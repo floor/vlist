@@ -27,7 +27,12 @@ window.probe=async()=>{
  // busy machine. Frame one lets a handler that defers to rAF write scrollLeft,
  // frame two dispatches that scroll before this callback runs.
  const frame=()=>new Promise(r=>requestAnimationFrame(()=>r()));const pause=async()=>{await frame();await frame();};const v=document.querySelector('.vlist-viewport'),results={};
- await pause();results.initial=sample();
+ // scrollWidth can still be the client width on the first frames of a busy
+ // machine. A zero here is unread layout, not a fixture without overflow.
+ const start=performance.now();let initial;
+ do { await frame(); initial=sample(); } while(initial.max<=0 && performance.now()-start<2000);
+ if(initial.max<=0) throw new Error('cross-axis overflow did not settle');
+ results.initial=initial;
  v.scrollLeft=-100;await pause();results.negative=sample();v.scrollLeft=100;await pause();results.positive=sample();v.scrollLeft=0;await pause();
  for(const key of ['ArrowLeft','ArrowLeft','ArrowRight','ArrowRight']){v.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));await pause();results[key+'-'+Object.keys(results).length]=sample();}
  v.scrollLeft=0;window.testList.scrollToIndex(0);await pause();v.dispatchEvent(new WheelEvent('wheel',{deltaX:host.dir==='rtl'?-40:40,deltaY:80,bubbles:true,cancelable:true}));await pause();results.diagonal=sample();return results;

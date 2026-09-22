@@ -50,18 +50,30 @@ try {
       await probe.waitForFunction(() => window.ready);
       assert.equal(await probe.evaluate(() => window.creationError),undefined);
       await probe.evaluate(() => window.list.scrollToIndex(400));
-      await wait(80);
+      await settle(probe, '.vlist-content');
       const point = await probe.$eval('.vlist-viewport',v=>{
         const r=v.getBoundingClientRect();return {x:r.left+100,y:Math.max(60,r.top+160)};
       });
       await probe.mouse.move(point.x,point.y);
+      // A row's dataset is absent until the list has painted. Retry across
+      // frames; a failure means no row ever appeared, not that the read was early.
+      const sampleMidRow = () => probe.evaluate(() => new Promise((resolve, reject) => {
+        const start = performance.now();
+        const tick = () => {
+          const rows = [...document.querySelectorAll('.vlist-item[data-index]')];
+          const row = rows[Math.floor(rows.length / 2)];
+          if (row) {
+            resolve({ index: row.dataset.index, y: row.getBoundingClientRect().top, pos: window.list.getScrollPosition() });
+            return;
+          }
+          if (performance.now() - start > 2000) { reject(new Error('no rendered row')); return; }
+          requestAnimationFrame(tick);
+        };
+        tick();
+      }));
       let moving=0,matching=0;
       for(let step=0;step<20;step++) {
-        const before=await probe.evaluate(()=>{
-          const rows=[...document.querySelectorAll('.vlist-item[data-index]')];
-          const row=rows[Math.floor(rows.length/2)];
-          return {index:row.dataset.index,y:row.getBoundingClientRect().top,pos:window.list.getScrollPosition()};
-        });
+        const before=await sampleMidRow();
         await probe.mouse.wheel({deltaY:12});
         // Wait for the step to land, not for a fixed 35ms. On a loaded CI runner
         // one commit missed that deadline and the suite reported 19 of 20 steps
@@ -106,6 +118,7 @@ try {
       if (pos !== window.documentFrames.previous) {
         window.documentFrames.moving++;
         const row = document.querySelector('[data-index]');
+        if (!row) return;
         const expected = viewport.getBoundingClientRect().top + Number(row.dataset.index) * 50;
         if (Math.abs(pos - Math.max(0,-viewport.getBoundingClientRect().top)) < 0.5 &&
             viewport.scrollTop === 0 && Math.abs(row.getBoundingClientRect().top - expected) < 0.5) {
