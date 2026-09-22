@@ -302,6 +302,42 @@ describe("tree + a11y keyboard", () => {
 });
 
 // =============================================================================
+// Click, then a key
+// =============================================================================
+
+describe("tree — click then arrow", () => {
+  interface Node extends VListItem {
+    id: string;
+    name: string;
+    children: Node[];
+  }
+
+  it("ArrowDown after a click moves to the next node", scoped(async (scope) => {
+    const { container, content } = await makeTree(scope, [
+      { id: "a", name: "alpha", children: [] },
+      { id: "b", name: "bravo", children: [] },
+      { id: "c", name: "charlie", children: [] },
+      { id: "d", name: "delta", children: [] },
+    ], {}, (item) => item.name);
+
+    // A real mouse click is not :focus-visible. happy-dom reports the
+    // programmatic focus() inside the click as visible, which hides the jump.
+    const hideFocusVisible = (el: HTMLElement): void => {
+      const orig = el.matches.bind(el);
+      el.matches = (selectors: string) => (selectors === ":focus-visible" ? false : orig(selectors));
+    };
+    hideFocusVisible(content);
+    hideFocusVisible(container);
+    const charlie = container.querySelector<HTMLElement>("[data-id='c']")!;
+    charlie.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    expect(focusedText(container)).toBeNull();
+
+    press(content, "ArrowDown");
+    expect(focusedText(container)).toBe("delta");
+  }));
+});
+
+// =============================================================================
 // Standalone focus ring
 // =============================================================================
 

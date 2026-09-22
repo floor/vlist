@@ -237,7 +237,10 @@ export function tree<T extends VListItem = VListItem>(
       const fn = getMethod("_getFocusedIndex") as (() => number) | undefined;
       return fn ? fn() : -1;
     }
-    return focusVisible ? focusedIndex : -1;
+    // A click records the row and hides the ring, because a mouse click is not
+    // :focus-visible. The next arrow still starts there. Treating a hidden ring
+    // as "no row" made ArrowDown jump to the first node.
+    return focusedIndex;
   }
 
   let cachedSelectFn: ((...ids: (string | number)[]) => void) | null | undefined;
