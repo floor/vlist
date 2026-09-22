@@ -699,12 +699,19 @@ export function createCore<T extends VListItem = VListItem>(
     }
   }
 
+  function trimPool(): void {
+    pool.trim(rendered.size);
+  }
+
   function doScrollIdle(): void {
     if (isScrolling) {
       isScrolling = false;
       dom.root.classList.remove(scrollingClass);
     }
     state.scrollDirection = 0;
+    // The pool still holds the previous window. The gesture is over, so those
+    // spares are no longer the next frame's jump.
+    trimPool();
     runIdleHooks(hooks.idle);
     _velEvt.velocity = 0;
     _velEvt.reliable = false;
@@ -731,6 +738,8 @@ export function createCore<T extends VListItem = VListItem>(
 
       if (forceIdleTimer !== null) clearTimeout(forceIdleTimer);
       forceIdleTimer = setTimeout(doScrollIdle, idleTimeout);
+    } else if (!isScrolling) {
+      trimPool();
     }
   }
 

@@ -6,6 +6,8 @@
  * next jump cloned them again. The cap follows the most elements ever out.
  */
 
+import { advanceTimers } from "../helpers/timers";
+import { SCROLL_IDLE_TIMEOUT } from "../../src/constants";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
@@ -146,5 +148,24 @@ describe("pool cap follows the largest mounted window", () => {
 
     const spares = new Set(before);
     expect(after.every((el) => spares.has(el))).toBe(true);
+  });
+
+  it("drops spare nodes once the list is idle after a shrink", async () => {
+    list = createVList<TestItem>(
+      { container, items: createTestItems(TOTAL), item: { height: ITEM, template: simpleTemplate } },
+      [poolProbe],
+    );
+
+    jumpTo(200_000);
+    const onScreen = mounted().length;
+    expect(onScreen).toBeGreaterThan(250);
+
+    list.setItems(createTestItems(10));
+    const shrunk = mounted().length;
+    expect(shrunk).toBeLessThan(onScreen);
+    expect(pool.size).toBeGreaterThan(shrunk);
+
+    await advanceTimers(SCROLL_IDLE_TIMEOUT);
+    expect(pool.size).toBeLessThanOrEqual(mounted().length);
   });
 });
