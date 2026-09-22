@@ -23,6 +23,7 @@ type ItemStateFn = (index: number, state: ItemState) => void;
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
+import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
 import { rowContentWritten } from "../../core/dom";
 import { createScrollPaddingReader } from "../../utils/scroll-padding";
 
@@ -1066,6 +1067,7 @@ export function groups<T extends VListItem = VListItem>(
         align: string,
         behavior?: string,
         duration?: number,
+        easing?: (t: number) => number,
       ): void | false => {
         const layoutIndex = layout.dataToLayoutIndex(index);
         const totalLayout = layout.totalEntries;
@@ -1114,11 +1116,7 @@ export function groups<T extends VListItem = VListItem>(
         const minPos = pagePad.start > 0 ? -pagePad.start : 0;
         pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
 
-        if (behavior === "smooth" && duration && duration > 0) {
-          ctx.scroll.smoothTo(pos, duration);
-        } else {
-          ctx.scroll.to(pos);
-        }
+        applyScrollBehavior(ctx.scroll, pos, behavior, duration, easing);
       });
 
       ctx.hooks.onDestroy(() => {

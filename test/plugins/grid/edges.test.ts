@@ -394,10 +394,6 @@ describe("grid — smooth scrollToIndex", () => {
     expect(translate(cell(container, 150)).y).toBe(2500);
   }));
 
-  // BUG (reported with FLO-168, not fixed here): core animates a smooth scroll
-  // with no duration over its default; grid() only animates when a duration is
-  // given, so `{ behavior: "smooth" }` alone jumps. groups() and masonry() share
-  // the same condition.
   it("neutralizes focusable descendants of a grid cell", scoped((scope) => {
     const container = createContainer({ width: WIDTH, height: HEIGHT });
     scope.defer(() => container.remove());
@@ -419,7 +415,7 @@ describe("grid — smooth scrollToIndex", () => {
     for (const button of buttons) expect(button.getAttribute("tabindex")).toBe("-1");
   }));
 
-  it.todo("behavior: smooth without a duration still animates, as a plain list does", scoped((scope) => {
+  it.serial("behavior: smooth without a duration still animates, as a plain list does", scoped((scope) => {
     const { list } = tallGrid(scope);
 
     list.scrollToIndex(150, { align: "start", behavior: "smooth" });
