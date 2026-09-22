@@ -388,6 +388,27 @@ describe("grid — smooth scrollToIndex", () => {
   // with no duration over its default; grid() only animates when a duration is
   // given, so `{ behavior: "smooth" }` alone jumps. groups() and masonry() share
   // the same condition.
+  it("neutralizes focusable descendants of a grid cell", scoped((scope) => {
+    const container = createContainer({ width: WIDTH, height: HEIGHT });
+    scope.defer(() => container.remove());
+    const list = createVList({
+      container,
+      items: createTestItems(12),
+      item: {
+        height: 40,
+        template: (item) => `<div><a href="#${item.id}">${item.name}</a><button>Go</button></div>`,
+      },
+    }, [grid({ columns: 3, gap: 0 })]);
+    scope.defer(() => list.destroy());
+
+    const links = container.querySelectorAll("a[href]");
+    const buttons = container.querySelectorAll("button");
+    expect(links.length).toBeGreaterThan(0);
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const link of links) expect(link.getAttribute("tabindex")).toBe("-1");
+    for (const button of buttons) expect(button.getAttribute("tabindex")).toBe("-1");
+  }));
+
   it.todo("behavior: smooth without a duration still animates, as a plain list does", scoped((scope) => {
     const { list } = tallGrid(scope);
 
