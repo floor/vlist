@@ -369,6 +369,12 @@ export function table<T extends VListItem = VListItem>(
       // ── Wire render pipeline ────────────────────────────────────
       ctx.render.setFn(tableRenderIfNeeded, tableForceRender);
 
+      // phase2Commit never runs, so the core rendered map stays empty.
+      // search() highlights through renderedElement and would skip every row.
+      ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+        tableRenderer?.getElement(layoutIndex) ?? null,
+      );
+
       // ── Header scroll sync ──────────────────────────────────────
       const headerWithSync = tableHeader as typeof tableHeader &
         { syncScroll?: (scrollLeft: number) => void };
