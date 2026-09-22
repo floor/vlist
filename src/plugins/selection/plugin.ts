@@ -764,7 +764,10 @@ export function selection<T extends VListItem = VListItem>(
       // it the move was treated like a click: with the default `focusOnClick`
       // the ring vanished, `_getFocusedIndex` answered -1, and the tree ignored
       // every further Left/Right until an up/down key revived the focus.
-      ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean): void => {
+      // `"preserve"` is a restore, not a key and not a click: keep whatever
+      // visibility the list already has, move the ring if it is showing, and
+      // do not paint one on a list the user has never focused.
+      ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
         // Layout space: it scans entries for the one holding this id.
         const total = getTotalFn();
         for (let i = 0; i < total; i++) {
@@ -772,9 +775,11 @@ export function selection<T extends VListItem = VListItem>(
           const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
             state.focusedIndex = i;
-            state.focusVisible = keyboard || focusOnClick;
-            if (keyboard) setActiveDescendant(i);
+            if (keyboard !== "preserve") state.focusVisible = keyboard === true || focusOnClick;
+            if (state.focusVisible) setActiveDescendant(i);
+            else dom.content.removeAttribute("aria-activedescendant");
             emitter.emit("focus:change", { id, index: i });
+            forceRender();
             return;
           }
         }

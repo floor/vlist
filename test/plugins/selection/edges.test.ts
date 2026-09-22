@@ -17,7 +17,7 @@
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
-import { flushMicrotasks } from "../../helpers/timers";
+import { flushMicrotasks, flushRAF } from "../../helpers/timers";
 import { scoped, waitFor, type TestScope } from "../../helpers/scope";
 import { createTestItems, createContainer, simpleTemplate } from "../../helpers/factory";
 import type { TestItem } from "../../helpers/factory";
@@ -28,7 +28,7 @@ import { selection, type SelectionMethods } from "../../../src/plugins/selection
 import { grid } from "../../../src/plugins/grid";
 import { groups } from "../../../src/plugins/groups";
 import { data } from "../../../src/plugins/data";
-import { snapshots } from "../../../src/plugins/snapshots";
+import { snapshots, type SnapshotsMethods } from "../../../src/plugins/snapshots";
 import { tree } from "../../../src/plugins/tree";
 
 // =============================================================================
@@ -523,6 +523,50 @@ describe("selection + tree — followFocus", () => {
       expect(content.getAttribute("aria-activedescendant")).toBe(ring!.id);
     }));
   }
+
+  it("a snapshot restore moves the ring onto the restored row and the next arrow steps from there", scoped(async (scope) => {
+    const { list, container, content } = makeList(
+      scope,
+      { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [selection<TestItem>(), snapshots<TestItem>()],
+    );
+    press(content, "Home");
+    press(content, "ArrowDown");
+    press(content, "ArrowDown");
+    const snapshot = (list as SelectableList & SnapshotsMethods<TestItem>).getScrollSnapshot();
+    press(content, "ArrowDown");
+    press(content, "ArrowDown");
+    expect(focusedId(container)).toBe(5);
+
+    (list as SelectableList & SnapshotsMethods<TestItem>).restoreScroll(snapshot);
+    await flushRAF();
+
+    const ring = container.querySelector<HTMLElement>(".vlist-item--focused");
+    expect(ring?.getAttribute("data-id")).toBe("3");
+    expect(content.getAttribute("aria-activedescendant")).toBe(ring!.id);
+
+    press(content, "ArrowDown");
+    expect(focusedId(container)).toBe(4);
+  }));
+
+  it("a snapshot restore onto a list that was never focused does not paint a ring", scoped(async (scope) => {
+    const { list, container, content } = makeList(
+      scope,
+      { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [selection<TestItem>(), snapshots<TestItem>()],
+    );
+
+    (list as SelectableList & SnapshotsMethods<TestItem>).restoreScroll({
+      index: 0,
+      offsetInItem: 0,
+      total: 20,
+      focusedId: 3,
+    });
+    await flushRAF();
+
+    expect(focusedId(container)).toBeNull();
+    expect(content.getAttribute("aria-activedescendant")).toBeNull();
+  }));
 
   it("type-ahead moves the ring too", scoped(async (scope) => {
     const { container, content } = await treeList(scope, false);
