@@ -58,6 +58,27 @@ export function a11y<T extends VListItem = VListItem>(
         is.focused = focusVis && focusIdx === _i;
       });
 
+      // tree() treats a state function as an external focus owner and then
+      // reads these. Without them ArrowLeft, ArrowRight, "*" and type-ahead
+      // see no focused row and return.
+      ctx.hooks.method("_getFocusedIndex", (): number => (focusVis ? focusIdx : -1));
+      ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
+        const total = getTotal();
+        for (let i = 0; i < total; i++) {
+          const it = getItem(i);
+          if (!it || it.id !== id) continue;
+          focusIdx = i;
+          if (keyboard !== "preserve") focusVis = keyboard === true;
+          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${i}`);
+          else dom.content.removeAttribute("aria-activedescendant");
+          _focusEvt.id = id;
+          _focusEvt.index = i;
+          emitter.emit("focus:change", _focusEvt);
+          ctx.render.force();
+          return;
+        }
+      });
+
       function announce(message: string): void {
         liveRegion.textContent = "";
         liveRegion.textContent = message;

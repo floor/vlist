@@ -21,6 +21,7 @@ import { createVList } from "../../../src/core/create";
 import type { CreateVListConfig, VList } from "../../../src/core/types";
 import type { VListItem } from "../../../src/types";
 import { tree, type TreeMethods, type TreePluginConfig } from "../../../src/plugins/tree";
+import { a11y } from "../../../src/plugins/a11y/plugin";
 
 const WIDTH = 300;
 const HEIGHT = 500;
@@ -232,6 +233,71 @@ describe("tree — connector lines", () => {
     const p2b = guides(container, "p2b");
     expect(p2b.guides).toBe("none");
     expect(p2b.elbow).not.toBe("none");
+  }));
+});
+
+// =============================================================================
+// tree + a11y keyboard
+// =============================================================================
+
+describe("tree + a11y keyboard", () => {
+  interface Node extends VListItem {
+    id: string;
+    name: string;
+    children: Node[];
+  }
+
+  async function makeA11yTree(scope: TestScope, items: Node[]) {
+    const container = createContainer({ width: WIDTH, height: HEIGHT });
+    const list = createVList<Node>({
+      container,
+      items,
+      item: { height: 32, template: (item) => item.name },
+    }, [tree<Node>(), a11y<Node>()]);
+    scope.own(list, container);
+    await advanceTimers(5);
+    const content = container.querySelector<HTMLElement>(".vlist-content")!;
+    return { list: list as VList<Node> & TreeMethods, container, content };
+  }
+
+  it("ArrowRight expands the focused folder and ArrowLeft collapses it", scoped(async (scope) => {
+    const { list, container, content } = await makeA11yTree(scope, [
+      { id: "a", name: "alpha", children: [{ id: "a1", name: "child", children: [] }] },
+      { id: "b", name: "beta", children: [] },
+    ]);
+
+    press(content, "ArrowDown");
+    press(content, "ArrowRight");
+    expect(list.isExpanded("a")).toBe(true);
+    expect(rowTexts(container)).toEqual(["alpha", "child", "beta"]);
+
+    press(content, "ArrowLeft");
+    expect(list.isExpanded("a")).toBe(false);
+    expect(rowTexts(container)).toEqual(["alpha", "beta"]);
+  }));
+
+  it("* expands the closed sibling folders", scoped(async (scope) => {
+    const { list, content } = await makeA11yTree(scope, [
+      { id: "a", name: "alpha", children: [{ id: "a1", name: "child", children: [] }] },
+      { id: "b", name: "beta", children: [{ id: "b1", name: "other", children: [] }] },
+    ]);
+
+    press(content, "ArrowDown");
+    press(content, "*");
+    expect(list.isExpanded("a")).toBe(true);
+    expect(list.isExpanded("b")).toBe(true);
+  }));
+
+  it("type-ahead moves to the matching node", scoped(async (scope) => {
+    const { container, content } = await makeA11yTree(scope, [
+      { id: "a", name: "alpha", children: [] },
+      { id: "b", name: "bravo", children: [] },
+      { id: "z", name: "zulu", children: [] },
+    ]);
+
+    press(content, "ArrowDown");
+    press(content, "z");
+    expect(focusedText(container)).toBe("zulu");
   }));
 });
 
