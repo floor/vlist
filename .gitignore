@@ -25,6 +25,7 @@ dist/
 .claude/worktrees
 .codex/
 scratchpad
+scratch/
 
 # OS
 .DS_Store
