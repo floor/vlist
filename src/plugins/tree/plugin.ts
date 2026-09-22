@@ -817,13 +817,17 @@ export function tree<T extends VListItem = VListItem>(
       });
 
       ctx.items.setUpdateFn((id: string | number, updates: Partial<T>): boolean => {
+        // idToIndex only lists nodes on screen. A child of a closed folder is
+        // still in the source tree, and that is the object the next expand reads.
+        const item = layout.findItem(id);
+        if (!item) return false;
+        Object.assign(item, updates);
         const idx = layout.idToIndex.get(id);
-        if (idx === undefined) return false;
-        const node = layout.flatNodes[idx]!;
-        Object.assign(node.item, updates);
-        const el = rendered.get(idx);
-        if (el) {
-          renderNodeElement(el, node, idx, getItemStateFn?.() ?? null);
+        if (idx !== undefined) {
+          const el = rendered.get(idx);
+          if (el) {
+            renderNodeElement(el, layout.flatNodes[idx]!, idx, getItemStateFn?.() ?? null);
+          }
         }
         emitter.emit("data:change", { type: "update", id });
         return true;

@@ -171,11 +171,7 @@ describe("tree — updateItem", () => {
     expect(changes).toEqual([]);
   }));
 
-  // BUG (reported with FLO-168, not fixed here): the update is looked up in
-  // layout.idToIndex, which only holds visible nodes. A node inside a closed
-  // folder is treated like an unknown id: the update is dropped without an
-  // event, and the old name is still there when the folder opens.
-  it.todo("updates a node that sits inside a closed folder", scoped(async (scope) => {
+  it("updates a node that sits inside a closed folder", scoped(async (scope) => {
     const { list, container } = await makeTree(scope, nodes(), {}, (item) => item.name);
 
     list.updateItem("core", { name: "engine" });
