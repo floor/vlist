@@ -470,6 +470,38 @@ export function tree<T extends VListItem = VListItem>(
 
   // ── Render pipeline ──────────────────────────────────────────────
 
+  // Columns to the left of this row's own branch. A column continues only
+  // while that ancestor still has a sibling below it; a last child closes it.
+  function continuingGuides(flatNode: FlatNode<T>): boolean[] {
+    const guides: boolean[] = [];
+    let parentId = flatNode.parentId;
+    while (parentId !== null) {
+      const parentIdx = layout.idToIndex.get(parentId);
+      if (parentIdx === undefined) break;
+      const parent = layout.flatNodes[parentIdx]!;
+      if (parent.parentId === null) break;
+      guides.push(!parent.isLastChild);
+      parentId = parent.parentId;
+    }
+    guides.reverse();
+    return guides;
+  }
+
+  const guideColor = "var(--vlist-tree-line, currentColor)";
+
+  function guideGradient(depth: number, through: boolean[], isLast: boolean, step: number): string {
+    const stops: string[] = [];
+    const lastColumn = isLast ? depth - 2 : depth - 1;
+    for (let column = 0; column <= lastColumn; column++) {
+      if (column < depth - 1 && !through[column]) continue;
+      const x = column * step;
+      if (stops.length > 0) stops.push(`transparent ${x}px`);
+      stops.push(`${guideColor} ${x}px`, `${guideColor} ${x + 1}px`, `transparent ${x + 1}px`);
+    }
+    if (stops.length === 0) return "none";
+    return `linear-gradient(to right, ${stops.join(", ")})`;
+  }
+
   function renderNodeElement(
     element: HTMLElement,
     flatNode: FlatNode<T>,
@@ -502,6 +534,13 @@ export function tree<T extends VListItem = VListItem>(
     if (connectorLines) {
       element.style.setProperty("--vlist-tree-indent", `${indent}px`);
       element.style.setProperty("--vlist-tree-pad", `${paddingStart}px`);
+      if (depth > 0) {
+        element.style.setProperty("--vlist-tree-guides", guideGradient(depth, continuingGuides(flatNode), isLastChild, indent));
+        element.style.setProperty("--vlist-tree-elbow", isLastChild ? `linear-gradient(${guideColor}, ${guideColor})` : "none");
+      } else {
+        element.style.setProperty("--vlist-tree-guides", "none");
+        element.style.setProperty("--vlist-tree-elbow", "none");
+      }
     }
 
     if (isf) isf(flatIndex, itemState);
@@ -817,13 +856,17 @@ export function tree<T extends VListItem = VListItem>(
       });
 
       ctx.items.setUpdateFn((id: string | number, updates: Partial<T>): boolean => {
+        // idToIndex only lists nodes on screen. A child of a closed folder is
+        // still in the source tree, and that is the object the next expand reads.
+        const item = layout.findItem(id);
+        if (!item) return false;
+        Object.assign(item, updates);
         const idx = layout.idToIndex.get(id);
-        if (idx === undefined) return false;
-        const node = layout.flatNodes[idx]!;
-        Object.assign(node.item, updates);
-        const el = rendered.get(idx);
-        if (el) {
-          renderNodeElement(el, node, idx, getItemStateFn?.() ?? null);
+        if (idx !== undefined) {
+          const el = rendered.get(idx);
+          if (el) {
+            renderNodeElement(el, layout.flatNodes[idx]!, idx, getItemStateFn?.() ?? null);
+          }
         }
         emitter.emit("data:change", { type: "update", id });
         return true;

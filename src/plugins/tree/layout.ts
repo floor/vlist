@@ -29,6 +29,8 @@ export interface TreeLayout<T extends VListItem> {
   addChild(parentId: string | number | null, item: T, index?: number): void;
   removeNode(id: string | number): number;
   moveNode(id: string | number, newParentId: string | number | null, index?: number): void;
+  /** The source item, including one hidden inside a closed folder. */
+  findItem(id: string | number): T | undefined;
 
   readonly totalVisible: number;
   readonly rootItems: readonly T[];
@@ -341,6 +343,11 @@ export function createTreeLayout<T extends VListItem>(
     addChild,
     removeNode,
     moveNode,
+    findItem(id: string | number): T | undefined {
+      const index = idToIndex.get(id);
+      if (index !== undefined) return flatNodes[index]!.item;
+      return findInTree(storedRootItems, id);
+    },
     get totalVisible(): number { return flatNodes.length; },
     get rootItems(): readonly T[] { return storedRootItems; },
   };

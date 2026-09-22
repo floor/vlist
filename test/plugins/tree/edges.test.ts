@@ -171,17 +171,67 @@ describe("tree — updateItem", () => {
     expect(changes).toEqual([]);
   }));
 
-  // BUG (reported with FLO-168, not fixed here): the update is looked up in
-  // layout.idToIndex, which only holds visible nodes. A node inside a closed
-  // folder is treated like an unknown id: the update is dropped without an
-  // event, and the old name is still there when the folder opens.
-  it.todo("updates a node that sits inside a closed folder", scoped(async (scope) => {
+  it("updates a node that sits inside a closed folder", scoped(async (scope) => {
     const { list, container } = await makeTree(scope, nodes(), {}, (item) => item.name);
 
     list.updateItem("core", { name: "engine" });
     list.expand("src");
 
     expect(rowTexts(container)).toEqual(["src", "engine", "plugins", "README.md"]);
+  }));
+});
+
+// =============================================================================
+// Connector lines
+// =============================================================================
+
+describe("tree — connector lines", () => {
+  interface Node extends VListItem {
+    id: string;
+    name: string;
+    children: Node[];
+  }
+
+  const nodes = (): Node[] => [
+    { id: "p", name: "p", children: [
+      { id: "p1", name: "p1", children: [
+        { id: "p1a", name: "p1a", children: [] },
+        { id: "p1b", name: "p1b", children: [] },
+      ] },
+      { id: "p2", name: "p2", children: [
+        { id: "p2a", name: "p2a", children: [] },
+        { id: "p2b", name: "p2b", children: [] },
+      ] },
+    ] },
+    { id: "q", name: "q", children: [] },
+  ];
+
+  const guides = (container: HTMLElement, id: string): { guides: string; elbow: string } => {
+    const row = container.querySelector<HTMLElement>(`[data-id="${id}"]`)!;
+    return {
+      guides: row.style.getPropertyValue("--vlist-tree-guides"),
+      elbow: row.style.getPropertyValue("--vlist-tree-elbow"),
+    };
+  };
+
+  it("closes the last child's branch and drops a finished ancestor guide", scoped(async (scope) => {
+    const { list, container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true }, (item) => item.name);
+
+    expect(list.isExpanded("p")).toBe(true);
+
+    const p1b = guides(container, "p1b");
+    expect(p1b.guides).toContain("0px");
+    expect(p1b.guides).not.toContain("24px");
+    expect(p1b.elbow).not.toBe("none");
+
+    const p2a = guides(container, "p2a");
+    expect(p2a.guides).toContain("24px");
+    expect(p2a.guides).not.toContain("0px");
+    expect(p2a.elbow).toBe("none");
+
+    const p2b = guides(container, "p2b");
+    expect(p2b.guides).toBe("none");
+    expect(p2b.elbow).not.toBe("none");
   }));
 });
 

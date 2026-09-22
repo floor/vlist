@@ -54,13 +54,10 @@
     bottom: 0;
     left: var(--vlist-tree-guide-start, calc(var(--vlist-tree-indent) / 2));
     width: calc(var(--vlist-tree-depth) * var(--vlist-tree-indent));
-    background-image: repeating-linear-gradient(
-        to right,
-        var(--vlist-tree-line, currentColor) 0,
-        var(--vlist-tree-line, currentColor) 1px,
-        transparent 1px,
-        transparent var(--vlist-tree-indent)
-    );
+    background-image: var(--vlist-tree-guides, none), var(--vlist-tree-elbow, none);
+    background-repeat: no-repeat;
+    background-size: 100% 100%, 1px 50%;
+    background-position: left top, calc((var(--vlist-tree-depth) - 1) * var(--vlist-tree-indent)) top;
     opacity: 0.12;
     pointer-events: none;
 }
