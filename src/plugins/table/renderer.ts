@@ -39,6 +39,7 @@ import type { SizeCache } from "../../rendering/sizes";
 import { claimPlaceholderSelection } from "../../plugins/selection/state";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
 import type { GroupHeaderItem } from "../groups/types";
+import { rowContentWritten, type StampableRow } from "../../core/dom";
 
 // =============================================================================
 // Types
@@ -290,6 +291,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       bar.className = cellSkeletonClass;
       cell.appendChild(bar);
     }
+    rowContentWritten(cell);
+    const row = cell.parentElement as StampableRow | null;
+    if (row) row._stamp = 0;
   };
 
   /**
@@ -415,6 +419,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     }
 
     element.appendChild(content);
+    rowContentWritten(element);
 
     return {
       element,
@@ -570,6 +575,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               } else {
                 content.replaceChildren(result);
               }
+              rowContentWritten(existing.element);
             }
             existing.element.setAttribute("data-id", String(item.id));
             existing._lastItem = item;

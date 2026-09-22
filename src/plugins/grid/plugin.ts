@@ -23,6 +23,7 @@ import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
 import { createGridLayout } from "./layout";
+import { rowContentWritten } from "../../core/dom";
 import type { GridLayout } from "./types";
 type ItemStateFn = (index: number, state: ItemState) => void;
 
@@ -173,6 +174,7 @@ export function grid<T extends VListItem = VListItem>(
       el.innerHTML = "";
       el.appendChild(result);
     }
+    rowContentWritten(el);
   }
 
   function gridRenderIfNeeded(): void {

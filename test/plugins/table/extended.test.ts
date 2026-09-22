@@ -765,3 +765,31 @@ describe("table — selection integration", () => {
     expect(visibleTop + rowHeight).toBeLessThanOrEqual(viewport + 1);
   });
 });
+
+describe("table — focusable neutralization", () => {
+  it("sets tabindex=-1 on links and buttons inside cells", () => {
+    const container = createContainer({ width: 800, height: 500 });
+    const items = createTableTestItems(8);
+    const list = createVList({
+      container,
+      items,
+      item: { height: 40, template: simpleTemplate },
+    }, [table({
+      columns: [
+        { key: "name", label: "Name", width: 200, cell: (item) => `<a href="#${item.id}">${item.name}</a>` },
+        { key: "role", label: "Role", width: 100, cell: () => `<button>Edit</button>` },
+      ],
+      rowHeight: 40,
+    })]);
+
+    const links = container.querySelectorAll(".vlist-table-cell a[href]");
+    const buttons = container.querySelectorAll(".vlist-table-cell button");
+    expect(links.length).toBeGreaterThan(0);
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const link of links) expect(link.getAttribute("tabindex")).toBe("-1");
+    for (const button of buttons) expect(button.getAttribute("tabindex")).toBe("-1");
+
+    list.destroy();
+    container.remove();
+  });
+});
