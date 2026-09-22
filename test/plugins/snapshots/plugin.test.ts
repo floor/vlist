@@ -1566,7 +1566,7 @@ describe("snapshots - Focus Save/Restore", () => {
     restore({ index: 5, offsetInItem: 0, focusedId: 42 });
 
     // rAF is synchronous in this describe block
-    expect(focusByIdFn).toHaveBeenCalledWith(42);
+    expect(focusByIdFn).toHaveBeenCalledWith(42, "preserve");
     cleanup();
   });
 
@@ -1613,7 +1613,7 @@ describe("snapshots - Focus Save/Restore", () => {
     await flushAsync();
 
     expect(loadVisibleFn).toHaveBeenCalled();
-    expect(focusByIdFn).toHaveBeenCalledWith(42);
+    expect(focusByIdFn).toHaveBeenCalledWith(42, "preserve");
     cleanup();
   });
 

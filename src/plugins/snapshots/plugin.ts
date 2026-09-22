@@ -215,9 +215,11 @@ export function snapshots<T extends VListItem = VListItem>(
         const restoreFocus = (): void => {
           if (focusedId === undefined) return;
           const focusByIdFn = ctx.hooks.get("_focusById") as
-            | ((id: string | number) => void)
+            | ((id: string | number, keyboard?: boolean | "preserve") => void)
             | undefined;
-          if (focusByIdFn) focusByIdFn(focusedId);
+          // A restore is not a key press. Keep the ring only if it is already
+          // showing, and move it onto the restored row.
+          if (focusByIdFn) focusByIdFn(focusedId, "preserve");
         };
 
         // Resolve once data has loaded and focus restored, so callers can
