@@ -102,6 +102,20 @@ export function a11y<T extends VListItem = VListItem>(
 
       const scrollIntoView = (idx: number): void => {
         const nav = ctx.nav.get();
+        // The layout that owns the scroll tells us where the item really is.
+        // Masonry lanes and a sticky group header are not a prefix sum, and
+        // carousel reveals inside the current lap. A prefix sum leaves the
+        // focused cell below the fold and the active descendant unmounted.
+        if (nav.reveal) {
+          nav.reveal(idx);
+          return;
+        }
+        const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
+        if (reveal) {
+          ctx.scroll.cancel();
+          reveal(idx);
+          return;
+        }
         const ci = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
         const off = sizeCache.getOffset(ci);
         const sz = sizeCache.getSize(ci);
