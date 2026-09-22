@@ -9,6 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { SCROLL_DURATION } from "../../../src/constants";
 import { masonry } from "../../../src/plugins/masonry/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -1450,6 +1451,37 @@ describe("masonry - scrollToIndex smooth", () => {
     const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(5, "start", "smooth", 300);
     expect(scrollCalls.length).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it("animates behavior smooth when duration is omitted and forwards easing", () => {
+    const plugin = masonry<TestItem>({ columns: 4, gap: 8 });
+    const items = createTestItems(20, () => 100);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, cleanup } = mockContext;
+    plugin.setup!(ctx);
+    ctx.render.force();
+
+    const smooth: { duration: number; easing?: (t: number) => number }[] = [];
+    const jumps: number[] = [];
+    const scroll = ctx.scroll;
+    const realSmooth = scroll.smoothTo.bind(scroll);
+    const realTo = scroll.to.bind(scroll);
+    scroll.smoothTo = (target, duration, easing, onComplete) => {
+      smooth.push({ duration, easing });
+      realSmooth(target, duration, easing, onComplete);
+    };
+    scroll.to = (pos) => {
+      jumps.push(pos);
+      realTo(pos);
+    };
+
+    const easing = (t: number): number => t;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
+    scrollToIndex(5, "start", "smooth", undefined, easing);
+
+    expect(jumps).toEqual([]);
+    expect(smooth).toEqual([{ duration: SCROLL_DURATION, easing }]);
     cleanup();
   });
 

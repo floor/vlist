@@ -24,6 +24,7 @@ import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
 import { createGridLayout } from "./layout";
 import { rowContentWritten } from "../../core/dom";
+import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
 import type { GridLayout } from "./types";
 type ItemStateFn = (index: number, state: ItemState) => void;
 
@@ -504,6 +505,7 @@ export function grid<T extends VListItem = VListItem>(
         align: string,
         behavior?: string,
         duration?: number,
+        easing?: (t: number) => number,
       ): void | false => {
         const rowIndex = layout.getRow(index);
         const totalRows = getRowCount();
@@ -529,11 +531,7 @@ export function grid<T extends VListItem = VListItem>(
         }
         pos = Math.max(0, Math.min(pos, maxScroll));
 
-        if (behavior === "smooth" && duration && duration > 0) {
-          ctx.scroll.smoothTo(pos, duration);
-        } else {
-          ctx.scroll.to(pos);
-        }
+        applyScrollBehavior(ctx.scroll, pos, behavior, duration, easing);
       });
 
       // ── 2D keyboard navigation ─────────────────────────────────

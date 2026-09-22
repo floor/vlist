@@ -16,6 +16,7 @@ import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import { createScrollPaddingReader } from "../../utils/scroll-padding";
+import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
 import { createMasonryLayout } from "./layout";
 import { createMasonryRenderer, type MasonryRenderer } from "./renderer";
 import type { MasonryLayout } from "./types";
@@ -519,6 +520,7 @@ export function masonry<T extends VListItem = VListItem>(
         align: string,
         behavior?: string,
         duration?: number,
+        easing?: (t: number) => number,
       ): void | false => {
         const placement = cachedPlacements[index];
         if (!placement) return false;
@@ -542,11 +544,7 @@ export function masonry<T extends VListItem = VListItem>(
         const minPos = pagePad.start > 0 ? -pagePad.start : 0;
         pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
 
-        if (behavior === "smooth" && duration && duration > 0) {
-          ctx.scroll.smoothTo(pos, duration);
-        } else {
-          ctx.scroll.to(pos);
-        }
+        applyScrollBehavior(ctx.scroll, pos, behavior, duration, easing);
       });
 
       // Placement-based scroll into view (used by selection focus)
