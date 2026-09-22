@@ -140,6 +140,28 @@ describe("rekeyRendered", () => {
     expect(el.classList.contains("vlist-item--odd")).toBe(false);
   });
 
+  it("rekeys a smaller window after a larger one", () => {
+    const content = document.createElement("div");
+    const wide = [0, 1, 2].map((index) => {
+      const el = document.createElement("div");
+      el.id = `vlist-item-${index}`;
+      return el;
+    });
+    const wideMap = new Map<number, HTMLElement>(wide.map((el, index) => [index, el]));
+    rekeyRendered(wideMap, 3, "vlist", content);
+    expect([...wideMap.keys()]).toEqual([-3, -2, -1]);
+
+    const only = document.createElement("div");
+    only.id = "vlist-item-8";
+    const narrow = new Map<number, HTMLElement>([[8, only]]);
+    rekeyRendered(narrow, 2, "vlist", content);
+
+    expect(narrow.size).toBe(1);
+    expect(narrow.get(6)).toBe(only);
+    expect(only.id).toBe("vlist-item-6");
+    expect(wide[0]!.id).toBe("vlist-item--3");
+  });
+
   it("no-ops when the index shift is zero", () => {
     const content = document.createElement("div");
     const el = document.createElement("div");

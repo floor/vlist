@@ -21,6 +21,12 @@
 import type { EngineState } from "./state";
 import type { WrapConfig } from "./runway";
 
+// One fold used to allocate both of these. They grow to the largest window
+// seen and are reused. Element slots are cleared after each fold so a shrink
+// does not keep detached nodes alive. Not re-entrant.
+let scratchIndices = new Int32Array(0);
+let scratchElements: Array<HTMLElement | undefined> = [];
+
 /**
  * Move every `rendered` key by `-indexShift` without touching the DOM tree.
  * `data-index` / `aria-posinset` carry the public index and stay put.
@@ -39,12 +45,12 @@ export function rekeyRendered(
   if (indexShift === 0 || rendered.size === 0) return;
 
   const count = rendered.size;
-  const indices = new Int32Array(count);
-  const elements = new Array<HTMLElement>(count);
+  if (scratchIndices.length < count) scratchIndices = new Int32Array(count);
+  if (scratchElements.length < count) scratchElements.length = count;
   let n = 0;
   for (const [index, el] of rendered) {
-    indices[n] = index;
-    elements[n] = el;
+    scratchIndices[n] = index;
+    scratchElements[n] = el;
     n++;
   }
   rendered.clear();
@@ -55,8 +61,9 @@ export function rekeyRendered(
   const flipOdd = oddClass && (indexShift & 1);
 
   for (let i = 0; i < count; i++) {
-    const index = indices[i]!;
-    const el = elements[i]!;
+    const index = scratchIndices[i]!;
+    const el = scratchElements[i]!;
+    scratchElements[i] = undefined;
     const next = index - indexShift;
     rendered.set(next, el);
     if (active !== null && el.id === active) activeEl = el;
