@@ -506,7 +506,9 @@ export function tree<T extends VListItem = VListItem>(
     for (let column = 0; column <= lastColumn; column++) {
       if (column < depth - 1 && !through[column]) continue;
       const x = column * step;
-      if (stops.length > 0) stops.push(`transparent ${x}px`);
+      // The first color stop paints back to the left edge. A line that does
+      // not start at 0 would fill the whole gutter, a gray bar beside the row.
+      if (stops.length > 0 || x > 0) stops.push(`transparent ${x}px`);
       stops.push(`${guideColor} ${x}px`, `${guideColor} ${x + 1}px`, `transparent ${x + 1}px`);
     }
     if (stops.length === 0) return "none";

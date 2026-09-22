@@ -227,7 +227,7 @@ describe("tree — connector lines", () => {
     expect(p1b.elbow).not.toBe("none");
 
     const p2a = guides(container, "p2a");
-    expect(p2a.guides).toContain("24px");
+    expect(p2a.guides).toContain("transparent 24px");
     expect(p2a.guides).not.toContain("0px");
     expect(p2a.elbow).toBe("none");
 
