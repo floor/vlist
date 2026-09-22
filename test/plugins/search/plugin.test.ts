@@ -859,11 +859,7 @@ describe("search bar keys", () => {
     expect(counter.textContent).toBe("1 of 3");
   });
 
-  // BUG (reported with FLO-168, not fixed here): only openSearch(), setQuery()
-  // and Ctrl+F mark search as open. Clicking into the visible bar and typing
-  // filters the list but leaves it "closed", so Enter, the arrows and Escape in
-  // the input do nothing and the root never gets `vlist--searching`.
-  it.todo("the same keys work when the user simply clicked into the bar and typed", () => {
+  it("the same keys work when the user simply clicked into the bar and typed", () => {
     const { container, list } = makeList({ mode: "navigate" });
     const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
     const counter = container.querySelector(".vlist-search__counter")!;

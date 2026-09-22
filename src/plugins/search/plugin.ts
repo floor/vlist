@@ -294,14 +294,20 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Open / close ────────────────────────────────────────────────────────────
 
-  const openSearch = (): void => {
+  // Opens without moving the caret. openSearch() also selects the field,
+  // which would replace what the user just typed on the next key.
+  const markOpen = (): void => {
     if (!open) {
       open = true;
       ctx.dom.root.classList.add(`${classPrefix}--search-open`);
       ctx.emitter.emit("search:open", undefined);
     }
-    bar?.focus();
     armCancelTimer();
+  };
+
+  const openSearch = (): void => {
+    markOpen();
+    bar?.focus();
   };
 
   const closeSearch = (): void => {
@@ -553,7 +559,10 @@ export function search<T extends VListItem = VListItem>(
           },
           listId,
           {
-            onInput: (value) => applyQuery(value),
+            onInput: (value) => {
+              markOpen();
+              applyQuery(value);
+            },
             onClear: () => applyQuery(""),
             onPrev: () => step(-1),
             onNext: () => step(1),
