@@ -272,14 +272,24 @@ describe("grid — updateGrid with a height function", () => {
     for (const index of asked) expect(index % 4).toBe(0);
   }));
 
-  // BUG (reported with FLO-168, not fixed here): ctx.sizes.setConfig() builds
-  // the new cache for `totalItems` rows before grid shrinks it to the row count,
-  // so the height function is asked about items 12, 16 … 44 of a twelve-item
-  // list. A function that reads its item (`items[index].ratio`) throws there —
-  // at creation too, where core logs `plugin "grid" setup failed` and carries on
-  // without a grid.
-  it.todo("never asks the height function about an item past the end of the data", scoped((scope) => {
+  it("never asks the height function about an item past the end of the data", scoped((scope) => {
     expect(askedAfterRegrid(scope, 4)).toEqual([0, 4, 8]);
+  }));
+
+  it("a height function that reads its item still installs the grid", scoped((scope) => {
+    const container = createContainer({ width: WIDTH, height: HEIGHT });
+    const items = createTestItems(12);
+    const list = track(scope, createVList<TestItem>({
+      container,
+      items,
+      item: {
+        height: (index) => items[index]!.id,
+        template: simpleTemplate,
+      },
+    }, [grid({ columns: 3 })]), container);
+
+    expect(container.querySelector(".vlist--grid")).not.toBeNull();
+    expect(list.total).toBe(12);
   }));
 
   it("a new gap widens the row pitch without stretching the cells", scoped((scope) => {

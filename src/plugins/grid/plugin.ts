@@ -381,14 +381,23 @@ export function grid<T extends VListItem = VListItem>(
       const rawSpec = ctx.sizes.rawSpec;
       let baseRowSize: number;
       heightIsFunction = typeof rawSpec === "function";
+      // setConfig builds one slot per item before the cache is shrunk to the
+      // row count. Row i stands for item i × columns, which runs past the
+      // data. A height function that reads its item throws there, and a
+      // throw in setup leaves the list with no grid.
+      function rowHeightFrom(rowIndex: number, cols: number, rowGap: number, gridCtx: { columnWidth: number; columns: number; gap: number }): number {
+        const firstItem = rowIndex * cols;
+        if (firstItem >= engineState.totalItems) return baseRowSize + rowGap;
+        return (rawSpec as Function)(firstItem, gridCtx) + rowGap;
+      }
+
       if (heightIsFunction) {
         const colWidth = layout.getColumnWidth(containerWidth);
         const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
-        baseRowSize = (rawSpec as Function)(0, gridCtx);
+        baseRowSize = engineState.totalItems > 0 ? (rawSpec as Function)(0, gridCtx) : 0;
         ctx.sizes.setConfig((rowIndex: number): number => {
           gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
-          const firstItem = rowIndex * config.columns;
-          return (rawSpec as Function)(firstItem, gridCtx) + gap;
+          return rowHeightFrom(rowIndex, config.columns, gap, gridCtx);
         }, gap);
       } else {
         baseRowSize = rawSpec;
@@ -468,8 +477,7 @@ export function grid<T extends VListItem = VListItem>(
             const gridCtx = { columnWidth: layout.getColumnWidth(containerWidth), columns: layout.columns, gap: newGap };
             ctx.sizes.setConfig((rowIndex: number): number => {
               gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
-              const firstItem = rowIndex * layout.columns;
-              return (rawSpec as Function)(firstItem, gridCtx) + newGap;
+              return rowHeightFrom(rowIndex, layout.columns, newGap, gridCtx);
             }, newGap);
           } else {
             ctx.sizes.setConfig(baseRowSize + newGap, newGap);
