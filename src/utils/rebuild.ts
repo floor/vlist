@@ -67,10 +67,18 @@ export async function rebuild<T extends VListItem = VListItem>(
 
   const newList = create(snapshotPlugin);
   const newRoot = newList.element;
+  const oldRoot = previous?.element ?? null;
+  const oldRect = oldRoot?.getBoundingClientRect();
 
-  // Hide new list behind old (overlay, invisible, but renders for layout)
+  // Hide new list behind old (overlay, invisible, but renders for layout).
+  // An absolute root inside a static container has no height, and a tree
+  // then skips its first render. Pin the old size so that render happens.
   newRoot.style.position = "absolute";
   newRoot.style.inset = "0";
+  if (oldRect && oldRect.height > 0) {
+    newRoot.style.height = `${oldRect.height}px`;
+    newRoot.style.width = `${oldRect.width}px`;
+  }
   newRoot.style.visibility = "hidden";
 
   // Wait for ready signal (default: one frame for initial render)
@@ -116,6 +124,8 @@ export async function rebuild<T extends VListItem = VListItem>(
 
   newRoot.style.position = "";
   newRoot.style.inset = "";
+  newRoot.style.height = "";
+  newRoot.style.width = "";
 
   if (previous) previous.destroy();
 
