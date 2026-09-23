@@ -71,6 +71,9 @@ export function masonry<T extends VListItem = VListItem>(
 
   let layout: MasonryLayout;
   let renderer: MasonryRenderer<T> | null = null;
+  // One plugin object can be installed on a replacement list before the old
+  // list is destroyed. Only the install that still owns the closure may clear it.
+  let installs = 0;
   let engineState: EngineState;
   let scroll: PluginContext<T>["scroll"];
   let lastOrigin = 0;
@@ -445,6 +448,7 @@ export function masonry<T extends VListItem = VListItem>(
     },
 
     setup(ctx: PluginContext<T>): void {
+      installs++;
       scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
@@ -587,10 +591,12 @@ export function masonry<T extends VListItem = VListItem>(
 
       // ── Cleanup ────────────────────────────────────────────────
 
+      const localRenderer = renderer;
       ctx.hooks.onDestroy(() => {
-        renderer?.destroy();
-        renderer = null;
-        interactive = null;
+        installs = Math.max(0, installs - 1);
+        localRenderer?.destroy();
+        if (renderer === localRenderer) renderer = null;
+        if (installs === 0) interactive = null;
         ctx.dom.root.classList.remove(`${classPrefix}--masonry`);
       });
     },
@@ -613,6 +619,7 @@ export function masonry<T extends VListItem = VListItem>(
     },
 
     destroy(): void {
+      if (installs > 0) return;
       renderer?.destroy();
       renderer = null;
       cachedPlacements = [];
