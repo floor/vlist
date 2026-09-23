@@ -69,6 +69,9 @@ export function table<T extends VListItem = VListItem>(
   let tableLayout: TableLayout<T> | null = null;
   let tableHeader: ReturnType<typeof createTableHeader<T>> | null = null;
   let tableRenderer: TableRendererInstance<T> | null = null;
+  // A replacement list can install this same plugin before the old list is
+  // destroyed. Only the install that still owns the header and renderer may clear them.
+  let installs = 0;
   let engineState: EngineState;
   let scroll: PluginContext<T>["scroll"];
   let lastOrigin = 0;
@@ -242,6 +245,7 @@ export function table<T extends VListItem = VListItem>(
     },
 
     setup(ctx: PluginContext<T>): void {
+      installs++;
       scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
@@ -495,12 +499,15 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // ── Cleanup ─────────────────────────────────────────────────
+      const localHeader = tableHeader;
+      const localRenderer = tableRenderer;
       ctx.hooks.onDestroy((): void => {
+        installs = Math.max(0, installs - 1);
         dom.viewport.removeEventListener("scroll", syncHeaderScroll);
-        tableHeader?.destroy();
-        tableHeader = null;
-        tableRenderer?.destroy();
-        tableRenderer = null;
+        localHeader?.destroy();
+        if (tableHeader === localHeader) tableHeader = null;
+        localRenderer?.destroy();
+        if (tableRenderer === localRenderer) tableRenderer = null;
         dom.content.style.minWidth = "";
         dom.root.classList.remove(`${classPrefix}--table`);
         dom.root.classList.remove(`${classPrefix}--table-row-borders`);
@@ -535,6 +542,7 @@ export function table<T extends VListItem = VListItem>(
     },
 
     destroy(): void {
+      if (installs > 0) return;
       tableHeader?.destroy();
       tableHeader = null;
       tableRenderer?.destroy();
