@@ -149,6 +149,9 @@ export function carousel<T extends VListItem = VListItem>(
   let scroll: PluginContext<T>["scroll"];
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
+  // A replacement list can install this same plugin before the old list is
+  // destroyed. Only the install that still owns the context may clear it.
+  let installs = 0;
   let isX: boolean;
 
   let currentIndex = initialIndex;
@@ -612,6 +615,7 @@ export function carousel<T extends VListItem = VListItem>(
     conflicts: ["groups", "grid", "table", "masonry", "tree"],
 
     setup(ctx: PluginContext<T>): void {
+      installs++;
       scroll = ctx.scroll;
       engineState = ctx.getState();
       sizeCache = ctx.sizes.cache;
@@ -846,12 +850,16 @@ export function carousel<T extends VListItem = VListItem>(
 
       // ── Destroy handler ─────────────────────────────────────────
 
+      const localCtx = ctx;
       ctx.hooks.onDestroy(() => {
-        storedCtx?.scroll.cancel();
+        installs = Math.max(0, installs - 1);
+        localCtx.scroll.cancel();
+        if (storedCtx === localCtx) storedCtx = null;
       });
     },
 
     destroy(): void {
+      if (installs > 0) return;
       storedCtx?.scroll.cancel();
       storedCtx = null;
     },
