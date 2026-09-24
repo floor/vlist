@@ -76,7 +76,7 @@ for(const [entry,create] of [['native',native],['synthetic',synthetic]] as const
   const f=fixture(create,isX);f.pointer('pointerdown');f.advance(350);f.pointer('pointermove',320);
   expect([...f.ctx.dom.content.children].some(el=>(el as HTMLElement).style.transition.includes('transform'))).toBe(true);
   f.ctx.scroll.to(1040);
-  expect([...f.ctx.dom.content.children].every(el=>(el as HTMLElement).style.transition==='')).toBe(true);
+  expect([...f.ctx.dom.content.children].every(el=>(el as HTMLElement).style.transition==='none')).toBe(true);
   f.pointer('pointerup',320);
  });
  if(entry==='synthetic')test(`${name} a contact catches actual inertia and cannot arm a long press`,()=>{

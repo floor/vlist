@@ -999,7 +999,10 @@ export function sortable<T extends VListItem = VListItem>(
           if (sorting) {
             // Logical scrolling moves every item through its render origin.
             // Only reordering shifts should animate, never that coordinate move.
-            if (originChanged) el.style.transition = "";
+            // "none" beats an author `transition: transform` rule. Clearing the
+            // inline value lets that rule animate synthetic edge-scroll and
+            // leaves a hole in the viewport.
+            if (originChanged) el.style.transition = "none";
             if (idx === dragIndex) {
               el.classList.add(dragSourceClass);
               draggedElement = el;
