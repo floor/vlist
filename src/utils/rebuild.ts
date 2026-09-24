@@ -29,6 +29,33 @@ export interface RebuildOptions {
 // rebuild()
 // =============================================================================
 
+type ListWithSnapshot<T extends VListItem> = VList<T> & {
+  getScrollSnapshot?: () => ScrollSnapshot;
+  getSelected?: () => Array<string | number>;
+  _getFocusedId?: () => string | number | undefined;
+};
+
+/** Scroll position from the snapshots plugin, or from the list itself. */
+function captureScroll<T extends VListItem>(previous: VList<T>): ScrollSnapshot | undefined {
+  const list = previous as ListWithSnapshot<T>;
+  if (typeof list.getScrollSnapshot === "function") return list.getScrollSnapshot();
+
+  const scrollTop = list.getScrollPosition();
+  const selectedIds = list.getSelected?.();
+  const focusedId = list._getFocusedId?.();
+  if (scrollTop <= 0 && !selectedIds?.length && focusedId === undefined) return undefined;
+
+  const snap: ScrollSnapshot = {
+    index: 0,
+    offsetInItem: 0,
+    total: list.total,
+    scrollTop,
+  };
+  if (selectedIds?.length) snap.selectedIds = selectedIds;
+  if (focusedId !== undefined) snap.focusedId = focusedId;
+  return snap;
+}
+
 /**
  * Recreate a list with scroll position continuity.
  *
@@ -51,12 +78,9 @@ export async function rebuild<T extends VListItem = VListItem>(
 ): Promise<VList<T>> {
   const key = options?.key;
 
-  // Capture scroll snapshot from old list
-  // The snapshot method exists only when the previous list had the snapshots
-  // plugin; rebuild works either way.
-  const getSnapshot = (previous as { getScrollSnapshot?: () => ScrollSnapshot } | null | undefined)
-    ?.getScrollSnapshot;
-  const snapshot = typeof getSnapshot === "function" ? getSnapshot() : undefined;
+  // A list that installed snapshots() has the full snapshot. Every other list
+  // still has a scroll position, and that is what the user expects to come back.
+  const snapshot = previous ? captureScroll(previous) : undefined;
 
   // Snapshots plugin: direct restore (no sessionStorage round-trip) + optional auto-save
   const snapshotPlugin = snapshots<T>(
@@ -86,6 +110,13 @@ export async function rebuild<T extends VListItem = VListItem>(
     await options.ready(newList);
   } else {
     await new Promise<void>((r) => requestAnimationFrame(() => r()));
+  }
+
+  // The first restore runs during setup, before the viewport has a size, so
+  // the position is clamped away. Apply it again once the list can scroll.
+  if (snapshot && Math.abs(newList.getScrollPosition() - (snapshot.scrollTop ?? 0)) > 1) {
+    const restore = (newList as { restoreScroll?: (snap: ScrollSnapshot, restoreSelection?: boolean) => Promise<void> }).restoreScroll;
+    if (restore) await restore(snapshot, false);
   }
 
   if (options?.delay && options.delay > 0) {
