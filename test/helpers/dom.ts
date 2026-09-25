@@ -217,6 +217,14 @@ export const setupDOM = (opts: SetupDOMOptions = {}): void => {
  * Unregister happy-dom globals.
  */
 export const teardownDOM = (): void => {
+  // The document lives for the whole process now, so whatever a file mounted
+  // and never removed is still there for every file after it. Per-file
+  // unregistration used to wipe this for free; this does it on purpose. A
+  // leaked `.vlist-content` full of `vlist-item-*` ids is exactly what made
+  // fold.test.ts resolve a stale element in CI order -- and the resulting
+  // assertion failure surfaced as a 5s "timeout", because formatting two
+  // Happy DOM elements for the diff takes longer than that.
+  document.body.replaceChildren();
   if (origResizeObserver !== undefined) {
     global.ResizeObserver = origResizeObserver;
     origResizeObserver = undefined;
