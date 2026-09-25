@@ -122,8 +122,9 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // The README publishes a gzipped size for every row this script measures.
 // Only the 9.9 KB base target used to be enforced, so 22 of 23 sizes could
 // double and CI would still pass. Ceilings are a measured run's 0.1 KB
-// column plus 0.4 KB of slack — the same margin the 9.9 KB target has over
-// the advertised 9.5 KB base. Base and native keep that 9.9 KB target.
+// column plus 0.4 KB of slack — the same margin the 9.9 KB target had over
+// the advertised 9.5 KB base. Base and native keep a fixed target; it moved
+// from 9.9 kB to 10.0 kB on 2026-09-25 (see below).
 
 /** Tenth-of-a-KB ceiling, matching how the README quotes sizes. */
 // Headroom rule (2026-09-18): each budget is the measured size rounded up on a
@@ -133,34 +134,38 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // quoted in the README still come from `bun run size`, never from this table.
 //
 // Two budgets are not headroom but a promise: the base and native entries stay
-// at 9.9 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
-// apply to them — raising either is a product decision, not a chore.
+// at 10.0 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
+// apply to them — raising either is a product decision, not a chore. It was
+// 9.9 kB until 2026-09-25: the 3.x fix cycle grew the core past it while the
+// gate was dark behind a failing typecheck (#287 alone cost 43 bytes), and
+// Dr Jones chose 10.0 kB over trimming merged fixes. 10.0 kB leaves the base
+// 40 bytes of room, so the next core growth is a decision again, on purpose.
 export const kb = (n: number): number => Math.floor(n * 1024);
 
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
-  "Base (createVList)": kb(9.9),
-  synthetic: kb(12.6),
-  "synthetic + carousel": kb(17.4),
-  "synthetic + sortable": kb(16.1),
+  "Base (createVList)": kb(10.0),
+  synthetic: kb(12.7),
+  "synthetic + carousel": kb(17.6),
+  "synthetic + sortable": kb(16.3),
   createStats: kb(10.3),
-  "synthetic + createStats": kb(12.8),
-  native: kb(9.9),
-  a11y: kb(11.2),
-  selection: kb(12.9),
-  data: kb(14.8),
-  scrollbar: kb(12.9),
-  sortable: kb(13.5),
-  groups: kb(15.4),
+  "synthetic + createStats": kb(13.0),
+  native: kb(10.0),
+  a11y: kb(11.5),
+  selection: kb(13.0),
+  data: kb(14.9),
+  scrollbar: kb(13.0),
+  sortable: kb(13.6),
+  groups: kb(15.5),
   page: kb(11.0),
-  snapshots: kb(11.2),
-  transition: kb(12.0),
-  autosize: kb(11.1),
-  grid: kb(12.6),
-  table: kb(15.9),
-  masonry: kb(14.4),
-  tree: kb(15.1),
+  snapshots: kb(11.3),
+  transition: kb(12.1),
+  autosize: kb(11.2),
+  grid: kb(12.7),
+  table: kb(16.0),
+  masonry: kb(14.5),
+  tree: kb(15.5),
   search: kb(13.4),
-  carousel: kb(15.1),
+  carousel: kb(15.3),
 };
 
 export interface SizeGateInput {
