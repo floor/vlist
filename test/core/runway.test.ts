@@ -115,7 +115,7 @@ function transformPx(el: HTMLElement): number {
 // Runway sizing
 // =============================================================================
 
-describe("bounded scroll — runway sizing", () => {
+describe("runway — runway sizing", () => {
   it("sizes content to the viewport-multiple runway, not the full virtual size", () => {
     // 1M items × 50px = 50,000,000px virtual — far past the ~16.7M browser limit.
     list = makeBounded(1_000_000);
@@ -195,7 +195,7 @@ describe("bounded scroll — runway sizing", () => {
 // Logical position range
 // =============================================================================
 
-describe("bounded scroll — logical position", () => {
+describe("runway — logical position", () => {
   it("getScrollPosition is the absolute logical pixel and reaches the exact end", () => {
     list = makeBounded(1_000_000);
     const virtualTotal = 1_000_000 * ITEM;
@@ -233,7 +233,7 @@ describe("bounded scroll — logical position", () => {
 // Rebasing
 // =============================================================================
 
-describe("bounded scroll — rebasing", () => {
+describe("runway — rebasing", () => {
   it("rebases near the upper runway edge, preserving the logical position", () => {
     list = makeBounded(1_000_000);
     const viewport = getViewport(container);
@@ -325,7 +325,7 @@ function renderSnapshot(c: HTMLElement): string[] {
   return snap.sort();
 }
 
-describe("bounded scroll — wrap mode", () => {
+describe("runway — wrap mode", () => {
   it("sizes content to the full runway even when the real list fits within it", () => {
     // 5 items × 50px = 250px — would degenerate to native sizing in non-wrap mode,
     // but the loop is infinite so the runway is always used in full.
@@ -451,7 +451,7 @@ describe("bounded scroll — wrap mode", () => {
 // Resize — bounded runway geometry must track the container size
 // =============================================================================
 
-describe("bounded scroll — resize", () => {
+describe("runway — resize", () => {
   it("refreshes the runway when the container resizes", () => {
     const c = createContainer({ width: 300, height: VIEWPORT });
     const saved = globalThis.ResizeObserver;
@@ -501,7 +501,7 @@ describe("bounded scroll — resize", () => {
 // bounded runway instead of writing the full physical size (RFC-013 Phase A).
 // =============================================================================
 
-describe("bounded scroll — renderer plugins", () => {
+describe("runway — renderer plugins", () => {
   // 50k items keeps the test light while still producing a physical size far
   // larger than the runway (e.g. 50k/4 cols × 50px = 625,000px ≫ 1000px runway).
   const HUGE = 50_000;
@@ -580,7 +580,7 @@ function fireWheel(target: HTMLElement, deltaY: number, deltaX: number = 0): Whe
   return event;
 }
 
-describe("bounded scroll — wheel", () => {
+describe("runway — wheel", () => {
   it("advances logical position on wheel deltaY", () => {
     list = makeBounded(1_000_000);
     const viewport = getViewport(container);
@@ -720,7 +720,7 @@ describe("bounded scroll — wheel", () => {
 // Idle detection — scrollDirection resets after idle timeout
 // =============================================================================
 
-describe("bounded scroll — idle detection", () => {
+describe("runway — idle detection", () => {
   it("resets scrollDirection to 0 after idle timeout", async () => {
     const c = createContainer({ width: 300, height: VIEWPORT });
     try {
@@ -750,7 +750,7 @@ describe("bounded scroll — idle detection", () => {
 // Smooth scroll — animates in logical space via requestAnimationFrame
 // =============================================================================
 
-describe("bounded scroll — smooth scroll", () => {
+describe("runway — smooth scroll", () => {
   it("scrollToIndex with smooth behavior animates to the target", async () => {
     const c = createContainer({ width: 300, height: VIEWPORT });
     try {
@@ -823,7 +823,7 @@ describe("bounded scroll — smooth scroll", () => {
 // Page mode retains the carousel conflict
 // =============================================================================
 
-describe("bounded scroll — page mode guard", () => {
+describe("runway — page mode guard", () => {
 
   it("throws when page() is combined with the carousel plugin (bounded wrap)", () => {
     expect(() =>
