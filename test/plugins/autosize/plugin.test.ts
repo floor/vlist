@@ -1433,3 +1433,50 @@ describe("autosize remeasure on late content", () => {
   });
 
 });
+
+// A scroll-mode switch rebuilds the list with the same plugin instances, so
+// for a moment autosize is installed on two lists. The old list's teardown
+// used to disconnect the shared observer, clear the measurements and null
+// the context -- the new list's autosize was dead: every row that scrolled
+// into view got the estimate (160 px against 590 px of content on the social
+// feed). Same class as #292-#294.
+describe("autosize — reinstalled on a new list before the old one is destroyed", () => {
+  const makeCtx = () => createPluginMockContext(createTestItems(20), {
+      itemSize: 50,
+      containerWidth: 300,
+      containerHeight: 500,
+    });
+
+  it("keeps measuring for the new list after the old list's teardown", () => {
+    const plugin = autosize<TestItem>();
+    const oldCtx = makeCtx();
+    const newCtx = makeCtx();
+    plugin.setup!(oldCtx.ctx);
+    plugin.setup!(newCtx.ctx);
+
+    // The old list goes away, as rebuild() destroys it after the swap.
+    for (const h of oldCtx.destroyHandlers) h();
+    plugin.destroy!();
+
+    // A commit on the new list observes its rows; the mock observer measures
+    // synchronously. Without the fix, observer is null and nothing measures.
+    const rows = [0, 1, 2].map((i) => { const el = document.createElement("div"); el.setAttribute("data-index", String(i)); newCtx.dom.content.appendChild(el); return el; });
+    newCtx.ctx.dom.renderedElement = (idx: number) => rows[idx] ?? null;
+    const state = newCtx.engineState;
+    state.visibleCount = 3;
+    state.visibleIndices[0] = 0; state.visibleIndices[1] = 1; state.visibleIndices[2] = 2;
+    plugin.hooks!.onCommit!(state);
+    const isMeasured = newCtx.methods.get("isMeasured") as (i: number) => boolean;
+    expect(isMeasured(0)).toBe(true);
+    expect(isMeasured(2)).toBe(true);
+    const count = newCtx.methods.get("getMeasuredCount") as () => number;
+    expect(count()).toBe(3);
+
+    // Destroying the new list, the last install, clears everything.
+    for (const h of newCtx.destroyHandlers) h();
+    plugin.destroy!();
+    expect(count()).toBe(0);
+    oldCtx.cleanup();
+    newCtx.cleanup();
+  });
+});
