@@ -11,6 +11,32 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-09-25
+
+The 3.0 line, on the npm `latest` tag. Everything in `3.0.0-next.1` through `3.0.0-next.6`
+below is part of it; the entries under this heading are what landed after `next.6`. For a
+reader coming from 2.8, the shape of 3.0:
+
+- **Two entries.** `vlist` scrolls natively, as 2.x did, and is the default everywhere.
+  `vlist/synthetic` is the opt-in entry for huge lists and application-owned touch motion,
+  with its own runway engine. `scroll.mode`, `scroll.runway` and `scale()` are gone: a legacy
+  value throws before any DOM is created. `vlist/native` remains as a deprecated alias.
+- **One boundary for scrolling.** Every plugin reads and writes scroll through the scroll
+  adapter; `setScrollSource` replaces `setScrollFns`; `page()` works under both entries.
+- **Semantics that hold.** Grid, grouped and masonry rows carry listbox semantics; a plugin that
+  cannot serve the configuration throws; `carousel()` declares the plugins it cannot be combined
+  with; the carousel's index space is three laps with a symmetric fold.
+- **Types that infer.** `createVListFromConfig` takes two type arguments (the four adapters were
+  rebuilt against it); `GroupsConfig` is generic in the item.
+- **Keyboard and touch that were measured on devices.** Column-preserving arrows and page keys in
+  grids, Space grabbing the row you clicked, the sortable ghost under pinch zoom, long-press
+  callouts on Android, momentum handled by the browser.
+- **Size as a promise.** The base is **10,201 bytes gzipped** against a 10.0 KB budget the
+  gate enforces per plugin; the size tables in both READMEs are what `bun run size` prints.
+
+Migration notes for the removed configuration and the renamed internals are under
+`3.0.0-next.1` and `3.0.0-next.2`.
+
 ### Fixed
 
 - `sortable()`: the drop animation lands on the slot on a scrolled or
