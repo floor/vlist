@@ -15,6 +15,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `sortable()`: Space grabs the row you clicked. With selection's default
+  `focusOnClick: false` a click remembers the row but hides the focus ring,
+  and the grab only asked for the ring's row, so Space did nothing until an
+  arrow had shown the ring — the "press Space twice" of #115. Space now
+  takes the focused row whether or not its ring shows, and shows the ring
+  with the grab.
+
 - `sortable()`: after a drop, the row at the slot the drag started from no
   longer blanks for a few frames and fades back. The drop suppresses
   transitions with a `vlist--settling` class and removed it on the next
