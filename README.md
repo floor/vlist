@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — `a11y()` or a selection mode adds WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core with tiny adapters for Vue, Svelte, Solid, React
-- **10.0 KB gzipped (3.0 prerelease)** — composable plugins with perfect tree-shaking
+- **10.0 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Tree, grid, masonry, carousel, table, groups, data, selection, search, sortable, transition** — all opt-in
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
@@ -42,7 +42,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 ```bash
 npm install vlist              # vanilla JS
-npm install vlist@next         # 3.0 prerelease; latest stays on 2.8
+npm install vlist@2            # the 2.x line, still maintained
 npm install vlist vlist-vue    # or vlist-svelte / vlist-solidjs / vlist-react
 ```
 
@@ -178,29 +178,29 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
-| **Base (`vlist`)** | 26.9 KB | 10.0 KB |
-| `vlist/synthetic` | 33.8 KB | 12.6 KB |
-| `vlist/native` (alias) | 26.9 KB | 10.0 KB |
-| `a11y()` | 30.7 KB | 11.3 KB |
-| `selection()` | 36.4 KB | 12.9 KB |
+| **Base (`vlist`)** | 27.0 KB | 10.0 KB |
+| `vlist/synthetic` | 33.9 KB | 12.6 KB |
+| `vlist/native` (alias) | 27.0 KB | 10.0 KB |
+| `a11y()` | 30.8 KB | 11.4 KB |
+| `selection()` | 36.5 KB | 12.9 KB |
 | `data()` | 40.6 KB | 14.8 KB |
 | `scrollbar()` | 35.1 KB | 12.8 KB |
-| `sortable()` | 38.7 KB | 13.4 KB |
+| `sortable()` | 38.9 KB | 13.6 KB |
 | `groups()` | 43.0 KB | 15.4 KB |
 | `page()` | 29.5 KB | 10.9 KB |
-| `snapshots()` | 30.2 KB | 11.1 KB |
+| `snapshots()` | 30.3 KB | 11.1 KB |
 | `transition()` | 33.7 KB | 12.0 KB |
-| `autosize()` | 30.1 KB | 11.1 KB |
+| `autosize()` | 30.2 KB | 11.1 KB |
 | `grid()` | 34.4 KB | 12.5 KB |
 | `table()` | 45.4 KB | 15.9 KB |
 | `masonry()` | 39.0 KB | 14.4 KB |
 | `tree()` | 43.1 KB | 15.3 KB |
 | `search()` | 36.5 KB | 13.3 KB |
-| `carousel()` | 41.7 KB | 15.1 KB |
+| `carousel()` | 41.7 KB | 15.2 KB |
 | `vlist/synthetic` + `carousel()` | 47.8 KB | 17.4 KB |
-| `vlist/synthetic` + `sortable()` | 45.7 KB | 16.1 KB |
+| `vlist/synthetic` + `sortable()` | 45.8 KB | 16.2 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **10,200 bytes gzipped**, within the 10.0 KB budget (10,240 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **12,889 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **10,201 bytes gzipped**, within the 10.0 KB budget (10,240 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **12,893 bytes** before plugins. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 ## Examples
 
