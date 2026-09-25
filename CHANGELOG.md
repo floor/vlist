@@ -15,6 +15,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Grid keyboard navigation: ArrowUp on the first row and ArrowDown on the
+  last row stay in their column instead of jumping to the first or last item
+  — that was Home and End, not a row move (#60). PageUp and PageDown had
+  been given that column-preserving clamp already; the arrows now share it,
+  in `selection()` and in `a11y()`. A row move into a shorter last row
+  still lands on the last item.
+
 - `sortable()`: Space grabs the row you clicked. With selection's default
   `focusOnClick: false` a click remembers the row but hides the focus ring,
   and the grab only asked for the ring's row, so Space did nothing until an
