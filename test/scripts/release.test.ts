@@ -230,11 +230,15 @@ describe("updateReadmeVersion", () => {
   });
 
   it("matches the current README.md version marker", async () => {
+    // A version the README can never already carry: the function refuses a
+    // no-op rewrite as "marker not found", and this test read the live README
+    // with "3.0.0" -- green through every prerelease, red the minute the
+    // release commit made the README say **v3.0.0**. It failed the release
+    // PR's own CI (2026-09-25).
     const readme = await Bun.file("README.md").text();
-    const next = updateReadmeVersion(readme, "3.0.0");
-    expect(next).toContain("**v3.0.0**");
-    expect(next).not.toContain("**v3.0.0-next.2**");
-    expect(next).not.toContain("(prerelease on the npm `next` tag)");
+    const next = updateReadmeVersion(readme, "999.0.0");
+    expect(next).toContain("**v999.0.0**");
+    expect(next).not.toMatch(/\*\*v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\*\* \(prerelease/);
   });
 
   it("throws when the marker is missing", () => {
