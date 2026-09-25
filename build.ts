@@ -2,6 +2,7 @@
 import { $ } from "bun";
 import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs";
 import { resolve } from "path";
+import { versionStamp } from "./scripts/version-stamp";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -281,6 +282,8 @@ async function build() {
   }
 
   writeFileSync("./dist/size.json", JSON.stringify(sizes) + "\n");
+  // Which vlist this dist is: a site serving the bundle reads it from here.
+  writeFileSync("./dist/version.json", JSON.stringify(versionStamp(resolve("."))) + "\n");
 
   const base = sizes.base ?? { minified: "0", gzipped: "0" };
   const baseGz = parseFloat(base.gzipped);
