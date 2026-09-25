@@ -164,12 +164,13 @@ export function sortable<T extends VListItem = VListItem>(
   // client coordinates are always in the same space; the arithmetic between
   // its inline position and that rect is what varies, and this never assumes
   // it. One rect read per move, the same cost as the drop-index math.
-  const placeGhost = (): void => {
+  const moveGhostTo = (x: number, y: number): void => {
     if (!ghost) return;
     const rect = ghost.getBoundingClientRect();
-    ghost.style.left = `${parseFloat(ghost.style.left) + pointerCurrentX - ghostOffsetX - rect.left}px`;
-    ghost.style.top = `${parseFloat(ghost.style.top) + pointerCurrentY - ghostOffsetY - rect.top}px`;
+    ghost.style.left = `${parseFloat(ghost.style.left) + x - rect.left}px`;
+    ghost.style.top = `${parseFloat(ghost.style.top) + y - rect.top}px`;
   };
+  const placeGhost = (): void => moveGhostTo(pointerCurrentX - ghostOffsetX, pointerCurrentY - ghostOffsetY);
   const updateGhostPosition = placeGhost;
 
   const computeDropIndex = (): number => {
@@ -489,15 +490,17 @@ export function sortable<T extends VListItem = VListItem>(
     const targetOffset = sizeCache.getOffset(toIndex);
     const duration = shiftDuration > 0 ? shiftDuration : 150;
 
+    // The slot's position in client space -- then the same feedback as
+    // placeGhost: the ghost is absolute, so its inline left/top are its
+    // containing block's coordinates, not the viewport's. Writing client
+    // coordinates here sent the drop animation to the top of a scrolled page
+    // (the phone pass card sits 3000 px down) and, pinch-zoomed on an iPhone,
+    // the ghost "went up" on release after following the finger correctly.
     ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
-
-    if (isX) {
-      ghost.style.left = `${viewportRect.left + targetOffset - scrollPos}px`;
-      ghost.style.top = `${viewportRect.top}px`;
-    } else {
-      ghost.style.left = `${viewportRect.left}px`;
-      ghost.style.top = `${viewportRect.top + targetOffset - scrollPos}px`;
-    }
+    moveGhostTo(
+      isX ? viewportRect.left + targetOffset - scrollPos : viewportRect.left,
+      isX ? viewportRect.top : viewportRect.top + targetOffset - scrollPos,
+    );
 
     let settled = false;
     const onEnd = (): void => {
