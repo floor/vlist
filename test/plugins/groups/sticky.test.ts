@@ -22,8 +22,8 @@
  * without real layout (e.g., state transitions, edge case guards).
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createStickyHeader, createStickyContainer } from "../../../src/plugins/groups/sticky";
 import { createSizeCache } from "../../../src/rendering/sizes";
 import type { GroupLayout } from "../../../src/plugins/groups/types";
@@ -32,8 +32,8 @@ import type { GroupLayout } from "../../../src/plugins/groups/types";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers

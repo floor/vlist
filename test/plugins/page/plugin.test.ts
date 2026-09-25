@@ -19,6 +19,7 @@
  * destroy cleanup.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import {
   describe,
   it,
@@ -27,7 +28,6 @@ import {
   beforeAll,
   afterAll,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { page } from "../../../src/plugins/page/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -37,12 +37,12 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // =============================================================================
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   // happy-dom implements scrollTo (unlike JSDOM). Override to no-op to prevent
   // state leaking between tests via window.scrollY.
   window.scrollTo = (() => {}) as any;
 });
-afterAll(() => { GlobalRegistrator.unregister(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers

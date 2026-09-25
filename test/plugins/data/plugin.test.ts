@@ -7,20 +7,19 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { data as dataPlugin } from "../../../src/plugins/data/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { createEmitter } from "../../../src/events/emitter";
-import { useFakeTimers } from "../../helpers/dom";
+import { useFakeTimers, registerDOM, unregisterDOM } from "../../helpers/dom";
 import type { VListEvents } from "../../../src/types";
 
 // =============================================================================
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers

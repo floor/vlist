@@ -1,13 +1,13 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { afterAll, beforeAll, expect, it, mock } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { PluginContext, VListPlugin } from "../../src/core/types";
 import { page } from "../../src/plugins/page/plugin";
 import { grid } from "../../src/plugins/grid/plugin";
 import { createContainer } from "../helpers/factory";
 
-beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+beforeAll(() => registerDOM());
+afterAll(() => unregisterDOM());
 
 function setup() {
   const host = createContainer();

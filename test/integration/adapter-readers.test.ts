@@ -1,5 +1,5 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { afterAll, beforeAll, expect, it, mock } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../helpers/plugin-context";
 import { a11y } from "../../src/plugins/a11y/plugin";
 import { autosize } from "../../src/plugins/autosize/plugin";
@@ -9,8 +9,8 @@ import type { PluginContext, VListPlugin } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 
-beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+beforeAll(() => registerDOM());
+afterAll(() => unregisterDOM());
 const setup = () => createPluginMockContext(Array.from({ length: 100 }, (_, id) => ({ id })), { itemSize: 40, containerHeight: 400 });
 
 it("a11y routes focus navigation through the adapter without pre-committing state", () => {

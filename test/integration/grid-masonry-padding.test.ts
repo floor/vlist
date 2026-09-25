@@ -4,6 +4,7 @@
  * correctly to item transforms when using grid() or masonry() plugins.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
@@ -14,7 +15,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
@@ -31,7 +31,7 @@ import { masonry } from "../../src/plugins/masonry/plugin";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
@@ -45,7 +45,7 @@ beforeAll(() => {
 
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());

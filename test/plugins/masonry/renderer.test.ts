@@ -4,6 +4,7 @@
  * selection/focus classes, horizontal mode, lifecycle, and edge cases.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import {
   describe,
   it,
@@ -13,7 +14,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createMasonryRenderer } from "../../../src/plugins/masonry/renderer";
 import type { MasonryRenderer, GetItemFn } from "../../../src/plugins/masonry/renderer";
 import type { ItemPlacement } from "../../../src/plugins/masonry/types";
@@ -23,8 +23,8 @@ import type { VListItem, ItemTemplate, ItemState } from "../../../src/types";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Types & Helpers

@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { transition } from "../../../src/plugins/transition/plugin";
 import type { VListItem } from "../../../src/types";
@@ -8,7 +9,6 @@ import type { PluginContext } from "../../../src/core/types";
 // DOM + Web Animations API Mock
 // =============================================================================
 
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 interface MockAnimation {
   finished: Promise<Animation>;
@@ -45,7 +45,7 @@ const createMockAnimation = (
 };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
 
   HTMLElement.prototype.animate = function (
     this: HTMLElement,
@@ -60,7 +60,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 // =============================================================================

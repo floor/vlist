@@ -12,9 +12,9 @@
  * Nothing covered masonry with an adapter before this file.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, createTestItems, type TestItem } from "../helpers/factory";
@@ -25,14 +25,14 @@ import type { VListAdapter } from "../../src/types";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return 400; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());

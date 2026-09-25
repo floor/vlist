@@ -1,4 +1,5 @@
 import { test, expect } from 'bun:test';
+import { NativeResponse } from '../helpers/native';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
@@ -15,7 +16,7 @@ test('benchmark never reuses a server on an explicitly selected port', async () 
   mkdirSync(resolve(site, 'node_modules'));
   mkdirSync(resolve(site, 'benchmarks/ci'), { recursive: true });
   writeFileSync(resolve(site, 'benchmarks/ci/runner.mjs'), '');
-  const server = Bun.serve({ port: 0, fetch: () => new Response('unrelated server') });
+  const server = Bun.serve({ port: 0, fetch: () => new NativeResponse('unrelated server') });
   try {
     const proc = Bun.spawn(['bun', script, '--quick'], { env: { ...process.env, VLIST_IO_DIR: site, VLIST_BENCH_PORT: String(server.port) }, stdout: 'pipe', stderr: 'pipe' });
     expect(await proc.exited).not.toBe(0);

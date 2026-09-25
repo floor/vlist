@@ -20,9 +20,9 @@
  * boundary, so neither behaviour can be "fixed" by breaking the other.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
@@ -34,7 +34,7 @@ let geometry: ReturnType<typeof capturePrototypeGeometry>;
 let consoleError: typeof console.error;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   consoleError = console.error;
   console.error = mock(() => {});
   geometry = capturePrototypeGeometry();
@@ -44,7 +44,7 @@ beforeAll(() => {
 afterAll(() => {
   console.error = consoleError;
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 afterAll(() => geometry.assertRestored());
 

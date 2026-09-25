@@ -5,6 +5,7 @@
  * resize interaction, scroll sync, visibility, and destroy.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import {
   describe,
   it,
@@ -14,7 +15,6 @@ import {
   afterAll,
   beforeEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 import { createTableHeader } from "../../../src/plugins/table/header";
 import { createTableLayout } from "../../../src/plugins/table/layout";
@@ -25,8 +25,8 @@ import type { VListItem } from "../../../src/types";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Types & Helpers

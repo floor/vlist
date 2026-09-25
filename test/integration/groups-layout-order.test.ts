@@ -10,6 +10,7 @@
  * wraps the same size cache and takes over the same render pipeline.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -20,7 +21,6 @@ import {
   afterEach,
 } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
 import {
@@ -36,7 +36,7 @@ import { masonry } from "../../src/plugins/masonry/plugin";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
@@ -54,7 +54,7 @@ beforeAll(() => {
 
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 afterAll(() => geometry.assertRestored());
 

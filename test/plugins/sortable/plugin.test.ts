@@ -6,8 +6,8 @@
  * Adapted from v1 withSortable feature tests to v2 PluginContext API.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { sortable } from "../../../src/plugins/sortable/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -94,7 +94,7 @@ let origRAF: typeof globalThis.requestAnimationFrame;
 let origCAF: typeof globalThis.cancelAnimationFrame;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   origRAF = global.requestAnimationFrame;
   origCAF = global.cancelAnimationFrame;
   global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
@@ -105,7 +105,7 @@ beforeAll(() => {
 afterAll(() => {
   global.requestAnimationFrame = origRAF;
   global.cancelAnimationFrame = origCAF;
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 // =============================================================================

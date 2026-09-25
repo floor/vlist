@@ -3,6 +3,7 @@
  * Tests for the custom scrollbar component
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import {
   describe,
   it,
@@ -13,7 +14,6 @@ import {
   afterAll,
   mock,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   createScrollbar,
   type Scrollbar,
@@ -31,7 +31,7 @@ const captureNames = ['setPointerCapture', 'hasPointerCapture', 'releasePointerC
 const dispatchCaptured = (event: Event): boolean => (captured ?? document).dispatchEvent(event);
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   captureDescriptors = captureNames.map(name => Object.getOwnPropertyDescriptor(HTMLElement.prototype, name));
   HTMLElement.prototype.setPointerCapture = function () { captured = this; };
   HTMLElement.prototype.hasPointerCapture = function () { return captured === this; };
@@ -51,7 +51,7 @@ afterAll(() => {
     if (descriptor) Object.defineProperty(HTMLElement.prototype, name, descriptor);
     else delete (HTMLElement.prototype as any)[name];
   });
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 // =============================================================================

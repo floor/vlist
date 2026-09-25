@@ -2,9 +2,9 @@
  * Default synthetic input keeps the full logical range and viewport-sized content.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/synthetic";
 import type { VList } from "../../src/core/types";
 import { createContainer, type TestItem } from "../helpers/factory";
@@ -16,14 +16,14 @@ import type { VListAdapter } from "../../src/types";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return 500; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());

@@ -13,8 +13,8 @@
  * leaves empty.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
@@ -25,7 +25,7 @@ import { data } from "../../src/plugins/data/plugin";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
@@ -33,7 +33,7 @@ beforeAll(() => {
 
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 const tick = (ms = 0): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));

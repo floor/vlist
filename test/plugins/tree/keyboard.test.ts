@@ -5,8 +5,8 @@
  * type-ahead, *, and focus management via focusin/focusout.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { tree } from "../../../src/plugins/tree/plugin";
 import type { VListItem } from "../../../src/types";
@@ -31,8 +31,8 @@ function makeTree(): TreeItem[] {
   ];
 }
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 function setup(expandedIds: string[] = []) {
   const items = makeTree();
