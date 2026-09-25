@@ -64,7 +64,10 @@ afterAll(() => geometry.assertRestored());
 // Shared Helpers
 // =============================================================================
 
-interface TableTestItem extends VListItem {
+// Extends TestItem rather than VListItem: TestItem carries an index signature,
+// and an interface declared without one is never assignable to it -- which is
+// why TableTestItem[] could not be passed where simpleTemplate's item goes.
+interface TableTestItem extends TestItem {
   id: number;
   name: string;
   email: string;

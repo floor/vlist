@@ -13,7 +13,9 @@ type Call = {
   kind: "to" | "smooth";
   position: number;
   duration?: number;
-  easing?: (t: number) => number;
+  // `| undefined` explicitly: exactOptionalPropertyTypes is on, and the
+  // smoothTo stub records `easing` whether or not one was passed.
+  easing?: ((t: number) => number) | undefined;
 };
 
 function target() {

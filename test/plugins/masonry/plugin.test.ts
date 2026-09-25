@@ -1462,7 +1462,7 @@ describe("masonry - scrollToIndex smooth", () => {
     plugin.setup!(ctx);
     ctx.render.force();
 
-    const smooth: { duration: number; easing?: (t: number) => number }[] = [];
+    const smooth: { duration: number; easing?: ((t: number) => number) | undefined }[] = [];
     const jumps: number[] = [];
     const scroll = ctx.scroll;
     const realSmooth = scroll.smoothTo.bind(scroll);

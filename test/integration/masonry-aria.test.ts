@@ -99,7 +99,11 @@ describe("masonry — listbox semantics", () => {
         container,
         items,
         item: {
-          height: (_item, index) => (index % 3 === 0 ? 180 : 48),
+          // Masonry's height callback is (index, context?), not (item, index).
+          // Written the other way round, `index` received the context object,
+          // `context % 3` was NaN, and every item silently got 48 -- so the
+          // varied heights this test exists to exercise never happened.
+          height: (index) => (index % 3 === 0 ? 180 : 48),
           template: simpleTemplate,
         },
       },
