@@ -748,6 +748,19 @@ export function createCore<T extends VListItem = VListItem>(
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
   if (skipDefaultScroll && boundedWrap) {
+    // This is the one throw after the setup loop, and page's setup has
+    // already bound a resize listener on window by now. A throw here used to
+    // leave it there: no list is returned, so nothing could ever destroy it,
+    // and the listener outlived its context. Unwind exactly as destroy() does
+    // before throwing. Any new throw placed after setup must do the same.
+    for (const handler of destroyHandlers) {
+      try { handler(); } catch { /* the construction error is the one to surface */ }
+    }
+    for (const plugin of sorted) {
+      if (plugin.destroy) {
+        try { plugin.destroy(); } catch { /* as above */ }
+      }
+    }
     throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
