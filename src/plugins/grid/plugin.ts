@@ -382,6 +382,10 @@ export function grid<T extends VListItem = VListItem>(
       const rawSpec = ctx.sizes.rawSpec;
       let baseRowSize: number;
       heightIsFunction = typeof rawSpec === "function";
+      // The resize hook reads `heightIsFunction`, but the branch below tests
+      // `typeof rawSpec` directly rather than the boolean: TypeScript narrows
+      // `rawSpec` on the typeof test and not through a mutable variable, and
+      // without the narrowing the `else` branch cannot assign it to a number.
       // setConfig builds one slot per item before the cache is shrunk to the
       // row count. Row i stands for item i × columns, which runs past the
       // data. A height function that reads its item throws there, and a
@@ -392,10 +396,10 @@ export function grid<T extends VListItem = VListItem>(
         return (rawSpec as Function)(firstItem, gridCtx) + rowGap;
       }
 
-      if (heightIsFunction) {
+      if (typeof rawSpec === "function") {
         const colWidth = layout.getColumnWidth(containerWidth);
         const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
-        baseRowSize = engineState.totalItems > 0 ? (rawSpec as Function)(0, gridCtx) : 0;
+        baseRowSize = engineState.totalItems > 0 ? rawSpec(0, gridCtx) : 0;
         ctx.sizes.setConfig((rowIndex: number): number => {
           gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
           return rowHeightFrom(rowIndex, config.columns, gap, gridCtx);
