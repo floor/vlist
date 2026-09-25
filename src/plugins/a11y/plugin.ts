@@ -243,11 +243,15 @@ export function a11y<T extends VListItem = VListItem>(
           const ud = nav.ud || 1;
           const lr = nav.lr;
           const isX = config.axis.primary === "x";
+          const lane = (d: number): number => (Math.abs(d) > 1 && p >= 0 ? clampPageTarget(p + d, p, Math.abs(d), total) : p + d);
           switch (e.key) {
-            case "ArrowUp":    if (isX && !lr) return; n = p - (isX ? lr : ud); break;
-            case "ArrowDown":  if (isX && !lr) return; n = p + (isX ? lr : ud); break;
-            case "ArrowLeft":  if (!isX && !lr) return; n = p - (isX ? ud : lr); break;
-            case "ArrowRight": if (!isX && !lr) return; n = p + (isX ? ud : lr); break;
+            // A step of more than one item is a row (or, sideways in a
+            // horizontal grid, a column): it keeps its lane at the edges
+            // instead of clamping to the corner, as the page keys do (#60).
+            case "ArrowUp":    if (isX && !lr) return; n = lane(-(isX ? lr : ud)); break;
+            case "ArrowDown":  if (isX && !lr) return; n = lane(isX ? lr : ud); break;
+            case "ArrowLeft":  if (!isX && !lr) return; n = lane(-(isX ? ud : lr)); break;
+            case "ArrowRight": if (!isX && !lr) return; n = lane(isX ? ud : lr); break;
             case "PageUp":
             case "PageDown": {
               const sz = sizeCache.getSize(Math.max(0, nav.scrollIndex ? nav.scrollIndex(p) : p));

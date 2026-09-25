@@ -257,6 +257,54 @@ describe("selection — left and right arrows", () => {
 // PageUp / PageDown across group headers
 // =============================================================================
 
+describe("selection — arrows at the grid\'s edges (#60)", () => {
+  // Reported against the photo album: click a cell in the first row and
+  // ArrowUp went to cell 0; a cell in the last row and ArrowDown went to the
+  // last cell -- Home and End, not a row move. The page keys had already been
+  // given the column-preserving clamp; the arrows still clamped linearly.
+  it("ArrowUp on the first row stays in its column", scoped((scope) => {
+    const { container, content } = makeList(
+      scope,
+      { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [grid({ columns: 4 }), selection<TestItem>()],
+    );
+    press(content, "Home");
+    press(content, "ArrowRight");
+    press(content, "ArrowRight");
+    expect(focusedId(container)).toBe(3);
+    expect(press(content, "ArrowUp").claimed).toBe(true);
+    expect(focusedId(container)).toBe(3);
+  }));
+
+  it("ArrowDown on the last row stays in its column", scoped((scope) => {
+    const { container, content } = makeList(
+      scope,
+      { items: createTestItems(20), item: { height: 50, template: simpleTemplate } },
+      [grid({ columns: 4 }), selection<TestItem>()],
+    );
+    press(content, "End");
+    press(content, "ArrowLeft");
+    press(content, "ArrowLeft");
+    expect(focusedId(container)).toBe(18);
+    expect(press(content, "ArrowDown").claimed).toBe(true);
+    expect(focusedId(container)).toBe(18);
+  }));
+
+  it("ArrowDown into a shorter last row lands on the last item, as PageDown does", scoped((scope) => {
+    const { container, content } = makeList(
+      scope,
+      { items: createTestItems(18), item: { height: 50, template: simpleTemplate } },
+      [grid({ columns: 4 }), selection<TestItem>()],
+    );
+    press(content, "End"); // index 17, the last row holds 16 and 17
+    press(content, "ArrowUp"); // index 13
+    press(content, "ArrowRight"); // index 14: a column the last row does not have
+    expect(focusedId(container)).toBe(15);
+    press(content, "ArrowDown");
+    expect(focusedId(container)).toBe(18);
+  }));
+});
+
 describe("selection + groups — PageUp and PageDown", () => {
   const ITEM = 50;
 

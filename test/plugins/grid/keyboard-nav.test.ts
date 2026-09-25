@@ -74,6 +74,40 @@ function initFocus(content: HTMLElement): void {
 // Arrow Down/Up — moves by columns (row navigation)
 // =============================================================================
 
+describe("grid keyboard nav — the edges keep their column (#60)", () => {
+  it("ArrowUp on the first row stays put instead of going to item 0", async () => {
+    const { vlist, container } = createGridList(20, 4);
+    await flush();
+    const content = getContent(container);
+    initFocus(content);
+    fireKey(content, "ArrowRight");
+    fireKey(content, "ArrowRight");
+    await flush();
+    expect(getFocusedIndex(content)).toBe(2);
+    fireKey(content, "ArrowUp");
+    await flush();
+    expect(getFocusedIndex(content)).toBe(2);
+    vlist.destroy();
+    container.remove();
+  });
+
+  it("ArrowDown on the last row stays put instead of going to the last item", async () => {
+    const { vlist, container } = createGridList(20, 4);
+    await flush();
+    const content = getContent(container);
+    fireKey(content, "End");
+    fireKey(content, "ArrowLeft");
+    fireKey(content, "ArrowLeft");
+    await flush();
+    expect(getFocusedIndex(content)).toBe(17);
+    fireKey(content, "ArrowDown");
+    await flush();
+    expect(getFocusedIndex(content)).toBe(17);
+    vlist.destroy();
+    container.remove();
+  });
+});
+
 describe("grid keyboard nav — ArrowDown/Up (row movement)", () => {
   it("ArrowDown moves focus by columns count (skips a row)", async () => {
     const { vlist, container } = createGridList(20, 3);
