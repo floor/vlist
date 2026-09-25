@@ -147,18 +147,30 @@ export function sortable<T extends VListItem = VListItem>(
     clone.className = `${classPrefix}-item ${ghostClass}`;
     clone.removeAttribute("data-index");
     clone.style.cssText =
-      `position:fixed;pointer-events:none;z-index:10000;width:${rect.width}px;` +
-      `height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;` +
-      "transition:none;will-change:transform";
+      `position:absolute;left:0;top:0;pointer-events:none;z-index:10000;width:${rect.width}px;` +
+      `height:${rect.height}px;transition:none;will-change:transform`;
     (ghostContainer || document.body).appendChild(clone);
     return clone;
   };
 
-  const updateGhostPosition = (): void => {
+  // Put the ghost where the pointer is, in whatever space the ghost's
+  // containing block lives in, by reading where it landed and correcting by
+  // the difference. It used to be `position: fixed` at the pointer's client
+  // coordinates. Measured on an iPhone (FLO-87, 2026-09-25): pinch-zoomed
+  // 2.21x and panned by (86, 215), the fixed ghost's rect sat exactly (86, 215)
+  // from where its inline left/top said -- on WebKit, fixed positioning and
+  // the client space disagree by the visual viewport's offset, so the row
+  // rendered that far from the finger. The ghost's own rect and the pointer's
+  // client coordinates are always in the same space; the arithmetic between
+  // its inline position and that rect is what varies, and this never assumes
+  // it. One rect read per move, the same cost as the drop-index math.
+  const placeGhost = (): void => {
     if (!ghost) return;
-    ghost.style.left = `${pointerCurrentX - ghostOffsetX}px`;
-    ghost.style.top = `${pointerCurrentY - ghostOffsetY}px`;
+    const rect = ghost.getBoundingClientRect();
+    ghost.style.left = `${parseFloat(ghost.style.left) + pointerCurrentX - ghostOffsetX - rect.left}px`;
+    ghost.style.top = `${parseFloat(ghost.style.top) + pointerCurrentY - ghostOffsetY - rect.top}px`;
   };
+  const updateGhostPosition = placeGhost;
 
   const computeDropIndex = (): number => {
     const totalItems = engineState.totalItems;
@@ -558,6 +570,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     if (draggedElement) {
       ghost = createGhost(draggedElement);
+      placeGhost();
       draggedElement.classList.add(dragSourceClass);
     }
 
@@ -647,7 +660,8 @@ export function sortable<T extends VListItem = VListItem>(
     pointerCurrentX = event.clientX;
     pointerCurrentY = event.clientY;
 
-    if (!dragInitiated) {
+    const starting = !dragInitiated;
+    if (starting) {
       const dx = pointerCurrentX - pointerStartX;
       const dy = pointerCurrentY - pointerStartY;
       if (Math.sqrt(dx * dx + dy * dy) < dragThreshold) return;
@@ -658,7 +672,8 @@ export function sortable<T extends VListItem = VListItem>(
     if (sorting) {
       if (touchClaimed) event.stopPropagation();
       event.preventDefault();
-      updateGhostPosition();
+      // startDrag placed the ghost for this move already.
+      if (!starting) updateGhostPosition();
       if (!inEdgeZone) {
         updateDropPosition();
       } else if (isPointerOutsideViewport()) {

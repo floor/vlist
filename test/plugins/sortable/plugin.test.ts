@@ -700,6 +700,99 @@ describe("sortable — sort events", () => {
 // Ghost Container Tests
 // =============================================================================
 
+describe("sortable — ghost position", () => {
+  // Measured on an iPhone (FLO-87, 2026-09-25): pinch-zoomed and panned by
+  // (86, 215), a `position: fixed` ghost at the pointer's client coordinates
+  // rendered exactly (86, 215) away from the finger -- fixed positioning and
+  // the client space disagree by the visual viewport's offset on WebKit. The
+  // ghost is absolute now and placed by feedback: read its rect, correct by
+  // the difference to the pointer. A test cannot pinch-zoom Happy DOM, but it
+  // can make the ghost's rect report any relation to its inline position --
+  // including the one the phone reported -- and read where the ghost went.
+  const PointerEventCtor = PointerEvent ?? MouseEvent;
+  const at = (type: string, clientX: number, clientY: number): PointerEvent =>
+    new PointerEventCtor(type, { bubbles: true, clientX, clientY, button: 0 }) as PointerEvent;
+  const rectOf = (el: HTMLElement, left: number, top: number, width = 400, height = 56): void => {
+    el.getBoundingClientRect = () =>
+      ({ left, top, right: left + width, bottom: top + height, width, height, x: left, y: top, toJSON: () => {} }) as DOMRect;
+  };
+  /** The ghost's rect reports its inline position shifted by (dx, dy): a containing block not at the origin, or the phone's viewport split. */
+  const shiftRect = (ghost: HTMLElement, dx: number, dy: number): void => {
+    ghost.getBoundingClientRect = () => {
+      const left = parseFloat(ghost.style.left) + dx, top = parseFloat(ghost.style.top) + dy;
+      return { left, top, right: left + 400, bottom: top + 56, width: 400, height: 56, x: left, y: top, toJSON: () => {} } as DOMRect;
+    };
+  };
+  const start = (ctx: ReturnType<typeof createMockContext>["ctx"]): HTMLElement => {
+    const itemEl = ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
+    rectOf(itemEl, 0, 112);
+    itemEl.dispatchEvent(at("pointerdown", 200, 140)); // grabbed 200 in, 28 down
+    document.dispatchEvent(at("pointermove", 200, 160)); // crosses the threshold: drag starts
+    return document.body.querySelector(".vlist-sort-ghost") as HTMLElement;
+  };
+  const finish = (mockCtx: ReturnType<typeof createMockContext>): void => {
+    document.dispatchEvent(at("pointerup", 200, 160));
+    for (const h of mockCtx.destroyHandlers) h();
+    document.body.querySelector(".vlist-sort-ghost")?.remove();
+    mockCtx.cleanup();
+  };
+
+  it("is absolute and placed the moment the drag starts, under the pointer", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      expect(ghost).not.toBeNull();
+      expect(ghost.style.position).toBe("absolute");
+      // Happy DOM reports every rect at the origin, so inline equals client.
+      expect(ghost.style.left).toBe("0px");
+      expect(ghost.style.top).toBe("132px");
+    } finally {
+      finish(mockCtx);
+    }
+  });
+
+  it("corrects by whatever its containing block adds: a block at (100, 300)", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      shiftRect(ghost, 100, 300);
+      document.dispatchEvent(at("pointermove", 200, 180));
+      expect(ghost.style.left).toBe("-100px");
+      expect(ghost.style.top).toBe("-148px");
+      // And stays put once it is right: the next move corrects by the move only.
+      document.dispatchEvent(at("pointermove", 210, 190));
+      expect(ghost.style.left).toBe("-90px");
+      expect(ghost.style.top).toBe("-138px");
+    } finally {
+      finish(mockCtx);
+    }
+  });
+
+  it("corrects the viewport split the phone measured: rect = inline - (86, 215)", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      shiftRect(ghost, -86, -215);
+      document.dispatchEvent(at("pointermove", 200, 180));
+      // The fixed ghost read `top: 152px` here and rendered 215 px above the
+      // finger. The rect now lands on the pointer: (0, 152) + (86, 215).
+      expect(ghost.style.left).toBe("86px");
+      expect(ghost.style.top).toBe("367px");
+      const r = ghost.getBoundingClientRect();
+      expect(r.left).toBe(0);
+      expect(r.top).toBe(152);
+    } finally {
+      finish(mockCtx);
+    }
+  });
+});
+
 describe("sortable — ghostContainer", () => {
   function startDrag(
     ctx: ReturnType<typeof createMockContext>["ctx"],
