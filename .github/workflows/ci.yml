@@ -24,29 +24,76 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # Every gate below runs even when an earlier one is red, and the last
+      # step fails the job if any did. Before 2026-09-25 the job stopped at the
+      # first red step, so one failure hid every gate behind it: next was red
+      # for three days and it took five CI round-trips to learn there were five
+      # layers (typecheck, test types, the harness, coverage, size). Now one run
+      # names them all. `outcome` is the step's own result; `conclusion` would
+      # read success because of continue-on-error.
       - name: Typecheck
+        id: typecheck
+        continue-on-error: true
         run: bun run typecheck
 
       - name: Test
+        id: test
+        continue-on-error: true
         run: bun test
 
       # CONTRIBUTING.md offers --concurrent as the fast way to run the suite, so
       # it is gated here: a test that leaks process state passes alone and fails
       # interleaved, and only this step tells the difference.
       - name: Test (concurrent — test isolation)
+        id: concurrent
+        continue-on-error: true
         run: bun test --concurrent
 
       - name: Coverage threshold
+        id: coverage
+        continue-on-error: true
         run: bun run scripts/coverage.ts --threshold 85
 
       - name: Build
+        id: build
+        continue-on-error: true
         run: bun run build
 
       - name: Bundle size + tree-shaking
+        id: size
+        continue-on-error: true
         run: bun run size
 
+      # Reads dist/, so it has nothing to measure without a build.
       - name: Heap growth
+        id: heap
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
         run: bun run heap
+
+      - name: Gate
+        env:
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          TEST: ${{ steps.test.outcome }}
+          CONCURRENT: ${{ steps.concurrent.outcome }}
+          COVERAGE: ${{ steps.coverage.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          SIZE: ${{ steps.size.outcome }}
+          HEAP: ${{ steps.heap.outcome }}
+        run: |
+          red=""
+          for gate in TYPECHECK TEST CONCURRENT COVERAGE BUILD SIZE HEAP; do
+            case "${!gate}" in
+              success) ;;
+              skipped) red="$red $gate(skipped)";;
+              *) red="$red $gate";;
+            esac
+          done
+          if [ -n "$red" ]; then
+            echo "::error::red gates:$red"
+            exit 1
+          fi
+          echo "every gate green"
 
   browser:
     name: Browser suites
