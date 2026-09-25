@@ -575,6 +575,51 @@ describe("sortable — sort events", () => {
     mockCtx.cleanup();
   });
 
+  // The drop commits its style changes under `vlist--settling` (transition:
+  // none). finalize runs from transitionend or a timeout, so the frame
+  // callback that removes the class fires before the next style calculation;
+  // without a forced calculation while the class is on, the drag source's
+  // opacity went 0 -> 1 through the base .vlist-item transition. Measured on
+  // the sortable example before the fix: 0.09, 0.40, 0.77 over three frames.
+  // Happy DOM has no transitions, so the test pins the mechanism: a layout
+  // read on the root while settling is on, sorting is off, and no row is a
+  // drag source any more. The browser suite measures the opacity itself.
+  const settledReads = (root: HTMLElement, content: HTMLElement): Array<{ settling: boolean; sorting: boolean; dragSource: boolean }> => {
+    const reads: Array<{ settling: boolean; sorting: boolean; dragSource: boolean }> = [];
+    Object.defineProperty(root, "offsetWidth", {
+      configurable: true,
+      get() {
+        reads.push({
+          settling: root.classList.contains("vlist--settling"),
+          sorting: root.classList.contains("vlist--sorting"),
+          dragSource: content.querySelector(".vlist-item--drag-source") !== null,
+        });
+        return 400;
+      },
+    });
+    return reads;
+  };
+
+  for (const [name, moveY] of [["a drop back at the origin", 20], ["a drop two rows down", 120]] as const) {
+    it(`forces a style calculation under settling before the frame that removes it: ${name}`, () => {
+      const plugin = sortable<TestItem>();
+      const mockCtx = createMockContext();
+      mockCtx.ctx.dom.viewport.getBoundingClientRect = () =>
+        ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+      plugin.setup!(mockCtx.ctx);
+      const reads = settledReads(mockCtx.ctx.dom.root, mockCtx.ctx.dom.content);
+
+      simulateDrag(mockCtx.ctx, mockCtx.emitSpy, 3, moveY);
+      const PointerEventCtor = PointerEvent ?? MouseEvent;
+      document.dispatchEvent(new PointerEventCtor("pointerup", { bubbles: true, clientX: 200, clientY: 3 * 56 + 28 + moveY, button: 0 }));
+      fakeTimers.tick(250);
+
+      expect(mockCtx.ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
+      expect(reads.some((r) => r.settling && !r.sorting && !r.dragSource)).toBe(true);
+      mockCtx.cleanup();
+    });
+  }
+
   it("emits sort:move when drop position changes during drag", () => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
