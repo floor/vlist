@@ -447,6 +447,22 @@ export function sortable<T extends VListItem = VListItem>(
     if (!storedCtx) return;
     const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
 
+    // `--settling` puts `transition: none` on every row so the drop commits
+    // in one step: the drag source going from opacity 0 back to 1, and the
+    // rows a stylesheet dims while sorting going back up. The class only works
+    // if a style calculation happens while it is on. finalize runs from
+    // transitionend or a timeout -- a task, not a frame callback -- so the
+    // requestAnimationFrame that removes the class fires in the next frame's
+    // callback phase, before that frame's style calculation: the class was
+    // never computed, and the base `.vlist-item` opacity transition animated
+    // the dropped row from 0. Measured on the sortable example: 0.09, 0.40,
+    // 0.77 over the three frames after the drop. Reading offsetWidth forces
+    // the calculation while the class is on; the removal a frame later then
+    // changes nothing that transitions.
+    const commitSettled = (): void => {
+      void rootEl.offsetWidth;
+      requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
+    };
     const finalize = (): void => {
       if (!storedCtx) return;
       sorting = false;
@@ -455,13 +471,12 @@ export function sortable<T extends VListItem = VListItem>(
         storedCtx.emitter.emit("sort:end" as never, { fromIndex, toIndex } as never);
         if (dragFocusedItemId !== null) focusById(dragFocusedItemId);
         cleanupDrag(true);
-        requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
       } else {
         rootEl.classList.add(settlingClass);
         storedCtx.emitter.emit("sort:cancel" as never, { originalItems: [...storedCtx.items.all()] } as never);
         cleanupDrag(false);
-        requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
       }
+      commitSettled();
     };
 
     if (!ghost) {
