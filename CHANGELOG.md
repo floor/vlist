@@ -11,6 +11,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.0.0-next.5] - 2026-09-25
+
+### Fixed
+
+- `sortable()`: the drag ghost lands under the finger on a pinch-zoomed page.
+  Measured on an iPhone: zoomed 2.21× and panned by (86, 215), the ghost's
+  rect sat exactly (86, 215) from where its inline position said, because
+  the ghost was `position: fixed` at the pointer's client coordinates and on
+  WebKit fixed positioning and the client space disagree by the visual
+  viewport's offset. The ghost is absolute now and placed by feedback — its
+  own rect read and corrected against the pointer — so nothing is assumed
+  about the containing block, the scroll or the zoom. Unzoomed, nothing
+  changes; `sortable` is 41 bytes larger gzipped.
+
 ## [3.0.0-next.4] - 2026-09-25
 
 ### Changed
