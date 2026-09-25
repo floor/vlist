@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Masonry 2D Keyboard Navigation Tests
+ * vlist — Masonry 2D Keyboard Navigation Tests
  *
  * Tests the masonry plugin's lane-aware navigate() function:
  * - ArrowUp/Down: move within the same lane
@@ -304,7 +304,7 @@ describe("masonry keyboard nav — PageUp/PageDown", () => {
     // Lane 0 has items: 0, 2, 4 (3 items only)
     // jump = 5, from pos 0 → tries pos 5, clamped to 2 (last)
     const result = navigate(state, 0, "PageDown", 6);
-    expect(result).toBe(state.laneItems[0]![2]);
+    expect(result).toBe(state.laneItems[0]![2]!);
   });
 
   it("PageUp clamps at start of lane", () => {
@@ -315,7 +315,7 @@ describe("masonry keyboard nav — PageUp/PageDown", () => {
     const startItem = laneItems[2]!;
 
     const result = navigate(state, startItem, "PageUp", 10);
-    expect(result).toBe(laneItems[0]);
+    expect(result).toBe(laneItems[0]!);
   });
 });
 

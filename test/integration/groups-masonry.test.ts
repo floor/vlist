@@ -9,6 +9,8 @@
  *   - Selection works across groups
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -18,8 +20,8 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -31,13 +33,12 @@ import { groups } from "../../src/plugins/groups/plugin";
 import { masonry } from "../../src/plugins/masonry/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
     configurable: true,
@@ -49,10 +50,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
@@ -82,8 +84,8 @@ function getGroupByTen(index: number): string {
   return "Delta";
 }
 
-function createGroupedMasonry(itemCount: number = 40, opts?: { sticky?: boolean }) {
-  list = createVList(
+function createGroupedMasonry(itemCount: number = 40, opts?: { sticky?: boolean }, factory = createVList<TestItem>) {
+  list = factory(
     {
       container,
       items: createTestItems(itemCount),
@@ -300,7 +302,7 @@ describe("groups + masonry integration", () => {
       // In masonry, the last-indexed item may be in a shorter lane.
       // align:end must target the group's tallest-lane bottom so the
       // scroll reaches the true content bottom (maxScroll).
-      createGroupedMasonry(40);
+      createGroupedMasonry(40, undefined, createNative);
       const vp = container.querySelector(".vlist-viewport") as HTMLElement;
       const content = container.querySelector(".vlist-content") as HTMLElement;
       const contentH = parseFloat(content.style.height);

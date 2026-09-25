@@ -1,3 +1,4 @@
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -8,8 +9,8 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList, VListPlugin } from "../../src/core/types";
 import {
   createTestItems,
@@ -33,23 +34,23 @@ import { createEngineState } from "../../src/core/state";
 import { createSizeCache } from "../../src/core/sizes";
 import { createPool } from "../../src/core/pool";
 import { createScrollHandler } from "../../src/core/scroll";
-import { useFakeTimers } from "../helpers/dom";
+import { useFakeTimers, registerDOM, unregisterDOM } from "../helpers/dom";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // ─── createVList edge cases ──────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ describe("createVList scroll", () => {
   afterEach(() => { list?.destroy(); container.remove(); });
 
   it("should scroll to index with center alignment", () => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [],
     );
@@ -180,7 +181,7 @@ describe("createVList scroll", () => {
   });
 
   it("should scroll to index with end alignment", () => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [],
     );
@@ -198,7 +199,7 @@ describe("createVList scroll", () => {
   });
 
   it("should scrollToIndex with smooth behavior and custom easing", (done) => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [],
     );
@@ -212,7 +213,7 @@ describe("createVList scroll", () => {
   });
 
   it("should scrollToIndex with easing function that overshoots (elastic)", (done) => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } },
       [],
     );
@@ -239,7 +240,7 @@ describe("createVList scroll", () => {
   });
 
   it("should emit scroll:idle after scrolling stops", async () => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(100), item: { height: 40, template: simpleTemplate }, scroll: { idleTimeout: 50 } },
       [],
     );
@@ -265,7 +266,7 @@ describe("createVList horizontal", () => {
   afterEach(() => { list?.destroy(); container.remove(); });
 
   it("should set content width instead of height", () => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(50), item: { width: 100, template: simpleTemplate }, orientation: "horizontal" },
       [],
     );
@@ -274,7 +275,7 @@ describe("createVList horizontal", () => {
   });
 
   it("should use scrollLeft for horizontal scrollToIndex", () => {
-    list = createVList(
+    list = createNative(
       { container, items: createTestItems(50), item: { width: 100, template: simpleTemplate }, orientation: "horizontal" },
       [],
     );

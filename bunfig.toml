@@ -1,5 +1,6 @@
 [test]
 concurrent = true
+preload = ["./test/preload.ts"]
 
 # Only report coverage for source files, not the bundled dist output
 coverageSkipTestFiles = true

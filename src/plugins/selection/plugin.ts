@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Selection Plugin
+ * vlist — Selection Plugin
  *
  * Manages selection state, click/keyboard handlers, ARIA attributes.
  * Adapted from v1 withSelection feature + a11y.ts to the v2 plugin interface.
@@ -43,9 +43,31 @@ export interface SelectionPluginConfig {
 
 const focusPreventScroll = { preventScroll: true };
 
+/** Methods the selection plugin adds to the list instance. */
+export interface SelectionMethods<T extends VListItem = VListItem> {
+  /** Select one or more items by id. Does not move the viewport. */
+  select(...ids: Array<string | number>): void;
+  /** Deselect one or more items by id. */
+  deselect(...ids: Array<string | number>): void;
+  /** Toggle one item by id. */
+  toggleSelect(id: string | number): void;
+  /** Select every item (multiple mode only). */
+  selectAll(): void;
+  /** Clear the selection. */
+  clearSelection(): void;
+  /** Ids of the selected items. */
+  getSelected(): Array<string | number>;
+  /** The selected items. */
+  getSelectedItems(): T[];
+  /** Select the next item and scroll it into view. `select(id)` selects without moving the viewport. */
+  selectNext(): void;
+  /** Select the previous item and scroll it into view. `select(id)` selects without moving the viewport. */
+  selectPrevious(): void;
+}
+
 export function selection<T extends VListItem = VListItem>(
   config?: SelectionPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, SelectionMethods<T>> {
   const mode: SelectionMode = config?.mode ?? "single";
   const followFocus = config?.followFocus ?? false;
   const focusOnClick = config?.focusOnClick ?? false;
@@ -68,17 +90,25 @@ export function selection<T extends VListItem = VListItem>(
   let isGHFn: ((i: number) => boolean) | null = null;
   let sivFn: ((i: number) => void) | null = null;
   let getTotalFn: () => number;
+  // getTotalFn is a layout-space bound: it walks focus across entries, so with
+  // groups it counts headers too. Questions of the form "how many items are
+  // there" need the data total instead — the engine's count is render-space,
+  // and carousel inflates it to three laps. Plugins that know better publish
+  // _getTotal; with none, the two spaces coincide.
+  let getDataTotalFn: () => number;
   let resolved = false;
 
   function resolveOnce(ctx: PluginContext<T>): void {
     if (resolved) return;
     resolved = true;
-    l2dFn = (ctx.getMethod("_layoutToDataIndex") as typeof l2dFn) ?? null;
-    d2lFn = (ctx.getMethod("_dataToLayoutIndex") as typeof d2lFn) ?? null;
-    isGHFn = (ctx.getMethod("_isGroupHeader") as typeof isGHFn) ?? null;
-    sivFn = (ctx.getMethod("_scrollItemIntoView") as typeof sivFn) ?? null;
-    loadedItemFn = (ctx.getMethod("_getLoadedItem") as typeof loadedItemFn) ?? null;
-    const gl = ctx.getMethod("getGroupLayout") as (() => { totalEntries: number }) | undefined;
+    l2dFn = (ctx.hooks.get("_layoutToDataIndex") as typeof l2dFn) ?? null;
+    d2lFn = (ctx.hooks.get("_dataToLayoutIndex") as typeof d2lFn) ?? null;
+    isGHFn = (ctx.hooks.get("_isGroupHeader") as typeof isGHFn) ?? null;
+    sivFn = (ctx.hooks.get("_scrollItemIntoView") as typeof sivFn) ?? null;
+    loadedItemFn = (ctx.hooks.get("_getLoadedItem") as typeof loadedItemFn) ?? null;
+    const dataTotal = ctx.hooks.get("_getTotal") as (() => number) | undefined;
+    if (dataTotal) getDataTotalFn = dataTotal;
+    const gl = ctx.hooks.get("getGroupLayout") as (() => { totalEntries: number }) | undefined;
     if (gl) {
       const layout = gl();
       getTotalFn = () => layout.totalEntries;
@@ -161,7 +191,11 @@ export function selection<T extends VListItem = VListItem>(
   }
 
   function doSelectAll(): void {
-    const total = engineState.totalItems;
+    // Layout space: this walks entries and skips headers, so it needs the
+    // layout count. The engine's total is not it under groups — with ten items
+    // in two groups this looped to ten and stopped two entries short, quietly
+    // selecting eight.
+    const total = getTotalFn();
     for (let i = 0; i < total; i++) {
       if (isGHFn?.(i)) continue;
       const item = getDataItemAtLayout(i);
@@ -189,7 +223,8 @@ export function selection<T extends VListItem = VListItem>(
 
     const result: T[] = [];
     const remaining = new Set(state.selected);
-    const total = engineState.totalItems;
+    // Layout space, as in doSelectAll.
+    const total = getTotalFn();
     for (let i = 0; i < total && remaining.size > 0; i++) {
       if (isGHFn?.(i)) continue;
       const item = getDataItemAtLayout(i);
@@ -218,37 +253,42 @@ export function selection<T extends VListItem = VListItem>(
     priority: 50,
 
     setup(ctx: PluginContext<T>): void {
-      ctx.enableListboxRole();
       state = createSelectionState(config?.initial);
-      getItems = ctx.getItems.bind(ctx);
-      forceRender = ctx.forceRender.bind(ctx);
+      getItems = ctx.items.all.bind(ctx);
+      forceRender = ctx.render.force.bind(ctx);
       emitter = ctx.emitter;
       dom = ctx.dom;
       const resolvedConfig = ctx.config;
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
-      scrollTo = ctx.scrollTo.bind(ctx);
+      scrollTo = ctx.scroll.to.bind(ctx);
       getTotalFn = () => engineState.totalItems;
+      getDataTotalFn = () => engineState.totalItems;
 
       if (mode === "none") {
-        ctx.registerMethod("select", () => {});
-        ctx.registerMethod("deselect", () => {});
-        ctx.registerMethod("toggleSelect", () => {});
-        ctx.registerMethod("selectAll", () => {});
-        ctx.registerMethod("clearSelection", () => {});
-        ctx.registerMethod("getSelected", () => []);
-        ctx.registerMethod("getSelectedItems", () => []);
-        ctx.registerMethod("selectNext", () => {});
-        ctx.registerMethod("selectPrevious", () => {});
-        ctx.registerMethod("_seedSelection", () => {});
-        ctx.registerMethod("_getFocusedId", () => undefined);
-        ctx.registerMethod("_focusById", () => {});
+        ctx.hooks.method("select", () => {});
+        ctx.hooks.method("deselect", () => {});
+        ctx.hooks.method("toggleSelect", () => {});
+        ctx.hooks.method("selectAll", () => {});
+        ctx.hooks.method("clearSelection", () => {});
+        ctx.hooks.method("getSelected", () => []);
+        ctx.hooks.method("getSelectedItems", () => []);
+        ctx.hooks.method("selectNext", () => {});
+        ctx.hooks.method("selectPrevious", () => {});
+        ctx.hooks.method("_seedSelection", () => {});
+        ctx.hooks.method("_getFocusedId", () => undefined);
+        ctx.hooks.method("_focusById", () => {});
         return;
       }
 
+      // Past the "none" early return: a list with no selection semantics is not
+      // a listbox. Claiming the role there put the list in the tab order and
+      // announced every item as an option, with no keyboard handler behind it.
+      ctx.dom.enableListbox();
+
       const classPrefix = resolvedConfig.classPrefix;
 
-      ctx.setItemStateFn((index: number, is: { selected: boolean; focused: boolean }): void => {
+      ctx.render.setStateFn((index: number, is: { selected: boolean; focused: boolean }): void => {
         resolveOnce(ctx);
         if (state.selected.size > 0) {
           const di = toDataIndex(index);
@@ -273,8 +313,8 @@ export function selection<T extends VListItem = VListItem>(
         is.focused = state.focusVisible && state.focusedIndex === index;
       });
 
-      ctx.registerMethod("_getSelectedIds", (): Set<string | number> => state.selected);
-      ctx.registerMethod("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
+      ctx.hooks.method("_getSelectedIds", (): Set<string | number> => state.selected);
+      ctx.hooks.method("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
 
       dom.root.classList.add(`${classPrefix}--selectable`);
 
@@ -300,17 +340,22 @@ export function selection<T extends VListItem = VListItem>(
       let selGridGap = 0;
       const scrollFocusIntoView = (index: number): void => {
         if (index < 0) return;
+        // writeScroll() commits the position; it does not stop an animation
+        // already in flight. Cancel through the scroll owner even when this
+        // item is already visible — otherwise the scheduled frames keep
+        // running and carry the selection off-screen.
+        ctx.scroll.cancel();
         if (sivFn) { sivFn(index); return; }
         if (!selGridGap) {
-          const gapFn = ctx.getMethod("_getRowGap") as (() => number) | undefined;
+          const gapFn = ctx.hooks.get("_getRowGap") as (() => number) | undefined;
           selGridGap = gapFn ? gapFn() : 0;
         }
-        const nav = ctx.getNavConfig();
+        const nav = ctx.nav.get();
         const ci = nav.scrollIndex ? nav.scrollIndex(index) : index;
         const offset = sizeCache.getOffset(ci);
         const size = sizeCache.getSize(ci) - selGridGap;
         const cs = engineState.containerSize;
-        const sp = engineState.scrollPosition;
+        const sp = ctx.scroll.getPixelEquivalent();
         const sp0 = resolvedConfig.startPadding;
         const sp1 = resolvedConfig.endPadding;
 
@@ -360,14 +405,14 @@ export function selection<T extends VListItem = VListItem>(
       };
       dom.root.addEventListener("focusout", onFocusOut);
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         dom.root.removeEventListener("focusin", onFocusIn);
         dom.root.removeEventListener("focusout", onFocusOut);
       });
 
       // ── Click handler ─────────────────────────────────────────
 
-      ctx.registerClickHandler((event: MouseEvent): void => {
+      ctx.hooks.onClick((event: MouseEvent): void => {
         resolveOnce(ctx);
         if (!findItemFromEvent(event)) return;
 
@@ -403,12 +448,12 @@ export function selection<T extends VListItem = VListItem>(
       // model stay active, but arrow/Home/End/PageUp-Down/Enter/Space
       // navigation is left to an outer system (e.g. a global hotkey layer).
 
-      if (keyboard) ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      if (keyboard) ctx.hooks.onKeydown((event: KeyboardEvent): void => {
           resolveOnce(ctx);
           const total = getTotalFn();
           if (total === 0) return;
 
-          const nav = ctx.getNavConfig();
+          const nav = ctx.nav.get();
           const prevFocus = state.focusedIndex;
           let handled = false;
           let selectionChanged = false;
@@ -491,7 +536,7 @@ export function selection<T extends VListItem = VListItem>(
               if (l2dFn && d2lFn) {
                 const curData = l2dFn(state.focusedIndex);
                 const step = event.key === "PageUp" ? -pageSize : pageSize;
-                const maxData = engineState.totalItems - 1;
+                const maxData = getDataTotalFn() - 1;
                 // Column-preserving clamp so PageUp/Down at the top/bottom row
                 // stays in the same column rather than jumping to the corner
                 // (Home/End). #60
@@ -539,7 +584,7 @@ export function selection<T extends VListItem = VListItem>(
 
             case "a":
               if ((event.ctrlKey || event.metaKey) && mode === "multiple") {
-                if (state.selected.size === engineState.totalItems) {
+                if (state.selected.size === getDataTotalFn()) {
                   doClear();
                 } else {
                   doSelectAll();
@@ -625,66 +670,80 @@ export function selection<T extends VListItem = VListItem>(
 
       // ── Public methods ────────────────────────────────────────
 
-      ctx.registerMethod("select", (...ids: Array<string | number>): void => {
+      ctx.hooks.method("select", (...ids: Array<string | number>): void => {
         for (const id of ids) doSelect(id);
         emitSelectionChange();
       });
 
-      ctx.registerMethod("deselect", (...ids: Array<string | number>): void => {
+      ctx.hooks.method("deselect", (...ids: Array<string | number>): void => {
         for (const id of ids) doDeselect(id);
         emitSelectionChange();
       });
 
-      ctx.registerMethod("toggleSelect", (id: string | number): void => {
+      ctx.hooks.method("toggleSelect", (id: string | number): void => {
         doToggle(id);
         emitSelectionChange();
       });
 
-      ctx.registerMethod("selectAll", (): void => {
+      ctx.hooks.method("selectAll", (): void => {
         if (mode !== "multiple") return;
         resolveOnce(ctx);
         doSelectAll();
         emitSelectionChange();
       });
 
-      ctx.registerMethod("clearSelection", (): void => {
+      ctx.hooks.method("clearSelection", (): void => {
         doClear();
         emitSelectionChange();
       });
 
-      ctx.registerMethod("getSelected", (): Array<string | number> => {
+      ctx.hooks.method("getSelected", (): Array<string | number> => {
         return getSelectedArray(state.selected);
       });
 
-      ctx.registerMethod("getSelectedItems", (): T[] => {
+      ctx.hooks.method("getSelectedItems", (): T[] => {
         return collectSelectedItems();
       });
 
-      ctx.registerMethod("selectNext", (): void => {
+      const selectAdjacent = (delta: 1 | -1): void => {
         resolveOnce(ctx);
-        const total = getTotalFn();
+        const nav = ctx.nav.get();
+        // Layout plugins that own the item space (carousel's real total,
+        // grid's item count) publish nav.total. Without it this is layout
+        // space — groups counts headers, then skipHeaders walks off them.
+        // Using the engine total under carousel walked every lap and wrapped.
+        const total = nav.total ? nav.total() : getTotalFn();
         if (total === 0) return;
-        moveFocus(state, 1, total, resolvedConfig.reverse);
-        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, 1, total);
+        moveFocus(state, delta, total, resolvedConfig.reverse);
+        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, delta, total);
         const item = getDataItemAtLayout(state.focusedIndex);
         if (item) doSelect(item.id, item);
+        // Selection first so a synchronous reveal render already has the
+        // new selected state. Reveal is a layout-aware operation with one
+        // owner: nav.reveal (carousel, current virtual lap, no wrap), else
+        // _scrollItemIntoView (groups sticky header, masonry lanes), else
+        // nearest-edge scrollFocusIntoView. Never nothing — and never skip
+        // because nav.navigate exists; that helper is the keyboard path,
+        // which these methods do not call.
+        if (state.focusedIndex >= 0) {
+          if (nav.reveal) nav.reveal(state.focusedIndex);
+          else scrollFocusIntoView(state.focusedIndex);
+          setActiveDescendant(state.focusedIndex);
+        }
         emitSelectionChange();
+      };
+
+      ctx.hooks.method("selectNext", (): void => {
+        selectAdjacent(1);
       });
 
-      ctx.registerMethod("selectPrevious", (): void => {
-        resolveOnce(ctx);
-        const total = getTotalFn();
-        if (total === 0) return;
-        moveFocus(state, -1, total, resolvedConfig.reverse);
-        if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, -1, total);
-        const item = getDataItemAtLayout(state.focusedIndex);
-        if (item) doSelect(item.id, item);
-        emitSelectionChange();
+      ctx.hooks.method("selectPrevious", (): void => {
+        selectAdjacent(-1);
       });
 
       // ── Internal methods (used by snapshots, sortable) ────────
 
-      ctx.registerMethod("_seedSelection", (ids: Array<string | number>): void => {
+      ctx.hooks.method("_seedSelection", (ids: Array<string | number>): void => {
         if (mode === "single") {
           if (ids.length === 1) state.selected.add(ids[0]!);
         } else {
@@ -692,22 +751,35 @@ export function selection<T extends VListItem = VListItem>(
         }
       });
 
-      ctx.registerMethod("_isFollowFocus", (): boolean => followFocus);
+      ctx.hooks.method("_isFollowFocus", (): boolean => followFocus);
 
-      ctx.registerMethod("_getFocusedId", (): string | number | undefined => {
+      ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
         if (state.focusedIndex < 0) return undefined;
         return getDataItemAtLayout(state.focusedIndex)?.id;
       });
 
-      ctx.registerMethod("_focusById", (id: string | number): void => {
-        const total = engineState.totalItems;
+      // `keyboard`: the caller moved focus because of a key press (tree's arrows,
+      // Home, End, type-ahead). The ring then stays visible and the active
+      // descendant follows, exactly as for this plugin's own key moves. Without
+      // it the move was treated like a click: with the default `focusOnClick`
+      // the ring vanished, `_getFocusedIndex` answered -1, and the tree ignored
+      // every further Left/Right until an up/down key revived the focus.
+      // `"preserve"` is a restore, not a key and not a click: keep whatever
+      // visibility the list already has, move the ring if it is showing, and
+      // do not paint one on a list the user has never focused.
+      ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
+        // Layout space: it scans entries for the one holding this id.
+        const total = getTotalFn();
         for (let i = 0; i < total; i++) {
           if (isGHFn?.(i)) continue;
           const item = getDataItemAtLayout(i);
           if (item && item.id === id) {
             state.focusedIndex = i;
-            state.focusVisible = focusOnClick;
+            if (keyboard !== "preserve") state.focusVisible = keyboard === true || focusOnClick;
+            if (state.focusVisible) setActiveDescendant(i);
+            else dom.content.removeAttribute("aria-activedescendant");
             emitter.emit("focus:change", { id, index: i });
+            forceRender();
             return;
           }
         }

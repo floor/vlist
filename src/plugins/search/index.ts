@@ -12,3 +12,4 @@ export {
   type SearchText,
 } from "./plugin";
 export { makeGetText, type FieldAccessor } from "./match";
+export type { SearchMethods } from "./plugin";

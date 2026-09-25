@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Test Mock for PluginContext
+ * vlist — Test Mock for PluginContext
  *
  * Creates a fully functional mock PluginContext for testing v2 plugins
  * without going through createVList(). Tracks method registrations,
@@ -32,6 +32,8 @@ export interface PluginTestContext<T extends VListItem> {
   renderFnReplaced: boolean;
   navConfig: any;
   scrollToPosFn: any;
+  /** The scroll-to-index hook a layout plugin installed via setScrollToIndexFn. */
+  scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null;
   cleanup: () => void;
 }
 
@@ -117,6 +119,8 @@ export function createPluginMockContext<T extends VListItem>(
     },
     getTotal: () => items.length,
     rebuild: () => {},
+    // This mock reads sizes live, so nothing can go stale.
+    invalidate: () => {},
     isVariable: () => typeof itemSizeConfig === "function",
   };
 
@@ -127,6 +131,7 @@ export function createPluginMockContext<T extends VListItem>(
     get size() {
       return 0;
     },
+    trim: () => {},
     clear: () => {},
   };
 
@@ -181,7 +186,9 @@ export function createPluginMockContext<T extends VListItem>(
       engineState.scrollPosition = px;
       scrollCalls.push(px);
     },
+    getRenderOrigin: () => engineState.baseOffset,
     getContainerSize: () => engineState.containerSize,
+    padding: config.mainAxisPadding,
   });
 
   let customRenderIfNeeded: (() => void) | null = null;
@@ -189,6 +196,7 @@ export function createPluginMockContext<T extends VListItem>(
   let _renderFnReplaced = false;
   let _navConfig: any = null;
   let _scrollToPosFn: any = null;
+  let _scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
   let itemStateFn: ((index: number, state: ItemState) => void) | null = null;
   let removeItemByIdFn: ((id: string | number) => number) | null = null;
@@ -196,113 +204,184 @@ export function createPluginMockContext<T extends VListItem>(
 
   // ── Context ─────────────────────────────────────────────────────
   const ctx: PluginContext<T> = {
-    dom,
-    sizeCache,
-    scroll,
     pool,
     config,
     emitter,
     template,
-
-    registerMethod: (name: string, fn: Function) => {
-      methods.set(name, fn);
-    },
-    getMethod: (name: string) => methods.get(name),
-    registerClickHandler: (handler) => {
-      clickHandlers.push(handler);
-    },
-    registerKeydownHandler: (handler) => {
-      keydownHandlers.push(handler);
-    },
-    registerDestroyHandler: (handler) => {
-      destroyHandlers.push(handler);
-    },
-
-    setSizeConfig: () => {},
-    setScrollFns: () => {},
-    setBoundedWrap: () => {},
-    setVirtualTotalFn: () => {},
-    setIndexMapFn: () => {},
-
-    getItems: () => items,
-    getItem: (index: number) => getItemFn ? getItemFn(index) : items[index],
     getState: () => engineState,
-    rebuildSizeCache: () => {},
-    updateContentSize: (size: number) => {
-      engineState.totalSize = size;
-      if (isX) {
-        content.style.width = `${size}px`;
-      } else {
-        content.style.height = `${size}px`;
-      }
-    },
-    setRenderFn: (renderFn, forceFn) => {
-      customRenderIfNeeded = renderFn;
-      customForceRender = forceFn;
-      _renderFnReplaced = true;
-    },
-    renderIfNeeded: () => {
-      if (customRenderIfNeeded) customRenderIfNeeded();
-    },
-    forceRender: () => {
-      if (customForceRender) customForceRender();
+
+    dom: {
+      ...dom,
+      renderedElement: (index: number) => {
+        const children = content.children;
+        for (let i = 0; i < children.length; i++) {
+          const el = children[i] as HTMLElement;
+          if (el.dataset.index === String(index)) return el;
+        }
+        return null;
+      },
+      enableListbox: () => {},
     },
 
-    setGetItemFn: (fn: (index: number) => T | undefined) => { getItemFn = fn; },
-    setItemStateFn: (fn: (index: number, state: ItemState) => void) => { itemStateFn = fn; },
-    getItemStateFn: () => itemStateFn,
-    get rawSizeSpec() { return itemSizeConfig; },
-
-    shiftScroll(delta: number) { this.scrollTo(this.getState().scrollPosition + delta); },
-    scrollTo: (pos: number) => {
-      // Mirror the real adapter: a scroll write moves the logical position.
-      engineState.scrollPosition = pos;
-      scrollCalls.push(pos);
-    },
-    smoothScrollTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, onComplete?: () => void) => {
-      const dest = typeof target === "function" ? target() : target;
-      engineState.scrollPosition = dest;
-      scrollCalls.push(dest);
-      onComplete?.();
-    },
-    cancelScroll: () => {},
-    disableDefaultScroll: () => {},
-    disableDefaultResize: () => {},
-    setScrollTarget: () => {},
-    setScrollToPosFn: (fn: any) => { _scrollToPosFn = fn; },
-    setScrollToIndexFn: () => { return undefined; },
-    onScrollFrame: () => {},
-    onScrollIdle: () => {},
-
-    removeItemById: (id: string | number) => {
-      if (removeItemByIdFn) return removeItemByIdFn(id);
-      const idx = items.findIndex((item) => item.id === id);
-      if (idx === -1) return -1;
-      items.splice(idx, 1);
-      engineState.totalItems = items.length;
-      return idx;
-    },
-    insertItemAt: (item: T, index: number) => {
-      if (insertItemAtFn) { insertItemAtFn(item, index); return; }
-      items.splice(index, 0, item);
-      engineState.totalItems = items.length;
-    },
-    setRemoveItemFn: (fn: (id: string | number) => number) => { removeItemByIdFn = fn; },
-    setInsertItemFn: (fn: (item: T, index: number) => void) => { insertItemAtFn = fn; },
-    setUpdateItemFn: (_fn: (id: string | number, updates: Partial<T>) => boolean) => {},
-    setGetIndexByIdFn: (_fn: (id: string | number) => number) => {},
-    getRenderedElement: (index: number) => {
-      const children = content.children;
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        if (el.dataset.index === String(index)) return el;
-      }
-      return null;
+    scroll: {
+      ...scroll,
+      to: (pos: number) => {
+        // Mirror the real adapter: a scroll write moves the logical position.
+        engineState.scrollPosition = pos;
+        scrollCalls.push(pos);
+      },
+      // The real context self-references through `ctx`; `this` would not
+      // survive being nested inside a capability object.
+      shiftBy: (delta: number) => { ctx.scroll.to(engineState.scrollPosition + delta); },
+      smoothTo: (target: number | (() => number), _duration: number, _easing?: (t: number) => number, onComplete?: () => void) => {
+        const dest = typeof target === "function" ? target() : target;
+        engineState.scrollPosition = dest;
+        scrollCalls.push(dest);
+        onComplete?.();
+      },
+      cancel: () => {},
+      commit: (pos: number) => {
+        engineState.prevScrollPosition = engineState.scrollPosition;
+        engineState.scrollPosition = pos;
+        engineState.scrollDirection = pos > engineState.prevScrollPosition ? 1 : pos < engineState.prevScrollPosition ? -1 : 0;
+        ctx.scroll.onFrame();
+      },
+      setSource: () => {},
+      setTarget: () => {},
+      setBoundedWrap: () => {},
+      setToPosFn: (fn: any) => { _scrollToPosFn = fn; },
+      setToIndexFn: (fn: any) => { _scrollToIndexFn = fn; },
+      onFrame: () => {},
+      onIdle: () => {},
+      disableResize: () => {},
     },
 
-    setNavConfig: (cfg: any) => { _navConfig = cfg; },
-    getNavConfig: () => _navConfig ? { ud: 0, lr: 0, scrollIndex: null, navigate: _navConfig.navigate, total: _navConfig.total ?? null } : ({ ud: 0, lr: 0, scrollIndex: null, navigate: null, total: null }),
-    enableListboxRole: () => {},
+    items: {
+      all: () => items,
+      at: (index: number) => getItemFn ? getItemFn(index) : items[index],
+      removeById: (id: string | number) => {
+        if (removeItemByIdFn) return removeItemByIdFn(id);
+        const idx = items.findIndex((item) => item.id === id);
+        if (idx === -1) return -1;
+        items.splice(idx, 1);
+        engineState.totalItems = items.length;
+        return idx;
+      },
+      insertAt: (item: T, index: number) => {
+        if (insertItemAtFn) { insertItemAtFn(item, index); return; }
+        items.splice(index, 0, item);
+        engineState.totalItems = items.length;
+      },
+      setGetFn: (fn: (index: number) => T | undefined) => { getItemFn = fn; },
+      setRemoveFn: (fn: (id: string | number) => number) => { removeItemByIdFn = fn; },
+      setInsertFn: (fn: (item: T, index: number) => void) => { insertItemAtFn = fn; },
+      setUpdateFn: (_fn: (id: string | number, updates: Partial<T>) => boolean) => {},
+      setIndexByIdFn: (_fn: (id: string | number) => number) => {},
+      setTotalFn: () => {},
+      setIndexMapFn: () => {},
+    },
+
+    sizes: {
+      cache: sizeCache,
+      get rawSpec() { return itemSizeConfig; },
+      setConfig: (sc: number | ((index: number) => number), gap = 0) => {
+        // Mimic core: build fresh implementations and assign them over the cache
+        // object. Core replaces the cache wholesale, so a reference captured
+        // before the swap keeps the OLD spec — groups captures sizeCache.getSize
+        // and feeds it data indices, which recurses if the swap mutates shared
+        // state instead. This was a no-op until now, so no plugin's replacement
+        // of the size config was ever exercised here.
+        const spec: (index: number) => number =
+          typeof sc === "function" ? sc : () => sc;
+        Object.assign(sizeCache, {
+          getOffset: (index: number) => {
+            let offset = 0;
+            for (let i = 0; i < index; i++) offset += spec(i);
+            return offset;
+          },
+          getSize: (index: number) => spec(index),
+          indexAtOffset: (offset: number) => {
+            let pos = 0;
+            const count = items.length;
+            for (let i = 0; i < count; i++) {
+              if (pos + spec(i) > offset) return i;
+              pos += spec(i);
+            }
+            return Math.max(0, count - 1);
+          },
+          getTotalSize: () => {
+            let total = 0;
+            for (let i = 0; i < items.length; i++) total += spec(i);
+            return total > 0 ? total - gap : 0;
+          },
+          isVariable: () => typeof sc === "function",
+        });
+      },
+      rebuild: () => {},
+    },
+
+    render: {
+      force: () => {
+        if (customForceRender) customForceRender();
+      },
+      ifNeeded: () => {
+        if (customRenderIfNeeded) customRenderIfNeeded();
+      },
+      contentSize: (size: number) => {
+        engineState.totalSize = size;
+        if (isX) {
+          content.style.width = `${size}px`;
+        } else {
+          content.style.height = `${size}px`;
+        }
+      },
+      setFn: (renderFn, forceFn) => {
+        customRenderIfNeeded = renderFn;
+        customForceRender = forceFn;
+        _renderFnReplaced = true;
+      },
+      setStateFn: (fn: (index: number, state: ItemState) => void) => { itemStateFn = fn; },
+      getStateFn: () => itemStateFn,
+    },
+
+    hooks: {
+      method: (name: string, fn: Function) => {
+        methods.set(name, fn);
+      },
+      get: (name: string) => methods.get(name),
+      onClick: (handler) => {
+        clickHandlers.push(handler);
+      },
+      onKeydown: (handler) => {
+        keydownHandlers.push(handler);
+      },
+      onDestroy: (handler) => {
+        destroyHandlers.push(handler);
+      },
+    },
+
+    nav: {
+      set: (cfg: any) => {
+        _navConfig = {
+          ud: 0,
+          lr: 0,
+          scrollIndex: null,
+          navigate: null,
+          total: null,
+          reveal: null,
+          ...(_navConfig ?? {}),
+          ...cfg,
+        };
+      },
+      get: () => _navConfig ?? {
+        ud: 0,
+        lr: 0,
+        scrollIndex: null,
+        navigate: null,
+        total: null,
+        reveal: null,
+      },
+    },
   };
 
   const cleanup = () => {
@@ -327,6 +406,10 @@ export function createPluginMockContext<T extends VListItem>(
     },
     get scrollToPosFn() {
       return _scrollToPosFn;
+    },
+    /** The scroll-to-index hook a layout plugin installed, if any. */
+    get scrollToIndexFn() {
+      return _scrollToIndexFn;
     },
     cleanup,
   };

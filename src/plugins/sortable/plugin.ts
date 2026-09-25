@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Sortable Plugin
+ * vlist — Sortable Plugin
  *
  * Drag-and-drop reordering for virtual lists.
  * Priority 30 — runs after layout plugins and scrollbar, before selection.
@@ -17,12 +17,16 @@
  * The consumer reorders their data and calls `setItems()`.
  *
  * Restrictions:
- * - Cannot be combined with grid, masonry, table, or scale plugins
+ * - Cannot be combined with the grid, masonry, table or tree plugins
+ * - Cannot *yet* be combined with carousel: this plugin asks the size cache
+ *   about a data index, and carousel makes it speak virtual ones. Fixable —
+ *   see `conflicts` below.
  */
 
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import { SCROLL_IDLE_TIMEOUT } from "../../constants";
 import type { SizeCache } from "../../core/sizes";
 
 // =============================================================================
@@ -36,6 +40,9 @@ export interface SortablePluginConfig {
   edgeScrollZone?: number;
   edgeScrollSpeed?: number;
   dragThreshold?: number;
+  /** Touch/pen hold delay without a handle, in milliseconds (default 350).
+   * Moving dragThreshold pixels before this expires yields to scrolling. */
+  touchDelay?: number;
   ghostContainer?: HTMLElement;
 }
 
@@ -43,18 +50,26 @@ export interface SortablePluginConfig {
 // Factory
 // =============================================================================
 
+/** Methods the sortable plugin adds to the list instance. */
+export interface SortableMethods {
+  /** Whether a drag or keyboard sort is in progress. */
+  isSorting(): boolean;
+}
+
 export function sortable<T extends VListItem = VListItem>(
   config?: SortablePluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, SortableMethods> {
   const handleSelector = config?.handle ?? null;
   const ghostClass = config?.ghostClass ?? "vlist-sort-ghost";
   const shiftDuration = config?.shiftDuration ?? 150;
   const edgeScrollZone = config?.edgeScrollZone ?? 40;
   const edgeScrollSpeed = config?.edgeScrollSpeed ?? 20;
   const dragThreshold = config?.dragThreshold ?? 5;
+  const touchDelay = Math.max(0, config?.touchDelay ?? 350);
   const ghostContainer = config?.ghostContainer ?? null;
 
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
   let contentEl: HTMLElement;
@@ -86,6 +101,16 @@ export function sortable<T extends VListItem = VListItem>(
   let ghostOffsetX = 0;
   let ghostOffsetY = 0;
   let dragFocusedItemId: string | number | null = null;
+
+  let touchPointer: number | null = null;
+  let pressTimer: ReturnType<typeof setTimeout> | null = null;
+  let touchClaimed = false;
+  let scrolling = false;
+  let lastScrollPosition = NaN, lastScrollTime = -Infinity;
+  let pressPosition = 0;
+  let touchItem: HTMLElement | null = null;
+  let touchTarget: HTMLElement | null = null;
+  let renderedOrigin = 0;
 
   // ── Keyboard state ──
   let kbGrabbed = false;
@@ -122,27 +147,40 @@ export function sortable<T extends VListItem = VListItem>(
     clone.className = `${classPrefix}-item ${ghostClass}`;
     clone.removeAttribute("data-index");
     clone.style.cssText =
-      `position:fixed;pointer-events:none;z-index:10000;width:${rect.width}px;` +
-      `height:${rect.height}px;left:${rect.left}px;top:${rect.top}px;` +
-      "transition:none;will-change:transform";
+      `position:absolute;left:0;top:0;pointer-events:none;z-index:10000;width:${rect.width}px;` +
+      `height:${rect.height}px;transition:none;will-change:transform`;
     (ghostContainer || document.body).appendChild(clone);
     return clone;
   };
 
-  const updateGhostPosition = (): void => {
+  // Put the ghost where the pointer is, in whatever space the ghost's
+  // containing block lives in, by reading where it landed and correcting by
+  // the difference. It used to be `position: fixed` at the pointer's client
+  // coordinates. Measured on an iPhone (FLO-87, 2026-09-25): pinch-zoomed
+  // 2.21x and panned by (86, 215), the fixed ghost's rect sat exactly (86, 215)
+  // from where its inline left/top said -- on WebKit, fixed positioning and
+  // the client space disagree by the visual viewport's offset, so the row
+  // rendered that far from the finger. The ghost's own rect and the pointer's
+  // client coordinates are always in the same space; the arithmetic between
+  // its inline position and that rect is what varies, and this never assumes
+  // it. One rect read per move, the same cost as the drop-index math.
+  const moveGhostTo = (x: number, y: number): void => {
     if (!ghost) return;
-    ghost.style.left = `${pointerCurrentX - ghostOffsetX}px`;
-    ghost.style.top = `${pointerCurrentY - ghostOffsetY}px`;
+    const rect = ghost.getBoundingClientRect();
+    ghost.style.left = `${parseFloat(ghost.style.left) + x - rect.left}px`;
+    ghost.style.top = `${parseFloat(ghost.style.top) + y - rect.top}px`;
   };
+  const placeGhost = (): void => moveGhostTo(pointerCurrentX - ghostOffsetX, pointerCurrentY - ghostOffsetY);
+  const updateGhostPosition = placeGhost;
 
   const computeDropIndex = (): number => {
     const totalItems = engineState.totalItems;
     if (totalItems === 0) return 0;
 
     const viewportRect = viewportEl.getBoundingClientRect();
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const ghostTop = isX
-      ? pointerCurrentX - ghostOffsetX - viewportRect.left + viewportEl.scrollLeft + scrollPos
+      ? pointerCurrentX - ghostOffsetX - viewportRect.left + scrollPos
       : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
     const ghostBottom = ghostTop + draggedItemSize;
 
@@ -183,7 +221,7 @@ export function sortable<T extends VListItem = VListItem>(
       }
 
       const baseOffset = sizeCache.getOffset(idx);
-      const finalOffset = Math.round(baseOffset + shift);
+      const finalOffset = Math.round(baseOffset + shift - scroll.getRenderOrigin());
       itemEl.style.transition = shiftTransition;
       itemEl.style.transform = `${prop}(${finalOffset}px)`;
     }
@@ -195,7 +233,7 @@ export function sortable<T extends VListItem = VListItem>(
       const itemEl = children[i] as HTMLElement;
       const idx = getIndex(itemEl);
       if (idx >= 0) {
-        itemEl.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx))}px)`;
+        itemEl.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx) - scroll.getRenderOrigin())}px)`;
       }
       itemEl.style.transition = "";
     }
@@ -221,13 +259,19 @@ export function sortable<T extends VListItem = VListItem>(
   // ── Selection helpers ──
 
   const getFocusedIndex = (): number => {
-    const fn = storedCtx?.getMethod("_getFocusedIndex") as (() => number) | undefined;
+    const fn = storedCtx?.hooks.get("_getFocusedIndex") as (() => number) | undefined;
     return fn ? fn() : -1;
   };
 
-  const focusById = (id: string | number): void => {
-    const fn = storedCtx?.getMethod("_focusById") as ((id: string | number) => void) | undefined;
-    if (fn) fn(id);
+  // `keyboard`: the move came from a key press, so the focus ring stays visible
+  // and the active descendant follows, as it does for selection's own key
+  // moves. The pointer drop leaves it off: a mouse drag is a click, and whether
+  // a click paints a ring is `focusOnClick`'s answer to give, not this plugin's.
+  const focusById = (id: string | number, keyboard?: boolean): void => {
+    const fn = storedCtx?.hooks.get("_focusById") as
+      | ((id: string | number, keyboard?: boolean) => void)
+      | undefined;
+    if (fn) fn(id, keyboard);
   };
 
   const scrollIntoView = (index: number): void => {
@@ -235,14 +279,14 @@ export function sortable<T extends VListItem = VListItem>(
     const containerSize = isX
       ? viewportEl.clientWidth
       : viewportEl.clientHeight;
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const itemTop = sizeCache.getOffset(index);
     const itemBottom = itemTop + sizeCache.getSize(index);
 
     if (itemTop < scrollPos) {
-      storedCtx.scrollTo(Math.max(0, itemTop));
+      storedCtx.scroll.to(Math.max(0, itemTop));
     } else if (itemBottom > scrollPos + containerSize) {
-      storedCtx.scrollTo(itemBottom - containerSize);
+      storedCtx.scroll.to(itemBottom - containerSize);
     }
   };
 
@@ -253,10 +297,26 @@ export function sortable<T extends VListItem = VListItem>(
     liveRegion.textContent = message;
   };
 
+  /**
+   * The item at a data index, or undefined when it is not loaded.
+   *
+   * data() replaces the item accessors, not the raw array, so items.all() is
+   * empty under an adapter — reading it by index made every keyboard sort inert
+   * while pointer drag, which works off DOM elements, kept going. _getLoadedItem
+   * is the shared hook for "a real item or nothing"; items.at() would hand back
+   * a placeholder and defeat the guards below.
+   */
+  const itemAt = (index: number): T | undefined => {
+    if (!storedCtx) return undefined;
+    const loaded = storedCtx.hooks.get("_getLoadedItem") as
+      | ((i: number) => T | undefined)
+      | undefined;
+    return loaded ? loaded(index) : storedCtx.items.at(index);
+  };
+
   const getItemLabel = (index: number): string => {
     if (!storedCtx) return "";
-    const items = storedCtx.getItems();
-    const item = items[index];
+    const item = itemAt(index);
     if (!item) return "";
     const el = contentEl.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
     const text = el?.textContent?.trim();
@@ -279,6 +339,7 @@ export function sortable<T extends VListItem = VListItem>(
   const startEdgeScroll = (): void => {
     const tick = (): void => {
       if (!sorting || !storedCtx) return;
+      const wasInEdgeZone = inEdgeZone;
 
       const viewportRect = viewportEl.getBoundingClientRect();
       let delta = 0;
@@ -309,7 +370,7 @@ export function sortable<T extends VListItem = VListItem>(
       const outsideViewport = isPointerOutsideViewport();
 
       if (delta !== 0) {
-        const currentScroll = engineState.scrollPosition;
+        const currentScroll = scroll.getPixelEquivalent();
         const maxScroll = sizeCache.getTotalSize() - (isX
           ? viewportEl.clientWidth
           : viewportEl.clientHeight);
@@ -320,12 +381,13 @@ export function sortable<T extends VListItem = VListItem>(
           inEdgeZone = outsideViewport;
         } else {
           inEdgeZone = true;
-          storedCtx.scrollTo(currentScroll + delta);
+          storedCtx.scroll.to(currentScroll + delta);
         }
       } else {
         inEdgeZone = outsideViewport;
       }
 
+      if (wasInEdgeZone && !inEdgeZone) updateDropPosition();
       scrollRafId = requestAnimationFrame(tick);
     };
     scrollRafId = requestAnimationFrame(tick);
@@ -343,6 +405,7 @@ export function sortable<T extends VListItem = VListItem>(
   // =========================================================================
 
   const cleanupDrag = (skipRender = false): void => {
+    clearTouch();
     sorting = false;
     dragInitiated = false;
 
@@ -356,7 +419,7 @@ export function sortable<T extends VListItem = VListItem>(
       el.classList.remove(dragSourceClass);
       const idx = getIndex(el);
       if (idx >= 0) {
-        el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx))}px)`;
+        el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx) - scroll.getRenderOrigin())}px)`;
       }
       el.style.transition = "";
     }
@@ -373,7 +436,7 @@ export function sortable<T extends VListItem = VListItem>(
     document.removeEventListener("pointercancel", onPointerCancel);
 
     if (!skipRender && storedCtx) {
-      storedCtx.forceRender();
+      storedCtx.render.force();
     }
   };
 
@@ -385,6 +448,22 @@ export function sortable<T extends VListItem = VListItem>(
     if (!storedCtx) return;
     const posChanged = fromIndex !== toIndex && fromIndex >= 0 && toIndex >= 0;
 
+    // `--settling` puts `transition: none` on every row so the drop commits
+    // in one step: the drag source going from opacity 0 back to 1, and the
+    // rows a stylesheet dims while sorting going back up. The class only works
+    // if a style calculation happens while it is on. finalize runs from
+    // transitionend or a timeout -- a task, not a frame callback -- so the
+    // requestAnimationFrame that removes the class fires in the next frame's
+    // callback phase, before that frame's style calculation: the class was
+    // never computed, and the base `.vlist-item` opacity transition animated
+    // the dropped row from 0. Measured on the sortable example: 0.09, 0.40,
+    // 0.77 over the three frames after the drop. Reading offsetWidth forces
+    // the calculation while the class is on; the removal a frame later then
+    // changes nothing that transitions.
+    const commitSettled = (): void => {
+      void rootEl.offsetWidth;
+      requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
+    };
     const finalize = (): void => {
       if (!storedCtx) return;
       sorting = false;
@@ -393,13 +472,12 @@ export function sortable<T extends VListItem = VListItem>(
         storedCtx.emitter.emit("sort:end" as never, { fromIndex, toIndex } as never);
         if (dragFocusedItemId !== null) focusById(dragFocusedItemId);
         cleanupDrag(true);
-        requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
       } else {
         rootEl.classList.add(settlingClass);
-        storedCtx.emitter.emit("sort:cancel" as never, { originalItems: [...storedCtx.getItems()] } as never);
+        storedCtx.emitter.emit("sort:cancel" as never, { originalItems: [...storedCtx.items.all()] } as never);
         cleanupDrag(false);
-        requestAnimationFrame(() => rootEl.classList.remove(settlingClass));
       }
+      commitSettled();
     };
 
     if (!ghost) {
@@ -408,19 +486,21 @@ export function sortable<T extends VListItem = VListItem>(
     }
 
     const viewportRect = viewportEl.getBoundingClientRect();
-    const scrollPos = engineState.scrollPosition;
+    const scrollPos = scroll.getPixelEquivalent();
     const targetOffset = sizeCache.getOffset(toIndex);
     const duration = shiftDuration > 0 ? shiftDuration : 150;
 
+    // The slot's position in client space -- then the same feedback as
+    // placeGhost: the ghost is absolute, so its inline left/top are its
+    // containing block's coordinates, not the viewport's. Writing client
+    // coordinates here sent the drop animation to the top of a scrolled page
+    // (the phone pass card sits 3000 px down) and, pinch-zoomed on an iPhone,
+    // the ghost "went up" on release after following the finger correctly.
     ghost.style.transition = `left ${duration}ms ease, top ${duration}ms ease`;
-
-    if (isX) {
-      ghost.style.left = `${viewportRect.left - viewportEl.scrollLeft + targetOffset - scrollPos}px`;
-      ghost.style.top = `${viewportRect.top}px`;
-    } else {
-      ghost.style.left = `${viewportRect.left}px`;
-      ghost.style.top = `${viewportRect.top + targetOffset - scrollPos}px`;
-    }
+    moveGhostTo(
+      isX ? viewportRect.left + targetOffset - scrollPos : viewportRect.left,
+      isX ? viewportRect.top : viewportRect.top + targetOffset - scrollPos,
+    );
 
     let settled = false;
     const onEnd = (): void => {
@@ -437,6 +517,93 @@ export function sortable<T extends VListItem = VListItem>(
   // =========================================================================
   // Pointer Events
   // =========================================================================
+
+  const isTouch = (event: PointerEvent): boolean => event.pointerType === "touch" || event.pointerType === "pen";
+
+  function clearTouch(): void {
+    if (pressTimer !== null) clearTimeout(pressTimer);
+    pressTimer = null;
+    touchItem?.classList.remove(`${classPrefix}-item--touch-sort`);
+    touchItem = null;
+    touchTarget?.removeEventListener("touchmove", blockTouchMove);
+    touchTarget = null;
+    if (touchPointer !== null && contentEl.hasPointerCapture(touchPointer)) contentEl.releasePointerCapture(touchPointer);
+    touchPointer = null;
+    touchClaimed = false;
+    document.removeEventListener("pointermove", onPointerMove, true);
+    document.removeEventListener("pointerup", onPointerUp, true);
+    document.removeEventListener("pointercancel", onPointerCancel, true);
+    document.removeEventListener("pointerdown", secondTouch, true);
+    document.removeEventListener("touchmove", blockTouchMove, true);
+    document.removeEventListener("contextmenu", blockCallout, true);
+    document.removeEventListener("selectstart", blockCallout, true);
+  }
+
+  function abandonTouch(): void {
+    clearTouch();
+    if (!dragInitiated) draggedElement = null;
+  }
+
+  function secondTouch(event: PointerEvent): void {
+    if (!isTouch(event) || event.pointerId === touchPointer) return;
+    if (touchClaimed) cancelPointerDrag();
+    abandonTouch();
+  }
+
+  function blockTouchMove(event: TouchEvent): void {
+    if (touchClaimed && event.cancelable) event.preventDefault();
+  }
+
+  function blockCallout(event: Event): void {
+    // While a touch press on a row is being tracked, the gesture is ours: a
+    // long-press callout or a text selection would take it away mid-drag.
+    //
+    // This used to require the event's target to sit inside the dragged item,
+    // which never matches once a drag has started. Measured during a drag: the
+    // ghost is appended to `document.body` with `pointer-events: none`, so what
+    // lies under the finger is `.vlist-content` — the item's *parent*, not a
+    // descendant. The guard never fired, and on Android the browser's menu
+    // appeared over the drag. Nothing in the stylesheet catches it either;
+    // there is no `-webkit-touch-callout` rule anywhere.
+    if (touchPointer !== null) event.preventDefault();
+  }
+
+  function startDrag(): void {
+    if (!storedCtx || !draggedElement) return;
+    if (touchPointer !== null) {
+      touchClaimed = true;
+      storedCtx.scroll.cancel();
+      if (viewportEl.hasPointerCapture(touchPointer)) viewportEl.releasePointerCapture(touchPointer);
+      // The source row can be recycled during edge scrolling; capture on the
+      // stable content element so the claimed gesture keeps reaching document.
+      contentEl.setPointerCapture(touchPointer);
+    }
+    dragInitiated = true;
+    sorting = true;
+    dropIndex = dragIndex;
+    rootEl.classList.add(sortingClass);
+    document.body.style.cursor = "grabbing";
+
+    draggedItemSize = sizeCache.getSize(dragIndex);
+
+    if (draggedElement) {
+      ghost = createGhost(draggedElement);
+      placeGhost();
+      draggedElement.classList.add(dragSourceClass);
+    }
+
+    const focusIdx = getFocusedIndex();
+    if (focusIdx >= 0) {
+      const focusItem = itemAt(focusIdx);
+      dragFocusedItemId = focusItem ? focusItem.id : null;
+    } else {
+      dragFocusedItemId = null;
+    }
+
+    storedCtx.emitter.emit("sort:start" as never, { index: dragIndex } as never);
+    startEdgeScroll();
+    if (touchClaimed) ghost?.classList.add(`${classPrefix}-sort-ghost--touch`);
+  }
 
   const onPointerDown = (event: PointerEvent): void => {
     if (engineState.destroyed || !storedCtx) return;
@@ -455,6 +622,10 @@ export function sortable<T extends VListItem = VListItem>(
 
     const index = getIndex(itemEl);
     if (index < 0) return;
+    const touch = isTouch(event);
+    // The native browser / synthetic viewport catches existing momentum. This
+    // contact does not arm a hold, even if the list becomes idle afterward.
+    if (touch && ((scrolling && performance.now() - lastScrollTime < SCROLL_IDLE_TIMEOUT) || !event.isPrimary)) return;
 
     pointerStartX = event.clientX;
     pointerStartY = event.clientY;
@@ -468,6 +639,34 @@ export function sortable<T extends VListItem = VListItem>(
     ghostOffsetX = event.clientX - rect.left;
     ghostOffsetY = event.clientY - rect.top;
 
+    if (touch) {
+      touchPointer = event.pointerId;
+      touchItem = itemEl;
+      // Touch Events retain their original target even when that node is
+      // recycled out of the DOM. Keep cancellation attached to that target too.
+      touchTarget = target;
+      target.addEventListener("touchmove", blockTouchMove, { passive: false });
+      pressPosition = scroll.getPixelEquivalent();
+      itemEl.classList.add(`${classPrefix}-item--touch-sort`);
+      document.addEventListener("pointermove", onPointerMove, true);
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", onPointerCancel, true);
+      document.addEventListener("pointerdown", secondTouch, true);
+      document.addEventListener("touchmove", blockTouchMove, { capture: true, passive: false });
+      // On the document, capturing: the callout can target the content, the
+      // ghost on `document.body`, or whatever the compositor puts under the
+      // finger. Listening on the content element alone missed it.
+      document.addEventListener("contextmenu", blockCallout, true);
+      document.addEventListener("selectstart", blockCallout, true);
+      if (handleSelector) {
+        // Reserve handle input before the viewport can begin tracking it.
+        storedCtx.scroll.cancel();
+        event.stopPropagation();
+      } else {
+        pressTimer = setTimeout(() => { pressTimer = null; startDrag(); }, touchDelay);
+      }
+      return;
+    }
     document.addEventListener("pointermove", onPointerMove);
     document.addEventListener("pointerup", onPointerUp);
     document.addEventListener("pointercancel", onPointerCancel);
@@ -475,43 +674,24 @@ export function sortable<T extends VListItem = VListItem>(
 
   function onPointerMove(event: PointerEvent): void {
     if (!storedCtx) return;
+    if (touchPointer !== null && event.pointerId !== touchPointer) return;
     pointerCurrentX = event.clientX;
     pointerCurrentY = event.clientY;
 
-    if (!dragInitiated) {
+    const starting = !dragInitiated;
+    if (starting) {
       const dx = pointerCurrentX - pointerStartX;
       const dy = pointerCurrentY - pointerStartY;
       if (Math.sqrt(dx * dx + dy * dy) < dragThreshold) return;
-
-      dragInitiated = true;
-      sorting = true;
-      dropIndex = dragIndex;
-      rootEl.classList.add(sortingClass);
-      document.body.style.cursor = "grabbing";
-
-      draggedItemSize = sizeCache.getSize(dragIndex);
-
-      if (draggedElement) {
-        ghost = createGhost(draggedElement);
-        draggedElement.classList.add(dragSourceClass);
-      }
-
-      const focusIdx = getFocusedIndex();
-      if (focusIdx >= 0) {
-        const items = storedCtx.getItems();
-        const focusItem = items[focusIdx];
-        dragFocusedItemId = focusItem ? focusItem.id : null;
-      } else {
-        dragFocusedItemId = null;
-      }
-
-      storedCtx.emitter.emit("sort:start" as never, { index: dragIndex } as never);
-      startEdgeScroll();
+      if (touchPointer !== null && !handleSelector) { abandonTouch(); return; }
+      startDrag();
     }
 
     if (sorting) {
+      if (touchClaimed) event.stopPropagation();
       event.preventDefault();
-      updateGhostPosition();
+      // startDrag placed the ghost for this move already.
+      if (!starting) updateGhostPosition();
       if (!inEdgeZone) {
         updateDropPosition();
       } else if (isPointerOutsideViewport()) {
@@ -524,6 +704,11 @@ export function sortable<T extends VListItem = VListItem>(
   }
 
   function onPointerUp(event: PointerEvent): void {
+    if (touchPointer !== null) {
+      if (event.pointerId !== touchPointer) return;
+      if (touchClaimed) event.stopPropagation();
+      clearTouch();
+    }
     if (!dragInitiated) {
       document.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("pointerup", onPointerUp);
@@ -550,8 +735,11 @@ export function sortable<T extends VListItem = VListItem>(
     animateDrop(dragIndex, dragIndex);
   };
 
-  function onPointerCancel(): void {
+  function onPointerCancel(event: PointerEvent): void {
+    if (touchPointer !== null && event.pointerId !== touchPointer) return;
+    if (touchClaimed) event.stopPropagation();
     cancelPointerDrag();
+    clearTouch();
   }
 
   // =========================================================================
@@ -575,8 +763,7 @@ export function sortable<T extends VListItem = VListItem>(
 
   const kbGrab = (index: number): void => {
     if (!storedCtx) return;
-    const items = storedCtx.getItems();
-    const item = items[index];
+    const item = itemAt(index);
     if (!item) return;
 
     kbGrabbed = true;
@@ -584,7 +771,9 @@ export function sortable<T extends VListItem = VListItem>(
     kbFromIndex = index;
     kbCurrentIndex = index;
 
-    kbOriginalItems = [...items] as T[];
+    // A snapshot, not an index read: under an adapter the list holds no full
+    // array, so sort:cancel reports what it has. Unchanged without data().
+    kbOriginalItems = [...storedCtx.items.all()] as T[];
 
     rootEl.classList.add(sortingClass);
     storedCtx.emitter.emit("sort:start" as never, { index } as never);
@@ -607,8 +796,8 @@ export function sortable<T extends VListItem = VListItem>(
     rootEl.classList.remove(sortingClass);
     clearKbGrabbedClass();
 
-    focusById(kbGrabbedItemId);
-    storedCtx.forceRender();
+    focusById(kbGrabbedItemId, true);
+    storedCtx.render.force();
 
     announce(`${label} dropped. Final position ${toIndex + 1} of ${totalLabel()}.`);
     kbOriginalItems = [];
@@ -630,8 +819,8 @@ export function sortable<T extends VListItem = VListItem>(
       storedCtx.emitter.emit("sort:cancel" as never, { originalItems: kbOriginalItems } as never);
     }
 
-    focusById(kbGrabbedItemId);
-    storedCtx.forceRender();
+    focusById(kbGrabbedItemId, true);
+    storedCtx.render.force();
     scrollIntoView(originalIndex);
 
     announce(`Reorder cancelled. Returned to position ${originalIndex + 1} of ${totalLabel()}.`);
@@ -653,8 +842,8 @@ export function sortable<T extends VListItem = VListItem>(
     storedCtx.emitter.emit("sort:end" as never, { fromIndex, toIndex } as never);
 
     kbCurrentIndex = toIndex;
-    focusById(kbGrabbedItemId);
-    storedCtx.forceRender();
+    focusById(kbGrabbedItemId, true);
+    storedCtx.render.force();
     scrollIntoView(toIndex);
     applyKbGrabbedClass();
 
@@ -713,11 +902,26 @@ export function sortable<T extends VListItem = VListItem>(
     }
 
     if (event.key === " " && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-      const focusedIndex = getFocusedIndex();
-      if (focusedIndex >= 0) {
+      // A click with the default `focusOnClick: false` remembers the row but
+      // hides the ring, and `_getFocusedIndex` answers -1 while the ring is
+      // off, so a table or masonry click paints none. The row is still the
+      // one the person means: `_getFocusedId` names it whatever the ring
+      // does. Without this, Space after a click did nothing and the first
+      // arrow -- which shows the ring -- made the second Space work (#115).
+      let index = getFocusedIndex();
+      const hidden = index < 0;
+      if (hidden) {
+        const id = (storedCtx?.hooks.get("_getFocusedId") as (() => string | number | undefined) | undefined)?.();
+        const el = id === undefined ? null : contentEl.querySelector<HTMLElement>(`[data-id="${id}"]`);
+        if (el) index = getIndex(el);
+      }
+      if (index >= 0) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        kbGrab(focusedIndex);
+        kbGrab(index);
+        // A key press grabbed it: the ring comes back with the grab, as it
+        // does for every other key move.
+        if (hidden) focusById(kbGrabbedItemId, true);
       }
     }
   };
@@ -729,12 +933,23 @@ export function sortable<T extends VListItem = VListItem>(
   return {
     name: "sortable",
     priority: 30,
-    conflicts: ["grid", "masonry", "table", "scale", "tree"],
+    // carousel is "not yet", not "never" — unlike the four layout plugins
+    // above, which own the geometry this plugin drags through. A sortable
+    // carousel is a reasonable thing to want; it is broken for one fixable
+    // reason. This plugin reads data-index for dragIndex and then hands that
+    // data index to sizeCache.getOffset() in computeDropIndex, and carousel
+    // has made the size cache speak virtual indices. A real pointer gesture
+    // on ten items emitted sort:end { fromIndex: 2, toIndex: 13 }, and the
+    // backward branch of computeDropIndex was unreachable, so dragging
+    // upward was impossible. Converting through _layoutToDataIndex would
+    // close it; until someone does, declare it and leave the door open.
+    conflicts: ["grid", "masonry", "table", "tree", "carousel"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       contentEl = ctx.dom.content;
       viewportEl = ctx.dom.viewport;
       rootEl = ctx.dom.root;
@@ -750,13 +965,13 @@ export function sortable<T extends VListItem = VListItem>(
       dragSourceClass = `${classPrefix}-item--drag-source`;
       kbGrabbedClassName = `${classPrefix}-item--kb-sorting`;
 
-      ctx.registerMethod("isSorting", (): boolean => sorting || kbGrabbed);
+      ctx.hooks.method("isSorting", (): boolean => sorting || kbGrabbed);
 
       // ── Pointer handler on items container ──
       contentEl.addEventListener("pointerdown", onPointerDown);
 
       // ── Keyboard handler directly on root ──
-      // Registered directly (not via ctx.registerKeydownHandler) so
+      // Registered directly (not via ctx.hooks.onKeydown) so
       // stopImmediatePropagation prevents selection from processing keys
       rootEl.addEventListener("keydown", onKeydown);
 
@@ -782,7 +997,7 @@ export function sortable<T extends VListItem = VListItem>(
       rootEl.appendChild(liveRegion);
 
       // ── Cleanup ──
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         if (kbGrabbed) kbCancel();
         cleanupDrag();
         contentEl.removeEventListener("pointerdown", onPointerDown);
@@ -793,8 +1008,20 @@ export function sortable<T extends VListItem = VListItem>(
     },
 
     hooks: {
+      onAfterScroll(position): void {
+        if (position !== lastScrollPosition) {
+          lastScrollPosition = position;
+          lastScrollTime = performance.now();
+          scrolling = true;
+        }
+        if (touchPointer !== null && !touchClaimed && position !== pressPosition) abandonTouch();
+      },
+      onIdle(): void { scrolling = false; },
       onCommit(): void {
         if (!storedCtx) return;
+        const origin = scroll.getRenderOrigin();
+        const originChanged = origin !== renderedOrigin;
+        renderedOrigin = origin;
 
         const children = contentEl.children;
         for (let i = 0; i < children.length; i++) {
@@ -816,8 +1043,14 @@ export function sortable<T extends VListItem = VListItem>(
             }
           }
 
-          // During pointer drag: maintain visual state on recycled elements
+          // During pointer drag: maintain visual state on recycled elements.
           if (sorting) {
+            // Logical scrolling moves every item through its render origin.
+            // Only reordering shifts should animate, never that coordinate move.
+            // "none" beats an author `transition: transform` rule. Clearing the
+            // inline value lets that rule animate synthetic edge-scroll and
+            // leaves a hole in the viewport.
+            if (originChanged) el.style.transition = "none";
             if (idx === dragIndex) {
               el.classList.add(dragSourceClass);
               draggedElement = el;
@@ -829,7 +1062,7 @@ export function sortable<T extends VListItem = VListItem>(
               } else if (dropIndex < dragIndex) {
                 if (idx >= dropIndex && idx < dragIndex) shift = draggedItemSize;
               }
-              const finalOffset = Math.round(sizeCache.getOffset(idx) + shift);
+              const finalOffset = Math.round(sizeCache.getOffset(idx) + shift - scroll.getRenderOrigin());
               el.style.transform = `${prop}(${finalOffset}px)`;
             }
           }

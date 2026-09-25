@@ -1,5 +1,5 @@
 /**
- * vlist v2 — createVList End-to-End Tests
+ * vlist — createVList End-to-End Tests
  *
  * Covers config validation, plugin validation, horizontal mode E2E,
  * smooth scrollToIndex, destroy safety, data operations, and scroll config.
@@ -7,32 +7,34 @@
  * boundary, pool, velocity, gap, or padding test files.
  */
 
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM, useFakeTimers } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
+import { createVList as createNative } from "../../src/native";
 import { createVList } from "../../src/core/create";
-import type { VList, VListPlugin } from "../../src/core/types";
+import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
 
 // =============================================================================
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -224,16 +226,16 @@ describe("createVList — plugin validation", () => {
     );
 
     expect(receivedCtx).not.toBeNull();
-    const ctx = receivedCtx as Record<string, unknown>;
+    const ctx = receivedCtx as PluginContext<TestItem>;
     expect(ctx.dom).toBeDefined();
-    expect(ctx.sizeCache).toBeDefined();
+    expect(ctx.sizes.cache).toBeDefined();
     expect(ctx.pool).toBeDefined();
     expect(ctx.config).toBeDefined();
     expect(ctx.emitter).toBeDefined();
     expect(ctx.template).toBe(simpleTemplate);
-    expect(typeof ctx.registerMethod).toBe("function");
-    expect(typeof ctx.registerDestroyHandler).toBe("function");
-    expect(typeof ctx.getItems).toBe("function");
+    expect(typeof ctx.hooks.method).toBe("function");
+    expect(typeof ctx.hooks.onDestroy).toBe("function");
+    expect(typeof ctx.items.all).toBe("function");
     expect(typeof ctx.getState).toBe("function");
   });
 });
@@ -252,7 +254,7 @@ describe("createVList — horizontal mode E2E", () => {
     hContainer.remove();
   });
 
-  it("scrollToIndex sets scrollLeft in horizontal mode", () => {
+  it("scrollToIndex sets logical position in horizontal mode", () => {
     list = createVList<TestItem>(
       {
         container: hContainer,
@@ -265,9 +267,9 @@ describe("createVList — horizontal mode E2E", () => {
 
     const viewport = getViewport(hContainer);
     list.scrollToIndex(10);
-    // In horizontal mode, scrollToIndex writes to scrollLeft
+    // Horizontal navigation updates the logical position.
     // With width 80, index 10 offset = 800
-    expect(viewport.scrollLeft).toBe(800);
+    expect(list!.getScrollPosition()).toBe(800);
   });
 
   it("getScrollPosition reads state in horizontal mode", () => {
@@ -283,15 +285,14 @@ describe("createVList — horizontal mode E2E", () => {
 
     list.scrollToIndex(5);
     // scrollToIndex(5) -> offset = 5 * 80 = 400
-    expect(list.getScrollPosition()).toBe(0);
-    // getScrollPosition reads state.scrollPosition, which updates on scroll events
-    // After scrollToIndex with auto behavior, viewport.scrollLeft is set directly
+    expect(list.getScrollPosition()).toBe(400);
+    // Programmatic writes commit native read-back before the DOM scroll event.
     const viewport = getViewport(hContainer);
-    expect(viewport.scrollLeft).toBe(400);
+    expect(list!.getScrollPosition()).toBe(400);
   });
 
   it("scroll event reports horizontal position", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container: hContainer,
         items: createTestItems(100),
@@ -315,7 +316,7 @@ describe("createVList — horizontal mode E2E", () => {
   });
 
   it("content width reflects total in horizontal mode", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container: hContainer,
         items: createTestItems(20),
@@ -378,8 +379,8 @@ describe("createVList — smooth scrollToIndex", () => {
 
     const viewport = getViewport(container);
     list.scrollToIndex(10);
-    // Auto/instant: sets scrollTop directly = 10 * 50 = 500
-    expect(viewport.scrollTop).toBe(500);
+    // Auto/instant: logical position = 10 * 50 = 500
+    expect(list!.getScrollPosition()).toBe(500);
   });
 
   it("scrollToIndex with smooth behavior starts animation", () => {
@@ -391,14 +392,14 @@ describe("createVList — smooth scrollToIndex", () => {
       );
 
       const viewport = getViewport(container);
-      const initialPos = viewport.scrollTop;
+      const initialPos = list!.getScrollPosition();
       list.scrollToIndex(20, { align: "start", behavior: "smooth" });
 
       // After first tick, rAF fires and position should start changing
       fakeTimers.tick(16);
       // The position may have started animating but won't reach final yet
       // We just verify something happened (rAF was scheduled)
-      expect(viewport.scrollTop).not.toBe(initialPos);
+      expect(list!.getScrollPosition()).not.toBe(initialPos);
     } finally {
       fakeTimers.restore();
     }
@@ -422,7 +423,7 @@ describe("createVList — smooth scrollToIndex", () => {
 
       const viewport = getViewport(container);
       // Should end up at index 20's offset = 20 * 50 = 1000
-      expect(viewport.scrollTop).toBe(1000);
+      expect(list!.getScrollPosition()).toBe(1000);
     } finally {
       fakeTimers.restore();
     }
@@ -437,7 +438,7 @@ describe("createVList — smooth scrollToIndex", () => {
     const viewport = getViewport(container);
     list.scrollToIndex(-5);
     // Clamped to 0
-    expect(viewport.scrollTop).toBe(0);
+    expect(list!.getScrollPosition()).toBe(0);
   });
 
   it("scrollToIndex clamps to valid range — beyond total", () => {
@@ -450,8 +451,8 @@ describe("createVList — smooth scrollToIndex", () => {
     list.scrollToIndex(999);
     // Clamped to last index (19), offset = 19 * 50 = 950
     // But also clamped to maxScroll = totalSize - containerSize = 1000 - 500 = 500
-    expect(viewport.scrollTop).toBeLessThanOrEqual(500);
-    expect(viewport.scrollTop).toBeGreaterThan(0);
+    expect(list!.getScrollPosition()).toBeLessThanOrEqual(500);
+    expect(list!.getScrollPosition()).toBeGreaterThan(0);
   });
 });
 
@@ -525,7 +526,7 @@ describe("createVList — destroy safety", () => {
       name: "destroy-c",
       priority: 30,
       setup(ctx) {
-        ctx.registerDestroyHandler(() => { order.push("c-handler"); });
+        ctx.hooks.onDestroy(() => { order.push("c-handler"); });
       },
       destroy() { order.push("c"); },
     };
@@ -635,7 +636,7 @@ describe("createVList — scroll config", () => {
     const fakeTimers = useFakeTimers();
     try {
       const customIdleTimeout = 500;
-      list = createVList<TestItem>(
+      list = createNative<TestItem>(
         {
           container,
           items: createTestItems(100),

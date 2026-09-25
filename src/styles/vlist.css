@@ -41,9 +41,7 @@
     --vlist-scrollbar-radius: 4px;
 
     /* Custom overlay scrollbar (withScrollbar feature) */
-    --vlist-custom-scrollbar-width: 8px;
     --vlist-custom-scrollbar-track-color: transparent;
-    --vlist-custom-scrollbar-radius: 4px;
     --vlist-custom-scrollbar-padding-top: 2px;
     --vlist-custom-scrollbar-padding-right: 2px;
     --vlist-custom-scrollbar-padding-bottom: 2px;
@@ -285,6 +283,25 @@
 /* Striped (odd) item state — use background shorthand so consumer
    shorthand rules (e.g. .vlist-item--odd { background: ... }) don't
    bleed through selected/hover states. */
+/* A template's root element fills the row.
+
+   `.vlist-item` is a flex container, so whatever `item.template` returns
+   becomes a flex item — and flex items do not grow. A single-root template
+   therefore shrink-wrapped to its own content, which is why every integration
+   ended up writing `width: 100%` and, separately, rediscovering that
+   `min-width: 0` is what lets text inside it truncate.
+
+   `:only-child` is deliberate. It covers the single-root template, which is the
+   case people write and the case that was wrong, and it leaves anything with
+   several roots exactly as it was — table cells being the one that matters,
+   since the table plugin sets their widths itself and growing them would
+   redistribute the columns. */
+.vlist-item > :only-child,
+.vlist-group-header > :only-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .vlist-item.vlist-item--odd {
     background: var(--vlist-bg-striped);
 }
@@ -350,6 +367,14 @@
    Custom Scrollbar (for compressed mode)
    ============================================================================= */
 
+/* Keyboard focus stays visible even with an auto-hidden track. */
+.vlist-scrollbar:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+    opacity: 1;
+    pointer-events: auto;
+}
+
 /* Scrollbar track */
 .vlist-scrollbar {
     position: absolute;
@@ -360,6 +385,7 @@
     background-color: var(--vlist-custom-scrollbar-track-color);
     opacity: 0;
     transition: opacity 0.2s ease-out;
+    touch-action: none;
     z-index: 10;
     pointer-events: none;
 }
@@ -373,6 +399,7 @@
     right: 0;
     height: 100%;
     z-index: 9;
+    touch-action: none;
     pointer-events: auto;
 }
 
@@ -416,6 +443,27 @@
 
 .vlist-scrollbar--dragging .vlist-scrollbar__thumb {
     background-color: var(--vlist-custom-scrollbar-thumb-hover-color);
+}
+
+/* Preserve track, thumb and keyboard focus in high-contrast themes. */
+@media (forced-colors: active) {
+    .vlist-scrollbar {
+        forced-color-adjust: none;
+        background-color: Canvas;
+    }
+
+    .vlist-scrollbar__thumb {
+        background-color: CanvasText;
+    }
+
+    .vlist-scrollbar__thumb:hover,
+    .vlist-scrollbar--dragging .vlist-scrollbar__thumb {
+        background-color: Highlight;
+    }
+
+    .vlist-scrollbar:focus-visible {
+        outline-color: Highlight;
+    }
 }
 
 /* =============================================================================
@@ -553,6 +601,19 @@
     opacity: 0.85;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
     cursor: grabbing;
+}
+
+/* Applied only for an active touch/pen press on a sortable item. */
+.vlist-item--touch-sort {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+/* Long-press/handle claim cue; applications may override this class hook. */
+.vlist-sort-ghost--touch {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: 2px;
 }
 
 /* Hide the original item while its ghost is being dragged */

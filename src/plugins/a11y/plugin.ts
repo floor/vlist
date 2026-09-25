@@ -1,5 +1,5 @@
 /**
- * vlist v2 — A11y Plugin
+ * vlist — A11y Plugin
  *
  * Baseline keyboard navigation, single-select, focus management, and ARIA.
  * Extracted from createVList() so it tree-shakes when selection() is used.
@@ -31,12 +31,12 @@ export function a11y<T extends VListItem = VListItem>(
     priority: 55,
 
     setup(ctx: PluginContext<T>): void {
-      if (ctx.getItemStateFn()) return;
+      if (ctx.render.getStateFn()) return;
 
-      ctx.enableListboxRole();
+      ctx.dom.enableListbox();
       const dom = ctx.dom;
       const config = ctx.config;
-      const sizeCache = ctx.sizeCache;
+      const sizeCache = ctx.sizes.cache;
       const engineState = ctx.getState();
       const emitter = ctx.emitter;
       const classPrefix = config.classPrefix;
@@ -47,15 +47,40 @@ export function a11y<T extends VListItem = VListItem>(
       let selId: string | number | undefined;
       let selIdx = -1;
 
-      const getItem = (i: number): T | undefined => ctx.getItem(i);
+      const getItem = (i: number): T | undefined => ctx.items.at(i);
       const getTotal = (): number => engineState.totalItems;
 
       const _focusEvt = { id: 0 as string | number, index: 0 };
       const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
 
-      ctx.setItemStateFn((_i: number, is: ItemState): void => {
+      ctx.render.setStateFn((_i: number, is: ItemState): void => {
         is.selected = selIdx === _i;
         is.focused = focusVis && focusIdx === _i;
+      });
+
+      // tree() treats a state function as an external focus owner and then
+      // reads these. Without them ArrowLeft, ArrowRight, "*" and type-ahead
+      // see no focused row and return.
+      ctx.hooks.method("_getFocusedIndex", (): number => (focusVis ? focusIdx : -1));
+      ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
+        if (focusIdx < 0) return undefined;
+        return getItem(focusIdx)?.id;
+      });
+      ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
+        const total = getTotal();
+        for (let i = 0; i < total; i++) {
+          const it = getItem(i);
+          if (!it || it.id !== id) continue;
+          focusIdx = i;
+          if (keyboard !== "preserve") focusVis = keyboard === true;
+          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${i}`);
+          else dom.content.removeAttribute("aria-activedescendant");
+          _focusEvt.id = id;
+          _focusEvt.index = i;
+          emitter.emit("focus:change", _focusEvt);
+          ctx.render.force();
+          return;
+        }
       });
 
       function announce(message: string): void {
@@ -80,11 +105,25 @@ export function a11y<T extends VListItem = VListItem>(
       };
 
       const scrollIntoView = (idx: number): void => {
-        const nav = ctx.getNavConfig();
+        const nav = ctx.nav.get();
+        // The layout that owns the scroll tells us where the item really is.
+        // Masonry lanes and a sticky group header are not a prefix sum, and
+        // carousel reveals inside the current lap. A prefix sum leaves the
+        // focused cell below the fold and the active descendant unmounted.
+        if (nav.reveal) {
+          nav.reveal(idx);
+          return;
+        }
+        const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
+        if (reveal) {
+          ctx.scroll.cancel();
+          reveal(idx);
+          return;
+        }
         const ci = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
         const off = sizeCache.getOffset(ci);
         const sz = sizeCache.getSize(ci);
-        const sp = engineState.scrollPosition;
+        const sp = ctx.scroll.getPixelEquivalent();
         const cs = engineState.containerSize;
         const sP = config.startPadding;
         const eP = config.endPadding;
@@ -96,15 +135,14 @@ export function a11y<T extends VListItem = VListItem>(
         else if (adjBot > sp + cs) pos = adjBot + eP - cs;
 
         if (pos !== sp) {
-          engineState.scrollPosition = pos;
-          ctx.scrollTo(pos);
+          ctx.scroll.setPixelEquivalent(pos);
         }
       };
 
       const commit = (idx: number, scroll: boolean): void => {
         dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${idx}`);
         if (scroll) scrollIntoView(idx);
-        ctx.forceRender();
+        ctx.render.force();
       };
 
       const move = (next: number): void => {
@@ -164,7 +202,7 @@ export function a11y<T extends VListItem = VListItem>(
         if (rel && dom.root.contains(rel)) return;
         focusVis = false;
         dom.content.removeAttribute("aria-activedescendant");
-        ctx.forceRender();
+        ctx.render.force();
       };
 
       dom.content.addEventListener("focusin", onFocusIn);
@@ -174,7 +212,7 @@ export function a11y<T extends VListItem = VListItem>(
       // Skipped when keyboard:false — click-selection, focus, and ARIA stay
       // active, but keyboard navigation is left to an outer system.
 
-      if (keyboard) ctx.registerKeydownHandler((e: KeyboardEvent): void => {
+      if (keyboard) ctx.hooks.onKeydown((e: KeyboardEvent): void => {
         if (engineState.destroyed) return;
         const total = getTotal();
         if (total === 0) return;
@@ -192,7 +230,7 @@ export function a11y<T extends VListItem = VListItem>(
           return;
         }
 
-        const nav = ctx.getNavConfig();
+        const nav = ctx.nav.get();
         if (nav.navigate) {
           switch (e.key) {
             case "ArrowUp": case "ArrowDown": case "ArrowLeft": case "ArrowRight":
@@ -205,11 +243,15 @@ export function a11y<T extends VListItem = VListItem>(
           const ud = nav.ud || 1;
           const lr = nav.lr;
           const isX = config.axis.primary === "x";
+          const lane = (d: number): number => (Math.abs(d) > 1 && p >= 0 ? clampPageTarget(p + d, p, Math.abs(d), total) : p + d);
           switch (e.key) {
-            case "ArrowUp":    if (isX && !lr) return; n = p - (isX ? lr : ud); break;
-            case "ArrowDown":  if (isX && !lr) return; n = p + (isX ? lr : ud); break;
-            case "ArrowLeft":  if (!isX && !lr) return; n = p - (isX ? ud : lr); break;
-            case "ArrowRight": if (!isX && !lr) return; n = p + (isX ? ud : lr); break;
+            // A step of more than one item is a row (or, sideways in a
+            // horizontal grid, a column): it keeps its lane at the edges
+            // instead of clamping to the corner, as the page keys do (#60).
+            case "ArrowUp":    if (isX && !lr) return; n = lane(-(isX ? lr : ud)); break;
+            case "ArrowDown":  if (isX && !lr) return; n = lane(isX ? lr : ud); break;
+            case "ArrowLeft":  if (!isX && !lr) return; n = lane(-(isX ? ud : lr)); break;
+            case "ArrowRight": if (!isX && !lr) return; n = lane(isX ? ud : lr); break;
             case "PageUp":
             case "PageDown": {
               const sz = sizeCache.getSize(Math.max(0, nav.scrollIndex ? nav.scrollIndex(p) : p));
@@ -237,7 +279,7 @@ export function a11y<T extends VListItem = VListItem>(
 
       // ── Click handler ───────────────────────────────────────────
 
-      ctx.registerClickHandler((e: MouseEvent): void => {
+      ctx.hooks.onClick((e: MouseEvent): void => {
         if (engineState.destroyed) return;
         const el = (e.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
@@ -252,7 +294,7 @@ export function a11y<T extends VListItem = VListItem>(
 
       // ── Cleanup ─────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         dom.content.removeEventListener("focusin", onFocusIn);
         dom.content.removeEventListener("focusout", onFocusOut);
       });

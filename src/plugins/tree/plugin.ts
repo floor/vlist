@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Tree Plugin
+ * vlist — Tree Plugin
  *
  * Renders hierarchical data as a virtualized, collapsible tree view with
  * WAI-ARIA treeview keyboard navigation. Owns the tree→flat conversion
@@ -10,13 +10,19 @@
  *
  * Replaces the render pipeline (like groups/grid/table) to maintain full
  * control over tree-specific ARIA, CSS classes, indent, and expand/collapse.
+ *
+ * Restrictions:
+ * - Cannot be combined with `groups()`, `grid()`, `masonry()` or `table()`:
+ *   each of those owns the layout, and so does this one.
+ * - Cannot be combined with `data()`, which claims the same data-access hooks
+ *   and would replace them. Use `loadChildren` for async tree data.
  */
 
 import type { VListItem, ItemState, ItemTemplate, TreeState, VListEvents } from "../../types";
 import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
-import { neutralizeFocusable } from "../../core/dom";
+import { rowContentWritten } from "../../core/dom";
 import { createTreeLayout, type TreeLayout } from "./layout";
 import type { TreePluginConfig, FlatNode } from "./types";
 
@@ -148,9 +154,35 @@ itemState.tree = treeState;
 // Factory
 // =============================================================================
 
+/** Methods the tree plugin adds to the list instance. */
+export interface TreeMethods<T extends VListItem = VListItem> {
+  /** Expand one node. */
+  expand(id: string | number): void;
+  /** Collapse one node. */
+  collapse(id: string | number): void;
+  /** Toggle one node. */
+  toggle(id: string | number): void;
+  /** Expand every node. */
+  expandAll(): void;
+  /** Collapse every node. */
+  collapseAll(): void;
+  /** Expand every ancestor of a node so it becomes visible. */
+  expandTo(id: string | number): void;
+  /** Ids of the expanded nodes. */
+  getExpanded(): (string | number)[];
+  /** Whether a node is expanded. */
+  isExpanded(id: string | number): boolean;
+  /** Add a child under a parent, or at the root when parentId is null. */
+  addChild(parentId: string | number | null, item: T, index?: number): void;
+  /** Move a node under a new parent. */
+  moveNode(id: string | number, newParentId: string | number | null, index?: number): void;
+  /** Visible node count and the flattened nodes. */
+  getTreeLayout(): { totalVisible: number; flatNodes: FlatNode<T>[] };
+}
+
 export function tree<T extends VListItem = VListItem>(
   config?: TreePluginConfig<T>,
-): VListPlugin<T> {
+): VListPlugin<T, TreeMethods<T>> {
   const cfg = config ?? {};
   const indent = cfg.indent ?? 24;
   const paddingStart = cfg.paddingStart ?? 0;
@@ -160,6 +192,8 @@ export function tree<T extends VListItem = VListItem>(
   let layout: TreeLayout<T>;
   let sizeCache: SizeCache;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let pool: ElementPool;
   let contentElement: HTMLElement;
   let rootElement: HTMLElement;
@@ -201,13 +235,24 @@ export function tree<T extends VListItem = VListItem>(
   function getEffectiveFocusedIndex(): number {
     if (hasExternalFocus) {
       const fn = getMethod("_getFocusedIndex") as (() => number) | undefined;
-      return fn ? fn() : -1;
+      const visible = fn ? fn() : -1;
+      if (visible >= 0) return visible;
+      // The ring index is -1 while a click hides it. The owner still remembers
+      // the row. ArrowRight, ArrowLeft, "*" and type-ahead start there.
+      const idFn = getMethod("_getFocusedId") as (() => string | number | undefined) | undefined;
+      const id = idFn?.();
+      if (id === undefined) return -1;
+      const index = layout.idToIndex.get(id);
+      return index === undefined ? -1 : index;
     }
-    return focusVisible ? focusedIndex : -1;
+    // A click records the row and hides the ring, because a mouse click is not
+    // :focus-visible. The next arrow still starts there. Treating a hidden ring
+    // as "no row" made ArrowDown jump to the first node.
+    return focusedIndex;
   }
 
   let cachedSelectFn: ((...ids: (string | number)[]) => void) | null | undefined;
-  let cachedFocusFn: ((id: string | number) => void) | null | undefined;
+  let cachedFocusFn: ((id: string | number, keyboard?: boolean) => void) | null | undefined;
   let cachedFollowFn: (() => boolean) | null | undefined;
 
   function resolveSelectionMethods(): void {
@@ -224,7 +269,8 @@ export function tree<T extends VListItem = VListItem>(
 
     if (hasExternalFocus) {
       resolveSelectionMethods();
-      if (cachedFocusFn) cachedFocusFn(node.id);
+      // Every caller of setFocusTo is a key press; a click goes through its own path.
+      if (cachedFocusFn) cachedFocusFn(node.id, true);
       if (cachedFollowFn?.() && cachedSelectFn) {
         cachedSelectFn(node.id);
       } else {
@@ -243,7 +289,7 @@ export function tree<T extends VListItem = VListItem>(
   function scrollIntoView(index: number): void {
     const offset = sizeCache.getOffset(index);
     const size = sizeCache.getSize(index);
-    const sp = engineState.scrollPosition;
+    const sp = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
     if (offset < sp) {
       scrollTo(offset);
@@ -435,6 +481,40 @@ export function tree<T extends VListItem = VListItem>(
 
   // ── Render pipeline ──────────────────────────────────────────────
 
+  // Columns to the left of this row's own branch. A column continues only
+  // while that ancestor still has a sibling below it; a last child closes it.
+  function continuingGuides(flatNode: FlatNode<T>): boolean[] {
+    const guides: boolean[] = [];
+    let parentId = flatNode.parentId;
+    while (parentId !== null) {
+      const parentIdx = layout.idToIndex.get(parentId);
+      if (parentIdx === undefined) break;
+      const parent = layout.flatNodes[parentIdx]!;
+      if (parent.parentId === null) break;
+      guides.push(!parent.isLastChild);
+      parentId = parent.parentId;
+    }
+    guides.reverse();
+    return guides;
+  }
+
+  const guideColor = "var(--vlist-tree-line, currentColor)";
+
+  function guideGradient(depth: number, through: boolean[], isLast: boolean, step: number): string {
+    const stops: string[] = [];
+    const lastColumn = isLast ? depth - 2 : depth - 1;
+    for (let column = 0; column <= lastColumn; column++) {
+      if (column < depth - 1 && !through[column]) continue;
+      const x = column * step;
+      // The first color stop paints back to the left edge. A line that does
+      // not start at 0 would fill the whole gutter, a gray bar beside the row.
+      if (stops.length > 0 || x > 0) stops.push(`transparent ${x}px`);
+      stops.push(`${guideColor} ${x}px`, `${guideColor} ${x + 1}px`, `transparent ${x + 1}px`);
+    }
+    if (stops.length === 0) return "none";
+    return `linear-gradient(to right, ${stops.join(", ")})`;
+  }
+
   function renderNodeElement(
     element: HTMLElement,
     flatNode: FlatNode<T>,
@@ -467,6 +547,13 @@ export function tree<T extends VListItem = VListItem>(
     if (connectorLines) {
       element.style.setProperty("--vlist-tree-indent", `${indent}px`);
       element.style.setProperty("--vlist-tree-pad", `${paddingStart}px`);
+      if (depth > 0) {
+        element.style.setProperty("--vlist-tree-guides", guideGradient(depth, continuingGuides(flatNode), isLastChild, indent));
+        element.style.setProperty("--vlist-tree-elbow", isLastChild ? `linear-gradient(${guideColor}, ${guideColor})` : "none");
+      } else {
+        element.style.setProperty("--vlist-tree-guides", "none");
+        element.style.setProperty("--vlist-tree-elbow", "none");
+      }
     }
 
     if (isf) isf(flatIndex, itemState);
@@ -486,7 +573,7 @@ export function tree<T extends VListItem = VListItem>(
       element.innerHTML = "";
       element.appendChild(content);
     }
-    neutralizeFocusable(element);
+    rowContentWritten(element);
   }
 
   function treeRenderIfNeeded(): void {
@@ -502,10 +589,11 @@ export function tree<T extends VListItem = VListItem>(
       if (connectorLines) rootElement.classList.add(`${classPrefix}--tree-lines`);
     }
 
-    const scrollPos = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPos = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
 
-    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize) return;
+    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize && origin === lastOrigin) return;
     lastScrollPosition = scrollPos;
     lastContainerSize = cs;
     forceNextRender = false;
@@ -526,9 +614,8 @@ export function tree<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-    // Row transforms subtract baseOffset (issue 025): a baseOffset move with an
-    // unchanged range must still commit. Native keeps baseOffset at 0.
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && engineState.baseOffset === engineState.prevBaseOffset) return;
+    // An origin move with an unchanged range must still commit (issue 025).
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && origin === lastOrigin) return;
 
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
@@ -559,9 +646,8 @@ export function tree<T extends VListItem = VListItem>(
         }
       }
 
-      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-      // bounded runway. baseOffset is 0 in native mode (byte-identical).
-      element.style.transform = buildTransform(sizeCache.getOffset(i) - engineState.baseOffset);
+      // Map logical item offsets into content coordinates using the adapter origin.
+      element.style.transform = buildTransform(sizeCache.getOffset(i) - origin);
 
       if (isf) {
         isf(i, itemState);
@@ -583,7 +669,7 @@ export function tree<T extends VListItem = VListItem>(
 
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
-    engineState.prevBaseOffset = engineState.baseOffset;
+    lastOrigin = origin;
     engineState.renderPending = false;
 
     let fillCount = 0;
@@ -647,25 +733,32 @@ export function tree<T extends VListItem = VListItem>(
   return {
     name: "tree",
     priority: 10,
-    conflicts: ["groups", "grid", "masonry", "table"],
+    // data() installs six of the seven hooks this plugin installs — total,
+    // item, index-by-id, insert, remove and update — and runs later (priority
+    // 20 against 10), so it replaced the whole data-access surface underneath
+    // the tree. The one hook it does not claim is the renderer, which stayed
+    // installed and kept reading through the replaced functions: nothing
+    // rendered. Async tree data has its own path in `loadChildren`.
+    conflicts: ["groups", "grid", "masonry", "table", "data"],
 
     setup(ctx: PluginContext<T>): void {
-      sizeCache = ctx.sizeCache;
+      scroll = ctx.scroll;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
       pool = ctx.pool;
       contentElement = ctx.dom.content;
-      updateContentSize = ctx.updateContentSize.bind(ctx);
+      updateContentSize = ctx.render.contentSize.bind(ctx);
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       emitter = ctx.emitter;
-      getItemStateFn = ctx.getItemStateFn.bind(ctx);
-      getMethod = ctx.getMethod.bind(ctx);
-      scrollTo = ctx.scrollTo.bind(ctx);
-      doForceRender = ctx.forceRender.bind(ctx);
-      ctxGetItems = ctx.getItems.bind(ctx) as () => readonly T[];
+      getItemStateFn = ctx.render.getStateFn.bind(ctx);
+      getMethod = ctx.hooks.get.bind(ctx);
+      scrollTo = ctx.scroll.to.bind(ctx);
+      doForceRender = ctx.render.force.bind(ctx);
+      ctxGetItems = ctx.items.all.bind(ctx) as () => readonly T[];
 
       treeItemClass = `${classPrefix}-item ${classPrefix}-tree-node`;
       expandedClass = `${classPrefix}-tree-node--expanded`;
@@ -675,7 +768,7 @@ export function tree<T extends VListItem = VListItem>(
       selectedClass = `${classPrefix}-item--selected`;
       focusedClass = `${classPrefix}-item--focused`;
 
-      const rawItems = ctx.getItems() as readonly T[];
+      const rawItems = ctx.items.all() as readonly T[];
       lastItems = rawItems;
       lastItemsLength = rawItems.length;
 
@@ -708,35 +801,35 @@ export function tree<T extends VListItem = VListItem>(
 
       engineState.totalItems = layout.totalVisible;
 
-      ctx.setVirtualTotalFn(() => layout.totalVisible);
-      ctx.setGetItemFn((index: number): T | undefined => {
+      ctx.items.setTotalFn(() => layout.totalVisible);
+      ctx.items.setGetFn((index: number): T | undefined => {
         const node = layout.flatNodes[index];
         return node ? node.item : undefined;
       });
-      ctx.setGetIndexByIdFn((id: string | number): number => {
+      ctx.items.setIndexByIdFn((id: string | number): number => {
         return layout.idToIndex.get(id) ?? -1;
       });
-      ctx.setRenderFn(treeRenderIfNeeded, treeForceRender);
+      ctx.render.setFn(treeRenderIfNeeded, treeForceRender);
 
-      ctx.registerMethod("_layoutToDataIndex", (layoutIndex: number): number => layoutIndex);
-      ctx.registerMethod("_dataToLayoutIndex", (dataIndex: number): number => dataIndex);
-      ctx.registerMethod("_getLoadedItem", (index: number): T | undefined => {
+      ctx.hooks.method("_layoutToDataIndex", (layoutIndex: number): number => layoutIndex);
+      ctx.hooks.method("_dataToLayoutIndex", (dataIndex: number): number => dataIndex);
+      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => {
         const node = layout.flatNodes[index];
         return node ? node.item : undefined;
       });
-      ctx.registerMethod("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+      ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
         rendered.get(layoutIndex) ?? null,
       );
 
       // ── Detect external focus management ─────────────────────────
 
       queueMicrotask(() => {
-        hasExternalFocus = !!(getMethod("_getFocusedIndex") || ctx.getItemStateFn());
+        hasExternalFocus = !!(getMethod("_getFocusedIndex") || ctx.render.getStateFn());
       });
 
       // ── Mutation interceptors ────────────────────────────────────
 
-      ctx.setInsertItemFn((item: T, index: number): void => {
+      ctx.items.setInsertFn((item: T, index: number): void => {
         const rawItems = ctxGetItems() as T[];
         const clampedIdx = Math.min(index, rawItems.length);
         rawItems.splice(clampedIdx, 0, item);
@@ -745,7 +838,7 @@ export function tree<T extends VListItem = VListItem>(
         invalidateTree();
       });
 
-      ctx.setRemoveItemFn((id: string | number): number => {
+      ctx.items.setRemoveFn((id: string | number): number => {
         const idx = layout.idToIndex.get(id);
 
         let removedIds: Set<string | number> | null = null;
@@ -775,14 +868,18 @@ export function tree<T extends VListItem = VListItem>(
         return removed;
       });
 
-      ctx.setUpdateItemFn((id: string | number, updates: Partial<T>): boolean => {
+      ctx.items.setUpdateFn((id: string | number, updates: Partial<T>): boolean => {
+        // idToIndex only lists nodes on screen. A child of a closed folder is
+        // still in the source tree, and that is the object the next expand reads.
+        const item = layout.findItem(id);
+        if (!item) return false;
+        Object.assign(item, updates);
         const idx = layout.idToIndex.get(id);
-        if (idx === undefined) return false;
-        const node = layout.flatNodes[idx]!;
-        Object.assign(node.item, updates);
-        const el = rendered.get(idx);
-        if (el) {
-          renderNodeElement(el, node, idx, getItemStateFn?.() ?? null);
+        if (idx !== undefined) {
+          const el = rendered.get(idx);
+          if (el) {
+            renderNodeElement(el, layout.flatNodes[idx]!, idx, getItemStateFn?.() ?? null);
+          }
         }
         emitter.emit("data:change", { type: "update", id });
         return true;
@@ -790,7 +887,7 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Click handler ────────────────────────────────────────────
 
-      ctx.registerClickHandler((event: MouseEvent): void => {
+      ctx.hooks.onClick((event: MouseEvent): void => {
         const el = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
         const idx = parseInt(el.dataset.index ?? "-1", 10);
@@ -846,7 +943,7 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Keyboard handler ─────────────────────────────────────────
 
-      ctx.registerKeydownHandler((e: KeyboardEvent): void => {
+      ctx.hooks.onKeydown((e: KeyboardEvent): void => {
         if (engineState.destroyed) return;
         const total = layout.totalVisible;
         if (total === 0) return;
@@ -912,9 +1009,9 @@ export function tree<T extends VListItem = VListItem>(
 
       // ── Public methods ───────────────────────────────────────────
 
-      ctx.registerMethod("expand", doExpand);
-      ctx.registerMethod("collapse", doCollapse);
-      ctx.registerMethod("toggle", (id: string | number): void => {
+      ctx.hooks.method("expand", doExpand);
+      ctx.hooks.method("collapse", doCollapse);
+      ctx.hooks.method("toggle", (id: string | number): void => {
         const idx = layout.idToIndex.get(id);
         if (idx === undefined) return;
         const node = layout.flatNodes[idx]!;
@@ -922,29 +1019,29 @@ export function tree<T extends VListItem = VListItem>(
         else doExpand(id);
       });
 
-      ctx.registerMethod("expandAll", (): void => {
+      ctx.hooks.method("expandAll", (): void => {
         layout.expandAll(layout.rootItems as T[]);
         invalidateTree();
       });
 
-      ctx.registerMethod("collapseAll", (): void => {
+      ctx.hooks.method("collapseAll", (): void => {
         layout.collapseAll();
         invalidateTree();
       });
 
-      ctx.registerMethod("expandTo", (id: string | number): void => {
+      ctx.hooks.method("expandTo", (id: string | number): void => {
         layout.expandTo(id);
         invalidateTree();
         const idx = layout.idToIndex.get(id);
         if (idx !== undefined) scrollIntoView(idx);
       });
 
-      ctx.registerMethod("getExpanded", (): (string | number)[] => Array.from(layout.expandedIds));
-      ctx.registerMethod("isExpanded", (id: string | number): boolean => layout.expandedIds.has(id));
+      ctx.hooks.method("getExpanded", (): (string | number)[] => Array.from(layout.expandedIds));
+      ctx.hooks.method("isExpanded", (id: string | number): boolean => layout.expandedIds.has(id));
 
       const parentIdKey = isParentIdMode && typeof cfg.parentId === "string" ? cfg.parentId : null;
 
-      ctx.registerMethod("addChild", (parentId: string | number | null, item: T, index?: number): void => {
+      ctx.hooks.method("addChild", (parentId: string | number | null, item: T, index?: number): void => {
         if (parentIdKey) (item as Record<string, unknown>)[parentIdKey] = parentId;
         if (isParentIdMode) {
           const rawItems = ctxGetItems() as T[];
@@ -956,7 +1053,7 @@ export function tree<T extends VListItem = VListItem>(
         emitter.emit("data:change", { type: "add", id: item.id });
       });
 
-      ctx.registerMethod("moveNode", (id: string | number, newParentId: string | number | null, index?: number): void => {
+      ctx.hooks.method("moveNode", (id: string | number, newParentId: string | number | null, index?: number): void => {
         if (parentIdKey) {
           const flatIdx = layout.idToIndex.get(id);
           if (flatIdx !== undefined) {
@@ -967,14 +1064,14 @@ export function tree<T extends VListItem = VListItem>(
         invalidateTree();
       });
 
-      ctx.registerMethod("getTreeLayout", () => ({
+      ctx.hooks.method("getTreeLayout", () => ({
         totalVisible: layout.totalVisible,
         flatNodes: layout.flatNodes,
       }));
 
       // ── Destroy ──────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         rootElement.removeEventListener("focusin", onFocusIn);
         rootElement.removeEventListener("focusout", onFocusOut);
         detachAll();

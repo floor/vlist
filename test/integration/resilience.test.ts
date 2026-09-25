@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -8,7 +9,10 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
+
+/** Plugins fail on purpose here; core logs that, which is expected. */
+let expectedFailureConsole: typeof console.error;
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin, PluginContext } from "../../src/core/types";
 import {
@@ -18,19 +22,11 @@ import {
   type TestItem,
 } from "../helpers/factory";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
     configurable: true,
@@ -42,21 +38,23 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth)
-    Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
 
 beforeEach(() => {
   container = createContainer({ width: 300, height: 500 });
+  expectedFailureConsole = console.error;
+  console.error = () => {};
 });
 
 afterEach(() => {
+  console.error = expectedFailureConsole;
   if (list) {
     list.destroy();
     list = null;
@@ -141,7 +139,7 @@ describe("plugin setup error isolation", () => {
       name: "method-registrar",
       priority: 20,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerMethod("customMethod", () => 42);
+        ctx.hooks.method("customMethod", () => 42);
       },
     };
 
@@ -150,8 +148,8 @@ describe("plugin setup error isolation", () => {
       [failingPlugin, methodPlugin],
     );
 
-    expect((list as Record<string, unknown>)["customMethod"]).toBeDefined();
-    expect(((list as Record<string, unknown>)["customMethod"] as () => number)()).toBe(42);
+    expect((list as unknown as Record<string, unknown>)["customMethod"]).toBeDefined();
+    expect(((list as unknown as Record<string, unknown>)["customMethod"] as () => number)()).toBe(42);
   });
 
   it("should allow plugins after the failing one to register destroy handlers", () => {
@@ -169,7 +167,7 @@ describe("plugin setup error isolation", () => {
       name: "destroy-registrar",
       priority: 20,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(destroyCalled);
+        ctx.hooks.onDestroy(destroyCalled);
       },
     };
 
@@ -209,10 +207,10 @@ describe("destroy resilience", () => {
       name: "dual-destroy-handlers",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler boom");
         });
-        ctx.registerDestroyHandler(secondHandler);
+        ctx.hooks.onDestroy(secondHandler);
       },
     };
 
@@ -262,7 +260,7 @@ describe("destroy resilience", () => {
       name: "destroy-throws",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler error");
         });
       },
@@ -292,7 +290,7 @@ describe("destroy resilience", () => {
       name: "destroy-err",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("boom");
         });
       },
@@ -322,10 +320,10 @@ describe("destroy resilience", () => {
       name: "multi-throw",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler 1 boom");
         });
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("handler 2 boom");
         });
       },
@@ -363,7 +361,7 @@ describe("destroy resilience", () => {
       name: "log-test",
       priority: 10,
       setup(ctx: PluginContext<TestItem>): void {
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           throw new Error("logged error");
         });
       },

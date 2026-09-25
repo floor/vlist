@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Masonry Plugin
+ * vlist — Masonry Plugin
  *
  * Switches from list layout to masonry/Pinterest-style layout with
  * shortest-lane placement. Each item is positioned in the shortest
@@ -13,8 +13,10 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, PluginContext } from "../../core/types";
+import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import { createScrollPaddingReader } from "../../utils/scroll-padding";
+import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
 import { createMasonryLayout } from "./layout";
 import { createMasonryRenderer, type MasonryRenderer } from "./renderer";
 import type { MasonryLayout } from "./types";
@@ -52,16 +54,29 @@ const EMPTY_ID_SET: Set<string | number> = new Set();
 // Factory
 // =============================================================================
 
+/** Methods the masonry plugin adds to the list instance. */
+export interface MasonryMethods {
+  /** The current masonry layout. */
+  getMasonryLayout(): MasonryLayout;
+  /** Change columns or gap at runtime. */
+  updateMasonry(config: Partial<MasonryPluginConfig>): void;
+}
+
 export function masonry<T extends VListItem = VListItem>(
   config: MasonryPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, MasonryMethods> {
   if (!config.columns || config.columns < 1) {
     throw new Error("[vlist] masonry: columns must be >= 1");
   }
 
   let layout: MasonryLayout;
   let renderer: MasonryRenderer<T> | null = null;
+  // One plugin object can be installed on a replacement list before the old
+  // list is destroyed. Only the install that still owns the closure may clear it.
+  let installs = 0;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let storedCtx: PluginContext<T> | null = null;
   let isX: boolean;
   let classPrefix: string;
@@ -90,18 +105,32 @@ export function masonry<T extends VListItem = VListItem>(
 
   // Persistent getItem closure — avoids per-render allocation
   let cachedItems: readonly T[] = [];
-  const getItem = (index: number): T | undefined => cachedItems[index];
+  const getItem = (index: number): T | undefined =>
+    loadedItemFn ? loadedItemFn(index) : cachedItems[index];
 
   // Selection method references (resolved lazily)
   let selectedIdsGetter: (() => Set<string | number>) | null = null;
   let focusedIndexGetter: (() => number) | null = null;
   let selectionResolved = false;
 
+  // Listbox semantics, resolved on the render path: masonry sets up at
+  // priority 10, before a11y (55) and selection (50). Both of those call
+  // enableListbox(), which marks the content element; `_getSelectedIds` is
+  // only published by selection().
+  let interactive: boolean | null = null;
+
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
-    selectedIdsGetter = (storedCtx.getMethod("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
+    selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+    focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
+  }
+
+  function resolveInteractive(): boolean {
+    if (interactive !== null) return interactive;
+    if (!storedCtx) return false;
+    interactive = storedCtx.dom.content.getAttribute("role") === "listbox";
+    return interactive;
   }
 
   // ── Per-lane navigation index ──
@@ -115,12 +144,27 @@ export function masonry<T extends VListItem = VListItem>(
   let navFnsResolved = false;
   let laneIndexDirty = true;
 
+  // data() leaves the raw items array empty — it replaces the accessors, not the
+  // array — so rendering from cachedItems drew nothing at all while the layout,
+  // which counts engineState.totalItems, reported a full content height. It is
+  // registered in data()'s own setup, which runs after this plugin's (priority
+  // 20 against 10), so it cannot be read during setup. Latched only once found,
+  // because a plugin may register late.
+  let loadedItemFn: ((index: number) => T | undefined) | null = null;
+  let loadedItemResolved = false;
+
+  function resolveLoadedItemFn(): void {
+    if (loadedItemResolved || !storedCtx) return;
+    loadedItemFn = (storedCtx.hooks.get("_getLoadedItem") as typeof loadedItemFn) ?? null;
+    if (loadedItemFn) loadedItemResolved = true;
+  }
+
   function resolveNavFns(): void {
     if (navFnsResolved || !storedCtx) return;
-    getItemLaneFn = (storedCtx.getMethod("_getItemLane") as typeof getItemLaneFn) ?? null;
-    getItemYFn = (storedCtx.getMethod("_getItemY") as typeof getItemYFn) ?? null;
-    getItemHFn = (storedCtx.getMethod("_getItemH") as typeof getItemHFn) ?? null;
-    isGroupHeaderFn = (storedCtx.getMethod("_isGroupHeader") as typeof isGroupHeaderFn) ?? null;
+    getItemLaneFn = (storedCtx.hooks.get("_getItemLane") as typeof getItemLaneFn) ?? null;
+    getItemYFn = (storedCtx.hooks.get("_getItemY") as typeof getItemYFn) ?? null;
+    getItemHFn = (storedCtx.hooks.get("_getItemH") as typeof getItemHFn) ?? null;
+    isGroupHeaderFn = (storedCtx.hooks.get("_isGroupHeader") as typeof isGroupHeaderFn) ?? null;
     if (getItemLaneFn || isGroupHeaderFn) navFnsResolved = true;
   }
 
@@ -280,7 +324,7 @@ export function masonry<T extends VListItem = VListItem>(
     if (rawSizeSpec !== null && typeof rawSizeSpec === "function") {
       return (index: number): number => (rawSizeSpec as Function)(index, masonryCtx);
     }
-    return (index: number): number => storedCtx!.sizeCache.getSize(index);
+    return (index: number): number => storedCtx!.sizes.cache.getSize(index);
   }
 
   function updateMasonryContext(): void {
@@ -313,7 +357,7 @@ export function masonry<T extends VListItem = VListItem>(
     const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
     if (totalSize === lastContentTotalSize) return;
     lastContentTotalSize = totalSize;
-    storedCtx.updateContentSize(totalSize);
+    storedCtx.render.contentSize(totalSize);
   }
 
   function masonryRenderIfNeeded(): void {
@@ -332,11 +376,13 @@ export function masonry<T extends VListItem = VListItem>(
     }
 
     resolveSelectionMethods();
+    resolveLoadedItemFn();
 
-    const scrollPosition = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPosition = scroll.getPixelEquivalent();
     const containerSize = engineState.containerSize;
 
-    if (!forceNextRender && scrollPosition === lastScrollPosition && containerSize === lastContainerSize) {
+    if (!forceNextRender && scrollPosition === lastScrollPosition && containerSize === lastContainerSize && origin === lastOrigin) {
       return;
     }
     lastScrollPosition = scrollPosition;
@@ -353,9 +399,10 @@ export function masonry<T extends VListItem = VListItem>(
     const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
     const focusedIndex = focusedIndexGetter?.() ?? -1;
 
-    cachedItems = storedCtx.getItems();
+    cachedItems = storedCtx.items.all();
 
-    renderer.render(getItem, visiblePlacements, selectedIds, focusedIndex);
+    renderer.render(getItem, visiblePlacements, selectedIds, focusedIndex, origin);
+    lastOrigin = origin;
 
     // Update engine state for other plugins
     const vLen = visiblePlacements.length;
@@ -394,17 +441,21 @@ export function masonry<T extends VListItem = VListItem>(
     priority: 10,
     conflicts: ["grid", "table"],
 
+    validateConfig(config: ResolvedConfig): void {
+      if (config.reverse) {
+        throw new Error("[vlist] masonry: cannot be combined with reverse mode");
+      }
+    },
+
     setup(ctx: PluginContext<T>): void {
+      installs++;
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
-      rawSizeSpec = ctx.rawSizeSpec;
+      rawSizeSpec = ctx.sizes.rawSpec;
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscanPx = ctx.config.overscan * OVERSCAN_PX_PER_UNIT;
-
-      if (ctx.config.reverse) {
-        throw new Error("[vlist] masonry: cannot be combined with reverse mode");
-      }
 
       crossPadTotal = ctx.config.crossAxisPadding;
       crossPadStart = ctx.config.crossPadStart;
@@ -426,25 +477,30 @@ export function masonry<T extends VListItem = VListItem>(
         classPrefix,
         isX,
         () => engineState.totalItems,
+        classPrefix,
         undefined,
-        undefined,
-        undefined,
-        () => engineState.baseOffset,
+        resolveInteractive,
+        scroll.getRenderOrigin,
       );
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);
 
+      // page() keeps a band of the window clear at each end. Masonry replaces
+      // page's scroll computations, so it folds the band into its own;
+      // without page it reads zero and the geometry is unchanged.
+      const readScrollPadding = createScrollPaddingReader(ctx);
+
       // Replace render pipeline
-      ctx.setRenderFn(masonryRenderIfNeeded, masonryForceRender);
+      ctx.render.setFn(masonryRenderIfNeeded, masonryForceRender);
 
       // Initial layout
       calculateLayout();
 
       // ── Public methods ─────────────────────────────────────────
 
-      ctx.registerMethod("getMasonryLayout", () => layout);
+      ctx.hooks.method("getMasonryLayout", () => layout);
 
-      ctx.registerMethod("updateMasonry", (newConfig: Partial<MasonryPluginConfig>) => {
+      ctx.hooks.method("updateMasonry", (newConfig: Partial<MasonryPluginConfig>) => {
         if (newConfig.columns !== undefined && newConfig.columns < 1) {
           throw new Error("[vlist] updateMasonry: columns must be >= 1");
         }
@@ -460,76 +516,87 @@ export function masonry<T extends VListItem = VListItem>(
       });
 
       // scrollToIndex: map item index to its placement position
-      ctx.registerMethod("scrollToIndex", (
+      // Core owns the public method: it holds a scroll requested before the
+      // total is known, clamps the index and resolves the options, then calls
+      // this hook. Returning false falls back to the core implementation.
+      ctx.scroll.setToIndexFn((
         index: number,
-        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
-      ) => {
+        align: string,
+        behavior?: string,
+        duration?: number,
+        easing?: (t: number) => number,
+      ): void | false => {
         const placement = cachedPlacements[index];
-        if (!placement) return;
+        if (!placement) return false;
 
-        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
-        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
-        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);
+        const pagePad = readScrollPadding();
 
-        let pos = placement.y;
+        let pos = placement.y - pagePad.start;
         if (align === "center") {
-          pos = placement.y - containerSize / 2 + placement.size / 2;
+          pos = placement.y - pagePad.start
+            - (containerSize - pagePad.start - pagePad.end - placement.size) / 2;
         } else if (align === "end") {
-          pos = placement.y - containerSize + placement.size;
+          pos = placement.y - containerSize + placement.size + pagePad.end;
           if (index >= engineState.totalItems - 1 && placement.y + placement.size > maxScroll) {
-            pos = maxScroll;
+            pos = maxScroll + pagePad.end;
           }
         }
-        pos = Math.max(0, Math.min(pos, maxScroll));
+        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
+        pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
 
-        if (behavior === "smooth" && duration && duration > 0) {
-          ctx.smoothScrollTo(pos, duration);
-        } else {
-          ctx.scrollTo(pos);
-        }
+        applyScrollBehavior(ctx.scroll, pos, behavior, duration, easing);
       });
 
       // Placement-based scroll into view (used by selection focus)
-      ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+      ctx.hooks.method("_scrollItemIntoView", (index: number): void => {
         const placement = cachedPlacements[index];
         if (!placement) return;
 
-        const scrollPos = engineState.scrollPosition;
+        const scrollPos = scroll.getPixelEquivalent();
         const containerSize = engineState.containerSize;
         const totalSize = layout.getTotalSize(cachedPlacements) + mainPadEnd;
         const maxScroll = Math.max(0, totalSize - containerSize);
+        const pagePad = readScrollPadding();
+        const padStart = mainPadStart + pagePad.start;
+        const padEnd = mainPadEnd + pagePad.end;
         const itemTop = placement.y;
         const itemBottom = itemTop + placement.size;
+        // page() scrolls the window, so the list may legitimately sit below the
+        // viewport top by the start band. Without page the floor stays 0.
+        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
 
-        if (itemTop - mainPadStart < scrollPos) {
-          ctx.scrollTo(Math.max(0, itemTop - mainPadStart));
-        } else if (itemBottom + mainPadEnd > scrollPos + containerSize) {
+        if (itemTop - padStart < scrollPos) {
+          ctx.scroll.to(Math.max(minPos, itemTop - padStart));
+        } else if (itemBottom + padEnd > scrollPos + containerSize) {
           const lastLane = laneItems[layout.columns - 1];
           const isEndTarget = lastLane && lastLane.length > 0 && index === lastLane[lastLane.length - 1];
           if (isEndTarget && itemTop >= maxScroll) {
-            ctx.scrollTo(maxScroll);
+            ctx.scroll.to(maxScroll + pagePad.end);
           } else {
-            ctx.scrollTo(Math.min(itemBottom + mainPadEnd - containerSize, maxScroll));
+            ctx.scroll.to(Math.min(itemBottom + padEnd - containerSize, maxScroll + pagePad.end));
           }
         }
       });
 
       // ── Lane-aware 2D keyboard navigation ─────────────────────
 
-      ctx.setNavConfig({
+      ctx.nav.set({
         total: () => engineState.totalItems,
         navigate,
       });
 
       // ── Cleanup ────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
-        renderer?.destroy();
-        renderer = null;
+      const localRenderer = renderer;
+      ctx.hooks.onDestroy(() => {
+        installs = Math.max(0, installs - 1);
+        localRenderer?.destroy();
+        if (renderer === localRenderer) renderer = null;
+        if (installs === 0) interactive = null;
         ctx.dom.root.classList.remove(`${classPrefix}--masonry`);
       });
     },
@@ -552,9 +619,11 @@ export function masonry<T extends VListItem = VListItem>(
     },
 
     destroy(): void {
+      if (installs > 0) return;
       renderer?.destroy();
       renderer = null;
       cachedPlacements = [];
+      interactive = null;
       storedCtx = null;
     },
   };

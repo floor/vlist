@@ -3,16 +3,16 @@
  * Tests for the DOM reordering utility used by renderers for accessibility.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { sortRenderedDOM } from "../../src/rendering/sort";
 
 // =============================================================================
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Helpers

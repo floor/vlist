@@ -1,3 +1,5 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -7,7 +9,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import {
   createTestItems,
@@ -15,22 +16,22 @@ import {
   simpleTemplate,
 } from "../helpers/factory";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 describe("config validation", () => {
   let container: HTMLElement;

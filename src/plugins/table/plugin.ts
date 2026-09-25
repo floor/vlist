@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Table Plugin
+ * vlist — Table Plugin
  *
  * Switches from list layout to a data table with columns, resizable headers,
  * sticky header row, and cell-based rendering.
@@ -13,7 +13,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, PluginContext } from "../../core/types";
+import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 
@@ -41,9 +41,23 @@ export interface TablePluginConfig<T extends VListItem = VListItem> extends Tabl
 // Factory
 // =============================================================================
 
+/** Methods the table plugin adds to the list instance. */
+export interface TableMethods<T extends VListItem = VListItem> {
+  /** Replace the column definitions. */
+  updateColumns(columns: TableColumn<T>[]): void;
+  /** Resize one column by key or index. */
+  resizeColumn(keyOrIndex: string | number, width: number): void;
+  /** Current width of every column, by key. */
+  getColumnWidths(): Record<string, number>;
+  /** Set the sort column and direction. */
+  setSort(key: string | null, direction?: "asc" | "desc"): void;
+  /** Current sort column and direction. */
+  getSort(): { key: string | null; direction: "asc" | "desc" };
+}
+
 export function table<T extends VListItem = VListItem>(
   config: TablePluginConfig<T>,
-): VListPlugin<T> {
+): VListPlugin<T, TableMethods<T>> {
   if (!config.columns?.length) {
     throw new Error("[vlist] table: columns must be a non-empty array");
   }
@@ -55,7 +69,12 @@ export function table<T extends VListItem = VListItem>(
   let tableLayout: TableLayout<T> | null = null;
   let tableHeader: ReturnType<typeof createTableHeader<T>> | null = null;
   let tableRenderer: TableRendererInstance<T> | null = null;
+  // A replacement list can install this same plugin before the old list is
+  // destroyed. Only the install that still owns the header and renderer may clear them.
+  let installs = 0;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
 
@@ -77,8 +96,8 @@ export function table<T extends VListItem = VListItem>(
   function resolveSelectionMethods(): void {
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
-    selectedIdsGetter = (storedCtx.getMethod("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    focusedIndexGetter = (storedCtx.getMethod("_getFocusedIndex") as (() => number)) ?? null;
+    selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
+    focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
   }
 
   // =========================================================================
@@ -108,7 +127,8 @@ export function table<T extends VListItem = VListItem>(
     }
 
     // Calculate visible range
-    const scrollPos = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPos = scroll.getPixelEquivalent();
     const overscan = storedCtx.config.overscan;
     let visStart = sizeCache.indexAtOffset(scrollPos);
     let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
@@ -118,13 +138,12 @@ export function table<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-    // Row transforms subtract baseOffset, so a baseOffset move with an
-    // unchanged range must still commit (issue 025). Native keeps it at 0.
+    // An origin move with an unchanged range must still commit (issue 025).
     if (
       renderStart === engineState.prevRangeStart &&
       renderEnd === engineState.prevRangeEnd &&
       !engineState.renderPending &&
-      engineState.baseOffset === engineState.prevBaseOffset
+      origin === lastOrigin
     ) {
       return;
     }
@@ -135,19 +154,19 @@ export function table<T extends VListItem = VListItem>(
 
     rangeItems.length = 0;
     for (let i = renderStart; i <= renderEnd; i++) {
-      const item = storedCtx.getItem(i);
+      const item = storedCtx.items.at(i);
       if (item) rangeItems.push(item);
     }
 
     range.start = renderStart;
     range.end = renderEnd;
 
-    tableRenderer.render(rangeItems, range, selectedIds, focusedIndex);
+    tableRenderer.render(rangeItems, range, selectedIds, focusedIndex, origin);
 
     // Update engine state
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
-    engineState.prevBaseOffset = engineState.baseOffset;
+    lastOrigin = origin;
     engineState.renderPending = false;
 
     // Publish the visible DATA range for the async data plugin's load hooks.
@@ -163,7 +182,7 @@ export function table<T extends VListItem = VListItem>(
     if (!layoutToDataResolved) {
       layoutToDataResolved = true;
       layoutToDataFn =
-        (storedCtx.getMethod?.("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
+        (storedCtx.hooks.get?.("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
     }
 
     if (layoutToDataFn) {
@@ -194,7 +213,7 @@ export function table<T extends VListItem = VListItem>(
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {
       lastContentTotalSize = totalSize;
-      storedCtx.updateContentSize(totalSize);
+      storedCtx.render.contentSize(totalSize);
     }
   }
 
@@ -216,20 +235,24 @@ export function table<T extends VListItem = VListItem>(
     priority: 10,
     conflicts: ["grid", "masonry"],
 
-    setup(ctx: PluginContext<T>): void {
-      storedCtx = ctx;
-      engineState = ctx.getState();
-      sizeCache = ctx.sizeCache;
-
-      const { dom, config: resolvedConfig, emitter } = ctx;
-      const { classPrefix } = resolvedConfig;
-
+    validateConfig(resolvedConfig: ResolvedConfig): void {
       if (resolvedConfig.axis.primary === "x") {
         throw new Error("[vlist] table: cannot be used with horizontal orientation");
       }
       if (resolvedConfig.reverse) {
         throw new Error("[vlist] table: cannot be used with reverse mode");
       }
+    },
+
+    setup(ctx: PluginContext<T>): void {
+      installs++;
+      scroll = ctx.scroll;
+      storedCtx = ctx;
+      engineState = ctx.getState();
+      sizeCache = ctx.sizes.cache;
+
+      const { dom, config: resolvedConfig, emitter } = ctx;
+      const { classPrefix } = resolvedConfig;
 
       // ── Resolve config ──────────────────────────────────────────
       const resizable = config.resizable ?? true;
@@ -264,9 +287,9 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Set row height ──────────────────────────────────────────
       if (typeof rowHeight === "function" || typeof rowHeight === "number") {
-        ctx.setSizeConfig(rowHeight);
+        ctx.sizes.setConfig(rowHeight);
       }
-      ctx.rebuildSizeCache();
+      ctx.sizes.rebuild();
 
       // ── CSS classes ─────────────────────────────────────────────
       dom.root.classList.add(`${classPrefix}--table`);
@@ -275,7 +298,7 @@ export function table<T extends VListItem = VListItem>(
 
       // ── ARIA ────────────────────────────────────────────────────
       queueMicrotask(() => {
-        if (ctx.getMethod("_getSelectedIds")) {
+        if (ctx.hooks.get("_getSelectedIds")) {
           dom.root.setAttribute("tabindex", "0");
         }
       });
@@ -344,11 +367,17 @@ export function table<T extends VListItem = VListItem>(
         () => engineState.totalItems,
         resolvedConfig.striped || undefined,
         undefined,
-        () => engineState.baseOffset,
+        scroll.getRenderOrigin,
       );
 
       // ── Wire render pipeline ────────────────────────────────────
-      ctx.setRenderFn(tableRenderIfNeeded, tableForceRender);
+      ctx.render.setFn(tableRenderIfNeeded, tableForceRender);
+
+      // phase2Commit never runs, so the core rendered map stays empty.
+      // search() highlights through renderedElement and would skip every row.
+      ctx.hooks.method("_getRenderedElement", (layoutIndex: number): HTMLElement | null =>
+        tableRenderer?.getElement(layoutIndex) ?? null,
+      );
 
       // ── Header scroll sync ──────────────────────────────────────
       const headerWithSync = tableHeader as typeof tableHeader &
@@ -367,7 +396,7 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Public methods ──────────────────────────────────────────
 
-      ctx.registerMethod("updateColumns", (columns: TableColumn<T>[]): void => {
+      ctx.hooks.method("updateColumns", (columns: TableColumn<T>[]): void => {
         if (!tableLayout || !tableHeader) return;
         tableLayout.updateColumns(columns);
         tableLayout.resolve(engineState.crossSize);
@@ -376,10 +405,10 @@ export function table<T extends VListItem = VListItem>(
         updateContentWidth();
         tableRenderer?.updateColumnLayout(tableLayout);
         tableRenderer?.clear();
-        ctx.forceRender();
+        ctx.render.force();
       });
 
-      ctx.registerMethod("resizeColumn", (keyOrIndex: string | number, width: number): void => {
+      ctx.hooks.method("resizeColumn", (keyOrIndex: string | number, width: number): void => {
         if (!tableLayout) return;
         let columnIndex: number;
         if (typeof keyOrIndex === "string") {
@@ -395,7 +424,7 @@ export function table<T extends VListItem = VListItem>(
         onColumnResize(columnIndex, width);
       });
 
-      ctx.registerMethod("getColumnWidths", (): Record<string, number> => {
+      ctx.hooks.method("getColumnWidths", (): Record<string, number> => {
         if (!tableLayout) return {};
         const result: Record<string, number> = {};
         const cols = tableLayout.columns;
@@ -405,45 +434,33 @@ export function table<T extends VListItem = VListItem>(
         return result;
       });
 
-      ctx.registerMethod("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
+      ctx.hooks.method("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
         sortKey = key;
         sortDirection = direction ?? "asc";
         tableHeader?.updateSort(sortKey, sortDirection);
       });
 
-      ctx.registerMethod("getSort", (): { key: string | null; direction: "asc" | "desc" } => {
+      ctx.hooks.method("getSort", (): { key: string | null; direction: "asc" | "desc" } => {
         return { key: sortKey, direction: sortDirection };
       });
 
-      ctx.registerMethod("_getTableLayout", () => tableLayout);
-      ctx.registerMethod("_getTableHeaderHeight", () => headerHeight);
+      ctx.hooks.method("_getTableLayout", () => tableLayout);
+      ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
 
-      ctx.registerMethod("_updateRenderedItem", (
-        index: number, item: T, isSelected: boolean, isFocused: boolean,
-      ) => {
-        tableRenderer?.updateItem(index, item, isSelected, isFocused);
-      });
-
-      ctx.registerMethod("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
+      ctx.hooks.method("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
         tableRenderer = newRenderer;
       });
 
-      ctx.registerMethod("_updateTableForGroups", (
+      ctx.hooks.method("_updateTableForGroups", (
         isHeaderFn: (item: T) => boolean,
         headerTemplate: (key: string, groupIndex: number) => HTMLElement | string,
       ) => {
         tableRenderer?.setGroupHeaderFn(isHeaderFn, headerTemplate);
       });
 
-      // Replace item-class updater for selection integration
-      ctx.registerMethod("_updateItemClasses", (
-        index: number, isSelected: boolean, isFocused: boolean,
-      ): void => {
-        tableRenderer?.updateItemClasses(index, isSelected, isFocused);
-      });
-
       // ── Keyboard horizontal scroll ─────────────────────────────
-      ctx.registerKeydownHandler((event: KeyboardEvent): void => {
+      const crossRTL = getComputedStyle(dom.viewport).direction === 'rtl';
+      ctx.hooks.onKeydown((event: KeyboardEvent): void => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
         if (!tableLayout) return;
 
@@ -453,12 +470,15 @@ export function table<T extends VListItem = VListItem>(
         const viewportWidth = dom.viewport.clientWidth;
         if (tableLayout.totalWidth <= viewportWidth) return;
 
-        const scrollLeft = dom.viewport.scrollLeft;
+        // Column offsets run from the physical left. RTL native scrollLeft is
+        // zero at the right edge and negative toward the left in current engines.
+        const origin = crossRTL ? tableLayout.totalWidth - viewportWidth : 0;
+        const scrollLeft = dom.viewport.scrollLeft + origin;
 
         if (event.key === "ArrowRight") {
           for (let i = 0; i < cols.length; i++) {
             if (cols[i]!.offset > scrollLeft + 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset;
+              dom.viewport.scrollLeft = cols[i]!.offset - origin;
               event.preventDefault();
               return;
             }
@@ -466,25 +486,28 @@ export function table<T extends VListItem = VListItem>(
         } else {
           for (let i = cols.length - 1; i >= 0; i--) {
             if (cols[i]!.offset < scrollLeft - 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset;
+              dom.viewport.scrollLeft = cols[i]!.offset - origin;
               event.preventDefault();
               return;
             }
           }
           if (scrollLeft > 0) {
-            dom.viewport.scrollLeft = 0;
+            dom.viewport.scrollLeft = -origin;
             event.preventDefault();
           }
         }
       });
 
       // ── Cleanup ─────────────────────────────────────────────────
-      ctx.registerDestroyHandler((): void => {
+      const localHeader = tableHeader;
+      const localRenderer = tableRenderer;
+      ctx.hooks.onDestroy((): void => {
+        installs = Math.max(0, installs - 1);
         dom.viewport.removeEventListener("scroll", syncHeaderScroll);
-        tableHeader?.destroy();
-        tableHeader = null;
-        tableRenderer?.destroy();
-        tableRenderer = null;
+        localHeader?.destroy();
+        if (tableHeader === localHeader) tableHeader = null;
+        localRenderer?.destroy();
+        if (tableRenderer === localRenderer) tableRenderer = null;
         dom.content.style.minWidth = "";
         dom.root.classList.remove(`${classPrefix}--table`);
         dom.root.classList.remove(`${classPrefix}--table-row-borders`);
@@ -519,6 +542,7 @@ export function table<T extends VListItem = VListItem>(
     },
 
     destroy(): void {
+      if (installs > 0) return;
       tableHeader?.destroy();
       tableHeader = null;
       tableRenderer?.destroy();

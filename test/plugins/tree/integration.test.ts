@@ -293,7 +293,7 @@ describe("tree integration — public API", () => {
     list.destroy();
   });
 
-  test("parentId addChild on empty parent persists in raw items", () => {
+  test("parentId addChild on empty parent persists in the list's items", () => {
     const items = [
       { id: "1", name: "root", parentId: null },
       { id: "2", name: "other", parentId: null },
@@ -309,12 +309,15 @@ describe("tree integration — public API", () => {
     (list as any).expand("2");
 
     expect(list.getIndexById("3")).toBeGreaterThan(-1);
-    expect(items.some((i: any) => i.id === "3")).toBe(true);
+    // The list owns its items array — core copies the one it is handed — so the
+    // child lands there and the caller's array is left alone.
+    expect(list.items.some((i: any) => i.id === "3")).toBe(true);
+    expect(items.some((i: any) => i.id === "3")).toBe(false);
 
     list.destroy();
   });
 
-  test("parentId removeItem removes subtree from raw items", () => {
+  test("parentId removeItem removes subtree from the list's items", () => {
     const items = [
       { id: "1", name: "root", parentId: null },
       { id: "2", name: "child", parentId: "1" },
@@ -328,8 +331,10 @@ describe("tree integration — public API", () => {
     }, [tree({ parentId: "parentId", expanded: true })]);
 
     list.removeItem("1");
-    expect(items.length).toBe(0);
+    expect(list.items.length).toBe(0);
     expect(list.total).toBe(0);
+    // Untouched: core copied it at construction.
+    expect(items.length).toBe(3);
 
     list.destroy();
   });

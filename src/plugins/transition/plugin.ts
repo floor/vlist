@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Transition Plugin
+ * vlist — Transition Plugin
  *
  * FLIP-based enter/exit animations for insertItem and removeItem.
  * Without this plugin, insert/remove are instantaneous.
@@ -73,7 +73,8 @@ export function transition<T extends VListItem = VListItem>(
     priority: 45,
 
     setup(ctx: PluginContext<T>): void {
-      const { sizeCache: sc, emitter } = ctx;
+      const { emitter, scroll } = ctx;
+      const sc = ctx.sizes.cache;
       const cfg = ctx.config;
       const dom = ctx.dom;
       const state = ctx.getState();
@@ -81,16 +82,12 @@ export function transition<T extends VListItem = VListItem>(
       const prop = cfg.axis.primary === "x" ? "translateX" : "translateY";
       const maxScroll = (): number => Math.max(0, sc.getTotalSize() + cfg.mainAxisPadding - state.containerSize);
       const clampScroll = (): void => {
-        const delta = Math.min(0, maxScroll() - state.scrollPosition);
-        if (delta) {
-          const target = state.scrollPosition + delta;
-          ctx.shiftScroll(delta);
-          state.scrollPosition = target;
-        }
+        const delta = Math.min(0, maxScroll() - scroll.getPixelEquivalent());
+        if (delta) ctx.scroll.shiftBy(delta);
       };
-      const visualOffset = (logical: number): number => Math.round(logical - state.baseOffset);
+      const visualOffset = (logical: number, renderOrigin: number): number => Math.round(logical - renderOrigin);
 
-      const toLayout = (ctx.getMethod("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
+      const toLayout = (ctx.hooks.get("_dataToLayoutIndex") as ((i: number) => number)) ?? null;
       const dataToLayout = (dataIndex: number): number =>
         toLayout ? toLayout(dataIndex) : dataIndex;
 
@@ -130,15 +127,15 @@ export function transition<T extends VListItem = VListItem>(
           const originalOffset = layoutIndex >= 0 ? sc.getOffset(layoutIndex) : 0;
 
           if (!removedEl || layoutIndex < 0) {
-            const result = ctx.removeItemById(id);
+            const result = ctx.items.removeById(id);
             if (result < 0) return false;
             clampScroll();
-            ctx.forceRender();
+            ctx.render.force();
             commitStyles();
             emitter.emit("data:change", { type: "remove", id });
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             emitter.emit("remove:end", { id });
             return true;
@@ -154,29 +151,30 @@ export function transition<T extends VListItem = VListItem>(
           exitClone.removeAttribute("aria-selected");
           exitClone.classList.remove(`${cfg.classPrefix}-item--selected`);
 
-          const oldScroll = state.scrollPosition;
+          const oldScroll = scroll.getPixelEquivalent();
 
           // LAST — remove data + reconcile
-          const result = ctx.removeItemById(id);
+          const result = ctx.items.removeById(id);
           if (result < 0) return false;
           clampScroll();
-          ctx.forceRender();
+          ctx.render.force();
           commitStyles();
           emitter.emit("data:change", { type: "remove", id });
 
-          const scrollDelta = oldScroll - state.scrollPosition;
+          const scrollDelta = oldScroll - scroll.getPixelEquivalent();
 
           exitClone.style.zIndex = "1";
           dom.content.appendChild(exitClone);
 
           const rt = removeTiming;
           const animOptions: KeyframeAnimationOptions = { duration: rt.duration, easing: rt.easing };
+          const renderOrigin = scroll.getRenderOrigin();
           const animations: Animation[] = [];
 
-          const cloneStart = visualOffset(originalOffset - scrollDelta);
+          const cloneStart = visualOffset(originalOffset - scrollDelta, renderOrigin);
           animations.push(exitClone.animate([
             { transform: `${prop}(${cloneStart}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
-            { transform: `${prop}(${visualOffset(originalOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
+            { transform: `${prop}(${visualOffset(originalOffset, renderOrigin)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
           ], animOptions));
 
           const allOnClamp = scrollDelta > 0;
@@ -188,9 +186,9 @@ export function transition<T extends VListItem = VListItem>(
             if (idx < 0 || (!allOnClamp && idx < layoutIndex)) continue;
             const newOffset = sc.getOffset(idx);
             const oldVisual = idx >= layoutIndex
-              ? visualOffset(newOffset + itemSize - scrollDelta)
-              : visualOffset(newOffset - scrollDelta);
-            const newVisual = visualOffset(newOffset);
+              ? visualOffset(newOffset + itemSize - scrollDelta, renderOrigin)
+              : visualOffset(newOffset - scrollDelta, renderOrigin);
+            const newVisual = visualOffset(newOffset, renderOrigin);
             if (oldVisual === newVisual) continue;
             animations.push(el.animate([
               { transform: `${prop}(${oldVisual}px)` },
@@ -209,7 +207,7 @@ export function transition<T extends VListItem = VListItem>(
             }
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             emitter.emit("remove:end", { id });
           };
@@ -285,19 +283,19 @@ export function transition<T extends VListItem = VListItem>(
             if (elId && idx >= 0) oldOffsetById.set(elId, sc.getOffset(idx));
           }
 
-          const oldScroll = state.scrollPosition;
+          const oldScroll = scroll.getPixelEquivalent();
 
           // Remove all items (descending order preserved)
           const removedIds: (string | number)[] = [];
           for (const t of targets) {
-            const result = ctx.removeItemById(t.id);
+            const result = ctx.items.removeById(t.id);
             if (result >= 0) removedIds.push(t.id);
           }
 
           if (removedIds.length === 0) return 0;
 
           clampScroll();
-          ctx.forceRender();
+          ctx.render.force();
           commitStyles();
 
           for (const rid of removedIds) {
@@ -307,15 +305,16 @@ export function transition<T extends VListItem = VListItem>(
           if (clones.length === 0) {
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             for (const rid of removedIds) emitter.emit("remove:end", { id: rid });
             return removedIds.length;
           }
 
-          const scrollDelta = oldScroll - state.scrollPosition;
+          const scrollDelta = oldScroll - scroll.getPixelEquivalent();
           const rt = removeTiming;
           const animOptions: KeyframeAnimationOptions = { duration: rt.duration, easing: rt.easing };
+          const renderOrigin = scroll.getRenderOrigin();
           const animations: Animation[] = [];
 
           clones.sort((a, b) => a.layoutIndex - b.layoutIndex);
@@ -323,8 +322,8 @@ export function transition<T extends VListItem = VListItem>(
           for (const c of clones) {
             c.clone.style.zIndex = "1";
             dom.content.appendChild(c.clone);
-            const cloneStart = visualOffset(c.offset - scrollDelta);
-            const shiftedEnd = visualOffset(c.offset - removedSizeAbove);
+            const cloneStart = visualOffset(c.offset - scrollDelta, renderOrigin);
+            const shiftedEnd = visualOffset(c.offset - removedSizeAbove, renderOrigin);
             animations.push(c.clone.animate([
               { transform: `${prop}(${cloneStart}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
               { transform: `${prop}(${shiftedEnd}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
@@ -343,8 +342,8 @@ export function transition<T extends VListItem = VListItem>(
             const oldOffset = oldOffsetById.get(elId);
             if (oldOffset === undefined) continue;
             const newOffset = sc.getOffset(idx);
-            const oldVisual = visualOffset(oldOffset - scrollDelta);
-            const newVisual = visualOffset(newOffset);
+            const oldVisual = visualOffset(oldOffset - scrollDelta, renderOrigin);
+            const newVisual = visualOffset(newOffset, renderOrigin);
             if (oldVisual === newVisual) continue;
             animations.push(el.animate([
               { transform: `${prop}(${oldVisual}px)` },
@@ -363,7 +362,7 @@ export function transition<T extends VListItem = VListItem>(
             }
             if (focIdx >= 0) {
               const t = state.totalItems;
-              if (t > 0) ctx.getRenderedElement(Math.min(focIdx, t - 1))?.focus();
+              if (t > 0) ctx.dom.renderedElement(Math.min(focIdx, t - 1))?.focus();
             }
             for (const rid of removedIds) emitter.emit("remove:end", { id: rid });
           };
@@ -375,8 +374,8 @@ export function transition<T extends VListItem = VListItem>(
           return removedIds.length;
         };
 
-        ctx.registerMethod("removeItem", removeItem);
-        ctx.registerMethod("removeItems", removeItems);
+        ctx.hooks.method("removeItem", removeItem);
+        ctx.hooks.method("removeItems", removeItems);
       }
 
       // ── Animated insertItem ────────────────────────────────────
@@ -397,41 +396,39 @@ export function transition<T extends VListItem = VListItem>(
             if (id && idx >= 0) oldOffsetById.set(id, sc.getOffset(idx));
           }
 
-          const oldScroll = state.scrollPosition;
+          const oldScroll = scroll.getPixelEquivalent();
           const oldMaxScroll = maxScroll();
           const wasAtEnd = oldScroll >= oldMaxScroll - 1;
 
-          ctx.insertItemAt(item, insertDataIndex);
-          ctx.forceRender();
+          ctx.items.insertAt(item, insertDataIndex);
+          ctx.render.force();
           commitStyles();
           emitter.emit("data:change", { type: "insert", id: item.id });
 
-          let scrollDelta = state.scrollPosition - oldScroll;
+          let scrollDelta = scroll.getPixelEquivalent() - oldScroll;
           const postInsertLayoutIndex = dataToLayout(insertDataIndex);
 
           if (cfg.reverse && scrollDelta === 0 && wasAtEnd) {
             const target = maxScroll();
-            ctx.shiftScroll(target - state.scrollPosition);
-            // Native scroll events may be delivered after the FLIP snapshot.
-            state.prevScrollPosition = state.scrollPosition;
-            state.scrollPosition = target;
+            ctx.scroll.shiftBy(target - scroll.getPixelEquivalent());
             scrollDelta = target - oldScroll;
             if (scrollDelta > 0) {
-              ctx.forceRender();
+              ctx.render.force();
               commitStyles();
             }
           }
 
-          const newEl = ctx.getRenderedElement(postInsertLayoutIndex);
+          const newEl = ctx.dom.renderedElement(postInsertLayoutIndex);
           const at = insertTiming;
           const animOptions: KeyframeAnimationOptions = { duration: at.duration, easing: at.easing };
+          const renderOrigin = scroll.getRenderOrigin();
           const animations: Animation[] = [];
 
           if (newEl) {
             const newOffset = sc.getOffset(postInsertLayoutIndex);
             animations.push(newEl.animate([
-              { transform: `${prop}(${visualOffset(newOffset)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
-              { transform: `${prop}(${visualOffset(newOffset)}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
+              { transform: `${prop}(${visualOffset(newOffset, renderOrigin)}px) scaleY(0)`, opacity: 0, transformOrigin: origin },
+              { transform: `${prop}(${visualOffset(newOffset, renderOrigin)}px) scaleY(1)`, opacity: 1, transformOrigin: origin },
             ], animOptions));
           }
 
@@ -445,8 +442,8 @@ export function transition<T extends VListItem = VListItem>(
             const oldOffset = oldOffsetById.get(id);
             if (oldOffset === undefined) continue;
             const newOffset = sc.getOffset(idx);
-            const visualOld = visualOffset(oldOffset + scrollDelta);
-            const visualNew = visualOffset(newOffset);
+            const visualOld = visualOffset(oldOffset + scrollDelta, renderOrigin);
+            const visualNew = visualOffset(newOffset, renderOrigin);
             if (visualOld === visualNew) continue;
             animations.push(el.animate([
               { transform: `${prop}(${visualOld}px)` },
@@ -470,7 +467,7 @@ export function transition<T extends VListItem = VListItem>(
           setTimeout(finalize, at.duration + 50);
         };
 
-        ctx.registerMethod("insertItem", insertItem);
+        ctx.hooks.method("insertItem", insertItem);
       }
     },
 

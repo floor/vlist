@@ -34,6 +34,19 @@ export interface SizeCache {
   /** Rebuild cache (call when items change) */
   rebuild(totalItems: number): void;
 
+  /**
+   * Re-read the sizes of `startIndex..endIndex`, an ascending in-range pair —
+   * cost independent of the total item count.
+   *
+   * Use this instead of `rebuild` when a handful of item sizes changed but the
+   * item count did not: a measurement batch from `autosize()`, say. The
+   * variable cache re-reads the size function only for the blocks the range
+   * touches, where `rebuild` re-reads every item. Out-of-range bounds are
+   * ignored. On the fixed cache this is a no-op, since every item is the same
+   * size.
+   */
+  invalidate(startIndex: number, endIndex?: number): void;
+
   /** Whether sizes are variable (false = fixed fast path) */
   isVariable(): boolean;
 }
@@ -49,6 +62,7 @@ export interface SizeCache {
 const createFixedSizeCache = (
   size: number,
   initialTotal: number,
+  gap: number,
 ): SizeCache => {
   let total = initialTotal;
 
@@ -62,13 +76,21 @@ const createFixedSizeCache = (
       return Math.max(0, Math.min(Math.floor(offset / size), total - 1));
     },
 
-    getTotalSize: (): number => total * size,
+    getTotalSize: (): number => {
+      // One trailing gap: the last slot carries a gap that is spacing between
+      // items, not content. Every caller used to correct this by hand.
+      const t = total * size;
+      return t > 0 ? t - gap : 0;
+    },
 
     getTotal: (): number => total,
 
     rebuild: (newTotal: number): void => {
       total = newTotal;
     },
+
+    // Every item is the same size, so nothing can go stale.
+    invalidate: (): void => {},
 
     isVariable: (): boolean => false,
   };
@@ -79,83 +101,133 @@ const createFixedSizeCache = (
 // =============================================================================
 
 /**
- * Create a variable-size cache using prefix sums
+ * Items per block in the variable cache. A fixed 512 keeps an invalidation at
+ * 512 size-function reads plus one addition per block, whatever the list
+ * length. Lists shorter than this hold a single block and behave exactly as a
+ * flat prefix-sum array did.
+ */
+const BLOCK_SHIFT = 9;
+const BLOCK_SIZE = 1 << BLOCK_SHIFT;
+
+/** Largest index in [lo, hi] whose entry in `arr` is <= target */
+const lastAtMost = (
+  arr: Float64Array,
+  lo: number,
+  hi: number,
+  target: number,
+): number => {
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (arr[mid]! <= target) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+};
+
+/**
+ * Create a variable-size cache using two-level prefix sums
  *
- * Prefix sums array: prefixSums[i] = sum of sizes for items 0..i-1
- *   prefixSums[0] = 0
- *   prefixSums[1] = size(0)
- *   prefixSums[n] = total size of all n items
+ * A flat prefix-sum array answers offsets in O(1) but costs a pass over every
+ * item whenever a single size changes — the measurement batches `autosize()`
+ * emits while scrolling made that pass dominate. Splitting the sums in two
+ * fixes it:
  *
- * This enables:
- *   getOffset(i) = prefixSums[i]           — O(1)
- *   getTotalSize() = prefixSums[n]         — O(1)
- *   indexAtOffset(y) = binary search        — O(log n)
+ *   blockOffsets[b] = absolute offset of the first item in block b
+ *   inner[i]        = offset of item i from the start of its own block
+ *
+ * A changed item only dirties its own block, so refreshing it re-reads one
+ * block's worth of sizes and walks the block offsets, never the whole list.
+ *
+ *   getOffset(i) = blockOffsets[i >> 9] + inner[i]    — O(1)
+ *   getTotalSize() = blockOffsets[blockCount]         — O(1)
+ *   indexAtOffset(y) = two binary searches             — O(log n)
+ *   invalidate(a, b) = the blocks it touches, and the
+ *                      block offsets after them        — O(n / 512)
  */
 const createVariableSizeCache = (
   sizeFn: (index: number) => number,
   initialTotal: number,
+  gap: number,
 ): SizeCache => {
-  let total = initialTotal;
-  let prefixSums: Float64Array = new Float64Array(0);
+  let total = 0;
+  let blockCount = 0;
+  let inner: Float64Array = new Float64Array(0);
+  let blockTotals: Float64Array = new Float64Array(0);
+  let blockOffsets: Float64Array = new Float64Array(1);
+
+  /** Re-read blocks `first..last`, then re-run the offsets from `first` on */
+  const rebuildBlocks = (first: number, last: number): void => {
+    for (let b = first; b < blockCount; b++) {
+      if (b <= last) {
+        const start = b << BLOCK_SHIFT;
+        const end = Math.min(start + BLOCK_SIZE, total);
+        let acc = 0;
+        for (let i = start; i < end; i++) {
+          inner[i] = acc;
+          acc += sizeFn(i);
+        }
+        blockTotals[b] = acc;
+      }
+      blockOffsets[b + 1] = blockOffsets[b]! + blockTotals[b]!;
+    }
+  };
 
   /**
-   * Build prefix sums from the size function
+   * Build every block from the size function
    * O(n) — only called on data changes, never on scroll
    */
   const build = (n: number): void => {
     total = n;
-    prefixSums = new Float64Array(n + 1);
-    prefixSums[0] = 0;
-    for (let i = 0; i < n; i++) {
-      prefixSums[i + 1] = prefixSums[i]! + sizeFn(i);
-    }
+    blockCount = Math.ceil(n / BLOCK_SIZE);
+    inner = new Float64Array(n);
+    blockTotals = new Float64Array(blockCount);
+    blockOffsets = new Float64Array(blockCount + 1);
+    rebuildBlocks(0, blockCount - 1);
   };
 
   // Initial build
   build(initialTotal);
 
-  /**
-   * Binary search: find the largest index i where prefixSums[i] <= offset
-   * This gives the item that contains the given scroll offset
-   */
-  const binarySearch = (offset: number): number => {
-    if (total === 0) return 0;
-
-    // Clamp to valid range
-    if (offset <= 0) return 0;
-    if (offset >= prefixSums[total]!) return total - 1;
-
-    let lo = 0;
-    let hi = total - 1;
-
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >>> 1;
-      if (prefixSums[mid]! <= offset) {
-        lo = mid;
-      } else {
-        hi = mid - 1;
-      }
-    }
-
-    return lo;
-  };
-
   return {
     getOffset: (index: number): number => {
       if (index <= 0) return 0;
-      if (index >= total) return prefixSums[total] as number;
-      return prefixSums[index] as number;
+      if (index >= total) return blockOffsets[blockCount]!;
+      return blockOffsets[index >>> BLOCK_SHIFT]! + inner[index]!;
     },
 
     getSize: (index: number): number => sizeFn(index),
 
-    indexAtOffset: (offset: number): number => binarySearch(offset),
+    // The item containing `offset`: the largest index whose own offset is at
+    // or before it. The first search picks the block, the second the item.
+    indexAtOffset: (offset: number): number => {
+      if (total === 0 || offset <= 0) return 0;
+      if (offset >= blockOffsets[blockCount]!) return total - 1;
 
-    getTotalSize: (): number => (prefixSums[total] as number) ?? 0,
+      const block = lastAtMost(blockOffsets, 0, blockCount - 1, offset);
+      const start = block << BLOCK_SHIFT;
+      return lastAtMost(
+        inner,
+        start,
+        Math.min(start + BLOCK_SIZE, total) - 1,
+        offset - blockOffsets[block]!,
+      );
+    },
+
+    getTotalSize: (): number => {
+      const t = blockOffsets[blockCount]!;
+      return t > 0 ? t - gap : 0;
+    },
 
     getTotal: (): number => total,
 
     rebuild: (newTotal: number): void => build(newTotal),
+
+    invalidate: (startIndex: number, endIndex = startIndex): void => {
+      // The bounds check also rejects NaN.
+      if (startIndex >= 0 && endIndex < total) {
+        rebuildBlocks(startIndex >>> BLOCK_SHIFT, endIndex >>> BLOCK_SHIFT);
+      }
+    },
 
     isVariable: (): boolean => true,
   };
@@ -170,15 +242,22 @@ const createVariableSizeCache = (
  *
  * When size is a number, returns a zero-overhead fixed implementation.
  * When size is a function, builds a prefix-sum array for efficient lookups.
+ *
+ * `gap` is the spacing already baked into each slot by the caller's size spec.
+ * The cache subtracts one trailing gap from the total, because the space after
+ * the last item is not content. Pass 0 when the spec carries no gap. Core,
+ * autosize and grid each re-implemented this correction, and a plugin that
+ * replaced the size config silently dropped whichever copy was installed.
  */
 export const createSizeCache = (
   size: number | ((index: number) => number),
   initialTotal: number,
+  gap = 0,
 ): SizeCache => {
   if (typeof size === "number") {
-    return createFixedSizeCache(size, initialTotal);
+    return createFixedSizeCache(size, initialTotal, gap);
   }
-  return createVariableSizeCache(size, initialTotal);
+  return createVariableSizeCache(size, initialTotal, gap);
 };
 
 // =============================================================================

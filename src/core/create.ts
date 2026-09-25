@@ -1,13 +1,15 @@
 /**
- * vlist v2 — createVList()
+ * vlist — createVList()
  *
  * Factory function. Resolves config, creates DOM, compiles hooks from
  * plugins, wires the 2-phase pipeline, returns the public VList API.
  */
 
+import { createScrollHandler } from "./scroll";
 import type { VListItem } from "../types";
 import type {
   CreateVListConfig,
+  PluginMethods,
   VListPlugin,
   VList,
   PluginContext,
@@ -16,7 +18,7 @@ import type {
   Axis,
   AxisConfig,
 } from "./types";
-import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE, BOUNDED_RUNWAY_MIN } from "../constants";
+import { OVERSCAN, CLASS_PREFIX, SCROLL_IDLE_TIMEOUT, SCROLL_DURATION, MAX_VIRTUAL_SIZE } from "../constants";
 import { resolvePadding, mainAxisPaddingFrom, crossAxisPaddingFrom } from "../utils/padding";
 import { createEngineState } from "./state";
 import type { EngineState } from "./state";
@@ -24,11 +26,11 @@ import { createSizeCache } from "./sizes";
 import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
-import { createScrollHandler } from "./scroll";
-import { createBoundedScrollHandler, type BoundedScrollHandler, type BoundedScrollConfig, type WrapConfig } from "./runway";
-import type { ScrollHandler } from "./scroll";
+import { createScrollSource } from "./scroll-source";
+import type { BoundedScrollHandler, BoundedScrollConfig, WrapConfig } from "./runway";
+import type { ScrollHandler, ScrollHandlerConfig } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./adapter";
-import { compileHooks, runAfterScrollHooks, runIdleHooks, runResizeHooks } from "./hooks";
+import { compileHooks, runAfterScrollHooks, runCommitHooks, runIdleHooks, runResizeHooks } from "./hooks";
 import { render, createRenderConfig } from "./pipeline";
 import { createEmitter, type Emitter } from "../events";
 import type { VListEvents } from "../types";
@@ -38,7 +40,7 @@ import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } fr
 // Config Validation
 // =============================================================================
 
-function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
+function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
   const { item } = raw;
 
   // Validate item.height (only if explicitly provided and is a number)
@@ -83,12 +85,11 @@ function validateConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
     }
   }
 
-  // Validate scroll.runway (bounded mode runway multiple, only if provided)
-  if (raw.scroll?.runway !== undefined) {
-    if (typeof raw.scroll.runway !== "number" || !Number.isFinite(raw.scroll.runway) || raw.scroll.runway <= 0) {
-      throw new Error(`vlist: scroll.runway must be a positive number, got ${raw.scroll.runway}`);
-    }
+  const legacyScroll = raw.scroll as { mode?: unknown; runway?: unknown } | undefined;
+  if (legacyScroll?.mode !== undefined || legacyScroll?.runway !== undefined) {
+    throw new Error('vlist 3.0: scroll.mode and scroll.runway were removed; bounded mode is gone. Use "vlist/synthetic" for huge lists or "vlist" for native scrolling.');
   }
+
 }
 
 // =============================================================================
@@ -171,25 +172,98 @@ function checkConflicts<T extends VListItem>(plugins: readonly VListPlugin<T>[])
   }
 }
 
+/**
+ * A plugin that cannot work with this list's configuration is the same kind of
+ * failure as a declared conflict: a programming error the caller has to see,
+ * not a runtime fault to absorb. So it is checked here, next to the conflicts
+ * and outside the setup catch, and it throws.
+ *
+ * `table()` rejecting reverse mode used to throw. Making setup errors
+ * observable turned every setup throw into an event that fires before
+ * createVList returns — which no caller can hear — so the list came back
+ * half wired and rendering plain rows instead.
+ */
+function checkConfigCompatibility<T extends VListItem>(
+  plugins: readonly VListPlugin<T>[],
+  config: ResolvedConfig,
+): void {
+  for (const p of plugins) p.validateConfig?.(config);
+}
+
 // =============================================================================
 // createVList()
 // =============================================================================
 
-export function createVList<T extends VListItem = VListItem>(
+/**
+ * Create a list with native scrolling. Opt into synthetic input via vlist/synthetic.
+ *
+ * Let the item type be inferred from the config — its `items`, or the
+ * `template` parameter — rather than passing it as a type argument. The list's
+ * type carries exactly the methods its plugins add, and that inference needs
+ * the plugins tuple as the second type parameter; TypeScript allows no partial
+ * type-argument list, so `createVList<Row>(config, [selection()])` fills the
+ * tuple with its default and returns a bare `VList<Row>`, with every plugin
+ * method gone. It compiles, which is why it looks like the fix for a
+ * `VListItem` constraint error on `Row`. The fix is the constraint: give `Row`
+ * an `id`, and keep the argument list empty.
+ *
+ * @example
+ * // inferred: list has select(), getSelected() …
+ * const list = createVList({ container, items, item: { height: 40, template } }, [selection()]);
+ * // explicit: compiles, and list.select does not exist
+ * const bare = createVList<Row>({ container, items, item: { height: 40, template } }, [selection()]);
+ */
+export function createVList<
+  T extends VListItem = VListItem,
+  const P extends readonly VListPlugin<T, any>[] = VListPlugin<T>[],
+>(
+  config: CreateVListConfig<T>, plugins: P = [] as unknown as P,
+): VList<T> & PluginMethods<P> {
+  let warned = false;
+  return createCore(config, plugins as unknown as VListPlugin<T>[], undefined, {
+    native: createScrollHandler,
+    onContentSize(size, emitter) {
+      if (!warned && size > MAX_VIRTUAL_SIZE) {
+        warned = true;
+        emitter.emit("error", {
+          error: new Error(`Content size (${size}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use "vlist/synthetic" for large datasets.`),
+          context: "content:size:overflow",
+        });
+      }
+    },
+  }) as VList<T> & PluginMethods<P>;
+}
+
+/** @internal Shared factory; entries select the input handler. */
+export function createCore<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
-  /** @internal Provided only by the opt-in scroll entry. */
+  /** @internal Omitted by the native entry. */
   logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
+  nativeOptions?: {
+    native: (config: ScrollHandlerConfig) => ScrollHandler & { commitScroll(pos?: number): void };
+    onContentSize: (size: number, emitter: Emitter<VListEvents<T>>) => void;
+  },
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 
-  validateConfig(rawConfig);
+  validateRawConfig(rawConfig);
+  if (logicalHandlerFactory && typeof rawConfig.scroll?.scrollbar === "string") {
+    throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist"; use the scrollbar() plugin with "vlist/synthetic".');
+  }
+  // Both entries reject it. Native used to accept the combination and then sit
+  // on the first page: RTL makes scrollLeft negative, the wheel clamp pins it
+  // at 0, and items translate the wrong way. Supporting it means signing every
+  // DOM boundary and every renderer that writes its own transform, so 3.0 says
+  // no out loud instead. Saying yes later is additive, not breaking.
+  if (rawConfig.orientation === "horizontal" && getComputedStyle(resolveContainer(rawConfig.container)).direction === "rtl") {
+    throw new Error('vlist: horizontal RTL lists are not supported; use a vertical list, or an LTR container');
+  }
 
   // ── Resolve config ──────────────────────────────────────────────
 
   const config = resolveConfig(rawConfig, plugins);
   const isX = config.axis.primary === "x";
-  const boundedMode = rawConfig.scroll?.mode === "bounded" || !!logicalHandlerFactory;
   const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;
   const gappedSizeSpec: number | ((index: number) => number) = gap > 0
@@ -210,7 +284,10 @@ export function createVList<T extends VListItem = VListItem>(
   // ── Sort and validate plugins ───────────────────────────────────
 
   const sorted = plugins.length > 0 ? sortPlugins(plugins) : plugins;
-  if (plugins.length > 0) checkConflicts(sorted);
+  if (plugins.length > 0) {
+    checkConflicts(sorted);
+    checkConfigCompatibility(sorted, config);
+  }
 
   // ── Create core components ──────────────────────────────────────
 
@@ -230,14 +307,7 @@ export function createVList<T extends VListItem = VListItem>(
   // Padding is handled via transform offsets (main axis) and inline
   // left/right or top/bottom (cross axis) in the pipeline, since items
   // are position:absolute and CSS padding on the container has no effect.
-  const sizeCache: SizeCache = createSizeCache(gappedSizeSpec, totalItems);
-  if (gap > 0) {
-    const origGetTotalSize = sizeCache.getTotalSize;
-    sizeCache.getTotalSize = (): number => {
-      const total = origGetTotalSize();
-      return total > 0 ? total - gap : 0;
-    };
-  }
+  const sizeCache: SizeCache = createSizeCache(gappedSizeSpec, totalItems, gap);
   const pool = createPool(config.classPrefix);
 
   // ── Initialize engine state ─────────────────────────────────────
@@ -248,7 +318,10 @@ export function createVList<T extends VListItem = VListItem>(
 
   // ── Items storage ───────────────────────────────────────────────
 
-  let items: T[] = rawConfig.items ?? [];
+  // Copied, not aliased. `setItems` already copies, while `insertItem`,
+  // `removeItem` and `removeItems` splice this array in place: sharing the
+  // caller's array meant the list quietly rewrote it from under them.
+  let items: T[] = rawConfig.items ? [...rawConfig.items] : [];
   const getItems = (): readonly T[] => items;
 
   // ── Rendered elements tracking ──────────────────────────────────
@@ -277,9 +350,24 @@ export function createVList<T extends VListItem = VListItem>(
   const clickHandlers: Array<(e: MouseEvent) => void> = [];
   const keydownHandlers: Array<(e: KeyboardEvent) => void> = [];
   const destroyHandlers: Array<() => void> = [];
+  // Runs every onDestroy handler, then every plugin's destroy. destroy() and
+  // the one throw after the setup loop both unwind through here, so a plugin
+  // torn down on a failed construction is torn down exactly as on destroy().
+  const unwindPlugins = (into: Error[]): void => {
+    const collect = (err: unknown): void => { into.push(err instanceof Error ? err : new Error(String(err))); };
+    for (const handler of destroyHandlers) {
+      try { handler(); } catch (err) { collect(err); }
+    }
+    for (const plugin of sorted) {
+      if (plugin.destroy) {
+        try { plugin.destroy(); } catch (err) { collect(err); }
+      }
+    }
+  };
   let virtualTotalFn: (() => number) | null = null;
-  let scrollGetFn: (() => number) | null = null;
   let scrollSetFn: ((pos: number) => void) | null = null;
+  let onContentSize: ((px: number) => void) | undefined;
+  let commitScroll: ((pos?: number) => void) | undefined;
   let customRenderIfNeeded: (() => void) | null = null;
   let customForceRender: (() => void) | null = null;
   let getItemFn: ((index: number) => T | undefined) | null = null;
@@ -296,6 +384,7 @@ export function createVList<T extends VListItem = VListItem>(
   let navScrollIndexFn: ((itemIndex: number) => number) | null = null;
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
   let navTotalFn: (() => number) | null = null;
+  let navRevealFn: ((index: number) => void) | null = null;
   let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
@@ -312,6 +401,7 @@ export function createVList<T extends VListItem = VListItem>(
   // A plugin (carousel) can request the bounded handler in wrap mode during
   // setup, before the handler is built below. Wrap implies bounded.
   let boundedWrap: WrapConfig | null = null;
+  let wrapHandlerFactory: ((config: BoundedScrollConfig) => BoundedScrollHandler) | null = null;
 
   // ── Pre-initialize container size so plugins can read it ────────
 
@@ -319,167 +409,200 @@ export function createVList<T extends VListItem = VListItem>(
   state.crossSize = isX ? dom.viewport.clientHeight : dom.viewport.clientWidth;
 
   // ── Scroll adapter (RFC-012) ────────────────────────────────────
-  // The logical scroll model's translation boundary: plugins read and write
-  // scroll position through this adapter rather than touching state.scrollPosition
-  // or raw scrollTop/scrollLeft. During migration its pixel-equivalent is the
-  // engine's existing scroll position (or the active scroll source's, e.g. page
-  // mode), so the public surface is unchanged (G4). scrollGetFn/scrollSetFn
-  // overrides installed during plugin setup are picked up lazily through the
-  // closures below, so this can be created before setup runs.
+  // Scroll sources commit their position to engine state. Reads stay cached so
+  // rendering and event payloads never invoke a source's DOM geometry getter.
+  // The setter override installed during plugin setup is resolved lazily.
+  function writeScroll(position: number): void {
+    if (scrollSetFn) scrollSetFn(position);
+    else {
+      if (isX) dom.viewport.scrollLeft = position;
+      else dom.viewport.scrollTop = position;
+      // Reuse native read-back, rendering, event dedupe and the idle timer.
+      commitScroll?.();
+    }
+  }
+
   const scrollAdapter: ScrollAdapter = createScrollAdapter({
     sizeCache,
-    getPixel: () => (scrollGetFn ? scrollGetFn() : state.scrollPosition),
-    setPixel: (px) => {
-      if (scrollSetFn) scrollSetFn(px);
-      else if (isX) dom.viewport.scrollLeft = px;
-      else dom.viewport.scrollTop = px;
-    },
+    getPixel: () => state.scrollPosition,
+    setPixel: writeScroll,
+    getRenderOrigin: () => state.baseOffset,
     getContainerSize: () => state.containerSize,
+    padding: config.mainAxisPadding,
   });
 
   // ── Run plugin setup (cold path) ────────────────────────────────
 
   if (plugins.length > 0) {
     const ctx: PluginContext<T> = {
-      dom,
-      sizeCache,
-      scroll: scrollAdapter,
       pool,
       config,
       emitter,
       template: rawConfig.item.template,
-      registerMethod(name: string, fn: Function): void { methods.set(name, fn); },
-      getMethod(name: string): Function | undefined { return methods.get(name); },
-      registerClickHandler(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
-      registerKeydownHandler(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
-      registerDestroyHandler(handler: () => void): void { destroyHandlers.push(handler); },
-      enableListboxRole(): void {
-        const currentRole = dom.content.getAttribute("role");
-        if (!currentRole || currentRole === "list") {
-          dom.content.setAttribute("role", "listbox");
-          dom.content.setAttribute("tabindex", "0");
-        }
-        rc.itemRole = "option";
-        rc.interactive = true;
-      },
-      setSizeConfig(sc: number | ((index: number) => number)): void {
-        const newCache = createSizeCache(sc, state.totalItems);
-        const setBase = methods.get("_setSizeCacheBase") as ((fn: (n: number) => void) => void) | undefined;
-        if (setBase) {
-          // A plugin (grid, groups) hooked sizeCache.rebuild. Preserve the
-          // hook and update its delegate to the new cache's internal rebuild.
-          const hooked = sizeCache.rebuild;
-          Object.assign(sizeCache, newCache);
-          sizeCache.rebuild = hooked;
-          setBase(newCache.rebuild);
-        } else {
-          Object.assign(sizeCache, newCache);
-        }
-      },
-      setScrollFns(get: () => number, set: (pos: number) => void): void {
-        scrollGetFn = get;
-        scrollSetFn = set;
-      },
-      setBoundedWrap(cfg: WrapConfig): void { boundedWrap = cfg; },
-      cancelScroll(): void { scrollHandler?.cancelScroll(); },
-      setVirtualTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
-      setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
-      getItems,
-      getItem(index: number): T | undefined {
-        return getItemFn ? getItemFn(index) : items[index];
-      },
       getState(): EngineState { return state; },
-      rebuildSizeCache(): void {
-        sizeCache.rebuild(state.totalItems);
+
+      dom: {
+        ...dom,
+        renderedElement(index: number): HTMLElement | null {
+          const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
+          if (override) return override(index);
+          return rendered.get(index) ?? null;
+        },
+        enableListbox(): void {
+          const currentRole = dom.content.getAttribute("role");
+          if (!currentRole || currentRole === "list") {
+            dom.content.setAttribute("role", "listbox");
+            dom.content.setAttribute("tabindex", "0");
+          }
+          rc.itemRole = "option";
+          rc.interactive = true;
+        },
       },
-      updateContentSize(size: number): void {
-        // Bounded mode (RFC-012): the content element is sized to the runway, not
-        // the full virtual size. Delegate to the handler so plugins that grow the
-        // virtual total (autosize, masonry, data, snapshots, search) never blow the
-        // runway. refresh() sets state.totalSize and re-derives the runway split.
-        if (boundedHandler) {
-          boundedHandler.refresh(size);
-          return;
-        }
-        state.totalSize = size;
-        dom.content.style[isX ? "width" : "height"] = (size + config.mainAxisPadding) + "px";
+
+      scroll: {
+        ...scrollAdapter,
+        to: writeScroll,
+        shiftBy(delta: number): void {
+          if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
+          else ctx.scroll.to(state.scrollPosition + delta);
+        },
+        smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
+          if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
+          else ctx.scroll.to(typeof target === "function" ? target() : target);
+        },
+        cancel(): void { scrollHandler?.cancelScroll(); },
+        commit(pos: number): void { commitScroll!(pos); },
+        setSource(source): void {
+          scrollSetFn = source.write;
+          onContentSize = source.onContentSize;
+          skipDefaultScroll = true;
+        },
+        setTarget(target: EventTarget): void { scrollTarget = target; },
+        setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
+        setToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
+        setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
+        onFrame: doScrollFrame,
+        onIdle: doScrollIdle,
+        disableResize(): void { skipDefaultResize = true; },
       },
-      setRenderFn(renderFn: () => void, forceFn: () => void): void {
-        customRenderIfNeeded = renderFn;
-        customForceRender = forceFn;
+
+      items: {
+        all: getItems,
+        at(index: number): T | undefined {
+          return getItemFn ? getItemFn(index) : items[index];
+        },
+        removeById(id: string | number): number {
+          if (removeItemByIdFn) return removeItemByIdFn(id);
+          const idx = items.findIndex((item) => item.id === id);
+          if (idx === -1) return -1;
+          items.splice(idx, 1);
+          state.totalItems = items.length;
+          sizeCache.rebuild(state.totalItems);
+          syncContentSize();
+          return idx;
+        },
+        insertAt(item: T, index: number): void {
+          if (insertItemAtFn) { insertItemAtFn(item, index); return; }
+          items.splice(index, 0, item);
+          state.totalItems = items.length;
+          sizeCache.rebuild(state.totalItems);
+          syncContentSize();
+        },
+        setGetFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
+        setRemoveFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
+        setInsertFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
+        setUpdateFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
+        setIndexByIdFn(fn: (id: string | number) => number): void { getIndexByIdFn = fn; },
+        setTotalFn(fn: () => number): void { virtualTotalFn = fn; rc.ariaTotalFn = fn; },
+        setIndexMapFn(fn: (renderIndex: number) => number): void { rc.indexMap = fn; },
       },
-      renderIfNeeded(): void { doRender(); },
-      forceRender(): void {
-        doForceRender();
+
+      sizes: {
+        cache: sizeCache,
+        get rawSpec() { return sizeSpec; },
+        setConfig(sc: number | ((index: number) => number), specGap = 0): void {
+          const newCache = createSizeCache(sc, state.totalItems, specGap);
+          const setBase = methods.get("_setSizeCacheBase") as ((fn: (n: number) => void) => void) | undefined;
+          if (setBase) {
+            // A plugin (grid, groups) hooked sizeCache.rebuild. Preserve the
+            // hook and update its delegate to the new cache's internal rebuild.
+            const hooked = sizeCache.rebuild;
+            Object.assign(sizeCache, newCache);
+            sizeCache.rebuild = hooked;
+            setBase(newCache.rebuild);
+          } else {
+            Object.assign(sizeCache, newCache);
+          }
+        },
+        rebuild(): void { sizeCache.rebuild(state.totalItems); },
       },
-      setGetItemFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
-      setItemStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
-      getItemStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
-      get rawSizeSpec() { return sizeSpec; },
-      scrollTo(position: number): void {
-        if (scrollSetFn) scrollSetFn(position);
-        else if (isX) dom.viewport.scrollLeft = position;
-        else dom.viewport.scrollTop = position;
+
+      render: {
+        force(): void { doForceRender(); },
+        ifNeeded(): void { doRender(); },
+        contentSize: updateContentSize,
+        setFn(renderFn: () => void, forceFn: () => void): void {
+          // Layout plugins (groups, grid, table, …) replace the core pipeline.
+          // phase2Commit is the only caller of onCommit, so without this wrap
+          // those hooks never run — search highlighting is the visible case.
+          // Skip when the custom renderer early-returned (range unchanged);
+          // force always commits, including a same-range rebuild of innerHTML.
+          customRenderIfNeeded = (): void => {
+            const start = state.prevRangeStart;
+            const end = state.prevRangeEnd;
+            renderFn();
+            if (state.prevRangeStart !== start || state.prevRangeEnd !== end) {
+              runCommitHooks(hooks.commit, state);
+            }
+          };
+          customForceRender = (): void => {
+            forceFn();
+            runCommitHooks(hooks.commit, state);
+          };
+        },
+        setStateFn(fn: (index: number, st: import("../types").ItemState) => void): void { itemStateFn = fn; },
+        getStateFn(): ((index: number, st: import("../types").ItemState) => void) | null { return itemStateFn; },
       },
-      shiftScroll(delta: number): void {
-        if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
-        else ctx.scrollTo(state.scrollPosition + delta);
+
+      hooks: {
+        method(name: string, fn: Function): void {
+          // Public names are a contract: two plugins claiming one used to be
+          // last-writer-wins, silently. Underscore names are the internal
+          // cross-plugin protocol, where overriding is deliberate (groups,
+          // masonry and page each provide _scrollItemIntoView, for example).
+          if (!name.startsWith("_") && methods.has(name)) {
+            throw new Error(`[vlist] duplicate method "${name}"; rename it or use a set*Fn hook`);
+          }
+          methods.set(name, fn);
+        },
+        get(name: string): Function | undefined { return methods.get(name); },
+        onClick(handler: (e: MouseEvent) => void): void { clickHandlers.push(handler); },
+        onKeydown(handler: (e: KeyboardEvent) => void): void { keydownHandlers.push(handler); },
+        onDestroy(handler: () => void): void { destroyHandlers.push(handler); },
       },
-      smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
-        if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
-        else ctx.scrollTo(typeof target === "function" ? target() : target);
+
+      nav: {
+        set(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number; reveal?: (index: number) => void }): void {
+          if (cfg.ud !== undefined) navUd = cfg.ud;
+          if (cfg.lr !== undefined) navLr = cfg.lr;
+          if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
+          if (cfg.navigate) navNavigateFn = cfg.navigate;
+          if (cfg.total) navTotalFn = cfg.total;
+          if (cfg.reveal) navRevealFn = cfg.reveal;
+        },
+        get: (() => {
+          const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null, reveal: null as ((index: number) => void) | null };
+          return (): typeof _nav => {
+            _nav.ud = navUd;
+            _nav.lr = navLr;
+            _nav.scrollIndex = navScrollIndexFn;
+            _nav.navigate = navNavigateFn;
+            _nav.total = navTotalFn;
+            _nav.reveal = navRevealFn;
+            return _nav;
+          };
+        })(),
       },
-      disableDefaultScroll(): void { skipDefaultScroll = true; },
-      disableDefaultResize(): void { skipDefaultResize = true; },
-      setScrollTarget(target: EventTarget): void { scrollTarget = target; },
-      setScrollToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
-      setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
-      onScrollFrame: doScrollFrame,
-      onScrollIdle: doScrollIdle,
-      removeItemById(id: string | number): number {
-        if (removeItemByIdFn) return removeItemByIdFn(id);
-        const idx = items.findIndex((item) => item.id === id);
-        if (idx === -1) return -1;
-        items.splice(idx, 1);
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
-        return idx;
-      },
-      insertItemAt(item: T, index: number): void {
-        if (insertItemAtFn) { insertItemAtFn(item, index); return; }
-        items.splice(index, 0, item);
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
-      },
-      setRemoveItemFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
-      setInsertItemFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
-      setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void { updateItemByIdFn = fn; },
-      setGetIndexByIdFn(fn: (id: string | number) => number): void { getIndexByIdFn = fn; },
-      getRenderedElement(index: number): HTMLElement | null {
-        const override = methods.get("_getRenderedElement") as ((i: number) => HTMLElement | null) | undefined;
-        if (override) return override(index);
-        return rendered.get(index) ?? null;
-      },
-      setNavConfig(cfg: { total?: () => number; ud?: number; lr?: number; scrollIndex?: (itemIndex: number) => number; navigate?: (currentIndex: number, key: string, total: number) => number }): void {
-        if (cfg.ud !== undefined) navUd = cfg.ud;
-        if (cfg.lr !== undefined) navLr = cfg.lr;
-        if (cfg.scrollIndex) navScrollIndexFn = cfg.scrollIndex;
-        if (cfg.navigate) navNavigateFn = cfg.navigate;
-        if (cfg.total) navTotalFn = cfg.total;
-      },
-      getNavConfig: (() => {
-        const _nav = { ud: 0, lr: 0, scrollIndex: null as ((itemIndex: number) => number) | null, navigate: null as ((currentIndex: number, key: string, total: number) => number) | null, total: null as (() => number) | null };
-        return (): typeof _nav => {
-          _nav.ud = navUd;
-          _nav.lr = navLr;
-          _nav.scrollIndex = navScrollIndexFn;
-          _nav.navigate = navNavigateFn;
-          _nav.total = navTotalFn;
-          return _nav;
-        };
-      })(),
     };
 
     for (const plugin of sorted) {
@@ -487,10 +610,18 @@ export function createVList<T extends VListItem = VListItem>(
         try {
           plugin.setup(ctx);
         } catch (err) {
-          emitter.emit("error", {
-            error: err instanceof Error ? err : new Error(String(err)),
-            context: `plugin:setup:${plugin.name}`,
-          });
+          const error = err instanceof Error ? err : new Error(String(err));
+          // The event fires before createVList returns, so a listener attached
+          // afterwards cannot hear it: without this the list comes back half
+          // wired, with no throw and nothing logged.
+          //
+          // `process.env.NODE_ENV` (no `typeof process`, no optional chaining)
+          // is what the dist define replaces. Treating a missing `process` as
+          // development made every browser bundle log in production.
+          if (process.env.NODE_ENV !== "production") {
+            console.error(`[vlist] plugin "${plugin.name}" setup failed`, error);
+          }
+          emitter.emit("error", { error, context: `plugin:setup:${plugin.name}` });
         }
       }
     }
@@ -506,7 +637,7 @@ export function createVList<T extends VListItem = VListItem>(
   const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
 
   function emitScrollEvents(): void {
-    _scrollEvt.scrollPosition = scrollAdapter.getPixelEquivalent();
+    _scrollEvt.scrollPosition = state.scrollPosition;
     if (isX) {
       _scrollEvt.direction = state.scrollDirection > 0 ? "right" : "left";
     } else {
@@ -528,29 +659,23 @@ export function createVList<T extends VListItem = VListItem>(
     }
   }
 
-  let sizeWarningEmitted = false;
-
-  function syncContentSize(): void {
-    if (customRenderIfNeeded) return;
-    const totalSize = sizeCache.getTotalSize();
-
-    // Bounded mode (RFC-012): the content element is sized to a viewport-multiple
-    // runway, not the full virtual size, so the browser's element-size limit is
-    // never reached and no MAX_VIRTUAL_SIZE warning applies.
+  function updateContentSize(size: number, write = true): void {
     if (boundedHandler) {
-      boundedHandler.refresh(totalSize);
+      if (write) boundedHandler.refresh(size);
       return;
     }
+    state.totalSize = size;
+    const pixels = size + config.mainAxisPadding;
+    onContentSize?.(pixels);
+    if (write) dom.content.style[isX ? "width" : "height"] = pixels + "px";
+  }
 
-    dom.content.style[isX ? "width" : "height"] = (totalSize + config.mainAxisPadding) + "px";
+  function syncContentSize(): void {
+    const totalSize = customRenderIfNeeded ? state.totalSize : sizeCache.getTotalSize();
+    updateContentSize(totalSize, !customRenderIfNeeded);
+    if (boundedHandler || customRenderIfNeeded) return;
 
-    if (!sizeWarningEmitted && totalSize > MAX_VIRTUAL_SIZE) {
-      sizeWarningEmitted = true;
-      emitter.emit("error", {
-        error: new Error(`Content size (${totalSize}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Enable bounded scroll (scroll: { mode: "bounded" }) for large datasets.`),
-        context: "content:size:overflow",
-      });
-    }
+    nativeOptions?.onContentSize(totalSize, emitter);
   }
 
   /** A scroll asked for before the list had a length, once it has one. */
@@ -564,12 +689,15 @@ export function createVList<T extends VListItem = VListItem>(
   }
 
   function doRender(): void {
-    flushPendingScroll();
     if (customRenderIfNeeded) {
       customRenderIfNeeded();
     } else {
       render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
     }
+    // After the render: layout plugins rebuild their own state during it (grid
+    // rows, masonry placements, group entries), and a scroll held from before
+    // the list had a total must land on that rebuilt layout, not the stale one.
+    flushPendingScroll();
   }
 
   function doScrollFrame(): void {
@@ -585,28 +713,37 @@ export function createVList<T extends VListItem = VListItem>(
     }
   }
 
+  function trimPool(): void {
+    pool.trim(rendered.size);
+  }
+
   function doScrollIdle(): void {
     if (isScrolling) {
       isScrolling = false;
       dom.root.classList.remove(scrollingClass);
     }
     state.scrollDirection = 0;
+    // The pool still holds the previous window. The gesture is over, so those
+    // spares are no longer the next frame's jump.
+    trimPool();
     runIdleHooks(hooks.idle);
     _velEvt.velocity = 0;
     _velEvt.reliable = false;
     emitter.emit("velocity:change", _velEvt);
-    _idleEvt.scrollPosition = scrollAdapter.getPixelEquivalent();
+    _idleEvt.scrollPosition = state.scrollPosition;
     emitter.emit("scroll:idle", _idleEvt);
   }
 
   function doForceRender(): void {
-    flushPendingScroll();
     state.renderPending = true;
     if (customForceRender) {
       customForceRender();
     } else {
       render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
     }
+    // Same ordering as doRender: the held scroll lands on the layout the
+    // plugins just rebuilt for the new items, not on the previous one.
+    flushPendingScroll();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
 
     if (state.scrollPosition !== lastEventScrollPos) {
@@ -615,6 +752,8 @@ export function createVList<T extends VListItem = VListItem>(
 
       if (forceIdleTimer !== null) clearTimeout(forceIdleTimer);
       forceIdleTimer = setTimeout(doScrollIdle, idleTimeout);
+    } else if (!isScrolling) {
+      trimPool();
     }
   }
 
@@ -622,51 +761,58 @@ export function createVList<T extends VListItem = VListItem>(
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
-  // page() (the only caller of disableDefaultScroll) installs window-based scroll
-  // fns; the bounded handler below would overwrite them with a viewport handler,
-  // silently breaking both. Bounded page-mode scrolling is not implemented yet.
-  if (skipDefaultScroll && (boundedMode || boundedWrap)) {
-    throw new Error(
-      `vlist: page() is not compatible with ${boundedWrap ? "the carousel plugin" : 'scroll: { mode: "bounded" }'} — bounded page-mode scrolling is not implemented yet.`,
-    );
+  if (skipDefaultScroll && boundedWrap) {
+    // This is the one throw after the setup loop, and page's setup has
+    // already bound a resize listener on window by now. A throw here used to
+    // leave it there: no list is returned, so nothing could ever destroy it,
+    // and the listener outlived its context. Unwind exactly as destroy() does
+    // before throwing; the construction error is the one to surface, so the
+    // teardown errors are dropped. Any new throw placed after setup must do
+    // the same.
+    unwindPlugins([]);
+    // The DOM was built at line ~295, before setup: destroy() removes it, and
+    // so must this. Measured before: the empty root stayed in the caller's
+    // container after the throw.
+    dom.root.remove();
+    throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
-  if (boundedMode || boundedWrap) {
-    boundedHandler = (logicalHandlerFactory ?? createBoundedScrollHandler)({
+  if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
+    boundedHandler = (logicalHandlerFactory ?? wrapHandlerFactory!)({
       state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,
       isX,
       wheelEnabled,
-      idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+      idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       mainAxisPadding: config.mainAxisPadding,
-      // Clamp the user runway multiple up to the floor so native scroll always
-      // has room; undefined lets the handler use its BOUNDED_RUNWAY_FACTOR default.
-      ...(rawConfig.scroll?.runway !== undefined
-        ? { runwayFactor: Math.max(BOUNDED_RUNWAY_MIN, rawConfig.scroll.runway) }
-        : {}),
-      ...(boundedWrap ? { wrap: boundedWrap } : {}),
+      ...(boundedWrap ? { wrap: boundedWrap, rendered, classPrefix: config.classPrefix, oddClass, onFold(shift: number) {
+        const tracker = velocityTracker as { _lp?: number };
+        if (tracker._lp !== undefined) tracker._lp -= shift;
+        lastEventScrollPos -= shift;
+      } } : {}),
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });
     scrollHandler = boundedHandler;
-    // Route every scroll write (ctx.scrollTo, scrollToIndex, adapter.setPixel)
+    // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
     // through the logical setter so the runway split stays consistent. The
     // pixel-equivalent (read) is the logical position, matching native mode (G4).
-    scrollGetFn = () => state.scrollPosition;
     scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
   } else {
-    scrollHandler = createScrollHandler({
+    const nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
       state,
       viewport: dom.viewport,
       isX,
       wheelEnabled,
-      idleTimeout: rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT,
+      idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });
+    scrollHandler = nativeHandler;
+    commitScroll = nativeHandler.commitScroll;
   }
 
   smoothScrollFn = scrollHandler.smoothScrollTo;
@@ -688,16 +834,29 @@ export function createVList<T extends VListItem = VListItem>(
     // (groups plugin in table mode).
     const layoutToData = methods.get("_layoutToDataIndex") as ((i: number) => number) | undefined;
     let item: T | undefined;
+    // The index reported is the data index — the space `getItemAt`,
+    // `scrollToIndex` and `removeItem` take. Reporting the layout index made a
+    // grouped list announce data row 3 as row 5, one off per header above it.
+    let index = layoutIndex;
     if (layoutToData) {
       const dataIndex = layoutToData(layoutIndex);
       if (dataIndex < 0) return null;
+      // groups in table mode replaces getItemFn with a layout-aware accessor, so
+      // getItemFn(dataIndex) would double-map. It publishes _getItemAtLayout for
+      // exactly this; the reported index stays the data index either way.
+      const getAtLayout = methods.get("_getItemAtLayout") as ((i: number) => T | undefined) | undefined;
       const getDataItem = methods.get("_getItem") as ((i: number) => T | undefined) | undefined;
-      item = getDataItem ? getDataItem(dataIndex) : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
+      item = getAtLayout
+        ? getAtLayout(layoutIndex)
+        : getDataItem
+          ? getDataItem(dataIndex)
+          : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
+      index = dataIndex;
     } else {
       item = getItemFn ? getItemFn(layoutIndex) : items[layoutIndex];
     }
     if (item === undefined) return null;
-    return { item, index: layoutIndex };
+    return { item, index };
   }
 
   function onContentClick(e: MouseEvent): void {
@@ -799,19 +958,48 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     appendItems(newItems: T[]): void {
+      // Reverse mode is documented for chat UIs: a view sitting at the end
+      // stays there as messages arrive. Core never read `reverse`, so the view
+      // held its pixel position while content grew past it. Only a list
+      // already at the end follows — scrolled back through history, it stays.
+      const endOf = (): number =>
+        Math.max(0, sizeCache.getTotalSize() + config.mainAxisPadding - state.containerSize);
+      const wasAtEnd = config.reverse && state.scrollPosition >= endOf() - 1;
       items.push(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
       syncContentSize();
       doForceRender();
+      if (wasAtEnd) writeScroll(endOf());
     },
 
     prependItems(newItems: T[]): void {
+      // The reverse-mode counterpart of appendItems: this is the chat "load
+      // older messages" path, so the rows being read must not move when
+      // history lands above them. Content grows at the start, so holding the
+      // scroll position pushes those rows down by the inserted size instead.
+      //
+      // The growth is measured from the size cache rather than summed per
+      // item: a variable spec, or an autosize() measurement, has no per-item
+      // size to add up here. One trailing gap is excluded from both readings,
+      // so it cancels.
+      const hadItems = state.totalItems > 0;
+      const sizeBefore = sizeCache.getTotalSize();
       items.unshift(...newItems);
       state.totalItems = items.length;
       sizeCache.rebuild(state.totalItems);
       syncContentSize();
       doForceRender();
+      // A list that was empty has no visible row to hold: compensating there
+      // would scroll away from the items just supplied.
+      if (!config.reverse || !hadItems) return;
+      const grew = sizeCache.getTotalSize() - sizeBefore;
+      if (grew <= 0) return;
+      const maxScroll = Math.max(
+        0,
+        sizeCache.getTotalSize() + config.mainAxisPadding - state.containerSize,
+      );
+      writeScroll(Math.min(state.scrollPosition + grew, maxScroll));
     },
 
     updateItem(id: string | number, updates: Partial<T>): void {
@@ -879,7 +1067,21 @@ export function createVList<T extends VListItem = VListItem>(
     },
 
     getItemAt(index: number): T | undefined {
-      if (rc.indexMap) return items[index];
+      if (rc.indexMap) {
+        // A data index, as documented. Under an adapter the raw array is empty
+        // and the loaded item lives in data()'s storage.
+        const loaded = methods.get("_getLoadedItem") as ((i: number) => T | undefined) | undefined;
+        return loaded ? loaded(index) : items[index];
+      }
+      // groups() in table mode replaces getItemFn with a layout-aware accessor,
+      // which would make this public method take layout indices in that one
+      // combination and data indices everywhere else. It publishes both halves
+      // of the mapping, so ask in the documented space.
+      const atLayout = methods.get("_getItemAtLayout") as ((i: number) => T | undefined) | undefined;
+      if (atLayout) {
+        const toLayout = methods.get("_dataToLayoutIndex") as ((i: number) => number) | undefined;
+        return atLayout(toLayout ? toLayout(index) : index);
+      }
       return getItemFn ? getItemFn(index) : items[index];
     },
 
@@ -898,16 +1100,22 @@ export function createVList<T extends VListItem = VListItem>(
         pendingScrollToIndex = { index, alignOrOptions };
         return;
       }
-      const clamped = Math.max(0, Math.min(index, total - 1));
-
       const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
       const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
       const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
       const easing = typeof alignOrOptions === "object" ? alignOrOptions.easing : undefined;
 
-      if (scrollToIndexFn && scrollToIndexFn(clamped, align, behavior, duration, easing) !== false) {
+      // The hook owns its own index space: grid counts rows, groups counts
+      // layout entries including headers, masonry counts placements. `total`
+      // here is whatever that plugin reported through setVirtualTotalFn, so
+      // clamping against it before the call would translate an item index into
+      // the wrong space. Each hook clamps in its own units; core clamps only
+      // for its own fallback below.
+      if (scrollToIndexFn && scrollToIndexFn(index, align, behavior, duration, easing) !== false) {
         return;
       }
+
+      const clamped = Math.max(0, Math.min(index, total - 1));
 
       const offset = sizeCache.getOffset(clamped);
       const itemSize = sizeCache.getSize(clamped);
@@ -936,11 +1144,8 @@ export function createVList<T extends VListItem = VListItem>(
 
       if (behavior === "smooth") {
         scrollHandler.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
-      } else if (scrollSetFn) {
-        scrollSetFn(pos);
       } else {
-        if (isX) dom.viewport.scrollLeft = pos;
-        else dom.viewport.scrollTop = pos;
+        writeScroll(pos);
       }
     },
 
@@ -969,22 +1174,7 @@ export function createVList<T extends VListItem = VListItem>(
       dom.root.removeEventListener("keydown", onContentKeydown);
 
       const destroyErrors: Error[] = [];
-      for (const handler of destroyHandlers) {
-        try {
-          handler();
-        } catch (err) {
-          destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
-        }
-      }
-      for (const plugin of sorted) {
-        if (plugin.destroy) {
-          try {
-            plugin.destroy();
-          } catch (err) {
-            destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
-          }
-        }
-      }
+      unwindPlugins(destroyErrors);
 
       for (const [, element] of rendered) {
         element.remove();
@@ -1007,7 +1197,10 @@ export function createVList<T extends VListItem = VListItem>(
   // ── Attach plugin-registered methods ────────────────────────────
 
   for (const [name, fn] of methods) {
-    (api as Record<string, unknown>)[name] = fn;
+    // Underscore names are the internal cross-plugin protocol, reached through
+    // ctx.hooks.get(); they stay off the public instance.
+    if (name.startsWith("_")) continue;
+    (api as unknown as Record<string, unknown>)[name] = fn;
   }
 
   return api;

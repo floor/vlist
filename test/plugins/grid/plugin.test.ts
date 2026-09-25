@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Grid Plugin Tests
+ * vlist — Grid Plugin Tests
  * Tests for grid() plugin: factory validation, setup, render function
  * replacement via setRenderFn, resize handling, updateGrid, scrollToIndex,
  * destroy cleanup, and edge cases.
@@ -7,8 +7,8 @@
  * Adapted from v1 withGrid feature tests to v2 PluginContext API.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { grid } from "../../../src/plugins/grid/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -17,8 +17,8 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers
@@ -150,11 +150,12 @@ describe("grid - Setup", () => {
   it("should expose scrollToIndex method", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    expect(methods.has("scrollToIndex")).toBe(true);
+    expect(typeof mockContext.scrollToIndexFn).toBe("function");
     cleanup();
   });
 
@@ -418,7 +419,7 @@ describe("grid - Render Functions", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.renderIfNeeded();
+      ctx.render.ifNeeded();
     }).not.toThrow();
     cleanup();
   });
@@ -431,7 +432,7 @@ describe("grid - Render Functions", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.forceRender();
+      ctx.render.force();
     }).not.toThrow();
     cleanup();
   });
@@ -446,11 +447,11 @@ describe("grid - Render Functions", () => {
     engineState.destroyed = true;
 
     expect(() => {
-      ctx.renderIfNeeded();
+      ctx.render.ifNeeded();
     }).not.toThrow();
 
     expect(() => {
-      ctx.forceRender();
+      ctx.render.force();
     }).not.toThrow();
     cleanup();
   });
@@ -463,7 +464,7 @@ describe("grid - Render Functions", () => {
     plugin.setup!(ctx);
 
     expect(() => {
-      ctx.renderIfNeeded();
+      ctx.render.ifNeeded();
     }).not.toThrow();
     cleanup();
   });
@@ -478,7 +479,7 @@ describe("grid - Render Functions", () => {
     engineState.containerSize = 0;
 
     expect(() => {
-      ctx.renderIfNeeded();
+      ctx.render.ifNeeded();
     }).not.toThrow();
     cleanup();
   });
@@ -489,7 +490,7 @@ describe("grid - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const renderedCount = dom.content.children.length;
     expect(renderedCount).toBeGreaterThan(0);
@@ -502,7 +503,7 @@ describe("grid - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild).toBeDefined();
@@ -517,7 +518,7 @@ describe("grid - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild.getAttribute("data-index")).not.toBeNull();
@@ -530,7 +531,7 @@ describe("grid - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild.style.transform).toContain("translate");
@@ -543,7 +544,7 @@ describe("grid - Render Functions", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const xPositions = new Set<string>();
     for (const child of dom.content.children) {
@@ -564,7 +565,7 @@ describe("grid - Render Functions", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     expect(firstChild.style.width).not.toBe("");
@@ -583,7 +584,7 @@ describe("grid - Render Functions", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     const width = parseInt(firstChild.style.width, 10);
@@ -612,19 +613,21 @@ describe("grid - render correctness (optimized hot path)", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // columnWidth = (800 - 3*8) / 4 = 194; col offset = col*(194+8)=col*202
-    // row offset = row * 100 (itemSize)
+    // row offset = row * (100 + 8): rows are spaced by the gap too. This read
+    // row*100 while the mock's setConfig was a no-op and swallowed grid's
+    // gapped row spec; a real list puts row 1 at 108 and row 2 at 216.
     const get = (i: number) =>
       transformXY(dom.content.querySelector(`[data-index='${i}']`) as HTMLElement);
 
     expect(get(0)).toEqual({ x: 0, y: 0 });    // row 0, col 0
     expect(get(1)).toEqual({ x: 202, y: 0 });  // row 0, col 1
     expect(get(3)).toEqual({ x: 606, y: 0 });  // row 0, col 3
-    expect(get(4)).toEqual({ x: 0, y: 100 });  // row 1, col 0
-    expect(get(5)).toEqual({ x: 202, y: 100 }); // row 1, col 1
-    expect(get(8)).toEqual({ x: 0, y: 200 });  // row 2, col 0
+    expect(get(4)).toEqual({ x: 0, y: 108 });  // row 1, col 0
+    expect(get(5)).toEqual({ x: 202, y: 108 }); // row 1, col 1
+    expect(get(8)).toEqual({ x: 0, y: 216 });  // row 2, col 0
     cleanup();
   });
 
@@ -649,7 +652,7 @@ describe("grid - render correctness (optimized hot path)", () => {
     // at y=0 inside the runway.
     engineState.scrollPosition = 300;
     engineState.baseOffset = 300;
-    ctx.forceRender();
+    ctx.render.force();
 
     const row3 = dom.content.querySelector("[data-index='12']") as HTMLElement;
     expect(transformXY(row3)).toEqual({ x: 0, y: 0 });
@@ -671,14 +674,14 @@ describe("grid - render correctness (optimized hot path)", () => {
 
     engineState.scrollPosition = 300;
     engineState.baseOffset = 300;
-    ctx.forceRender();
+    ctx.render.force();
     const row3 = dom.content.querySelector("[data-index='12']") as HTMLElement;
     expect(transformXY(row3)).toEqual({ x: 0, y: 0 });
 
     // A wheel step smaller than a row: same rendered range, baseOffset moved.
     engineState.scrollPosition = 288;
     engineState.baseOffset = 288;
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     expect(transformXY(row3)).toEqual({ x: 0, y: 12 });
     cleanup();
   });
@@ -695,7 +698,7 @@ describe("grid - render correctness (optimized hot path)", () => {
     plugin.setup!(ctx);
 
     engineState.scrollPosition = 300; // baseOffset stays 0 (native)
-    ctx.forceRender();
+    ctx.render.force();
 
     // Native: absolute offset is used directly, so row 3 keeps y = getOffset(3) = 300.
     const row3 = dom.content.querySelector("[data-index='12']") as HTMLElement;
@@ -714,11 +717,11 @@ describe("grid - render correctness (optimized hot path)", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // Grid passes the bare total (no main-axis padding) to updateContentSize,
     // matching the core list pipeline (pipeline.ts: state.totalSize = getTotalSize()).
-    expect(engineState.totalSize).toBe(ctx.sizeCache.getTotalSize());
+    expect(engineState.totalSize).toBe(ctx.sizes.cache.getTotalSize());
     cleanup();
   });
 
@@ -730,7 +733,7 @@ describe("grid - render correctness (optimized hot path)", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     let w = parseInt((dom.content.querySelector("[data-index='0']") as HTMLElement).style.width, 10);
     expect(w).toBe(194); // (800 - 24)/4
@@ -757,14 +760,14 @@ describe("grid - render correctness (optimized hot path)", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
     const firstIndices = Array.from(dom.content.children).map(
       (c) => (c as HTMLElement).getAttribute("data-index"),
     );
 
     // Scroll far down and re-render
     ctx.getState().scrollPosition = 2000;
-    ctx.forceRender();
+    ctx.render.force();
     const laterIndices = Array.from(dom.content.children).map(
       (c) => (c as HTMLElement).getAttribute("data-index"),
     );
@@ -828,7 +831,7 @@ describe("grid - Resize Hook", () => {
       createPluginMockContext<TestItem>(items, { containerWidth: 800 });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // Simulate cross-axis resize by changing engineState.crossSize
     engineState.crossSize = 1200;
@@ -855,7 +858,7 @@ describe("grid - Engine State", () => {
       createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
     cleanup();
@@ -868,7 +871,7 @@ describe("grid - Engine State", () => {
       createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(engineState.visibleCount).toBeGreaterThan(0);
     cleanup();
@@ -880,7 +883,7 @@ describe("grid - Engine State", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const height = parseInt(dom.content.style.height, 10);
     expect(height).toBeGreaterThan(0);
@@ -894,7 +897,7 @@ describe("grid - Engine State", () => {
       createPluginMockContext<TestItem>(items, { containerWidth: 400 });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     if (firstChild) {
@@ -970,10 +973,13 @@ describe("grid - Edge Cases", () => {
     cleanup();
   });
 
-  it("should have conflicts with masonry and table plugins", () => {
+  it("should have conflicts with masonry, table and autosize plugins", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     expect(plugin.conflicts).toContain("masonry");
     expect(plugin.conflicts).toContain("table");
+    // autosize measures items; this size cache is indexed by row. Combined,
+    // row n took item n's measurement — 800px where 650px was right.
+    expect(plugin.conflicts).toContain("autosize");
   });
 
   it("should render correctly with horizontal mode", () => {
@@ -984,7 +990,7 @@ describe("grid - Edge Cases", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // In horizontal mode content width (not height) should be set
     const width = parseInt(dom.content.style.width, 10);
@@ -1002,7 +1008,7 @@ describe("grid - Edge Cases", () => {
     });
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     // In horizontal mode the cross-axis is the container height (400)
     // colWidth = (400 - 3*8) / 4 = 94
@@ -1023,22 +1029,24 @@ describe("grid - scrollToIndex", () => {
   it("should register scrollToIndex method", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    expect(methods.has("scrollToIndex")).toBe(true);
+    expect(typeof mockContext.scrollToIndexFn).toBe("function");
     cleanup();
   });
 
   it("should call scrollToIndex without errors", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(10);
@@ -1049,11 +1057,12 @@ describe("grid - scrollToIndex", () => {
   it("should handle scrollToIndex with center align", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(20, "center");
@@ -1064,11 +1073,12 @@ describe("grid - scrollToIndex", () => {
   it("should handle scrollToIndex with end align", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(20, "end");
@@ -1079,11 +1089,12 @@ describe("grid - scrollToIndex", () => {
   it("should handle scrollToIndex for empty list", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(0);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
 
     expect(() => {
       scrollToIndex(0);
@@ -1094,8 +1105,8 @@ describe("grid - scrollToIndex", () => {
   it("should map item index to correct row for scrolling", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(100);
-    const { ctx, dom, methods, cleanup } =
-      createPluginMockContext<TestItem>(items);
+    const mockContext = createPluginMockContext<TestItem>(items);
+    const { ctx, dom, methods, cleanup } = mockContext;
 
     plugin.setup!(ctx);
 
@@ -1111,7 +1122,7 @@ describe("grid - scrollToIndex", () => {
     expect(layout.getRow(5)).toBe(1);
 
     const viewport = dom.viewport;
-    const scrollToIndex = methods.get("scrollToIndex") as Function;
+    const scrollToIndex = mockContext.scrollToIndexFn as Function;
     scrollToIndex(8);
 
     // Should have set viewport.scrollTop to the row 2 offset
@@ -1132,7 +1143,7 @@ describe("grid - Destroy", () => {
       createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     expect(dom.content.children.length).toBeGreaterThan(0);
 
@@ -1256,14 +1267,14 @@ describe("grid — item identity by reference", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     const originalHTML = firstChild.innerHTML;
 
     // Replace item 0 with a new object — same id, different name
     items[0] = { id: 0, name: "Updated" };
-    ctx.forceRender();
+    ctx.render.force();
 
     const updatedHTML = firstChild.innerHTML;
     expect(updatedHTML).not.toBe(originalHTML);
@@ -1277,12 +1288,12 @@ describe("grid — item identity by reference", () => {
     const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
 
     plugin.setup!(ctx);
-    ctx.forceRender();
+    ctx.render.force();
 
     const firstChild = dom.content.children[0] as HTMLElement;
     // Mutate in place — same reference
     firstChild.innerHTML = "<div>Manually changed</div>";
-    ctx.forceRender();
+    ctx.render.force();
 
     // Should skip re-render because reference hasn't changed
     expect(firstChild.innerHTML).toBe("<div>Manually changed</div>");
@@ -1323,7 +1334,7 @@ describe("grid - sizeCache.rebuild hook", () => {
 
     // The hook wraps sizeCache.rebuild — verify it was replaced
     const calls: number[] = [];
-    const originalRebuild = ctx.sizeCache.rebuild;
+    const originalRebuild = ctx.sizes.cache.rebuild;
     // The grid should have hooked it; calling rebuild(100) should
     // forward ceil(100/4)=25 to the base function, not 100.
     // We can verify by checking the hook IS installed (not a no-op).
@@ -1348,7 +1359,7 @@ describe("grid - sizeCache.rebuild hook", () => {
     expect(getLayout().getTotalRows(120)).toBe(20);
 
     // Verify the rebuild hook doesn't stack-overflow after column change
-    expect(() => ctx.sizeCache.rebuild(120)).not.toThrow();
+    expect(() => ctx.sizes.cache.rebuild(120)).not.toThrow();
 
     cleanup();
   });
@@ -1365,7 +1376,7 @@ describe("grid - sizeCache.rebuild hook", () => {
     expect(() => {
       for (let cols = 2; cols <= 8; cols++) {
         updateGrid({ columns: cols });
-        ctx.sizeCache.rebuild(200);
+        ctx.sizes.cache.rebuild(200);
       }
     }).not.toThrow();
 

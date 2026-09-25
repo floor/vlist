@@ -1,5 +1,5 @@
 /**
- * vlist v2 — EngineState Tests
+ * vlist — EngineState Tests
  * Tests for createEngineState: initial values, resizeCapacity, clear.
  */
 

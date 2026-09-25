@@ -5,8 +5,8 @@
  * type-ahead, *, and focus management via focusin/focusout.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { tree } from "../../../src/plugins/tree/plugin";
 import type { VListItem } from "../../../src/types";
@@ -31,8 +31,8 @@ function makeTree(): TreeItem[] {
   ];
 }
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 function setup(expandedIds: string[] = []) {
   const items = makeTree();
@@ -42,7 +42,7 @@ function setup(expandedIds: string[] = []) {
   });
   tree<TreeItem>({ expanded: expandedIds }).setup!(testCtx.ctx);
   testCtx.engineState.containerSize = 400;
-  testCtx.ctx.forceRender();
+  testCtx.ctx.render.force();
   return testCtx;
 }
 
@@ -55,7 +55,7 @@ test("re-commits row transforms when baseOffset moves with an unchanged range (i
   // Sub-row logical move carried by baseOffset, range unchanged.
   engineState.scrollPosition = 12;
   engineState.baseOffset = 12;
-  ctx.renderIfNeeded();
+  ctx.render.ifNeeded();
   expect(row.style.transform).not.toBe(before);
   testCtx.cleanup();
 });
@@ -232,7 +232,7 @@ describe("tree keyboard (standalone) — Enter", () => {
 
     tree<TreeItem>().setup!(testCtx.ctx);
     testCtx.engineState.containerSize = 400;
-    testCtx.ctx.forceRender();
+    testCtx.ctx.render.force();
 
     const handler = testCtx.keydownHandlers[0]!;
     fireKey(handler, "Home");
@@ -265,7 +265,7 @@ describe("tree keyboard (standalone) — asterisk", () => {
     });
     tree<TreeItem>().setup!(testCtx.ctx);
     testCtx.engineState.containerSize = 400;
-    testCtx.ctx.forceRender();
+    testCtx.ctx.render.force();
 
     const handler = testCtx.keydownHandlers[0]!;
     fireKey(handler, "Home");

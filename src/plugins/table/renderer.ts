@@ -39,6 +39,7 @@ import type { SizeCache } from "../../rendering/sizes";
 import { claimPlaceholderSelection } from "../../plugins/selection/state";
 import type { TableLayout, ResolvedColumn, TableColumn } from "./types";
 import type { GroupHeaderItem } from "../groups/types";
+import { rowContentWritten, type StampableRow } from "../../core/dom";
 
 // =============================================================================
 // Types
@@ -52,6 +53,8 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    /** Reuse the plugin commit's origin; standalone renders read the callback once. */
+    origin?: number,
   ) => void;
 
   /** Update a single row (e.g., after selection change) */
@@ -288,6 +291,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       bar.className = cellSkeletonClass;
       cell.appendChild(bar);
     }
+    rowContentWritten(cell);
+    const row = cell.parentElement as StampableRow | null;
+    if (row) row._stamp = 0;
   };
 
   /**
@@ -380,11 +386,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     item: T,
     index: number,
     sc: SizeCache,
+    origin: number,
   ): TrackedRow => {
     const element = pool.acquire();
     const headerItem = item as unknown as GroupHeaderItem;
     const height = sc.getSize(index);
-    const offset = sc.getOffset(index) - getBaseOffset();
+    const offset = sc.getOffset(index) - origin;
 
     // Set all styles in one operation (element was reset by pool.release)
     element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
@@ -412,6 +419,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     }
 
     element.appendChild(content);
+    rowContentWritten(element);
 
     return {
       element,
@@ -437,10 +445,11 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isSelected: boolean,
     isFocused: boolean,
     sc: SizeCache,
+    origin: number,
   ): TrackedRow => {
     const element = pool.acquire();
     const height = sc.getSize(index);
-    const offset = sc.getOffset(index) - getBaseOffset();
+    const offset = sc.getOffset(index) - origin;
     const isPlaceholder = isPH(item.id);
 
     // Set all row styles in one operation (element was reset by pool.release)
@@ -505,6 +514,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     range: Range,
     selectedIds: Set<string | number>,
     focusedIndex: number,
+    origin = getBaseOffset(),
   ): void => {
     // Check if aria-setsize changed
     let setSizeChanged = false;
@@ -543,8 +553,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           pool.release(existing.element);
           rendered.delete(i);
           const tracked = isHeader
-            ? renderGroupHeaderRow(item, i, sc)
-            : renderRow(item, i, isSelected, isFocused, sc);
+            ? renderGroupHeaderRow(item, i, sc, origin)
+            : renderRow(item, i, isSelected, isFocused, sc, origin);
           rendered.set(i, tracked);
           if (!fragment) fragment = document.createDocumentFragment();
           fragment.appendChild(tracked.element);
@@ -565,6 +575,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               } else {
                 content.replaceChildren(result);
               }
+              rowContentWritten(existing.element);
             }
             existing.element.setAttribute("data-id", String(item.id));
             existing._lastItem = item;
@@ -572,7 +583,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
 
           // Position update
-          const offset = sc.getOffset(i) - getBaseOffset();
+          const offset = sc.getOffset(i) - origin;
           if (existing.lastOffset !== offset) {
             existing.lastOffset = offset;
             existing.element.style.transform = `translateY(${offset}px)`;
@@ -630,7 +641,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
           }
 
           // Position update only when offset changed
-          const offset = sc.getOffset(i) - getBaseOffset();
+          const offset = sc.getOffset(i) - origin;
           if (existing.lastOffset !== offset) {
             existing.lastOffset = offset;
             existing.element.style.transform = `translateY(${offset}px)`;
@@ -657,8 +668,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
         // New row — create and collect in fragment for batched insertion
         const tracked = isHeader
-          ? renderGroupHeaderRow(item, i, sc)
-          : renderRow(item, i, isSelected, isFocused, sc);
+          ? renderGroupHeaderRow(item, i, sc, origin)
+          : renderRow(item, i, isSelected, isFocused, sc, origin);
         rendered.set(i, tracked);
 
         if (!fragment) fragment = document.createDocumentFragment();

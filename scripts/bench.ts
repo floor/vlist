@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Benchmark runner
+ * vlist — Benchmark runner
  *
  * Thin wrapper around vlist.io's CI benchmark runner.
  * Starts the vlist.io dev server if needed, runs benchmarks via Puppeteer,

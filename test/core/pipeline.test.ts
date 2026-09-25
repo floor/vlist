@@ -1,5 +1,5 @@
 /**
- * vlist v2 — phase1Calculate Unit Tests
+ * vlist — phase1Calculate Unit Tests
  *
  * Exercises the range calculation engine in isolation.
  * Uses EngineState + SizeCache directly — no DOM required.
@@ -429,21 +429,27 @@ describe("phase1Calculate — range calculations", () => {
     expect(state.renderPending).toBe(false);
   });
 
-  it("capacity safety cap prevents excessive rendering", () => {
-    // Small capacity, but large range of items that would otherwise render
-    const capacity = 5;
-    const state = createEngineState(capacity);
+  it("grows capacity to the window instead of truncating it", () => {
+    // This asserted that a window larger than the buffers was cut down to them,
+    // which is the defect recorded as C7: capacity is derived from a 20px guess
+    // whenever the size spec is a function, resizeCapacity re-derives demand
+    // from that same guess and so never sees the shortfall, and the bottom of
+    // the viewport stays blank. The invariant worth holding is that the buffers
+    // hold the window — not that the window is cut to fit the buffers.
+    const state = createEngineState(5);
     state.totalItems = 100;
     state.containerSize = 500;
     state.scrollPosition = 0;
 
-    const sizeCache = createSizeCache(10, 100); // tiny items => many would be visible
-    const hooks = emptyHooks();
+    const sizeCache = createSizeCache(10, 100); // 500px / 10px = 50 rows on screen
+    phase1Calculate(state, sizeCache, 3, emptyHooks());
 
-    phase1Calculate(state, sizeCache, 3, hooks);
-
-    // Should not exceed the buffer capacity
-    expect(state.visibleCount).toBeLessThanOrEqual(capacity);
+    // 50 on screen, +1 boundary row, +3 overscan (start is already 0) => 55.
+    expect(state.visibleCount).toBe(55);
+    expect(state.capacity).toBeGreaterThanOrEqual(state.visibleCount);
+    expect(state.visibleIndices.length).toBe(state.capacity);
+    expect(state.visibleOffsets.length).toBe(state.capacity);
+    expect(state.visibleSizes.length).toBe(state.capacity);
   });
 
   it("handles large overscan with small item count", () => {

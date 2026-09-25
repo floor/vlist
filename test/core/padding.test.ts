@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Padding Tests
+ * vlist — Padding Tests
  *
  * Tests padding resolution, pipeline transform offsets, cross-axis
  * inline styles, range calculation adjustment, and scrollToIndex alignment.

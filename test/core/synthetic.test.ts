@@ -1,8 +1,10 @@
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createContainer, createTestItems, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/synthetic";
+import { createVList as createNative } from "../../src/native";
 import type { PluginContext, VList, VListPlugin } from "../../src/core/types";
 import { createSyntheticScrollHandler } from "../../src/synthetic/handler";
 import { createEngineState } from "../../src/core/state";
@@ -16,9 +18,12 @@ import { autosize } from "../../src/plugins/autosize";
 import { transition } from "../../src/plugins/transition";
 import { scrollbar } from "../../src/plugins/scrollbar";
 
+function factoryFor(mode: "native" | "synthetic") {
+  return mode === "synthetic" ? createVList : createNative;
+}
+
 let container: HTMLElement;
 let list: VList<TestItem> | undefined;
-let originalHeight: PropertyDescriptor | undefined, originalWidth: PropertyDescriptor | undefined;
 let raf: typeof requestAnimationFrame, caf: typeof cancelAnimationFrame;
 let next = 0;
 const frames = new Map<number, FrameRequestCallback>();
@@ -26,10 +31,11 @@ function frame(time: number) {
   const pending = [...frames.values()]; frames.clear();
   for (const fn of pending) fn(time);
 }
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
+
 beforeAll(() => {
   setupDOM();
-  originalHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  originalWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 500 });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => 300 });
   raf = globalThis.requestAnimationFrame; caf = globalThis.cancelAnimationFrame;
@@ -37,17 +43,17 @@ beforeAll(() => {
   globalThis.cancelAnimationFrame = id => { frames.delete(id); };
 });
 afterAll(() => {
-  if (originalHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", originalHeight);
-  if (originalWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", originalWidth);
+  geometry.restore();
   globalThis.requestAnimationFrame = raf; globalThis.cancelAnimationFrame = caf;
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 beforeEach(() => { container = createContainer(); frames.clear(); });
 afterEach(() => { list?.destroy(); list = undefined; container.remove(); frames.clear(); });
 function make(axis = "y", plugins: VListPlugin<TestItem>[] = []) {
   list = createVList<TestItem>({ container, orientation: axis === "x" ? "horizontal" : "vertical",
-    items: createTestItems(1000), item: { height: 50, width: 50, template: simpleTemplate },
-    scroll: { mode: "synthetic" } }, plugins);
+    items: createTestItems(1000), item: { height: 50, width: 50, template: simpleTemplate } }, plugins);
   const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
   const content = container.querySelector<HTMLElement>(".vlist-content")!;
   const captured = new Set<number>();
@@ -79,11 +85,11 @@ function drag(target: Element, axis: string, id = 1, start = 0) {
 }
 
 describe("synthetic entry and input", () => {
-  it("the separate entry retains native and bounded mode behavior", () => {
-    for (const mode of ["native", "bounded"] as const) {
-      list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } });
+  it("the native entry retains native scrolling behavior", () => {
+    for (const mode of ["native"] as const) {
+      list = factoryFor(mode)({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } });
       const content = container.querySelector<HTMLElement>(".vlist-content")!;
-      expect(content.style.height).toBe(mode === "native" ? "50000px" : "1000px");
+      expect(content.style.height).toBe("50000px");
       expect(content.style.overflow).not.toBe("clip");
       list.destroy(); list = undefined;
     }
@@ -189,8 +195,8 @@ describe("synthetic entry and input", () => {
   });
   it("plugin-owned keyboard navigation runs before the synthetic fallback", () => {
     const plugin: VListPlugin<TestItem> = { name: "test-keyboard", setup(ctx) {
-      ctx.registerKeydownHandler(e => {
-        if (e.key === "ArrowDown") { ctx.scrollTo(200); e.preventDefault(); }
+      ctx.hooks.onKeydown(e => {
+        if (e.key === "ArrowDown") { ctx.scroll.to(200); e.preventDefault(); }
       });
     } };
     const { content } = make("y", [plugin]);
@@ -200,7 +206,7 @@ describe("synthetic entry and input", () => {
     for (const factory of [selection<TestItem>, a11y<TestItem>]) {
       const outcomes: unknown[] = [];
       for (const mode of ["native", "synthetic"] as const) {
-        list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } }, [factory()]);
+        list = factoryFor(mode)({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } }, [factory()]);
         const content = container.querySelector<HTMLElement>(".vlist-content")!;
         const child = document.createElement("button"); content.append(child);
         let delivered = 0;
@@ -259,8 +265,9 @@ describe("synthetic entry and input", () => {
   it("snapshots and scrollbar navigate through logical state", () => {
     make("y", [snapshots<TestItem>(), scrollbar<TestItem>()]);
     list!.scrollToIndex(500, "start");
-    const saved = (list!.getScrollSnapshot as () => ScrollSnapshot)();
-    list!.scrollToIndex(0); (list!.restoreScroll as (snapshot: ScrollSnapshot) => void)(saved);
+    const saved = (list as unknown as { getScrollSnapshot(): ScrollSnapshot }).getScrollSnapshot();
+    list!.scrollToIndex(0);
+    (list as unknown as { restoreScroll(snapshot: ScrollSnapshot): void }).restoreScroll(saved);
     expect(list!.getScrollPosition()).toBe(25000);
     expect(container.querySelector(".vlist-scrollbar__thumb")).not.toBeNull();
   });
@@ -290,10 +297,10 @@ describe("synthetic correction integration", () => {
     let ctx!: PluginContext<TestItem>;
     make("y", [{ name: "capture-context", setup(value) { ctx = value; } }]);
     let completed = 0;
-    ctx.smoothScrollTo(2000, 200, t => t, () => completed++);
+    ctx.scroll.smoothTo(2000, 200, t => t, () => completed++);
     frame(0); frame(50);
     const pending = [...frames.keys()];
-    ctx.shiftScroll(75);
+    ctx.scroll.shiftBy(75);
     expect([...frames.keys()]).toEqual(pending);
     expect(ctx.getState().baseOffset).toBe(list!.getScrollPosition());
     for (const t of [100, 150, 200]) frame(t);
@@ -313,17 +320,17 @@ describe("synthetic correction integration", () => {
     try {
       let ctx!: PluginContext<TestItem>;
       list = createVList({ container, items: createTestItems(1000),
-        item: { estimatedHeight: 50, template: simpleTemplate }, scroll: { mode: "synthetic" } },
+        item: { estimatedHeight: 50, template: simpleTemplate } },
         [autosize(), { name: "capture-context", setup(value) { ctx = value; } }]);
       const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
       viewport.setPointerCapture = () => {}; viewport.hasPointerCapture = () => false;
       list.scrollToIndex(10); drag(viewport, "y"); frame(40); frame(56);
       const before = list.getScrollPosition();
-      const above = [...observed].find(el => el.isConnected && ctx.getRenderedElement(Number(el.getAttribute("data-index"))) === el && Number(el.getAttribute("data-index")) < ctx.sizeCache.indexAtOffset(before));
+      const above = [...observed].find(el => el.isConnected && ctx.dom.renderedElement(Number(el.getAttribute("data-index"))) === el && Number(el.getAttribute("data-index")) < ctx.sizes.cache.indexAtOffset(before));
       expect(above).toBeDefined();
       measure([{ target: above!, borderBoxSize: [{ blockSize: 80, inlineSize: 300 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);
       expect(list.getScrollPosition()).toBeCloseTo(before + 30, 8);
-      ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+      ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
       frame(72);
       expect(list.getScrollPosition()).toBeGreaterThan(before + 30);
       expect(ctx.getState().baseOffset).toBe(list.getScrollPosition());
@@ -331,18 +338,18 @@ describe("synthetic correction integration", () => {
   });
 
   it("native and bounded correction fallback matches their absolute scroll path", () => {
-    for (const mode of ["native", "bounded"] as const) {
+    for (const mode of ["native"] as const) {
       let ctx!: PluginContext<TestItem>;
-      list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } },
+      list = factoryFor(mode)({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } },
         [{ name: "capture-context", setup(value) { ctx = value; } }]);
-      ctx.scrollTo(500);
+      ctx.scroll.to(500);
       const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
       viewport.dispatchEvent(new Event("scroll")); frame(0);
       const before = ctx.getState().scrollPosition;
-      ctx.shiftScroll(75);
+      ctx.scroll.shiftBy(75);
       const actualNative = viewport.scrollTop;
       const actualLogical = list.getScrollPosition();
-      ctx.scrollTo(before + 75);
+      ctx.scroll.to(before + 75);
       expect(viewport.scrollTop).toBe(actualNative);
       expect(list.getScrollPosition()).toBe(actualLogical);
       list.destroy(); list = undefined;
@@ -350,7 +357,7 @@ describe("synthetic correction integration", () => {
   });
 });
 
-it("transition animations end at rendered coordinates in native, bounded and synthetic modes", () => {
+it("transition animations end at rendered coordinates in native and synthetic entries", () => {
   const original = HTMLElement.prototype.animate;
   const animations: { el: HTMLElement; keyframes: Keyframe[] }[] = [];
   HTMLElement.prototype.animate = function(keyframes) {
@@ -358,8 +365,8 @@ it("transition animations end at rendered coordinates in native, bounded and syn
     return { finished: new Promise(() => {}), playState: "running", cancel() {} } as unknown as Animation;
   };
   try {
-    for (const mode of ["native", "bounded", "synthetic"] as const) {
-      list = createVList({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } }, [transition()]);
+    for (const mode of ["native", "synthetic"] as const) {
+      list = factoryFor(mode)({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } }, [transition()]);
       list.scrollToIndex(500);
       const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
       viewport.dispatchEvent(new Event("scroll")); frame(0);
@@ -379,12 +386,12 @@ it("transition animations end at rendered coordinates in native, bounded and syn
 });
 
 
-it("reverse transition insertion preserves end pinning for all three scroll modes", () => {
+it("reverse transition insertion preserves end pinning for both scroll entries", () => {
   const original = HTMLElement.prototype.animate;
   HTMLElement.prototype.animate = () => ({ finished: Promise.resolve(), playState: "finished", cancel() {} }) as unknown as Animation;
   try {
-    for (const mode of ["native", "bounded", "synthetic"] as const) {
-      list = createVList({ container, reverse: true, items: createTestItems(1000), item: { height: 50, template: simpleTemplate }, scroll: { mode } }, [transition()]);
+    for (const mode of ["native", "synthetic"] as const) {
+      list = factoryFor(mode)({ container, reverse: true, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } }, [transition()]);
       list.scrollToIndex(999, "end");
       container.querySelector(".vlist-viewport")!.dispatchEvent(new Event("scroll")); frame(0);
       expect(list.getScrollPosition()).toBe(49500);
@@ -396,25 +403,8 @@ it("reverse transition insertion preserves end pinning for all three scroll mode
 });
 
 describe("synthetic unsupported-combination guards", () => {
-  for (const name of ["page", "carousel", "sortable"]) {
-    it(`rejects ${name} before plugin setup or DOM creation`, () => {
-      let setupCalled = false;
-      const plugin: VListPlugin<TestItem> = { name, setup() { setupCalled = true; } };
-      expect(() => make("y", [plugin])).toThrow(`${name} is not supported with synthetic mode in this release`);
-      expect(setupCalled).toBe(false); expect(container.children.length).toBe(0);
-    });
-    it(`leaves ${name} handling in native and bounded modes to core`, () => {
-      for (const mode of ["native", "bounded"] as const) {
-        let setupCalled = false;
-        // Stub isolates the entry guard from each plugin's own mode policy.
-        list = createVList({ container, items: createTestItems(10), item: { height: 50, template: simpleTemplate }, scroll: { mode } },
-          [{ name, setup() { setupCalled = true; } }]);
-        expect(setupCalled).toBe(true); list.destroy(); list = undefined;
-      }
-    });
-  }
   it("allows every supported plugin name through the entry", () => {
-    const names = ["table", "groups", "snapshots", "scrollbar", "autosize", "transition", "selection", "a11y"];
+    const names = ["table", "groups", "snapshots", "scrollbar", "autosize", "transition", "selection", "a11y", "carousel", "sortable"];
     const called: string[] = [];
     make("y", names.map(name => ({ name, setup() { called.push(name); } })));
     expect(called.sort()).toEqual(names.sort());
@@ -423,14 +413,14 @@ describe("synthetic unsupported-combination guards", () => {
   });
 });
 
-describe("synthetic horizontal RTL creation guard", () => {
+describe("horizontal RTL creation guard", () => {
   it("rejects computed RTL for element and selector containers before creating DOM", () => {
     container.style.direction = "rtl";
     container.id = "rtl-synthetic-container";
     for (const target of [container, "#rtl-synthetic-container"]) {
       expect(() => createVList({ container: target, orientation: "horizontal", items: createTestItems(10),
-        item: { width: 50, template: simpleTemplate }, scroll: { mode: "synthetic" } }))
-        .toThrow("RTL horizontal lists are not supported with synthetic mode in this release; use native mode");
+        item: { width: 50, template: simpleTemplate } }))
+        .toThrow("horizontal RTL lists are not supported");
       expect(container.children.length).toBe(0);
     }
   });
@@ -441,13 +431,13 @@ describe("synthetic horizontal RTL creation guard", () => {
     container.style.direction = "ltr";
     make("x"); list!.scrollToIndex(10); expect(list!.getScrollPosition()).toBe(500);
   });
-  it("leaves horizontal RTL handling in native and bounded modes unchanged", () => {
+  it("rejects horizontal RTL in the native entry too", () => {
+    // It used to build the list and render a first page that never moved.
     container.style.direction = "rtl";
-    for (const mode of ["native", "bounded"] as const) {
-      list = createVList({ container, orientation: "horizontal", items: createTestItems(100),
-        item: { width: 50, template: simpleTemplate }, scroll: { mode } });
-      expect(list.element).toBeDefined(); list.destroy(); list = undefined;
-    }
+    expect(() => factoryFor("native")({ container, orientation: "horizontal", items: createTestItems(100),
+      item: { width: 50, template: simpleTemplate } }))
+      .toThrow("horizontal RTL lists are not supported");
+    expect(container.children.length).toBe(0);
   });
 });
 

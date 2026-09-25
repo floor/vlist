@@ -5,8 +5,6 @@
 //
 // No DOM access, no RAF, no side effects — purely functional state tracker.
 
-import { MAX_VIRTUAL_SIZE } from "../constants";
-
 // =============================================================================
 // Constants
 // =============================================================================
@@ -19,7 +17,7 @@ const MIN_VELOCITY = 0.1;
 // =============================================================================
 
 export interface StatsConfig {
-  /** Returns the current scroll position (scrollTop or scrollLeft) */
+  /** Returns the unscaled logical position, normally list.getScrollPosition(). */
   getScrollPosition: () => number;
 
   /** Returns the total number of items */
@@ -69,6 +67,14 @@ export interface Stats {
  *
  * All inputs are provided via callbacks so the tracker always reflects
  * the latest values without needing to be recreated when the list changes.
+ * Position is an unscaled logical offset on both native and synthetic entries,
+ * clamped to the declared content's real scroll range. Progress counts items up
+ * to the viewport end (including partial rows), rather than just scroll distance.
+ *
+ * Native content beyond the browser limit still uses its full declared size:
+ * a browser-clamped position is not expanded to the end, so progress may never
+ * reach 100%. Handle the core's `content:size:overflow` error and use
+ * `vlist/synthetic` when the full range must remain reachable.
  *
  * ```ts
  * const stats = createStats({
@@ -109,27 +115,10 @@ export function createStats(config: StatsConfig): Stats {
   /**
    * Compute cumulative item count from scroll position geometrically.
    *
-   * scrollPosition is the DOM scrollTop/scrollLeft — in compressed/scaled
-   * mode this is the virtual (compressed) scroll position. We map it back
-   * to real item indices using the same linear mapping vlist uses internally:
-   *
-   *   columns         = getColumns() ?? 1
-   *   totalRows       = ceil(total / columns)
-   *   totalActualSize = totalRows × itemSize
-   *   totalVirtualSize = min(totalActualSize, MAX_VIRTUAL_SIZE)
-   *   maxVirtualScroll = totalVirtualSize − containerSize
-   *   maxActualScroll  = totalActualSize − containerSize
-   *   ratio            = maxActualScroll / maxVirtualScroll
-   *   actualOffset     = scrollPosition × ratio
-   *   visibleRows      = ceil((actualOffset + containerSize) / itemSize)
-   *   itemCount        = min(visibleRows × columns, total)
-   *
-   * containerSize is provided by the caller (clientHeight for vertical,
-   * clientWidth for horizontal).
-   *
-   * Using scroll-range ratio (not size ratio) ensures that at max scroll
-   * the end of the viewport aligns exactly with the last row/column.
-   * For grid/masonry, rows are converted to items via the column multiplier.
+   * Native and synthetic positions already use the content's logical pixels.
+   * Clamp overscroll to [0, max(0, totalRows * itemSize - containerSize)], then count
+   * through the viewport's trailing edge. For grids, multiply rows by columns
+   * and cap the result at the actual item count (the last row may be partial).
    */
   function getItemCount(): number {
     const total = config.getTotal();
@@ -150,17 +139,11 @@ export function createStats(config: StatsConfig): Stats {
       typeof config.getColumns === "function" ? config.getColumns() : 1;
     const totalRows = Math.ceil(total / columns);
 
-    // Map virtual scroll position back to actual content offset.
-    // Use scroll-range ratio so maxScroll maps exactly to the last row.
-    const totalActualSize = totalRows * itemSize;
-    const totalVirtualSize = Math.min(totalActualSize, MAX_VIRTUAL_SIZE);
-    const maxVirtualScroll = totalVirtualSize - containerSize;
-    const maxActualScroll = totalActualSize - containerSize;
-    const ratio = maxVirtualScroll > 0 ? maxActualScroll / maxVirtualScroll : 1;
-    const actualOffset = scrollPosition * ratio;
+    const maxScroll = Math.max(0, totalRows * itemSize - containerSize);
+    const offset = Math.max(0, Math.min(scrollPosition, maxScroll));
 
     const lastVisibleRow = Math.ceil(
-      (actualOffset + containerSize) / itemSize
+      (offset + containerSize) / itemSize
     );
     return Math.min(lastVisibleRow * columns, total);
   }

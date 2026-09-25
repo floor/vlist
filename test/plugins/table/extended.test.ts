@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Table Plugin Extended Tests
+ * vlist — Table Plugin Extended Tests
  *
  * Covers gaps from v1 table feature tests not present in v2:
  * - Roles and ARIA attributes
@@ -12,6 +12,8 @@
  * E2E integration tests.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
+import { capturePrototypeGeometry } from "../../helpers/geometry";
 import {
   describe,
   it,
@@ -21,9 +23,9 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { table } from "../../../src/plugins/table/plugin";
 import { selection } from "../../../src/plugins/selection/plugin";
+import { createVList as createNative } from "../../../src/native";
 import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import type { VListItem } from "../../../src/types";
@@ -41,28 +43,31 @@ import {
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 800, configurable: true });
 });
 
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Shared Helpers
 // =============================================================================
 
-interface TableTestItem extends VListItem {
+// Extends TestItem rather than VListItem: TestItem carries an index signature,
+// and an interface declared without one is never assignable to it -- which is
+// why TableTestItem[] could not be passed where simpleTemplate's item goes.
+interface TableTestItem extends TestItem {
   id: number;
   name: string;
   email: string;
@@ -438,7 +443,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const events: Array<{ range: { start: number; end: number } }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -470,7 +475,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const events: Array<{ range: { start: number; end: number } }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -507,7 +512,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const events: Array<{ range: { start: number; end: number } }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -545,7 +550,7 @@ describe("table — range events", () => {
     const items = createTestItems(200);
     const scrollEvents: Array<{ scrollPosition: number; direction: string }> = [];
 
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items,
@@ -715,5 +720,79 @@ describe("table — selection integration", () => {
     // Verify no errors — the combined table + selection handles keyboard
     // The fact that this does not throw is the primary assertion
     expect(root.getAttribute("role")).toBe("grid");
+  });
+
+  it("selectNext past the fold leaves the selected row rendered in the table", () => {
+    const items = createTestItems(80);
+    const rowHeight = 40;
+    const viewport = 500;
+
+    list = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: { height: rowHeight, template: simpleTemplate },
+      },
+      [
+        table({
+          columns: [
+            { key: "name", label: "Name", width: 200 },
+            { key: "value", label: "Value", width: 100 },
+          ],
+          rowHeight,
+        }),
+        selection({ mode: "single" }),
+      ],
+    );
+
+    const sel = list as unknown as {
+      selectNext(): void;
+      getSelected(): Array<string | number>;
+    };
+    const steps = Math.floor(viewport / rowHeight) + 5;
+    for (let i = 0; i < steps; i++) sel.selectNext();
+
+    expect(sel.getSelected().length).toBe(1);
+    expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+    const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+    expect(row).not.toBeNull();
+    expect(row!.classList.contains("vlist-table-row")).toBe(true);
+
+    const transform = row!.style.transform;
+    const yOnly = /translateY\((-?\d+(?:\.\d+)?)px\)/.exec(transform);
+    expect(yOnly).not.toBeNull();
+    const rowY = Number(yOnly![1]);
+    const visibleTop = rowY - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + rowHeight).toBeLessThanOrEqual(viewport + 1);
+  });
+});
+
+describe("table — focusable neutralization", () => {
+  it("sets tabindex=-1 on links and buttons inside cells", () => {
+    const container = createContainer({ width: 800, height: 500 });
+    const items = createTableTestItems(8);
+    const list = createVList({
+      container,
+      items,
+      item: { height: 40, template: simpleTemplate },
+    }, [table({
+      columns: [
+        { key: "name", label: "Name", width: 200, cell: (item) => `<a href="#${item.id}">${item.name}</a>` },
+        { key: "role", label: "Role", width: 100, cell: () => `<button>Edit</button>` },
+      ],
+      rowHeight: 40,
+    })]);
+
+    const links = container.querySelectorAll(".vlist-table-cell a[href]");
+    const buttons = container.querySelectorAll(".vlist-table-cell button");
+    expect(links.length).toBeGreaterThan(0);
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const link of links) expect(link.getAttribute("tabindex")).toBe("-1");
+    for (const button of buttons) expect(button.getAttribute("tabindex")).toBe("-1");
+
+    list.destroy();
+    container.remove();
   });
 });

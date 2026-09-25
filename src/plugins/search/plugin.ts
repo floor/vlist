@@ -12,13 +12,31 @@
  *
  * Phase 2 (server-side search via `data()`, column-aware, fuzzy, query syntax)
  * is out of scope here.
+ *
+ * Restrictions:
+ * - Cannot be combined with `data()`. Filtering is client-side over the items
+ *   the list holds, and with an adapter those are only the loaded window.
+ *   Query the remote dataset through the adapter instead.
+ * - Cannot be combined with `tree()`. Filtering a tree means preserving the
+ *   ancestors of each match, which belongs to the plugin that owns the layout;
+ *   `tree()` provides no such hook.
+ * - Cannot *yet* be combined with `carousel()`. Filter mode replaces the item
+ *   accessors and the total that the carousel window owns, and clearing the
+ *   query does not give them back. Fixable — see `conflicts` below.
  */
 
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import type { StampableRow } from "../../core/dom";
 import type { ItemState } from "../../types";
-import { makeGetText, textMatches, highlightElement, type FieldAccessor } from "./match";
+import {
+  makeGetText,
+  textMatches,
+  highlightElement,
+  clearHighlights,
+  type FieldAccessor,
+} from "./match";
 import { createSearchBar, type SearchBar } from "./searchbar";
 
 /**
@@ -93,7 +111,25 @@ export interface SearchPluginConfig<T extends VListItem = VListItem> {
   text?: SearchText;
 }
 
-export interface SearchPluginInstance<T extends VListItem = VListItem> extends VListPlugin<T> {}
+/** Methods the search plugin adds to the list instance. */
+export interface SearchMethods {
+  /** Show the search bar. */
+  openSearch(): void;
+  /** Hide the search bar and clear the query. */
+  closeSearch(): void;
+  /** Set the query, opening the bar when needed. */
+  setQuery(query: string): void;
+  /** The current query. */
+  getQuery(): string;
+  /** Move to the next match. */
+  nextMatch(): void;
+  /** Move to the previous match. */
+  prevMatch(): void;
+  /** Indices of the matching items. */
+  getMatches(): number[];
+}
+
+export interface SearchPluginInstance<T extends VListItem = VListItem> extends VListPlugin<T, SearchMethods> {}
 
 export function search<T extends VListItem = VListItem>(
   config: SearchPluginConfig<T> = {},
@@ -122,6 +158,11 @@ export function search<T extends VListItem = VListItem>(
   let bar: SearchBar | null = null;
   let open = false;
   let query = "";
+  /** Bumped on every query change. Rows stamped with an older value re-highlight.
+   *  Starts at 1: 0 is the row stamp a renderer voids when it rewrites a row. */
+  let queryVersion = 1;
+  /** Whether any rendered row may still carry marks — gates the clearing pass. */
+  let marksPresent = false;
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
@@ -134,15 +175,15 @@ export function search<T extends VListItem = VListItem>(
   // Lazily-resolved cross-plugin methods.
   let resolved = false;
   let scrollToIndexFn: ((index: number, align?: string) => void) | null = null;
-  let filterTreeFn: ((predicate: (item: T) => boolean) => void) | null = null;
-  let clearFilterTreeFn: (() => void) | null = null;
+  let d2lFn: ((dataIndex: number) => number) | null = null;
+  let l2dFn: ((layoutIndex: number) => number) | null = null;
 
   const resolveOnce = (): void => {
     if (resolved) return;
     resolved = true;
-    scrollToIndexFn = (ctx.getMethod("scrollToIndex") as typeof scrollToIndexFn) ?? null;
-    filterTreeFn = (ctx.getMethod("filterTree") as typeof filterTreeFn) ?? null;
-    clearFilterTreeFn = (ctx.getMethod("clearTreeFilter") as typeof clearFilterTreeFn) ?? null;
+    scrollToIndexFn = (ctx.hooks.get("scrollToIndex") as typeof scrollToIndexFn) ?? null;
+    d2lFn = (ctx.hooks.get("_dataToLayoutIndex") as typeof d2lFn) ?? null;
+    l2dFn = (ctx.hooks.get("_layoutToDataIndex") as typeof l2dFn) ?? null;
   };
 
   // ── Matching ────────────────────────────────────────────────────────────
@@ -152,7 +193,7 @@ export function search<T extends VListItem = VListItem>(
     matchSet.clear();
     if (query.length < minLength) return;
     const needle = caseSensitive ? query : query.toLowerCase();
-    const items = ctx.getItems();
+    const items = ctx.items.all();
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       if (item !== undefined && textMatches(getText(item), needle, caseSensitive)) {
@@ -166,35 +207,24 @@ export function search<T extends VListItem = VListItem>(
 
   const applyFilter = (): void => {
     resolveOnce();
-    // Delegate to the tree plugin (ancestor-preserving filter) when present.
-    if (filterTreeFn) {
-      const needle = caseSensitive ? query : query.toLowerCase();
-      filterTreeFn((item) => textMatches(getText(item), needle, caseSensitive));
-      filtered = true;
-      return;
-    }
-    const base = ctx.getItems();
+    const base = ctx.items.all();
     const idx = matches;
-    ctx.setGetItemFn((i: number): T | undefined => base[idx[i]!]);
-    ctx.setVirtualTotalFn(() => idx.length);
+    ctx.items.setGetFn((i: number): T | undefined => base[idx[i]!]);
+    ctx.items.setTotalFn(() => idx.length);
     engineState.totalItems = idx.length;
-    ctx.rebuildSizeCache();
-    ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+    ctx.sizes.rebuild();
+    ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
     filtered = true;
   };
 
   const restoreItems = (): void => {
     if (!filtered) return;
     filtered = false;
-    if (clearFilterTreeFn) {
-      clearFilterTreeFn();
-      return;
-    }
-    ctx.setGetItemFn((i: number): T | undefined => ctx.getItems()[i]);
-    ctx.setVirtualTotalFn(() => ctx.getItems().length);
-    engineState.totalItems = ctx.getItems().length;
-    ctx.rebuildSizeCache();
-    ctx.updateContentSize(ctx.sizeCache.getTotalSize());
+    ctx.items.setGetFn((i: number): T | undefined => ctx.items.all()[i]);
+    ctx.items.setTotalFn(() => ctx.items.all().length);
+    engineState.totalItems = ctx.items.all().length;
+    ctx.sizes.rebuild();
+    ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
   };
 
   // ── Navigate mode ─────────────────────────────────────────────────────────
@@ -204,8 +234,8 @@ export function search<T extends VListItem = VListItem>(
     const original = matches[current];
     if (original === undefined) return;
     if (scrollToIndexFn) scrollToIndexFn(original, "center");
-    else ctx.scrollTo(Math.max(0, ctx.sizeCache.getOffset(original) - ctx.getState().containerSize / 2));
-    const item = ctx.getItem(original);
+    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(original) - ctx.getState().containerSize / 2));
+    const item = ctx.items.at(original);
     ctx.emitter.emit("search:match", {
       index: original,
       item,
@@ -237,6 +267,7 @@ export function search<T extends VListItem = VListItem>(
   // ── Query application ───────────────────────────────────────────────────────
 
   const applyQuery = (next: string): void => {
+    if (next !== query) queryVersion++;
     query = next;
     bar?.setValue(query);
     computeMatches();
@@ -249,28 +280,34 @@ export function search<T extends VListItem = VListItem>(
 
     setSearchingClass();
     updateCounter();
-    ctx.forceRender(); // fresh innerHTML so highlight re-applies for the new query
+    ctx.render.force(); // fresh innerHTML so highlight re-applies for the new query
 
     if (mode === "navigate" && matches.length > 0) scrollToMatch();
 
     ctx.emitter.emit("search:change", {
       query,
       matches: matches.length,
-      total: ctx.getItems().length,
+      total: ctx.items.all().length,
     });
     armCancelTimer();
   };
 
   // ── Open / close ────────────────────────────────────────────────────────────
 
-  const openSearch = (): void => {
+  // Opens without moving the caret. openSearch() also selects the field,
+  // which would replace what the user just typed on the next key.
+  const markOpen = (): void => {
     if (!open) {
       open = true;
       ctx.dom.root.classList.add(`${classPrefix}--search-open`);
       ctx.emitter.emit("search:open", undefined);
     }
-    bar?.focus();
     armCancelTimer();
+  };
+
+  const openSearch = (): void => {
+    markOpen();
+    bar?.focus();
   };
 
   const closeSearch = (): void => {
@@ -291,7 +328,7 @@ export function search<T extends VListItem = VListItem>(
     updateCounter();
     if (mode === "navigate") {
       scrollToMatch();
-      ctx.forceRender(); // re-evaluate the --current mark
+      ctx.render.force(); // re-evaluate the --current mark
     }
   };
 
@@ -315,32 +352,94 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Highlight pass (after each commit) ────────────────────────────────────────
 
+  /**
+   * A row's marks stay valid until either the query changes or the row's
+   * content is rewritten, and a commit that merely moved the range does
+   * neither. The stamp therefore rides on the row element's `_stamp` slot and
+   * holds the `queryVersion` the marks were built for: every renderer voids
+   * that slot when it writes the row, which is the only sound signal there is.
+   * Node identity is not one — `item.template` may return an `HTMLElement` and
+   * hand back that same object on a later call, so the row's first child
+   * outlives a rewrite that emptied it.
+   */
+  interface StampedRow extends StampableRow {
+    /** Whether this row currently carries the `--current` class (navigate). */
+    _searchMarkCurrent?: boolean;
+  }
+
+  const highlightRow = (el: HTMLElement): void => {
+    if (highlightWithin) {
+      // Scope marking to the matching descendants only.
+      const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
+      for (let s = 0; s < scoped.length; s++) {
+        highlightElement(scoped[s]!, query, caseSensitive, matchClass);
+      }
+    } else {
+      highlightElement(el, query, caseSensitive, matchClass);
+    }
+  };
+
+  const clearRow = (el: HTMLElement): void => {
+    if (highlightWithin) {
+      const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
+      for (let s = 0; s < scoped.length; s++) {
+        clearHighlights(scoped[s]!, matchClass);
+      }
+    } else {
+      clearHighlights(el, matchClass);
+    }
+  };
+
   const highlightVisible = (state: EngineState): void => {
-    if (!doHighlight || query.length < minLength) return;
+    if (!doHighlight) return;
+    // No query and no marks left over from one: every commit of every list
+    // that merely has search() installed lands here, so it costs one compare.
+    const active = query.length >= minLength;
+    if (!active && !marksPresent) return;
+    resolveOnce();
     const start = state.startIndex;
     const end = start + Math.max(0, state.visibleCount - 1);
     const currentOriginal = mode === "navigate" ? matches[current] : -1;
-    for (let i = start; i <= end; i++) {
-      const el = ctx.getRenderedElement(i);
+    // startIndex/visibleCount are data-space (groups fills them that way so
+    // loaders request items, not headers). renderedElement is layout-space —
+    // headers occupy indices — so look up through the mapping groups publishes.
+    for (let dataIndex = start; dataIndex <= end; dataIndex++) {
+      const layoutIndex = d2lFn !== null ? d2lFn(dataIndex) : dataIndex;
+      if (l2dFn !== null && l2dFn(layoutIndex) < 0) continue;
+      const el = ctx.dom.renderedElement(layoutIndex);
       if (!el) continue;
-      if (highlightWithin) {
-        // Scope marking to the matching descendants only.
-        const scoped = el.querySelectorAll<HTMLElement>(highlightWithin);
-        for (let s = 0; s < scoped.length; s++) {
-          highlightElement(scoped[s]!, query, caseSensitive, matchClass);
+
+      const row = el as StampedRow;
+      if (row._stamp !== queryVersion) {
+        // Newly rendered, rewritten, or built for an older query.
+        if (active) {
+          highlightRow(el);
+          marksPresent = true;
+          row._stamp = queryVersion;
+          row._searchMarkCurrent = false;
+        } else if (row._stamp) {
+          // Marks built for a query that is no longer active. A row the
+          // renderer has written since carries 0 and costs nothing.
+          clearRow(el);
+          row._stamp = 0;
         }
-      } else {
-        highlightElement(el, query, caseSensitive, matchClass);
       }
-      if (mode === "navigate") {
-        // Toggle the current-match class on this row's marks.
-        const isCurrentRow = i === currentOriginal;
-        const marks = el.querySelectorAll(`.${matchClass}`);
-        for (let m = 0; m < marks.length; m++) {
-          marks[m]!.classList.toggle(currentClass, isCurrentRow);
+
+      if (active && mode === "navigate") {
+        // Cheap by construction: only the row entering or leaving the current
+        // match touches the DOM — the rest compare one property and move on.
+        const isCurrentRow = dataIndex === currentOriginal;
+        if (row._searchMarkCurrent !== isCurrentRow) {
+          const marks = el.querySelectorAll(`.${matchClass}`);
+          for (let m = 0; m < marks.length; m++) {
+            marks[m]!.classList.toggle(currentClass, isCurrentRow);
+          }
+          row._searchMarkCurrent = isCurrentRow;
         }
       }
     }
+    // The pass above visited every rendered row, so nothing is marked now.
+    if (!active) marksPresent = false;
   };
 
   // ── Keyboard ─────────────────────────────────────────────────────────────────
@@ -408,6 +507,30 @@ export function search<T extends VListItem = VListItem>(
 
   return {
     name: "search",
+    // Filtering is client-side over the items the list holds. Under data() those
+    // are a sliding window of loaded rows, so a query could only ever match what
+    // happened to be loaded — and clearing a filter is worse than useless there:
+    // restoreItems() reinstates static getItem/virtualTotal functions over the
+    // ones data() installed, so the list keeps the empty total for good.
+    // Searching a remote dataset belongs to the adapter's own query.
+    //
+    // tree() owns the layout index space, and never implemented the filterTree
+    // hook this plugin was written to call. Filtering therefore fell through to
+    // flat indices into the source array: the total was corrupted, children
+    // were never matched, and clearing left the list a size it had never been.
+    //
+    // carousel is "not yet", not "never". A searchable carousel is a
+    // reasonable thing to want, and the reason it does not work is fixable:
+    // filter mode replaces setGetFn, setTotalFn and engineState.totalItems,
+    // which is exactly the window carousel installs over the data, and
+    // installWindow runs once. Measured on 30 items: the engine total went
+    // 30 → 1 on a query and came back 10, never 30, because restoreItems
+    // writes identity accessors over carousel's; painted slides went
+    // 12 → 0 → 3. Clearing the query does not recover the list. Whoever
+    // teaches the two to compose — a filter that maps through the window
+    // instead of replacing it — can delete this entry, which is safe to do
+    // in a way that adding one is not.
+    conflicts: ["data", "tree", "carousel"],
     // Run after selection (50) so its item-state fn is captured and composed
     // (state.search alongside state.selected), and so a filter override is the
     // outermost item transform.
@@ -436,7 +559,10 @@ export function search<T extends VListItem = VListItem>(
           },
           listId,
           {
-            onInput: (value) => applyQuery(value),
+            onInput: (value) => {
+              markOpen();
+              applyQuery(value);
+            },
             onClear: () => applyQuery(""),
             onPrev: () => step(-1),
             onNext: () => step(1),
@@ -453,8 +579,8 @@ export function search<T extends VListItem = VListItem>(
       }
 
       // Compose search state into the template state.
-      const prevStateFn = ctx.getItemStateFn();
-      ctx.setItemStateFn((index: number, is: ItemState): void => {
+      const prevStateFn = ctx.render.getStateFn();
+      ctx.render.setStateFn((index: number, is: ItemState): void => {
         if (prevStateFn) prevStateFn(index, is);
         if (query.length < minLength) {
           delete is.search;
@@ -474,21 +600,27 @@ export function search<T extends VListItem = VListItem>(
         }
       });
 
+      // Filter remaps getItemFn, not the source array. selection() (and
+      // masonry, sortable) resolve rows through this hook; without it they
+      // read items.all()[i] and select the unfiltered occupant of a
+      // filtered row.
+      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => ctx.items.at(index));
+
       // Public methods.
-      ctx.registerMethod("openSearch", openSearch);
-      ctx.registerMethod("closeSearch", closeSearch);
-      ctx.registerMethod("setQuery", (q: string) => {
+      ctx.hooks.method("openSearch", openSearch);
+      ctx.hooks.method("closeSearch", closeSearch);
+      ctx.hooks.method("setQuery", (q: string) => {
         if (!open) openSearch();
         applyQuery(q);
       });
-      ctx.registerMethod("getQuery", () => query);
-      ctx.registerMethod("nextMatch", () => step(1));
-      ctx.registerMethod("prevMatch", () => step(-1));
-      ctx.registerMethod("getMatches", () => matches.slice());
+      ctx.hooks.method("getQuery", () => query);
+      ctx.hooks.method("nextMatch", () => step(1));
+      ctx.hooks.method("prevMatch", () => step(-1));
+      ctx.hooks.method("getMatches", () => matches.slice());
 
-      ctx.registerKeydownHandler(onKeydown);
+      ctx.hooks.onKeydown(onKeydown);
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         clearCancelTimer();
         restoreItems();
         bar?.destroy();

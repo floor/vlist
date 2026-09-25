@@ -7,6 +7,8 @@ import type { VListItem, SelectionMode, SelectionState } from "../../types";
 import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 
 // Re-export SelectionState for convenience
+import { clampPageTarget } from "../../utils/grid-nav";
+
 export type { SelectionState } from "../../types";
 
 // =============================================================================
@@ -437,6 +439,15 @@ export function moveFocus(
 ): void {
   if (totalItems === 0) return;
   const d = reverse ? -delta : delta;
+  const step = Math.abs(d);
+  // A row move in a grid (|delta| > 1) keeps its column at the edges: ArrowUp
+  // on the first row stays, ArrowDown on the last row stays. The linear clamp
+  // below sent them to item 0 and the last item, which is Home and End (#60).
+  // Before any focus exists (-1) the first arrow still lands in range.
+  if (step > 1 && state.focusedIndex >= 0) {
+    state.focusedIndex = clampPageTarget(state.focusedIndex + d, state.focusedIndex, step, totalItems);
+    return;
+  }
   let idx = state.focusedIndex + d;
   if (idx < 0) idx = 0;
   if (idx >= totalItems) idx = totalItems - 1;

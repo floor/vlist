@@ -1,5 +1,5 @@
 /**
- * vlist v2 — 2-Phase Pipeline
+ * vlist — 2-Phase Pipeline
  *
  * Phase 1: Calculate & Reconcile — zero allocation hot path.
  *   Reads scroll position + size cache, writes into EngineState TypedArrays.
@@ -16,7 +16,7 @@ import type { CompiledHooks, ElementPool } from "./types";
 import type { EngineState } from "./state";
 import type { Emitter } from "../events";
 import { runCalculateHooks, runCommitHooks } from "./hooks";
-import { neutralizeFocusable } from "./dom";
+import { rowContentWritten } from "./dom";
 import { PLACEHOLDER_ID_PREFIX } from "../constants";
 
 // =============================================================================
@@ -125,12 +125,33 @@ export function phase1Calculate(
 
   // Overscan
   const renderStart = Math.max(0, visStart - overscan);
-  const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
+  let renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
-  // Safety cap
-  const maxRender = Math.ceil(containerSize / 1) + overscan * 2 + 10;
+  // A size function has no knowable minimum, so create.ts estimates 20px and
+  // resizeCapacity re-derived demand from that same estimate — it could never
+  // see a shortfall, and the window was silently truncated: 219 of 305 rows for
+  // a 10px size function in a 3050px viewport, the tail left blank. The window
+  // is the authority on what is needed, and capacity grows to meet it.
+  //
+  // That authority needs a ceiling of its own, or it is unbounded. A size spec
+  // reporting 0 puts every item at the same offset, so indexAtOffset lands on
+  // total - 1 and the window becomes the whole dataset: 20,000 of 20,000 rows
+  // measured, each one a TypedArray slot and a DOM node. An item cannot occupy
+  // less than one physical pixel, so containerSize + overscan * 2 is the most
+  // that can ever be visible. This is the cap that used to sit here and was
+  // removed as dead code — correctly, while capacity was the binding
+  // constraint, which is exactly what the capacity fix changed.
+  const maxWindow = Math.ceil(containerSize) + overscan * 2;
+  if (renderEnd - renderStart + 1 > maxWindow) {
+    renderEnd = renderStart + maxWindow - 1;
+    // Latched rather than reported here: a degenerate spec binds every frame,
+    // and an error per frame is its own defect. render() emits it once.
+    state.windowClamped = true;
+  }
+
   const count = renderEnd - renderStart + 1;
-  const safeCap = Math.min(count, state.capacity, maxRender);
+  if (count > state.capacity) state.ensureCapacity(count);
+  const safeCap = Math.min(count, state.capacity);
 
   // Range-unchanged fast path. Item transforms are `offset - baseOffset`, so a
   // logical provider that moves baseOffset without changing the range (bounded
@@ -265,7 +286,7 @@ export function phase2Commit<T extends VListItem>(
           acquired.textContent = "";
           acquired.appendChild(result);
         }
-        neutralizeFocusable(acquired);
+        rowContentWritten(acquired);
       }
 
       acquired.setAttribute("role", rc.itemRole);
@@ -338,7 +359,7 @@ export function phase2Commit<T extends VListItem>(
           element.textContent = "";
           element.appendChild(result);
         }
-        neutralizeFocusable(element);
+        rowContentWritten(element);
         element.setAttribute("data-id", newId);
         el._lastItem = item;
 
@@ -431,6 +452,25 @@ export function render<T extends VListItem>(
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
 ): void {
   const changed = phase1Calculate(state, sizeCache, overscan, hooks, rc.startPadding);
+  // Clamping silently is the failure the ceiling replaced, not a fix for it:
+  // the caller gets a short list with no way to know why. phase1 has no
+  // emitter, so it latches and this reports, once.
+  if (state.windowClamped && !state.windowClampReported) {
+    state.windowClampReported = true;
+    // Deferred one microtask. The first render runs inside createVList, so the
+    // conventional `const list = createVList(...); list.on("error", ...)` would
+    // attach too late to hear this — the same trap setup errors fell into, and
+    // a clamp nobody can hear about is the failure this ceiling replaced, not a
+    // fix for it. A listener added in a later task still misses it; plugins
+    // subscribe during setup and hear it either way.
+    queueMicrotask(() => {
+      if (state.destroyed) return;
+      rc.emitter?.emit("error", {
+        error: new Error("[vlist] render window capped to the viewport: the item size spec reports sizes below 1px"),
+        context: "render:window-ceiling",
+      });
+    });
+  }
   if (changed) {
     phase2Commit(state, pool, contentElement, template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
   }

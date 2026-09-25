@@ -38,6 +38,9 @@ vlist/
 ├── src/
 │   ├── index.ts              # Main entry — exports everything
 │   ├── internals.ts          # Low-level exports for advanced users
+│   ├── synthetic.ts          # vlist/synthetic entry (opt-in owned input)
+│   ├── native.ts             # vlist/native — deprecated alias of the default entry
+│   ├── config.ts             # vlist/config — the declarative layer the adapters use
 │   ├── types.ts              # Public type definitions
 │   ├── constants.ts          # Shared constants and defaults
 │   ├── core/                 # Core engine + factory
@@ -48,35 +51,49 @@ vlist/
 │   │   ├── hooks.ts          #   Hook compilation (plugin hooks → linear arrays)
 │   │   ├── state.ts          #   EngineState (TypedArray-based hot-path state)
 │   │   ├── sizes.ts          #   Size cache (prefix sums, O(1) lookups)
-│   │   ├── data.ts           #   Data manager
 │   │   ├── dom.ts            #   DOM structure creation (root, viewport, content)
 │   │   ├── pool.ts           #   Element pool (DOM recycling)
-│   │   ├── range.ts          #   Visible range calculations
-│   │   ├── scroll.ts         #   Scroll handler
+│   │   ├── scroll.ts         #   Native scroll handler
+│   │   ├── scroll-source.ts  #   Shared commit + smooth-scroll for both entries
+│   │   ├── runway.ts         #   Wrap runway (carousel)
+│   │   ├── adapter.ts        #   External scroll source contract
 │   │   └── velocity.ts       #   Scroll velocity tracking
 │   ├── plugins/              # Composable plugins (opt-in via plugins array)
-│   │   ├── async/            #   Async data adapter (infinite scroll)
+│   │   ├── a11y/             #   Keyboard navigation, focus and ARIA roles
 │   │   ├── autosize/         #   Auto-measure items via ResizeObserver
+│   │   ├── carousel/         #   Looping carousel with wrap
+│   │   ├── data/             #   Async data adapter (infinite scroll)
 │   │   ├── grid/             #   2D grid / card layout
 │   │   ├── groups/           #   Sticky group headers
 │   │   ├── masonry/          #   Pinterest-style layout
-│   │   ├── page/             #   Window scroll mode
-│   │   ├── scale/            #   Large-list compression (1M+ items)
-│   │   ├── scrollbar/        #   Custom scrollbar
+│   │   ├── page/             #   Document / window scrolling
+│   │   ├── scrollbar/        #   Custom overlay scrollbar
+│   │   ├── search/           #   In-list filtering
 │   │   ├── selection/        #   Selection state management
 │   │   ├── snapshots/        #   Scroll save/restore
 │   │   ├── sortable/         #   Drag-and-drop reordering
 │   │   ├── table/            #   Data table with columns + sorting
-│   │   └── transition/       #   FLIP-based enter/exit animations
+│   │   ├── transition/       #   FLIP-based enter/exit animations
+│   │   └── tree/             #   Expandable tree nodes
+│   ├── rendering/            # Renderer, ARIA and sort helpers
+│   ├── utils/                # Padding, grid navigation, stats
 │   ├── events/               # Event emitter
 │   └── styles/               # CSS files
 │       ├── vlist.css          #   Core styles
 │       ├── vlist-table.css    #   Table plugin styles
+│       ├── vlist-grid.css     #   Grid plugin styles
+│       ├── vlist-masonry.css  #   Masonry plugin styles
+│       ├── vlist-carousel.css #   Carousel plugin styles
+│       ├── vlist-search.css   #   Search plugin styles
+│       ├── vlist-tree.css     #   Tree plugin styles
 │       └── vlist-extras.css   #   Optional variants
 ├── test/                     # Tests (mirrors src/ structure)
 │   ├── helpers/              #   setupDOM, createPluginMockContext, timer utils
-│   ├── builder/              #   Core engine tests
-│   ├── features/             #   One folder per plugin
+│   ├── core/                 #   Core engine tests
+│   ├── plugins/              #   One folder per plugin
+│   ├── integration/          #   Cross-plugin, memory and performance tests
+│   ├── config/               #   vlist/config resolver tests
+│   ├── types/                #   Type-level assertions
 │   ├── rendering/
 │   ├── events/
 │   └── utils/
@@ -107,7 +124,7 @@ createVList(config, [       → VList instance
 
 - **EngineState** — TypedArray-based state singleton. All hot-path data (`visibleIndices`, `visibleOffsets`, `visibleSizes`, `visibleCount`, `scrollPosition`, `containerSize`) lives in typed arrays — zero allocation per frame.
 - **2-Phase Pipeline** — Phase 1 (`onCalculate`) fills TypedArrays with visible range and positions. Phase 2 (`onCommit`) reads the buffers and updates DOM. Plugins hook into either phase.
-- **`PluginContext`** — The context object passed to every plugin's `setup()`. Plugins register handlers (`registerClickHandler`, `registerKeydownHandler`, `registerDestroyHandler`), add public methods (`registerMethod`), and can replace core functions (`setSizeConfig`, `setRenderFn`).
+- **`PluginContext`** — The context object passed to every plugin's `setup()`, grouped by capability: `ctx.dom`, `ctx.scroll`, `ctx.items`, `ctx.sizes`, `ctx.render`, `ctx.hooks` and `ctx.nav`, plus `config`, `emitter`, `template`, `pool` and `getState()` at the top level. Plugins register handlers through `ctx.hooks.onClick` / `onKeydown` / `onDestroy`, add public methods with `ctx.hooks.method`, and replace core functions through the `set*` members of the capability that owns them (`ctx.sizes.setConfig`, `ctx.render.setFn`, `ctx.items.setGetFn`). One owner per hook: a second plugin claiming the same one is how several 3.0 composition bugs began.
 - **`VListPlugin`** — The interface every plugin implements: `name`, optional `priority` (lower runs first), optional `conflicts` array, `setup(ctx)`, optional `hooks` object (`onCalculate`, `onCommit`, `onAfterScroll`, `onIdle`, `onResize`), optional `destroy()`.
 
 ## Development Workflow
@@ -127,6 +144,9 @@ createVList(config, [       → VList instance
 # All tests
 bun test
 
+# All tests in parallel (~2x faster) — also gated in CI
+bun test --concurrent
+
 # Specific file
 bun test test/plugins/grid/plugin.test.ts
 
@@ -138,6 +158,25 @@ bun test --watch
 ```
 
 Tests use [Bun's test runner](https://bun.sh/docs/cli/test) with JSDOM for DOM testing. Every domain has corresponding tests mirroring the `src/` structure. Plugin tests use the `createPluginMockContext()` helper from `test/helpers/plugin-context.ts`.
+
+#### Writing tests that survive `--concurrent`
+
+`--concurrent` runs the tests **within each file** at the same time, so a test
+that reaches module-level state is reading and writing its neighbours'. CI runs
+the suite both ways; a test that passes alone and fails interleaved fails the
+build. Two rules keep it green:
+
+1. **A test owns what it builds.** Create the list, container and fixture inside
+   the test (or in a helper that returns them) and tear it down in a `finally`.
+   Do not park a `let list` / `let container` at module scope with an
+   `afterEach` that destroys it — under concurrency that hook fires while
+   another test is still using it.
+2. **If the test owns a process global, mark it `it.serial` / `test.serial`**
+   and say which global in a comment. `document.activeElement`, an
+   `HTMLElement.prototype` geometry getter driven by a mutable variable, a
+   single mocked `ResizeObserver` callback, and `window.dispatchEvent(...)` are
+   all one-per-process — no amount of fixture hygiene isolates them. Note that
+   `describe.serial` is **not** honoured by Bun 1.4; only the per-test form is.
 
 ### Building
 
@@ -246,23 +285,24 @@ export const myPlugin = <
     conflicts: ["grid"], // Cannot combine with grid
 
     setup(ctx: PluginContext<T>): void {
-      const { dom, config, emitter, sizeCache } = ctx;
+      const { dom, config, emitter } = ctx;
+      const sizeCache = ctx.sizes.cache;
 
       // Register click/keydown handlers:
-      ctx.registerClickHandler((event: MouseEvent) => {
+      ctx.hooks.onClick((event: MouseEvent) => {
         // Attached as DOM click listener on the root element
       });
 
-      ctx.registerKeydownHandler((event: KeyboardEvent) => {
+      ctx.hooks.onKeydown((event: KeyboardEvent) => {
         // Attached as DOM keydown listener on the root element
       });
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         // Cleanup: remove listeners, free resources
       });
 
       // Add public API methods:
-      ctx.registerMethod("myMethod", () => {
+      ctx.hooks.method("myMethod", () => {
         // Accessible as list.myMethod() on the VList instance
       });
     },
@@ -335,7 +375,7 @@ type(scope): description
 feat(grid): add 2D grid layout mode
 fix(scroll): prevent jitter on fast scroll
 docs(readme): update API reference
-test(rendering): add scale edge cases
+test(groups): add sticky header edge cases
 refactor(core): simplify pipeline
 perf(core): reduce allocations in scroll handler
 chore(deps): update dev dependencies
@@ -343,7 +383,7 @@ chore(deps): update dev dependencies
 
 **Types:** `feat`, `fix`, `docs`, `test`, `refactor`, `style`, `chore`, `perf`
 
-**Scopes:** `core`, `render`, `styles`, or specific plugin names (`grid`, `selection`, `table`, `scale`, `async`, `groups`, `masonry`, `page`, `scrollbar`, `snapshots`, `sortable`, `transition`). Also: `deps`, `readme`.
+**Scopes:** `core`, `render`, `styles`, `config`, or specific plugin names (`a11y`, `autosize`, `carousel`, `data`, `grid`, `groups`, `masonry`, `page`, `scrollbar`, `search`, `selection`, `snapshots`, `sortable`, `table`, `transition`, `tree`). Also: `deps`, `readme`.
 
 ## Pull Requests
 

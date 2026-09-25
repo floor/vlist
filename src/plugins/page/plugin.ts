@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Page (Window Scroll) Plugin
+ * vlist — Page (Window Scroll) Plugin
  *
  * Redirects scroll from the viewport to the window, enabling
  * the list to scroll with the page. Useful for infinite feeds,
@@ -8,6 +8,9 @@
  * Priority: 5 (runs early, before plugins that depend on scroll)
  */
 
+import { MAX_ELEMENT_SIZE } from "../../constants";
+import { SCROLL_PADDING_HOOK } from "../../utils/scroll-padding";
+import type { ScrollPadding } from "../../utils/scroll-padding";
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 
@@ -47,14 +50,14 @@ export function page<T extends VListItem = VListItem>(
     priority: 5,
 
     setup(ctx: PluginContext<T>): void {
-      const { dom, sizeCache, config: cfg, emitter } = ctx;
+      const { dom, config: cfg, emitter } = ctx;
+      const sizeCache = ctx.sizes.cache;
       const isX = cfg.axis.primary === "x";
       const win = window;
       const state = ctx.getState();
 
-      // ── 1. Disable default viewport scroll & resize ────────────
-      ctx.disableDefaultScroll();
-      ctx.disableDefaultResize();
+      // ── 1. Own window resize ────────────
+      ctx.scroll.disableResize();
 
       // ── 2. Modify DOM for window scroll ────────────────────────
       dom.root.style.overflow = "visible";
@@ -69,13 +72,25 @@ export function page<T extends VListItem = VListItem>(
 
       dom.viewport.classList.remove(`${cfg.classPrefix}-viewport--custom-scrollbar`);
 
-      // ── 3. Override scroll position get/set ─────────────────────
-      ctx.setScrollFns(
-        (): number => {
-          const rect = dom.viewport.getBoundingClientRect();
-          return Math.max(0, isX ? -rect.left : -rect.top);
+      // ── 3. Install the external scroll writer ─────────────────────
+      let sized = false;
+      let warned = false;
+      ctx.scroll.setSource({
+        onContentSize(pixels): void {
+          if (pixels > MAX_ELEMENT_SIZE && !warned) {
+            const message = `vlist: page() native document size ${pixels}px exceeds the ${MAX_ELEMENT_SIZE}px limit. Use the viewport-scrolled default for larger lists. See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model`;
+            if (!sized) {
+              cleanupScroll?.();
+              cleanupResize?.();
+              dom.root.remove();
+              throw new Error(message);
+            }
+            warned = true;
+            console.warn(message);
+          }
+          sized = true;
         },
-        (pos: number): void => {
+        write(pos: number): void {
           const rect = dom.viewport.getBoundingClientRect();
           const target = (isX ? rect.left + win.scrollX : rect.top + win.scrollY) + pos;
           if (isX) {
@@ -83,32 +98,22 @@ export function page<T extends VListItem = VListItem>(
           } else {
             win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
           }
+          // Read-after-write must not wait for the asynchronous window event.
+          ctx.scroll.commit(pos);
         },
-      );
+      });
 
       // ── 4. Set container size from window ──────────────────────
       state.containerSize = isX ? win.innerWidth : win.innerHeight;
       state.crossSize = isX ? win.innerHeight : win.innerWidth;
 
       // ── 5. Window scroll listener ──────────────────────────────
-      let idleTimer: ReturnType<typeof setTimeout> | null = null;
-
       const onWindowScroll = (): void => {
         const rect = dom.viewport.getBoundingClientRect();
         const pos = Math.max(0, isX ? -rect.left : -rect.top);
 
-        state.prevScrollPosition = state.scrollPosition;
-        state.scrollPosition = pos;
-        state.scrollDirection = pos > state.prevScrollPosition ? 1
-          : pos < state.prevScrollPosition ? -1 : 0;
-
-        ctx.onScrollFrame();
-
-        if (idleTimer !== null) clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          idleTimer = null;
-          ctx.onScrollIdle();
-        }, 150);
+        if (Math.abs(pos - ctx.scroll.getPixelEquivalent()) < 0.5) return;
+        ctx.scroll.commit(pos);
       };
 
       win.addEventListener("scroll", onWindowScroll, { passive: true });
@@ -130,7 +135,7 @@ export function page<T extends VListItem = VListItem>(
         state.containerSize = isX ? w : h;
         state.crossSize = isX ? h : w;
 
-        ctx.forceRender();
+        ctx.render.force();
         emitter.emit("resize", { width: w, height: h });
       };
 
@@ -139,9 +144,16 @@ export function page<T extends VListItem = VListItem>(
 
       // ── 7. Scroll padding (scrollToIndex adjustments) ──────────
       if (scrollPadding) {
-        ctx.setScrollToPosFn((index, sc, containerSize, totalItems, align) => {
-          const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
-          const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
+        // Published so the layout plugins that displace page's own scroll
+        // computations — groups(), masonry() — keep honouring the band.
+        const getPadding = (): ScrollPadding => ({
+          start: resolvePad(isX ? scrollPadding.left : scrollPadding.top),
+          end: resolvePad(isX ? scrollPadding.right : scrollPadding.bottom),
+        });
+        ctx.hooks.method(SCROLL_PADDING_HOOK, getPadding);
+
+        ctx.scroll.setToPosFn((index, sc, containerSize, totalItems, align) => {
+          const { start: startPad, end: endPad } = getPadding();
           if (totalItems === 0) return 0;
           const clamped = Math.max(0, Math.min(index, totalItems - 1));
           const offset = sc.getOffset(clamped);
@@ -162,10 +174,9 @@ export function page<T extends VListItem = VListItem>(
           return Math.max(-startPad, Math.min(pos, maxScroll));
         });
 
-        ctx.registerMethod("_scrollItemIntoView", (index: number): void => {
+        ctx.hooks.method("_scrollItemIntoView", (index: number): void => {
           const containerSize = isX ? win.innerWidth : win.innerHeight;
-          const startPad = resolvePad(isX ? scrollPadding.left : scrollPadding.top);
-          const endPad = resolvePad(isX ? scrollPadding.right : scrollPadding.bottom);
+          const { start: startPad, end: endPad } = getPadding();
 
           const rect = dom.viewport.getBoundingClientRect();
           const domScroll = isX ? win.scrollX : win.scrollY;
@@ -196,10 +207,9 @@ export function page<T extends VListItem = VListItem>(
       }
 
       // ── 8. Register cleanup ────────────────────────────────────
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         cleanupScroll?.();
         cleanupResize?.();
-        if (idleTimer !== null) clearTimeout(idleTimer);
       });
     },
 

@@ -1,10 +1,11 @@
 /**
- * vlist v2 — Error Recovery & Destroy Resilience Tests
+ * vlist — Error Recovery & Destroy Resilience Tests
  *
  * Verifies that: API calls after destroy are safe no-ops,
  * double-destroy is safe, and destroy event fires correctly.
  */
 
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
@@ -16,21 +17,21 @@ import type { VList } from "../../src/core/types";
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers

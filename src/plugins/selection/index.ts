@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Selection Plugin
+ * vlist — Selection Plugin
  */
 
 export { selection, type SelectionPluginConfig } from "./plugin";
@@ -34,3 +34,4 @@ export {
   claimPlaceholderSelection,
   setFocusedIndex,
 } from "./state";
+export type { SelectionMethods } from "./plugin";

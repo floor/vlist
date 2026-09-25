@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -8,7 +9,7 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import {
@@ -18,19 +19,11 @@ import {
   type TestItem,
 } from "../helpers/factory";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -45,20 +38,11 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
@@ -108,7 +92,7 @@ describe("lifecycle", () => {
       expect(indices.length).toBeLessThan(items.length);
     });
 
-    it("should set content height based on total items", () => {
+    it("should size native content for the total items", () => {
       const items = createTestItems(50);
       list = createVList(
         { container, items, item: { height: 40, template: simpleTemplate } },
@@ -118,8 +102,8 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      const height = parseInt(content.style.height, 10);
-      expect(height).toBe(50 * 40);
+      expect(parseInt(content.style.height, 10)).toBe(50 * 40);
+      expect(list.total).toBe(50);
     });
 
     it("should expose correct total count", () => {
@@ -178,8 +162,8 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      const height = parseInt(content.style.height, 10);
-      expect(height).toBe(50 * 40);
+      expect(parseInt(content.style.height, 10)).toBe(50 * 40);
+      expect(list.total).toBe(50);
     });
 
     it("should append items and update total", () => {
@@ -316,7 +300,7 @@ describe("lifecycle", () => {
       const viewport = list.element.querySelector(
         ".vlist-viewport",
       ) as HTMLElement;
-      expect(viewport.scrollTop).toBe(20 * 40);
+      expect(list!.getScrollPosition()).toBe(20 * 40);
     });
 
     it("should clamp scrollToIndex to valid range", () => {
@@ -334,7 +318,7 @@ describe("lifecycle", () => {
         ".vlist-viewport",
       ) as HTMLElement;
       const maxScroll = 100 * 40 - 500;
-      expect(viewport.scrollTop).toBeLessThanOrEqual(maxScroll);
+      expect(list!.getScrollPosition()).toBeLessThanOrEqual(maxScroll);
     });
   });
 
@@ -472,8 +456,8 @@ describe("lifecycle", () => {
       const content = list.element.querySelector(
         ".vlist-content",
       ) as HTMLElement;
-      const width = parseInt(content.style.width, 10);
-      expect(width).toBe(100 * 120);
+      expect(parseInt(content.style.width, 10)).toBe(100 * 120);
+      expect(list.total).toBe(100);
     });
 
     it("should scroll horizontally with scrollToIndex", () => {
@@ -492,7 +476,7 @@ describe("lifecycle", () => {
       const viewport = list.element.querySelector(
         ".vlist-viewport",
       ) as HTMLElement;
-      expect(viewport.scrollLeft).toBe(10 * 120);
+      expect(list!.getScrollPosition()).toBe(10 * 120);
     });
   });
 });

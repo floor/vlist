@@ -1,5 +1,5 @@
 /**
- * vlist v2 - ScrollHandler Tests
+ * vlist — ScrollHandler Tests
  *
  * Tests the createScrollHandler API:
  * - Factory creates handler with attach/detach/cancelScroll/smoothScrollTo

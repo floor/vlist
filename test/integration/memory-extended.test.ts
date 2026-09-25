@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -8,8 +9,9 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -25,19 +27,11 @@ import { selection } from "../../src/plugins/selection/plugin";
 import { scrollbar } from "../../src/plugins/scrollbar/plugin";
 import type { VListAdapter } from "../../src/types";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -52,20 +46,11 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
@@ -228,7 +213,7 @@ describe("memory — DOM leak detection per plugin", () => {
 
 describe("memory — event listener cleanup", () => {
   it("scroll events stop after destroy", () => {
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -253,7 +238,7 @@ describe("memory — event listener cleanup", () => {
   });
 
   it("unsubscribe stops event delivery", () => {
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -277,7 +262,7 @@ describe("memory — event listener cleanup", () => {
   });
 
   it("off() stops event delivery", () => {
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -356,7 +341,7 @@ describe("memory — event listener cleanup", () => {
     const scrollHandler = mock(() => {});
 
     for (let i = 0; i < 5; i++) {
-      const cycleList = createVList(
+      const cycleList = createNative(
         {
           container,
           items: createTestItems(100),
@@ -369,7 +354,7 @@ describe("memory — event listener cleanup", () => {
       cycleList.destroy();
     }
 
-    list = createVList(
+    list = createNative(
       {
         container,
         items: createTestItems(100),
@@ -534,7 +519,7 @@ describe("memory — async lifecycle cleanup", () => {
 
     // Resolve after destroy to simulate late callback
     if (resolveRead) {
-      resolveRead({ items: createTestItems(10), total: 10, hasMore: false });
+      (resolveRead as (v: unknown) => void)({ items: createTestItems(10), total: 10, hasMore: false });
     }
 
     await new Promise((r) => setTimeout(r, 50));

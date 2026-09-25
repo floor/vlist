@@ -14,10 +14,13 @@ export type EventMap = Record<string, unknown>;
 // Item Types
 // =============================================================================
 
-/** Base item interface - must have an id */
+/**
+ * Base item interface: an item only has to carry an id. Plugins that read
+ * arbitrary fields (search, table, tree) narrow the item themselves, so an
+ * ordinary `interface Row { id: number; name: string }` satisfies this.
+ */
 export interface VListItem {
   id: string | number;
-  [key: string]: unknown;
 }
 
 // =============================================================================
@@ -53,7 +56,7 @@ export interface GroupHeaderConfig {
   template: (group: string, groupIndex: number) => string | HTMLElement;
 }
 
-export interface GroupsConfig {
+export interface GroupsConfig<T extends VListItem = VListItem> {
   /**
    * Determine which group an item belongs to.
    * Called with the DATA index (index into the original items array).
@@ -69,7 +72,7 @@ export interface GroupsConfig {
    * @param index - Data index of the item
    * @param item - The item at this index (always provided; undefined only for unloaded async items)
    */
-  getGroupForIndex: (index: number, item?: any) => string;
+  getGroupForIndex: (index: number, item?: T) => string;
 
   /**
    * Group header configuration — mirrors the `item` config shape.
@@ -355,21 +358,11 @@ export interface ScrollConfig {
    */
   wrap?: boolean;
 
-  /**
-   * Scrollbar selection depends on the entry:
-   * - Core reads only `'none'`, which hides the native scrollbar via CSS.
-   *   Omission, `'native'` and options objects do not install a custom scrollbar.
-   * - `vlist/config` installs `scrollbar()` for omission or an options object;
-   *   `'native'` and `'none'` skip that plugin. An explicit `scrollbar()` plugin
-   *   controls its own native-scrollbar hiding independently.
+  /** Native visibility: "none" hides the browser scrollbar, "native" keeps it.
+   * Options are consumed by vlist/config; with the low-level factory install
+   * scrollbar() explicitly. The synthetic entry rejects both string values.
    */
-  scrollbar?:
-    /** Browser scrollbar. Stays available on the native default in 3.0; the
-     * `vlist/synthetic` entry has no browser scrollbar and uses `scrollbar()`. */
-    | "native"
-    /** Hide the browser scrollbar. Stays available on the native default in 3.0. */
-    | "none"
-    | ScrollbarOptions;
+  scrollbar?: "native" | "none" | ScrollbarOptions;
 
   /** External scroll element for window scrolling */
   element?: Window;
@@ -377,32 +370,7 @@ export interface ScrollConfig {
   /** Scroll idle detection timeout in ms (default: 150) */
   idleTimeout?: number;
 
-  /**
-   * Scroll model (RFC-012). `"native"` (default) sizes the content element to
-   * the full virtual size — simple, but hits the browser's ~16.7M px limit.
-   * `"bounded"` sizes the content to a viewport-multiple runway and rebases a
-   * logical origin near the edges, supporting unbounded item counts without
-   * compressing the scroll space.
-   *
-   * @deprecated Removed in 3.0. Native scrolling stays the default of `vlist`; for
-   * lists beyond the browser's element size limit, import `createVList` from
-   * `vlist/synthetic` instead of using bounded mode. Bounded remains supported in 2.x.
-   * See https://vlist.io/docs/migration-v3
-   */
-  mode?: "native" | "bounded";
 
-  /**
-   * Runway size as a multiple of the viewport, used only with
-   * `mode: "bounded"` (default 2). The bounded content element is sized to
-   * `viewport × runway` (capped at the real virtual size). Larger values mean
-   * more native-scroll headroom and less frequent rebasing, at the cost of a
-   * bigger content element. Clamped up to a minimum of 1.5 so native scroll and
-   * touch momentum always have some room.
-   *
-   * @deprecated Removed with bounded mode in 3.0.
-   * See https://vlist.io/docs/migration-v3
-   */
-  runway?: number;
 }
 
 /** Custom scrollbar fine-tuning options */
@@ -451,28 +419,6 @@ export type ScrollbarPadding = number | {
   bottom?: number;
   left?: number;
 };
-
-// =============================================================================
-// Scrollbar (legacy — use ScrollConfig.scrollbar instead)
-// =============================================================================
-
-/**
- * Scrollbar configuration.
- * @deprecated Use `scroll.scrollbar` in `ScrollConfig` instead.
- */
-export interface ScrollbarConfig {
-  /** Enable scrollbar (default: true) */
-  enabled?: boolean;
-
-  /** Auto-hide scrollbar after idle (default: true) */
-  autoHide?: boolean;
-
-  /** Auto-hide delay in milliseconds (default: 1000) */
-  autoHideDelay?: number;
-
-  /** Minimum thumb size in pixels (default: 30) */
-  minThumbSize?: number;
-}
 
 /** Item template function */
 export type ItemTemplate<T = VListItem> = (
@@ -627,13 +573,17 @@ export interface ErrorViewportSnapshot {
 
 /** Event types and their payloads */
 export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
-  /** Item clicked */
+  /**
+   * Item clicked. `index` is the DATA index — what `getItemAt`,
+   * `scrollToIndex` and `removeItem` take — not the layout index, which counts
+   * group headers and carousel laps as well.
+   */
   "item:click": { item: T; index: number; event: MouseEvent };
 
-  /** Item double-clicked */
+  /** Item double-clicked. `index` is the data index, as for `item:click`. */
   "item:dblclick": { item: T; index: number; event: MouseEvent };
 
-  /** Item right-clicked */
+  /** Item right-clicked. `index` is the data index, as for `item:click`. */
   "item:contextmenu": { item: T; index: number; event: MouseEvent };
 
   /** Selection changed */

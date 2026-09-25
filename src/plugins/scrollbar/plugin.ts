@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scrollbar Plugin
+ * vlist — Scrollbar Plugin
  *
  * Replaces the native scrollbar with a custom, cross-browser consistent scrollbar.
  * Priority 15 — runs after layout plugins (10) but before selection (50).
@@ -28,9 +28,15 @@ export interface ScrollbarPluginConfig extends ScrollbarConfig {
 // Factory
 // =============================================================================
 
+/** Methods the scrollbar plugin adds to the list instance. */
+export interface ScrollbarMethods {
+  /** Recompute the thumb from the current content size. */
+  refreshScrollbar(): void;
+}
+
 export function scrollbar<T extends VListItem = VListItem>(
   config?: ScrollbarPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, ScrollbarMethods> {
   let sb: Scrollbar | null = null;
   let engineState: EngineState;
   let mainAxisPadding = 0;
@@ -49,29 +55,23 @@ export function scrollbar<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       mainAxisPadding = resolvedConfig.mainAxisPadding;
 
-      // Indirect callback — scale plugin can redirect via registerMethod.
-      // Route through ctx.scrollTo so the position reaches the bounded handler's
+      // Route through ctx.scroll.to so the position reaches the bounded handler's
       // setLogical (which clamps using maxLogical that includes padding) rather
       // than the adapter's clampPixel (which only knows sizeCache, no padding).
-      let scrollCb = (position: number): void => {
-        ctx.scrollTo(position);
-      };
-      ctx.registerMethod("_scrollbar:setCallback", (cb: (pos: number) => void) => { scrollCb = cb; });
-
       sb = createScrollbar(
         dom.viewport,
-        (position: number) => { scrollCb(position); },
+        (position: number) => { ctx.scroll.to(position); },
         config,
         classPrefix,
         isX,
         dom.root,
+        () => ctx.sizes.cache,
+        dom.root.parentElement!,
       );
 
       dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
 
-      if (config?.gutter) {
-        dom.viewport.classList.add(`${classPrefix}-viewport--gutter`);
-      }
+      ctx.hooks.method("refreshScrollbar", () => sb?.refresh());
 
       // Defer initial bounds update — containerSize may be 0 during setup
       // since the viewport hasn't been laid out yet. The resize observer
@@ -81,9 +81,9 @@ export function scrollbar<T extends VListItem = VListItem>(
       });
 
       // Expose scrollbar instance for cross-plugin bounds coordination
-      ctx.registerMethod("_scrollbar:getInstance", () => sb);
+      ctx.hooks.method("_scrollbar:getInstance", () => sb);
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         sb?.destroy();
         sb = null;
         dom.viewport.classList.remove(`${classPrefix}-viewport--custom-scrollbar`);

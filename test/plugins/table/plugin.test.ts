@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Table Plugin Tests
+ * vlist — Table Plugin Tests
  * Tests for table() plugin: initialization, configuration, render pipeline,
  * resize handlers, public methods, and event emission.
  *
@@ -7,8 +7,8 @@
  * needing a full materialized vlist instance.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { table } from "../../../src/plugins/table/plugin";
 import type { VListItem } from "../../../src/types";
 import type { TableColumn } from "../../../src/plugins/table/types";
@@ -19,8 +19,8 @@ import type { PluginTestContext } from "../../helpers/plugin-context";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers
@@ -83,7 +83,7 @@ function createTableMockContext(overrides?: {
     result.engineState.scrollPosition = overrides.scrollTop;
   }
 
-  // Inject a tracking emitter BEFORE plugin.setup() so plugin captures it
+  // Inject a tracking emitter BEFORE plugin.setup!() so plugin captures it
   const emitted: Array<{ event: string; payload: any }> = [];
   const trackingEmitter = {
     on: () => () => {},
@@ -212,7 +212,7 @@ describe("table - Setup", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { isX: true });
 
-    expect(() => plugin.setup!(ctx)).toThrow("cannot be used with horizontal orientation");
+    expect(() => plugin.validateConfig!(ctx.config)).toThrow("cannot be used with horizontal orientation");
     cleanup();
   });
 
@@ -221,7 +221,7 @@ describe("table - Setup", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, { reverse: true });
 
-    expect(() => plugin.setup!(ctx)).toThrow("cannot be used with reverse mode");
+    expect(() => plugin.validateConfig!(ctx.config)).toThrow("cannot be used with reverse mode");
     cleanup();
   });
 
@@ -341,8 +341,8 @@ describe("table - Render Functions", () => {
     engineState.destroyed = true;
 
     // Should not throw
-    ctx.renderIfNeeded();
-    ctx.forceRender();
+    ctx.render.ifNeeded();
+    ctx.render.force();
     cleanup();
   });
 
@@ -352,14 +352,14 @@ describe("table - Render Functions", () => {
     plugin.setup!(ctx);
 
     engineState.baseOffset = 4000;
-    ctx.forceRender();
+    ctx.render.force();
     const row = dom.content.querySelector("[data-index='100']") as HTMLElement;
     const before = row.style.transform;
 
     // Sub-row step: identical rendered range, baseOffset moved by 12 px.
     engineState.scrollPosition = 3988;
     engineState.baseOffset = 3988;
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     expect(row.style.transform).not.toBe(before);
     expect(row.style.transform).toContain("12px");
     cleanup();
@@ -371,7 +371,7 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // With container 200px and row height 40px, should see ~5 visible rows + overscan
     const rows = dom.content.querySelectorAll(".vlist-table-row");
@@ -387,11 +387,11 @@ describe("table - Render Functions", () => {
     plugin.setup!(ctx);
 
     // First render
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     const rowCount1 = dom.content.querySelectorAll(".vlist-table-row").length;
 
     // Second render with same state — should be a no-op (early exit)
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
     const rowCount2 = dom.content.querySelectorAll(".vlist-table-row").length;
 
     expect(rowCount2).toBe(rowCount1);
@@ -407,14 +407,14 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const firstRowBefore = dom.content.querySelector(".vlist-table-row[data-index='0']");
     expect(firstRowBefore).not.toBeNull();
 
     // Scroll down
     engineState.scrollPosition = 800; // 800 / 40 = row 20
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Rows around index 20 should exist
     const row20 = dom.content.querySelector(".vlist-table-row[data-index='20']");
@@ -428,10 +428,10 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Force render should work even though nothing changed
-    ctx.forceRender();
+    ctx.render.force();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
@@ -444,7 +444,7 @@ describe("table - Render Functions", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBe(0);
@@ -459,7 +459,7 @@ describe("table - Render Functions", () => {
     plugin.setup!(ctx);
 
     // Should not throw — graceful handling is the requirement
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     cleanup();
   });
@@ -480,7 +480,7 @@ describe("table - Engine State", () => {
     expect(engineState.prevRangeStart).toBe(0);
     expect(engineState.prevRangeEnd).toBe(-1);
 
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     expect(engineState.prevRangeStart).toBeGreaterThanOrEqual(0);
     expect(engineState.prevRangeEnd).toBeGreaterThanOrEqual(0);
@@ -496,7 +496,7 @@ describe("table - Engine State", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // engineState.scrollPosition was set to 160 before render
     expect(engineState.scrollPosition).toBe(160);
@@ -512,7 +512,7 @@ describe("table - Engine State", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Render range should extend by overscan beyond visible range
     // visStart at scroll=200, rowHeight=40 → index 5
@@ -738,7 +738,7 @@ describe("table - Public Methods", () => {
     engineState.containerSize = 600;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const updateColumns = methods.get("updateColumns") as (cols: TableColumn<TestItem>[]) => void;
     const newColumns: TableColumn<TestItem>[] = [
@@ -881,7 +881,7 @@ describe("table - Configuration", () => {
 
     // Should not throw
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     expect(rows.length).toBeGreaterThan(0);
@@ -1064,7 +1064,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 120; // ~3 visible rows
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Should have rendered rows with cells
     const rows = dom.content.querySelectorAll(".vlist-table-row");
@@ -1090,7 +1090,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const rows = dom.content.querySelectorAll(".vlist-table-row");
     // With 200px container and 40px rows = 5 visible + 2 overscan each side ≈ 9
@@ -1107,7 +1107,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 200;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Verify 3 cells per row initially
     let firstRow = dom.content.querySelector(".vlist-table-row")!;
@@ -1146,11 +1146,11 @@ describe("table - Integration", () => {
 
     // Simulate selection plugin registering methods
     const selectedIds = new Set<string | number>([0, 2]);
-    ctx.registerMethod("_getSelectedIds", () => selectedIds);
-    ctx.registerMethod("_getFocusedIndex", () => 0);
+    ctx.hooks.method("_getSelectedIds", () => selectedIds);
+    ctx.hooks.method("_getFocusedIndex", () => 0);
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     // Row 0 should be selected and focused
     const row0 = dom.content.querySelector(".vlist-table-row[data-index='0']") as HTMLElement;
@@ -1285,7 +1285,7 @@ describe("table - Integration", () => {
     engineState.containerSize = 600;
 
     plugin.setup!(ctx);
-    ctx.renderIfNeeded();
+    ctx.render.ifNeeded();
 
     const updateForGroups = methods.get("_updateTableForGroups") as Function;
     expect(updateForGroups).toBeDefined();
@@ -1322,5 +1322,91 @@ describe("table - Integration", () => {
     expect(() => replaceRenderer(mockRenderer)).not.toThrow();
 
     cleanup();
+  });
+});
+
+describe('table — physical cross-axis keyboard navigation', () => {
+  for (const rtl of [false, true]) it(`${rtl ? 'RTL' : 'LTR'} column keys reach both edges with native offsets`, () => {
+    const t = createTableMockContext({ containerWidth: 300 });
+    t.dom.root.dir = rtl ? 'rtl' : 'ltr';
+    // Happy DOM omits the browser UA rule mapping dir to inherited direction.
+    t.dom.root.style.direction = t.dom.root.dir;
+    let raw = 0;
+    Object.defineProperty(t.dom.viewport, 'scrollLeft', {
+      configurable: true, get: () => raw,
+      set: (value: number) => { raw = rtl ? Math.max(-300, Math.min(0, value)) : Math.max(0, Math.min(300, value)); },
+    });
+    const plugin = table({ columns: testColumns, rowHeight: 40 });
+    try {
+      plugin.setup!(t.ctx);
+      const sequence: [string, number][] = rtl
+        ? [['ArrowLeft', -100], ['ArrowLeft', -300], ['ArrowRight', -100], ['ArrowRight', 0]]
+        : [['ArrowRight', 200], ['ArrowRight', 300], ['ArrowLeft', 200], ['ArrowLeft', 0]];
+      for (const [key, expected] of sequence) {
+        const event = new KeyboardEvent('keydown', { key, cancelable: true });
+        for (const handler of t.keydownHandlers) handler(event);
+        expect(raw).toBe(expected);
+        expect(event.defaultPrevented).toBe(true);
+      }
+      expect(t.engineState.scrollPosition).toBe(0);
+    } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
+  });
+
+  /** A table in a 300px viewport whose horizontal scroll is a plain number. */
+  function scrollableTable(columns: TableColumn<TestItem>[], maxScroll: number) {
+    const t = createTableMockContext({ containerWidth: 300 });
+    let raw = 0;
+    Object.defineProperty(t.dom.viewport, 'scrollLeft', {
+      configurable: true, get: () => raw,
+      set: (value: number) => { raw = Math.max(0, Math.min(maxScroll, value)); },
+    });
+    table({ columns, rowHeight: 40 }).setup!(t.ctx);
+    const press = (key: string): boolean => {
+      const event = new KeyboardEvent('keydown', { key, cancelable: true });
+      for (const handler of t.keydownHandlers) handler(event);
+      return event.defaultPrevented;
+    };
+    const done = (): void => { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); };
+    return { press, done, scrollLeft: () => raw, scrollTo: (value: number) => { raw = value; } };
+  }
+
+  it('ArrowRight past the last column edge is left to the page instead of being swallowed', () => {
+    // The last column (offset 500) is wider than the viewport, so the table can
+    // scroll beyond its left edge: from there no column starts further right.
+    const wide: TableColumn<TestItem>[] = [
+      { key: 'name', label: 'Name', width: 200 },
+      { key: 'email', label: 'Email', width: 300 },
+      { key: 'role', label: 'Role', width: 400 },
+    ];
+    const t = scrollableTable(wide, 600);
+    try {
+      expect(t.press('ArrowRight')).toBe(true);
+      expect(t.press('ArrowRight')).toBe(true);
+      expect(t.scrollLeft()).toBe(500);
+      t.scrollTo(600);
+
+      expect(t.press('ArrowRight')).toBe(false);
+      expect(t.scrollLeft()).toBe(600);
+
+      // And ArrowLeft from there comes back to the column it was inside.
+      expect(t.press('ArrowLeft')).toBe(true);
+      expect(t.scrollLeft()).toBe(500);
+    } finally { t.done(); }
+  });
+
+  it('ArrowLeft clears a sub-pixel leftover so the first column sits flush', () => {
+    const t = scrollableTable(testColumns, 300);
+    try {
+      // A trackpad or a zoomed page can leave the viewport half a pixel in:
+      // no column starts left of that, yet the table is not at its start.
+      t.scrollTo(0.5);
+
+      expect(t.press('ArrowLeft')).toBe(true);
+      expect(t.scrollLeft()).toBe(0);
+
+      // At the true start there is nothing left to do, and the key is not claimed.
+      expect(t.press('ArrowLeft')).toBe(false);
+      expect(t.scrollLeft()).toBe(0);
+    } finally { t.done(); }
   });
 });

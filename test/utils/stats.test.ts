@@ -5,7 +5,6 @@
 
 import { describe, it, expect, beforeEach } from "bun:test";
 import { createStats, type Stats, type StatsConfig } from "../../src/utils/stats";
-import { MAX_VIRTUAL_SIZE } from "../../src/constants";
 
 // =============================================================================
 // Helpers
@@ -179,7 +178,7 @@ describe("getItemCount — basic geometry", () => {
   });
 
   it("should count items when scrolled partially", () => {
-    // scrollPosition=100 → actualOffset=100 (no compression for small list)
+    // scrollPosition=100 is already the logical offset
     // ceil((100 + 500) / 50) = ceil(12) = 12
     const stats = createStats(
       makeConfig({
@@ -238,67 +237,26 @@ describe("getItemCount — basic geometry", () => {
 });
 
 // =============================================================================
-// getItemCount — virtual size compression
+// getItemCount — large logical ranges
 // =============================================================================
 
-describe("getItemCount — virtual size compression", () => {
-  it("should apply scroll-range ratio for large lists", () => {
-    // 1_000_000 items × 50px = 50_000_000px totalActual
-    // totalVirtual = min(50_000_000, 16_000_000) = 16_000_000
-    // maxVirtualScroll = 16_000_000 - 500 = 15_999_500
-    // maxActualScroll = 50_000_000 - 500 = 49_999_500
-    // ratio = 49_999_500 / 15_999_500 ≈ 3.125
-    // At scrollPosition=0 → actualOffset=0 → ceil(500/50) = 10
-    const stats = createStats(
-      makeConfig({
-        getScrollPosition: () => 0,
-        getTotal: () => 1_000_000,
-        getItemSize: () => 50,
-        getContainerSize: () => 500,
-      })
-    );
-
+describe("getItemCount — large logical ranges", () => {
+  it("counts only the initial viewport in a million-row list", () => {
+    const stats=createStats(makeConfig({getTotal:()=>1000000}));
     expect(stats.getState().itemCount).toBe(10);
   });
-
-  it("should map max virtual scroll to last items", () => {
-    // At maxVirtualScroll, actualOffset = maxActualScroll
-    // → last visible row = ceil((maxActualScroll + containerSize) / itemSize)
-    //   = ceil(totalActualSize / itemSize) = totalRows → total items
-    const total = 1_000_000;
-    const itemSize = 50;
-    const containerSize = 500;
-    const totalRows = Math.ceil(total / 1);
-    const totalActualSize = totalRows * itemSize;
-    const totalVirtualSize = Math.min(totalActualSize, MAX_VIRTUAL_SIZE);
-    const maxVirtualScroll = totalVirtualSize - containerSize;
-
-    const stats = createStats(
-      makeConfig({
-        getScrollPosition: () => maxVirtualScroll,
-        getTotal: () => total,
-        getItemSize: () => itemSize,
-        getContainerSize: () => containerSize,
-      })
-    );
-
-    expect(stats.getState().itemCount).toBe(total);
+  it("reaches the last item at the real maximum", () => {
+    const stats=createStats(makeConfig({getTotal:()=>1000000,getScrollPosition:()=>50000000-500}));
+    expect(stats.getState().itemCount).toBe(1000000);
   });
-
-  it("should not compress when totalActualSize <= MAX_VIRTUAL_SIZE", () => {
-    // 100 items × 50px = 5000px < 16_000_000 → no compression, ratio = 1
-    const stats = createStats(
-      makeConfig({
-        getScrollPosition: () => 200,
-        getTotal: () => 100,
-        getItemSize: () => 50,
-        getContainerSize: () => 500,
-      })
-    );
-
-    // actualOffset = 200 * 1 = 200
-    // ceil((200 + 500) / 50) = ceil(14) = 14
+  it("uses the same direct mapping for small lists", () => {
+    const stats=createStats(makeConfig({getScrollPosition:()=>200}));
     expect(stats.getState().itemCount).toBe(14);
+  });
+  it("keeps large-grid progress in logical coordinates", () => {
+    const stats=createStats(makeConfig({getTotal:()=>2000000,getColumns:()=>2,getItemSize:()=>48,getContainerSize:()=>480,getScrollPosition:()=>23999760}));
+    expect(stats.getState().itemCount).toBe(1000010);
+    expect(stats.getState().progress).toBeCloseTo(50.0005,6);
   });
 });
 
@@ -356,7 +314,6 @@ describe("getItemCount — grid / columns", () => {
   it("should handle scrolled grid", () => {
     // 1000 items, 5 columns → 200 rows
     // totalActualSize = 200 * 40 = 8000
-    // no compression (8000 < MAX_VIRTUAL_SIZE), ratio = 1
     // scrollPosition=200 → actualOffset=200
     // visibleRows = ceil((200 + 600) / 40) = ceil(20) = 20
     // itemCount = min(20 * 5, 1000) = 100
@@ -494,12 +451,11 @@ describe("getState — full snapshot", () => {
 });
 
 // =============================================================================
-// Ratio edge case — maxVirtualScroll = 0
+// Content shorter than the viewport
 // =============================================================================
 
-describe("ratio edge case", () => {
-  it("should use ratio=1 when maxVirtualScroll is 0", () => {
-    // totalActualSize <= containerSize → maxVirtualScroll <= 0
+describe("content shorter than the viewport", () => {
+  it("counts every item when no scrolling is possible", () => {
     // 2 items × 50px = 100 < containerSize 500
     const stats = createStats(
       makeConfig({
@@ -510,7 +466,7 @@ describe("ratio edge case", () => {
       })
     );
 
-    // ratio=1, actualOffset=0, ceil((0+500)/50)=10, min(10,2)=2
+    // ceil(500/50)=10 visible rows, capped at the two actual items.
     expect(stats.getState().itemCount).toBe(2);
   });
 });

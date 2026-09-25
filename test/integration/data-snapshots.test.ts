@@ -1,3 +1,5 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -8,7 +10,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
@@ -27,19 +28,12 @@ function waitForLoad(list: VList<TestItem>): Promise<void> {
   });
 }
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -54,20 +48,11 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 function createMockAdapter(total: number = 100): VListAdapter<TestItem> {
   return {
@@ -165,7 +150,9 @@ describe("async + snapshots integration", () => {
 
       await waitForLoad(list);
 
-      (list as any)._saveSnapshot();
+      // The plugin saves on unload, and on debounced scroll, selection and focus
+      // changes; _saveSnapshot is internal and no longer on the instance.
+      window.dispatchEvent(new Event("beforeunload"));
       const stored = sessionStorage.getItem(storageKey);
       expect(stored).not.toBeNull();
     });
@@ -181,7 +168,7 @@ describe("async + snapshots integration", () => {
       );
 
       await waitForLoad(list1);
-      (list1 as any)._saveSnapshot();
+      window.dispatchEvent(new Event("beforeunload")); // writes the snapshot
       list1.destroy();
       container1.remove();
 

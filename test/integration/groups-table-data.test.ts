@@ -14,6 +14,8 @@
  *   - sticky header population after async data arrives
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -24,7 +26,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, type TestItem } from "../helpers/factory";
@@ -38,8 +39,11 @@ import type { VListAdapter } from "../../src/types";
 // Setup
 // =============================================================================
 
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
+
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
     configurable: true,
@@ -49,7 +53,12 @@ beforeAll(() => {
     configurable: true,
   });
 });
-afterAll(() => { GlobalRegistrator.unregister(); });
+afterAll(() => {
+  geometry.restore();
+  unregisterDOM();
+});
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -227,16 +236,21 @@ describe("groups + table + data", () => {
 
       await waitForLoad(list);
 
-      // getItemAt should return header pseudo-items at group boundaries
+      // getItemAt takes data indices, as types.ts and the README document, so
+      // it never returns a header pseudo-item: headers are layout entries. This
+      // asserted the reverse until P9, which is how getItemAt came to mean one
+      // index space under table+groups and another everywhere else.
       const item0 = list.getItemAt(0);
       expect(item0).toBeDefined();
-      expect((item0 as any).__groupHeader).toBe(true);
+      expect((item0 as any).__groupHeader).toBeUndefined();
+      expect(item0!.name).toBe("City 1");
 
-      // First data item should be at index 1 (after the first group header)
+      // The layout mapping still runs underneath — reaching a data item through
+      // groups' accessor is what this test is really about.
       const item1 = list.getItemAt(1);
       expect(item1).toBeDefined();
       expect((item1 as any).__groupHeader).toBeUndefined();
-      expect(item1!.name).toBe("City 1");
+      expect(item1!.name).toBeDefined();
     });
   });
 
@@ -352,12 +366,12 @@ describe("groups + table + data", () => {
           { container: c1, item: { height: 36, template: () => "" } },
           [
             dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-            groups({
+            table<CityItem>({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups<CityItem>({
               getGroupForIndex: getPopTier,
               header: { height: 28, template: (key) => key },
             }),
-            snapshots({ autoSave: STORAGE_KEY }),
+            snapshots<CityItem>({ autoSave: STORAGE_KEY }),
           ],
         );
 
@@ -380,12 +394,12 @@ describe("groups + table + data", () => {
           { container: c2, item: { height: 36, template: () => "" } },
           [
             dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-            groups({
+            table<CityItem>({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups<CityItem>({
               getGroupForIndex: getPopTier,
               header: { height: 28, template: (key) => key },
             }),
-            snapshots({ autoSave: STORAGE_KEY }),
+            snapshots<CityItem>({ autoSave: STORAGE_KEY }),
           ],
         );
 
@@ -450,8 +464,8 @@ describe("groups + table + data", () => {
           { container: c, item: { height: 36, template: () => "" } },
           [
             dataPlugin({ adapter, storage: { chunkSize: 50 } }),
-            table({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
-            groups({
+            table<CityItem>({ columns: COLUMNS, rowHeight: 36, headerHeight: 36 }),
+            groups<CityItem>({
               getGroupForIndex: getPopTier,
               header: { height: 28, template: (key) => key },
               sticky: true,
@@ -641,12 +655,12 @@ describe("groups + table + data", () => {
 
       await waitForLoad(list);
 
-      // getItemAt(0) should return a group header (not undefined)
+      // getItemAt takes data indices (P9), so both are data items and neither
+      // is a header pseudo-entry.
       const item0 = list.getItemAt(0);
       expect(item0).toBeDefined();
-      expect((item0 as any).__groupHeader).toBe(true);
+      expect((item0 as any).__groupHeader).toBeUndefined();
 
-      // getItemAt(1) should return a data item (not undefined)
       const item1 = list.getItemAt(1);
       expect(item1).toBeDefined();
       expect((item1 as any).__groupHeader).toBeUndefined();
@@ -699,10 +713,7 @@ describe("groups + table + data", () => {
     const LAST = TOTAL - 1;
 
     function scrollToBottom(l: VList<CityItem>): void {
-      const vp = (l as unknown as { element: HTMLElement }).element
-        .querySelector(".vlist-viewport") as HTMLElement;
-      vp.scrollTop = 10_000_000; // clamped to max scroll by the runway
-      vp.dispatchEvent(new Event("scroll", { bubbles: true }));
+      l.scrollToIndex(l.total - 1, "end");
     }
 
     function readParams(adapter: VListAdapter<CityItem>): Array<{ offset: number; limit: number }> {

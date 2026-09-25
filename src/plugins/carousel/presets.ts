@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Carousel Presets
+ * vlist — Carousel Presets
  *
  * Registry-based preset system. Each preset is a `SlotConfigResolver`
  * registered by name. Built-in presets are pre-registered; users can

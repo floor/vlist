@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Size Cache
+ * vlist — Size Cache
  *
  * Float64Array prefix sums with O(1) offset lookups and O(log n) binary search.
  */

@@ -1,15 +1,17 @@
 /**
- * vlist v2 — Boundary Conditions & Edge Case Tests
+ * vlist — Boundary Conditions & Edge Case Tests
  *
  * Adapted from v1 builder/boundary.test.ts and builder/recovery.test.ts.
  * Tests extreme dimensions, zero-size containers, single items,
  * data transitions, ResizeObserver errors, and timer/listener cleanup.
  */
 
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
+import { createVList as createNative } from "../../src/native";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 
@@ -17,21 +19,21 @@ import type { VList } from "../../src/core/types";
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 400, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -120,7 +122,7 @@ describe("boundary — extreme item dimensions", () => {
 
     const viewport = getViewport(container);
     list.scrollToIndex(5000, "start");
-    expect(viewport.scrollTop).toBe(5000);
+    expect(list!.getScrollPosition()).toBe(5000);
   });
 
   it("scrollToIndex works with very large items", () => {
@@ -132,7 +134,7 @@ describe("boundary — extreme item dimensions", () => {
     const viewport = getViewport(container);
     list.scrollToIndex(5, "start");
     // offset = 5 * 10000 = 50000, but maxScroll = 100000 - 400 = 99600
-    expect(viewport.scrollTop).toBe(50000);
+    expect(list!.getScrollPosition()).toBe(50000);
   });
 });
 
@@ -428,7 +430,7 @@ describe("boundary — timer & listener cleanup", () => {
   });
 
   it("scroll events stop after destroy", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate } },
       [],
     );

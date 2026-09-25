@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Grid Plugin
+ * vlist — Grid Plugin
  *
  * Switches from list layout to a 2D grid with configurable columns and gap.
  * Priority 10 — runs before selection (50) so layout is ready for other plugins.
@@ -12,6 +12,10 @@
  *
  * Restrictions:
  * - Cannot be combined with masonry or table plugins
+ * - Cannot be combined with autosize: it measures items, while this size cache
+ *   is indexed by row. A row's height is a question about the row's cells, and
+ *   answering it belongs to whichever plugin owns the layout. Give grid lists a
+ *   fixed `item.height` (or `item.width` when horizontal).
  */
 
 import type { VListItem, ItemTemplate, ItemState } from "../../types";
@@ -19,6 +23,8 @@ import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
 import { createGridLayout } from "./layout";
+import { rowContentWritten } from "../../core/dom";
+import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
 import type { GridLayout } from "./types";
 type ItemStateFn = (index: number, state: ItemState) => void;
 
@@ -41,9 +47,17 @@ const itemState: ItemState = { selected: false, focused: false };
 // Factory
 // =============================================================================
 
+/** Methods the grid plugin adds to the list instance. */
+export interface GridMethods {
+  /** The current grid layout. */
+  getGridLayout(): GridLayout;
+  /** Change columns, gap or aspect ratio at runtime. */
+  updateGrid(config: Partial<GridPluginConfig>): void;
+}
+
 export function grid<T extends VListItem = VListItem>(
   config: GridPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, GridMethods> {
   if (!config.columns || config.columns < 1) {
     throw new Error("[vlist] grid: columns must be >= 1");
   }
@@ -51,8 +65,13 @@ export function grid<T extends VListItem = VListItem>(
   let layout: GridLayout;
   let sizeCache: SizeCache;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
+  let lastOrigin = 0;
   let pool: ElementPool;
   let storedCtx: PluginContext<T> | null = null;
+  /** null until the render path resolves it; a11y() or selection() may enable it. */
+  let interactive: boolean | null = null;
+  let lastAriaTotal = -1;
   let contentElement: HTMLElement;
   let template: ItemTemplate<T>;
   let getItem: (index: number) => T | undefined;
@@ -88,7 +107,9 @@ export function grid<T extends VListItem = VListItem>(
   let lastContainerSize = -1;
   let lastContentTotalSize = -1;
   let forceNextRender = true;
-  let rebuildAsRows: (rowCount: number) => void = (n) => sizeCache.rebuild(n);
+  let rebuildAsRows: (rowCount: number) => void;
+  // The resize hook is outside setup, so it cannot see the spec captured there.
+  let heightIsFunction = false;
 
   // Recompute the cached column width — call on resize/config change.
   function recomputeColumnWidth(): void {
@@ -104,17 +125,29 @@ export function grid<T extends VListItem = VListItem>(
     isf = resolveItemState?.() ?? null;
   }
 
+  // Listbox semantics, resolved on the same schedule and for the same reason:
+  // grid sets up at priority 10, before a11y (55) and selection (50), so this
+  // cannot be read during setup.
+  //
+  // Both a11y() and selection() call ctx.dom.enableListbox(), which marks the
+  // content element, and core renders role="option" with aria-posinset and
+  // aria-setsize for either. Reading that marker keeps an a11y()-only list
+  // right; `_getSelectedIds` is only published by selection().
+  function resolveInteractive(): void {
+    if (interactive !== null || storedCtx === null) return;
+    interactive = storedCtx.dom.content.getAttribute("role") === "listbox";
+  }
+
   function getRowCount(): number {
     return layout.getTotalRows(engineState.totalItems);
   }
 
-  function buildTransform(itemIndex: number): string {
+  function buildTransform(itemIndex: number, origin: number): string {
     const row = (itemIndex / columns) | 0;
     const col = itemIndex - row * columns;
     const x = col * (columnWidth + gap) + crossPadStart;
-    // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-    // bounded runway. baseOffset is 0 in native mode (byte-identical).
-    const y = sizeCache.getOffset(row) - engineState.baseOffset + mainPadStart;
+    // Map logical item offsets into content coordinates using the adapter origin.
+    const y = sizeCache.getOffset(row) - origin + mainPadStart;
     if (isX) {
       return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
     }
@@ -142,15 +175,17 @@ export function grid<T extends VListItem = VListItem>(
       el.innerHTML = "";
       el.appendChild(result);
     }
+    rowContentWritten(el);
   }
 
   function gridRenderIfNeeded(): void {
     if (engineState.destroyed) return;
 
-    const scrollPos = engineState.scrollPosition;
+    const origin = scroll.getRenderOrigin();
+    const scrollPos = scroll.getPixelEquivalent();
     const cs = engineState.containerSize;
 
-    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize) {
+    if (!forceNextRender && scrollPos === lastScrollPosition && cs === lastContainerSize && origin === lastOrigin) {
       return;
     }
     lastScrollPosition = scrollPos;
@@ -162,6 +197,7 @@ export function grid<T extends VListItem = VListItem>(
 
     // Visible row range
     resolveItemStateFn();
+    resolveInteractive();
     let visStart = sizeCache.indexAtOffset(scrollPos);
     let visEnd = sizeCache.indexAtOffset(scrollPos + cs);
     if (visEnd < totalRows - 1) visEnd++;
@@ -170,10 +206,9 @@ export function grid<T extends VListItem = VListItem>(
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalRows - 1, visEnd + overscan);
 
-    // Range-unchanged fast path. Item transforms subtract baseOffset, so a
-    // logical provider that moves baseOffset without changing the range must
-    // still commit (see core pipeline, issue 025). Native keeps baseOffset at 0.
-    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && engineState.baseOffset === engineState.prevBaseOffset) {
+    // An origin move must still commit even when the range stays unchanged
+    // (issue 025). The renderer owns the origin of its last committed frame.
+    if (renderStart === engineState.prevRangeStart && renderEnd === engineState.prevRangeEnd && !engineState.renderPending && origin === lastOrigin) {
       return;
     }
 
@@ -189,6 +224,15 @@ export function grid<T extends VListItem = VListItem>(
         pool.release(tracked.el);
         rendered.delete(idx);
       }
+    }
+
+    // aria-setsize is the same for every row, so it only needs rewriting when
+    // the total moves — appending items must not leave the rendered rows
+    // announcing the old count.
+    if (interactive && engineState.totalItems !== lastAriaTotal) {
+      lastAriaTotal = engineState.totalItems;
+      const setSize = String(engineState.totalItems);
+      for (const [, tracked] of rendered) tracked.el.setAttribute("aria-setsize", setSize);
     }
 
     for (let i = rangeStart; i <= rangeEnd; i++) {
@@ -207,6 +251,15 @@ export function grid<T extends VListItem = VListItem>(
         el.className = gridItemClass;
         el.setAttribute("data-index", String(i));
         el.setAttribute("data-id", String(item.id));
+        // Core sets role on every item and the position attributes only for an
+        // interactive list. Grid replaces the render pipeline, so none of that
+        // reached a grid row: they carried no role at all.
+        el.setAttribute("role", interactive ? "option" : "listitem");
+        if (interactive) {
+          el.id = `${classPrefix}-item-${i}`;
+          el.setAttribute("aria-posinset", String(i + 1));
+          el.setAttribute("aria-setsize", String(engineState.totalItems));
+        }
         applyTemplate(el, item, i);
         tracked = { el, lastItem: item };
         rendered.set(i, tracked);
@@ -231,9 +284,8 @@ export function grid<T extends VListItem = VListItem>(
       applySizeStyles(tracked.el, row);
 
       const x = col * (columnWidth + gap) + crossPadStart;
-      // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-      // bounded runway. baseOffset is 0 in native mode (byte-identical).
-      const y = sizeCache.getOffset(row) - engineState.baseOffset + mainPadStart;
+      // Map logical item offsets into content coordinates using the adapter origin.
+      const y = sizeCache.getOffset(row) - origin + mainPadStart;
       tracked.el.style.transform = isX
         ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
         : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
@@ -246,13 +298,13 @@ export function grid<T extends VListItem = VListItem>(
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {
       lastContentTotalSize = totalSize;
-      storedCtx?.updateContentSize(totalSize);
+      storedCtx?.render.contentSize(totalSize);
     }
 
     // Update engine state for other hooks/plugins
     engineState.prevRangeStart = renderStart;
     engineState.prevRangeEnd = renderEnd;
-    engineState.prevBaseOffset = engineState.baseOffset;
+    lastOrigin = origin;
     engineState.renderPending = false;
 
     // Fill EngineState buffers for plugins that read them
@@ -282,14 +334,23 @@ export function grid<T extends VListItem = VListItem>(
   return {
     name: "grid",
     priority: 10,
-    conflicts: ["masonry", "table"],
+    // autosize measures individual items; this plugin's size cache is indexed
+    // by row. With a numeric estimate and no gap the two combine silently and
+    // wrongly: the cache is rebuilt in row space while autosize's item-space
+    // size function stays installed, so row n takes item n's measurement —
+    // twenty items in two columns, two cells measured at 200, came to 800px
+    // where 650px is right. With a gap or a function spec the measurements are
+    // dropped instead. A row's height is a question about the row's cells, and
+    // answering it belongs to whichever plugin owns the layout.
+    conflicts: ["masonry", "table", "autosize"],
 
     setup(ctx: PluginContext<T>): void {
+      scroll = ctx.scroll;
       columns = Math.max(1, Math.floor(config.columns));
       gap = config.gap ?? 0;
 
       layout = createGridLayout({ columns: config.columns, gap });
-      sizeCache = ctx.sizeCache;
+      sizeCache = ctx.sizes.cache;
       engineState = ctx.getState();
       pool = ctx.pool;
       storedCtx = ctx;
@@ -298,8 +359,8 @@ export function grid<T extends VListItem = VListItem>(
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
-      getItem = ctx.getItem.bind(ctx);
-      resolveItemState = () => ctx.getItemStateFn();
+      getItem = ctx.items.at.bind(ctx);
+      resolveItemState = () => ctx.render.getStateFn();
 
       // Hoist class strings — built once, reused every frame
       gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
@@ -318,21 +379,35 @@ export function grid<T extends VListItem = VListItem>(
 
       // Size cache in ROW space: each row = itemHeight + gap
       // Inject grid context into dynamic height functions
-      const rawSpec = ctx.rawSizeSpec;
+      const rawSpec = ctx.sizes.rawSpec;
       let baseRowSize: number;
+      heightIsFunction = typeof rawSpec === "function";
+      // The resize hook reads `heightIsFunction`, but the branch below tests
+      // `typeof rawSpec` directly rather than the boolean: TypeScript narrows
+      // `rawSpec` on the typeof test and not through a mutable variable, and
+      // without the narrowing the `else` branch cannot assign it to a number.
+      // setConfig builds one slot per item before the cache is shrunk to the
+      // row count. Row i stands for item i × columns, which runs past the
+      // data. A height function that reads its item throws there, and a
+      // throw in setup leaves the list with no grid.
+      function rowHeightFrom(rowIndex: number, cols: number, rowGap: number, gridCtx: { columnWidth: number; columns: number; gap: number }): number {
+        const firstItem = rowIndex * cols;
+        if (firstItem >= engineState.totalItems) return baseRowSize + rowGap;
+        return (rawSpec as Function)(firstItem, gridCtx) + rowGap;
+      }
+
       if (typeof rawSpec === "function") {
         const colWidth = layout.getColumnWidth(containerWidth);
         const gridCtx = { columnWidth: colWidth, columns: config.columns, gap };
-        baseRowSize = (rawSpec as Function)(0, gridCtx);
-        ctx.setSizeConfig((rowIndex: number): number => {
+        baseRowSize = engineState.totalItems > 0 ? rawSpec(0, gridCtx) : 0;
+        ctx.sizes.setConfig((rowIndex: number): number => {
           gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
-          const firstItem = rowIndex * config.columns;
-          return (rawSpec as Function)(firstItem, gridCtx) + gap;
-        });
+          return rowHeightFrom(rowIndex, config.columns, gap, gridCtx);
+        }, gap);
       } else {
         baseRowSize = rawSpec;
         if (gap > 0) {
-          ctx.setSizeConfig(baseRowSize + gap);
+          ctx.sizes.setConfig(baseRowSize + gap, gap);
         }
       }
 
@@ -356,7 +431,7 @@ export function grid<T extends VListItem = VListItem>(
         sizeCache.rebuild = currentHook;
       }
 
-      ctx.registerMethod("_setSizeCacheBase", (fn: (n: number) => void): void => {
+      ctx.hooks.method("_setSizeCacheBase", (fn: (n: number) => void): void => {
         baseRebuild = fn;
         rebuildAsRows = (rowCount: number): void => baseRebuild(rowCount);
       });
@@ -364,31 +439,30 @@ export function grid<T extends VListItem = VListItem>(
       installRebuildHook();
       rebuildAsRows(getRowCount());
 
-      // Fix trailing gap: last row's cached size includes gap that
-      // shouldn't add empty space at the bottom.
-      if (gap > 0) {
-        const origGetTotalSize = sizeCache.getTotalSize;
-        sizeCache.getTotalSize = (): number => {
-          const t = origGetTotalSize();
-          return t > 0 ? t - gap : 0;
-        };
-      }
-
-      // Virtual total = row count (not item count)
-      ctx.setVirtualTotalFn(() => getRowCount());
+      // The engine renders rows, so engineState.totalItems stays the row-space
+      // count that the size cache and the range math use. The public total is a
+      // different question — how many items a consumer has — and it is the item
+      // count. groups() and carousel() already publish it this way; grid was
+      // reporting 34 for a hundred items in three columns, while getItemAt(99)
+      // returned item 100 and items.length was 100.
+      ctx.items.setTotalFn(() => engineState.totalItems);
+      // Plugins ask through _getTotal rather than the public getter: selection,
+      // snapshots and the aria resolvers all read it. groups() and carousel()
+      // publish it; grid never did, so consumers fell back to the row count.
+      ctx.hooks.method("_getTotal", (): number => engineState.totalItems);
 
       // Add CSS class
       ctx.dom.root.classList.add(`${classPrefix}--grid`);
 
       // Replace render pipeline
-      ctx.setRenderFn(gridRenderIfNeeded, gridForceRender);
+      ctx.render.setFn(gridRenderIfNeeded, gridForceRender);
 
       // ── Public methods ─────────────────────────────────────────
 
-      ctx.registerMethod("getGridLayout", () => layout);
-      ctx.registerMethod("_getRowGap", () => layout.gap);
+      ctx.hooks.method("getGridLayout", () => layout);
+      ctx.hooks.method("_getRowGap", () => layout.gap);
 
-      ctx.registerMethod("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
+      ctx.hooks.method("updateGrid", (newConfig: Partial<GridPluginConfig>) => {
         if (newConfig.columns !== undefined) {
           if (!Number.isInteger(newConfig.columns) || newConfig.columns < 1) {
             throw new Error("[vlist] updateGrid: columns must be >= 1");
@@ -406,20 +480,19 @@ export function grid<T extends VListItem = VListItem>(
           const newGap = layout.gap;
           if (typeof rawSpec === "function") {
             const gridCtx = { columnWidth: layout.getColumnWidth(containerWidth), columns: layout.columns, gap: newGap };
-            ctx.setSizeConfig((rowIndex: number): number => {
+            ctx.sizes.setConfig((rowIndex: number): number => {
               gridCtx.columnWidth = layout.getColumnWidth(containerWidth);
-              const firstItem = rowIndex * layout.columns;
-              return (rawSpec as Function)(firstItem, gridCtx) + newGap;
-            });
+              return rowHeightFrom(rowIndex, layout.columns, newGap, gridCtx);
+            }, newGap);
           } else {
-            ctx.setSizeConfig(baseRowSize + newGap);
+            ctx.sizes.setConfig(baseRowSize + newGap, newGap);
           }
           installRebuildHook();
           rebuildAsRows(getRowCount());
         }
 
         if (newConfig.columns !== undefined) {
-          ctx.setNavConfig({ ud: layout.columns });
+          ctx.nav.set({ ud: layout.columns });
         }
 
         containerWidth = engineState.crossSize - crossPadTotal;
@@ -428,13 +501,19 @@ export function grid<T extends VListItem = VListItem>(
       });
 
       // Override scrollToIndex: item index → row index
-      ctx.registerMethod("scrollToIndex", (
+      // Core owns the public method: it holds a scroll requested before the
+      // total is known, clamps the index and resolves the options, then calls
+      // this hook. Returning false falls back to the core implementation.
+      ctx.scroll.setToIndexFn((
         index: number,
-        alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number } = "start",
-      ) => {
+        align: string,
+        behavior?: string,
+        duration?: number,
+        easing?: (t: number) => number,
+      ): void | false => {
         const rowIndex = layout.getRow(index);
         const totalRows = getRowCount();
-        if (totalRows === 0) return;
+        if (totalRows === 0) return false;
         const safeRow = Math.max(0, Math.min(rowIndex, totalRows - 1));
         const offset = sizeCache.getOffset(safeRow) + mainPadStart;
         const rowHeight = sizeCache.getSize(safeRow);
@@ -442,9 +521,6 @@ export function grid<T extends VListItem = VListItem>(
         const totalSize = sizeCache.getTotalSize() + mainPadTotal;
         const maxScroll = Math.max(0, totalSize - cs);
 
-        const align = typeof alignOrOptions === "string" ? alignOrOptions : (alignOrOptions.align ?? "start");
-        const behavior = typeof alignOrOptions === "object" ? alignOrOptions.behavior : undefined;
-        const duration = typeof alignOrOptions === "object" ? alignOrOptions.duration : undefined;
 
         let pos: number;
         switch (align) {
@@ -459,16 +535,12 @@ export function grid<T extends VListItem = VListItem>(
         }
         pos = Math.max(0, Math.min(pos, maxScroll));
 
-        if (behavior === "smooth" && duration && duration > 0) {
-          ctx.smoothScrollTo(pos, duration);
-        } else {
-          ctx.scrollTo(pos);
-        }
+        applyScrollBehavior(ctx.scroll, pos, behavior, duration, easing);
       });
 
       // ── 2D keyboard navigation ─────────────────────────────────
 
-      ctx.setNavConfig({
+      ctx.nav.set({
         total: () => engineState.totalItems,
         ud: config.columns,
         lr: 1,
@@ -477,11 +549,13 @@ export function grid<T extends VListItem = VListItem>(
 
       // ── Cleanup ────────────────────────────────────────────────
 
-      ctx.registerDestroyHandler(() => {
+      ctx.hooks.onDestroy(() => {
         for (const [, tracked] of rendered) {
           tracked.el.remove();
         }
         rendered.clear();
+        interactive = null;
+        lastAriaTotal = -1;
         ctx.dom.root.classList.remove(`${classPrefix}--grid`);
       });
     },
@@ -493,10 +567,19 @@ export function grid<T extends VListItem = VListItem>(
         containerWidth = newCross;
         recomputeColumnWidth();
 
+        // A height function reads columnWidth. Core has already rendered this
+        // resize against the previous row sizes, so rebuild and render again.
+        // Restyling the cells in place would leave them on the old pitch.
+        if (heightIsFunction) {
+          gridForceRender();
+          return;
+        }
+
+        const origin = scroll.getRenderOrigin();
         for (const [index, tracked] of rendered) {
           const row = (index / columns) | 0;
           applySizeStyles(tracked.el, row);
-          tracked.el.style.transform = buildTransform(index);
+          tracked.el.style.transform = buildTransform(index, origin);
         }
       },
     },

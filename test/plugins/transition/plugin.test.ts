@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { transition } from "../../../src/plugins/transition/plugin";
 import type { VListItem } from "../../../src/types";
@@ -8,7 +9,6 @@ import type { PluginContext } from "../../../src/core/types";
 // DOM + Web Animations API Mock
 // =============================================================================
 
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
 interface MockAnimation {
   finished: Promise<Animation>;
@@ -45,7 +45,7 @@ const createMockAnimation = (
 };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
 
   HTMLElement.prototype.animate = function (
     this: HTMLElement,
@@ -60,7 +60,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 // =============================================================================
@@ -138,32 +138,41 @@ function createMockContext(
   const ctx: PluginContext<TestItem> = {
     ...base.ctx,
 
-    forceRender: forceRenderMock,
+    render: { ...base.ctx.render, force: forceRenderMock },
 
-    removeItemById: (id: string | number): number => {
-      let index = testItems.findIndex((item) => item.id === id);
-      if (index < 0 && typeof id === "number") index = id;
-      if (index < 0 || index >= testItems.length) return -1;
-      testItems.splice(index, 1);
-      base.engineState.totalItems = testItems.length;
-      return index;
+    items: {
+      ...base.ctx.items,
+
+      removeById: (id: string | number): number => {
+        let index = testItems.findIndex((item) => item.id === id);
+        if (index < 0 && typeof id === "number") index = id;
+        if (index < 0 || index >= testItems.length) return -1;
+        testItems.splice(index, 1);
+        base.engineState.totalItems = testItems.length;
+        return index;
+      },
+
+      insertAt: (item: TestItem, index: number): void => {
+        testItems.splice(index, 0, item);
+        base.engineState.totalItems = testItems.length;
+      },
+
+      all: () => testItems,
     },
 
-    insertItemAt: (item: TestItem, index: number): void => {
-      testItems.splice(index, 0, item);
-      base.engineState.totalItems = testItems.length;
+    dom: {
+      ...base.ctx.dom,
+
+      renderedElement: (index: number): HTMLElement | null => {
+        const children = base.dom.content.children;
+        for (let i = 0; i < children.length; i++) {
+          const el = children[i] as HTMLElement;
+          if (el.dataset.index === String(index)) return el;
+        }
+        return null;
+      },
     },
 
-    getRenderedElement: (index: number): HTMLElement | null => {
-      const children = base.dom.content.children;
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        if (el.dataset.index === String(index)) return el;
-      }
-      return null;
-    },
-
-    getItems: () => testItems,
     getState: () => base.engineState,
   };
 
@@ -203,7 +212,7 @@ const flushMicrotasks = (): Promise<void> =>
 
 describe("withTransition — Config", () => {
   it("uses default duration and easing when no config provided", () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     expect(plugin.name).toBe("transition");
     const { ctx, methods } = createMockContext();
     plugin.setup!(ctx);
@@ -212,7 +221,7 @@ describe("withTransition — Config", () => {
   });
 
   it("accepts custom duration and easing", () => {
-    const plugin = transition({
+    const plugin = transition<TestItem>({
       duration: 400,
       easing: "ease-in-out",
     });
@@ -223,7 +232,7 @@ describe("withTransition — Config", () => {
   });
 
   it("disables remove animation when remove: false", () => {
-    const plugin = transition({ remove: false });
+    const plugin = transition<TestItem>({ remove: false });
     const { ctx, methods } = createMockContext();
     plugin.setup!(ctx);
     expect(methods.has("removeItem")).toBe(false);
@@ -231,7 +240,7 @@ describe("withTransition — Config", () => {
   });
 
   it("disables insert animation when insert: false", () => {
-    const plugin = transition({ insert: false });
+    const plugin = transition<TestItem>({ insert: false });
     const { ctx, methods } = createMockContext();
     plugin.setup!(ctx);
     expect(methods.has("removeItem")).toBe(true);
@@ -239,7 +248,7 @@ describe("withTransition — Config", () => {
   });
 
   it("disables both when both set to false", () => {
-    const plugin = transition({ insert: false, remove: false });
+    const plugin = transition<TestItem>({ insert: false, remove: false });
     const { ctx, methods } = createMockContext();
     plugin.setup!(ctx);
     expect(methods.has("removeItem")).toBe(false);
@@ -247,7 +256,7 @@ describe("withTransition — Config", () => {
   });
 
   it("applies per-animation timing overrides", () => {
-    const plugin = transition({
+    const plugin = transition<TestItem>({
       duration: 300,
       insert: { duration: 100 },
       remove: { easing: "linear" },
@@ -273,7 +282,7 @@ describe("withTransition — Metadata", () => {
   });
 
   it("conflicts with grid, table, and masonry", () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     expect(plugin.conflicts).toContain("grid");
     expect(plugin.conflicts).toContain("table");
     expect(plugin.conflicts).toContain("masonry");
@@ -294,10 +303,10 @@ describe("withTransition — Setup", () => {
     const baseRemove = mock((_id: string | number): boolean => true);
 
     const { ctx, methods } = createMockContext();
-    ctx.registerMethod("insertItem", baseInsert);
-    ctx.registerMethod("removeItem", baseRemove);
+    ctx.hooks.method("insertItem", baseInsert);
+    ctx.hooks.method("removeItem", baseRemove);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const insertFn = methods.get("insertItem") as Function;
@@ -310,9 +319,9 @@ describe("withTransition — Setup", () => {
   it("captures _dataToLayoutIndex from methods map", () => {
     const { ctx, dom, methods } = createMockContext();
     const layoutMapper = (i: number): number => i + 1;
-    ctx.registerMethod("_dataToLayoutIndex", layoutMapper);
+    ctx.hooks.method("_dataToLayoutIndex", layoutMapper);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     expect(methods.has("insertItem")).toBe(true);
@@ -323,7 +332,7 @@ describe("withTransition — Setup", () => {
     const { ctx, dom, methods } = createMockContext();
     populateDOM(dom.content, createTestItems(5), 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const insertFn = methods.get("insertItem") as Function;
@@ -345,7 +354,7 @@ describe("withTransition — Setup", () => {
     const { ctx, dom, methods } = createMockContext({ reverse: true });
     populateDOM(dom.content, createTestItems(5), 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -375,7 +384,7 @@ describe("withTransition — removeItem (off-screen)", () => {
     const { ctx, dom, testItems, emitCalls, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -395,7 +404,7 @@ describe("withTransition — removeItem (off-screen)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const removeFn = methods.get("removeItem") as (
@@ -411,7 +420,7 @@ describe("withTransition — removeItem (off-screen)", () => {
     const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const removeFn = methods.get("removeItem") as (
@@ -433,7 +442,7 @@ describe("withTransition — removeItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -459,7 +468,7 @@ describe("withTransition — removeItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -486,7 +495,7 @@ describe("withTransition — removeItem (animated)", () => {
     const { ctx, dom, testItems, emitCalls, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -513,9 +522,9 @@ describe("withTransition — removeItem (animated)", () => {
     const baseRemove = mock(
       (_id: string | number): boolean => false,
     );
-    ctx.registerMethod("removeItem", baseRemove);
+    ctx.hooks.method("removeItem", baseRemove);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const removeFn = methods.get("removeItem") as (
@@ -523,7 +532,7 @@ describe("withTransition — removeItem (animated)", () => {
     ) => boolean;
 
     // Override removeItemById to return -1 so the base wrapper returns false
-    (ctx as any).removeItemById = (_id: string | number): number => -1;
+    (ctx as any).items.removeById = (_id: string | number): number => -1;
 
     const result = removeFn(2);
 
@@ -536,7 +545,7 @@ describe("withTransition — removeItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const removeFn = methods.get("removeItem") as (
@@ -554,7 +563,7 @@ describe("withTransition — removeItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -581,7 +590,7 @@ describe("withTransition — removeItem (animated)", () => {
     el.setAttribute("id", "test-id");
     el.classList.add("vlist-item--selected");
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -603,7 +612,7 @@ describe("withTransition — removeItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -636,7 +645,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -658,7 +667,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, emitCalls, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -681,7 +690,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const insertFn = methods.get("insertItem") as (
@@ -701,7 +710,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -721,7 +730,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -749,7 +758,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -774,7 +783,7 @@ describe("withTransition — insertItem (animated)", () => {
     const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -800,7 +809,7 @@ describe("withTransition — Horizontal mode", () => {
     const { ctx, dom, testItems, methods } = createMockContext({ isX: true });
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -822,7 +831,7 @@ describe("withTransition — Horizontal mode", () => {
     const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext({ isX: true });
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -847,7 +856,7 @@ describe("withTransition — Reverse mode", () => {
     const { ctx, dom, testItems, methods } = createMockContext({ reverse: true });
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -883,7 +892,7 @@ describe("withTransition — Reverse mode", () => {
       configurable: true,
     });
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -909,9 +918,9 @@ describe("withTransition — Groups integration", () => {
     const { ctx, dom, testItems, methods, forceRenderMock } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    ctx.registerMethod("_dataToLayoutIndex", (i: number) => i + 1);
+    ctx.hooks.method("_dataToLayoutIndex", (i: number) => i + 1);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -931,7 +940,7 @@ describe("withTransition — Groups integration", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const insertFn = methods.get("insertItem") as (
@@ -955,10 +964,10 @@ describe("withTransition — Groups integration", () => {
       testItems.splice(index ?? 0, 0, item);
     };
     const staticRemove = (_id: string | number): boolean => true;
-    ctx.registerMethod("insertItem", staticInsert);
-    ctx.registerMethod("removeItem", staticRemove);
+    ctx.hooks.method("insertItem", staticInsert);
+    ctx.hooks.method("removeItem", staticRemove);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const transitionInsert = methods.get("insertItem");
@@ -982,13 +991,13 @@ describe("withTransition — Groups integration", () => {
     populateDOM(dom.content, testItems, 50, 0, 5);
 
     const staleRemove = mock((_id: string | number): boolean => false);
-    ctx.registerMethod("removeItem", staleRemove);
+    ctx.hooks.method("removeItem", staleRemove);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     // Simulate async groups replacing removeItemById after setup
-    (ctx as any).removeItemById = (id: string | number): number => {
+    (ctx as any).items.removeById = (id: string | number): number => {
       const index = testItems.findIndex((item) => item.id === id);
       if (index < 0) return -1;
       testItems.splice(index, 1);
@@ -1014,13 +1023,13 @@ describe("withTransition — Groups integration", () => {
     populateDOM(dom.content, testItems, 50, 0, 5);
 
     const staleInsert = mock((_item: TestItem, _index?: number): void => {});
-    ctx.registerMethod("insertItem", staleInsert);
+    ctx.hooks.method("insertItem", staleInsert);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     // Simulate async groups replacing insertItemAt after setup
-    (ctx as any).insertItemAt = (item: TestItem, index: number): void => {
+    (ctx as any).items.insertAt = (item: TestItem, index: number): void => {
       testItems.splice(index, 0, item);
     };
 
@@ -1042,7 +1051,7 @@ describe("withTransition — Groups integration", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const removeFn = methods.get("removeItem") as (
@@ -1067,7 +1076,7 @@ describe("withTransition — Destroy", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -1090,7 +1099,7 @@ describe("withTransition — Destroy", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -1113,7 +1122,7 @@ describe("withTransition — Destroy", () => {
   it("is safe to call destroy when no animations are pending", () => {
     const { ctx, methods } = createMockContext();
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     expect(() => plugin.destroy!()).not.toThrow();
@@ -1129,7 +1138,7 @@ describe("withTransition — Edge cases", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -1152,7 +1161,7 @@ describe("withTransition — Edge cases", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const removeFn = methods.get("removeItem") as (
@@ -1169,7 +1178,7 @@ describe("withTransition — Edge cases", () => {
   it("handles empty items container gracefully", async () => {
     const { ctx, methods } = createMockContext();
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const insertFn = methods.get("insertItem") as (
@@ -1194,7 +1203,7 @@ describe("withTransition — Edge cases", () => {
     const { ctx, dom, methods } = createMockContext({ items });
     populateDOM(dom.content, items, 50, 0, 3);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -1210,7 +1219,7 @@ describe("withTransition — Edge cases", () => {
   });
 
   it("clamps duration to MAX_DURATION (1000ms)", () => {
-    const plugin = transition({ duration: 5000 });
+    const plugin = transition<TestItem>({ duration: 5000 });
     const { ctx, dom, methods } = createMockContext();
     populateDOM(dom.content, createTestItems(5), 50, 0, 5);
     plugin.setup!(ctx);
@@ -1227,7 +1236,7 @@ describe("withTransition — Edge cases", () => {
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
 
-    const plugin = transition({ duration: 50 });
+    const plugin = transition<TestItem>({ duration: 50 });
     plugin.setup!(ctx);
 
     allAnimations.length = 0;
@@ -1254,21 +1263,21 @@ describe("withTransition — Edge cases", () => {
 
 describe("withTransition — removeItems", () => {
   it("registers removeItems method during setup", () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, methods } = createMockContext();
     plugin.setup!(ctx);
     expect(methods.has("removeItems")).toBe(true);
   });
 
   it("does not register removeItems when remove: false", () => {
-    const plugin = transition({ remove: false });
+    const plugin = transition<TestItem>({ remove: false });
     const { ctx, methods } = createMockContext();
     plugin.setup!(ctx);
     expect(methods.has("removeItems")).toBe(false);
   });
 
   it("returns 0 for empty array", () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, methods } = createMockContext();
     populateDOM(dom.content, createTestItems(5), 50, 0, 5);
     plugin.setup!(ctx);
@@ -1278,7 +1287,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("delegates to single removeItem for array of length 1", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1294,7 +1303,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("removes multiple visible items with animations", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, emitCalls, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1314,7 +1323,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("creates clone elements for each visible target", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1330,7 +1339,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("strips selection attributes from clones", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
 
@@ -1356,7 +1365,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("cleans up clones after animations finish", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1373,7 +1382,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("emits remove:end for each removed item after finalize", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, emitCalls, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1393,7 +1402,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("returns 0 when no items could be removed", () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1406,7 +1415,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("handles off-screen-only batch removal without animation", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, emitCalls, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 5);
     plugin.setup!(ctx);
@@ -1424,7 +1433,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("cancels pending remove animation when batch starts", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1443,7 +1452,7 @@ describe("withTransition — removeItems", () => {
   });
 
   it("captures offsets for items below viewport", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 8);
     plugin.setup!(ctx);
@@ -1463,7 +1472,7 @@ describe("withTransition — removeItems", () => {
 
     populateDOM(dom.content, testItems, 50, 0, 12);
 
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     plugin.setup!(ctx);
 
     const initialLength = testItems.length;
@@ -1484,7 +1493,7 @@ describe("withTransition — removeItems", () => {
 
 describe("withTransition — removeItem focus & scroll clamp", () => {
   it("recovers focus after animated removal finishes", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 12);
     plugin.setup!(ctx);
@@ -1509,7 +1518,7 @@ describe("withTransition — removeItem focus & scroll clamp", () => {
 describe("withTransition — ensureRange scheduling", () => {
   it("schedules ensureRange when data manager supports it", async () => {
     const ensureRangeMock = mock(() => Promise.resolve());
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
 
     // Attach ensureRange via a custom property on ctx (simulating extended context)
@@ -1535,7 +1544,7 @@ describe("withTransition — ensureRange scheduling", () => {
 
 describe("withTransition — insertItem sibling slide", () => {
   it("animates existing siblings when they shift after insert", async () => {
-    const plugin = transition();
+    const plugin = transition<TestItem>();
     const { ctx, dom, testItems, methods } = createMockContext();
     populateDOM(dom.content, testItems, 50, 0, 10);
     plugin.setup!(ctx);
@@ -1549,4 +1558,57 @@ describe("withTransition — insertItem sibling slide", () => {
     await flushMicrotasks();
     allAnimations.length = 0;
   });
+});
+
+
+it("captures the adapter origin once for a removal animation", async () => {
+  const { ctx, dom, testItems, methods } = createMockContext();
+  populateDOM(dom.content, testItems, 50);
+  const readOrigin = mock(() => 100);
+  ctx.scroll.getRenderOrigin = readOrigin;
+  ctx.getState().baseOffset = 0;
+  const plugin = transition<TestItem>();
+  plugin.setup!(ctx);
+  const start = allAnimations.length;
+  await methods.get("removeItem")!(0);
+  expect(allAnimations[start]!.keyframes[0]!.transform).toBe("translateY(-100px) scaleY(1)");
+  expect(readOrigin).toHaveBeenCalledTimes(1);
+  dom.root.remove();
+});
+
+for (const reverse of [false, true]) it(`adapter correction preserves FLIP positions after ${reverse ? "reverse end pin" : "removal clamp"}`, async () => {
+  const { ctx, dom, testItems, methods } = createMockContext({ reverse });
+  let position = 400;
+  let renderOrigin = 400;
+  const shifts: number[] = [];
+  ctx.scroll.getPixelEquivalent = () => position;
+  ctx.scroll.getRenderOrigin = () => renderOrigin;
+  // The source owns its position. A plugin assigning engine coordinates fails.
+  Object.defineProperty(ctx.getState(), "scrollPosition", {
+    get: () => position,
+    set: () => { throw new Error("plugin wrote source-owned scroll position"); },
+    configurable: true,
+  });
+  ctx.scroll.shiftBy = delta => { shifts.push(delta); position += delta; renderOrigin += delta; };
+  const remove = ctx.items.removeById, insert = ctx.items.insertAt;
+  ctx.items.removeById = id => { const index = remove(id); ctx.sizes.cache.rebuild(testItems.length); return index; };
+  ctx.items.insertAt = (item, index) => { insert(item, index); ctx.sizes.cache.rebuild(testItems.length); };
+  ctx.render.force = () => { dom.content.replaceChildren(); populateDOM(dom.content, testItems, 50, 0, testItems.length); };
+  ctx.render.force();
+  transition<TestItem>().setup!(ctx);
+  const start = allAnimations.length;
+  if (reverse) {
+    methods.get("insertItem")!({ id: 100, name: "New" }, 20);
+    expect(shifts).toEqual([50]);
+    expect(position).toBe(450);
+    expect(allAnimations[start]!.keyframes[0]!.transform).toBe("translateY(550px) scaleY(0)");
+  } else {
+    methods.get("removeItem")!(10);
+    expect(shifts).toEqual([-50]);
+    expect(position).toBe(350);
+    expect(allAnimations[start]!.keyframes[0]!.transform).toBe("translateY(100px) scaleY(1)");
+    expect(allAnimations[start]!.keyframes[1]!.transform).toBe("translateY(150px) scaleY(0)");
+  }
+  await flushMicrotasks();
+  dom.root.remove();
 });

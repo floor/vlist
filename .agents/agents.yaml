@@ -1,0 +1,315 @@
+# vlist — agent manifest
+#
+# The root of resolution: agents find this by convention in the checkout they
+# already have, and it names everything else. An issue or discussion may
+# describe this file, but where they disagree, this wins.
+#
+# It declares WHERE things are and WHO may do what. It is not a TODO: item
+# status lives in the source below, never here, or we have two task lists again.
+
+name: "vlist 3.0"
+
+project:
+  name: "vlist"
+  root: ".."                  # relative to this file, so the repository root
+  repo: "vlist"
+  baseBranch: "next"          # 3.0 integrates on next; main is the 2.x line
+  language: "typescript"
+  runtime: "bun"
+
+  setup:
+    - name: Install dependencies
+      command: [bun, install, --frozen-lockfile]
+
+  # The gate, declared rather than remembered. Every one of these must pass on a
+  # clean export of the exact commit before anything merges.
+  verification:
+    - name: Typecheck
+      command: [bun, run, typecheck]
+    # One run of the suite, not two: scripts/coverage.ts runs `bun test
+    # --coverage`, prints the failures and exits non-zero when a test fails, so
+    # a separate Tests step only repeated 21 seconds of work.
+    - name: Tests and coverage threshold
+      command: [bun, run, scripts/coverage.ts, --threshold, "85"]
+    - name: Build
+      command: [bun, run, build, --, --types]
+    - name: Bundle size
+      command: [bun, run, size]
+    - name: Heap growth
+      command: [bun, run, heap]
+    # A docs-only change passes every other step trivially. This one reads the
+    # migration notes and fails when they name an API that no longer exists.
+    - name: Migration notes
+      command: [bun, run, "docs:check"]
+    - name: Browser suites
+      command: [bun, run, "test:browser"]
+
+  conventions:
+    semicolons: true
+    quotes: "double"
+    indent: 2
+    modules: "esm"
+
+  structure:
+    backend: "src/"
+    tests: "test/"
+
+# ── Tasks ──────────────────────────────────────────────────────────
+#
+# Where the work lives: Linear, team FLO, project vlist (Dr Jones, 2026-09-18).
+# One queue for the findings and the TODOs, visible as it moves, that a person
+# can add to directly; its comments are the discussion an agent reads. The API
+# key is in .agents/.env, never here. `run --issue FLO-31` reads the issue by
+# key; `watch` takes an issue as soon as it carries one of the labels below. A
+# PR references a task as `Refs FLO-31` and never repeats its text — the
+# tracker is private, the repository is not.
+
+tasks:
+  source: linear
+  labels: [agent]
+  linear:
+    team: FLO
+    project: vlist
+
+# ── Sources ────────────────────────────────────────────────────────
+#
+# The engine reads `path` and `visibility` (floor/agents#45); the other keys are
+# ours, for the lint and promotion tooling. The findings source is HTML: rows carry their data in `data-*` attributes, so the
+# page IS the record and no parser sits between the view and the check.
+#
+# It is PRIVATE. A finding becomes a public issue only by promotion, and only
+# the user-facing half crosses. A source without `visibility` counts as private.
+
+# Paths are relative to this file, like promptTemplate: `../../docs` is the
+# sibling docs checkout. Commands such as `lint` run from the repository root,
+# so their arguments are relative to that instead.
+
+sources:
+  findings:
+    path: "../../docs/projects/vlist/findings.html"   # private repo, sibling checkout
+    format: "html"
+    visibility: "private"
+    idAttribute: "data-id"
+    lint: [bun, run, "../docs/projects/vlist/tools/lint.ts"]   # from the repository root
+
+  narrative:
+    path: "../../docs/activity/2026/vlist.md"
+    format: "markdown"
+    visibility: "private"
+
+# ── Related projects ───────────────────────────────────────────────
+#
+# Findings span more than this repository; issues do not. This is the
+# cross-repo state that the service holds and a per-repo tracker cannot.
+
+relatedProjects:
+  - repo: "vlist.io"
+    role: "docs and examples"
+    visibility: "public"
+  - repo: "vlist-react"
+    role: "adapter"
+    visibility: "public"
+  - repo: "vlist-vue"
+    role: "adapter"
+    visibility: "public"
+  - repo: "vlist-svelte"
+    role: "adapter"
+    visibility: "public"
+  - repo: "vlist-solidjs"
+    role: "adapter"
+    visibility: "public"
+
+# ── Promotion ──────────────────────────────────────────────────────
+#
+# A TODO is private; a TODO can become an issue. Mechanical, never an agent's
+# judgement: the fields that cross are named here, and the row records the
+# issue it became so the join is explicit and checkable in both directions.
+
+promotion:
+  target: "floor/vlist"
+  linkAttribute: "data-issue"
+  publicFields: [finding, evidence, severity, area]
+  privateFields: [claimedBy, claimedAt, notes, verdict]
+  labels:
+    severity: { blocking: "blocking", critical: "critical", suggestion: "enhancement" }
+    area: "area/{value}"
+  milestone: "3.0.0"
+
+agents:
+  - id: cto
+    name: "Claude"
+    promptTemplate: "../../agents/agents/cto.md"
+    llm:
+      provider: claude-code
+      model: opus
+    capabilities: [read_code, create_pr, review_rfc]
+    autonomy: T1
+    # Coordinates, reviews, merges into next after a clean-export gate. Never
+    # tags, releases, deploys, or posts to discussions without Dr Jones.
+
+  # ── Implementers ────────────────────────────────────────────────
+  #
+  # `run` hands an issue to the agent whose id is a label on it, and otherwise to
+  # the first agent here with write_code. It runs on a worktree inside an
+  # implementer sandbox: it may write that worktree and nothing else, and the
+  # engine verifies and publishes the tree.
+  #
+  # One implementer. Claude sat here as `claude-dev` on 2026-09-17 and took N13,
+  # N14, R3, N19 and R1; Dr Jones retired the seat that night. The cto agent
+  # above is Claude too, but coordinates and reviews — it does not implement.
+
+  - id: grok-dev
+    name: "Grok"
+    promptTemplate: "../../agents/agents/backend-dev.md"
+    llm:
+      # `provider` names the adapter package — the transport — and never the
+      # model's vendor; the model string carries vendor and family. Under that
+      # rule `claude-code` and `lmstudio` were already transports, while `openai`
+      # here named a vendor and reached nothing. Grok comes through the Cursor
+      # CLI (`cursor-agent -p`), billed to the Cursor subscription. The xAI `grok`
+      # CLI is a different account and is not authenticated on this machine.
+      provider: cursor
+      # Effort is part of the identifier rather than a separate field:
+      #   cursor-grok-4.6-{low,medium,high,xhigh}   (+ a -fast variant of each)
+      # 4.5 exists under the same shape. `--model` takes this string verbatim.
+      model: cursor-grok-4.6-high
+    capabilities: [read_code, write_code, write_tests, create_pr]
+    autonomy: T1
+    # The engine's default is ten minutes, which a carousel change spent
+    # reading its 23 context files (FLO-163, killed at 10m with 12 lines
+    # written). Forty minutes covers a plugin-wide change with its tests and
+    # the browser suite.
+    timeoutMs: 2400000
+    # A headless turn can end having written nothing and still report success —
+    # measured: two identical runs, one wrote the file, one only described
+    # writing it, both exit 0. So completion is decided by `verification` against
+    # the worktree diff, never by what the agent says it did.
+    #
+    # `cursor` is hosted, so what it reads leaves this machine. It is trusted with
+    # private sources (see privateSourceProviders below), so it may read the
+    # findings as well as the public issue.
+
+  # A speed trial (Dr Jones, 2026-09-18): the same Grok at the same effort on
+  # Cursor's `-fast` variant. An issue labelled `grok-fast` comes here; compare
+  # turn time, gate result and review verdict with `grok-dev` before switching.
+  - id: grok-fast
+    name: "Grok"
+    promptTemplate: "../../agents/agents/backend-dev.md"
+    llm:
+      provider: cursor
+      model: cursor-grok-4.6-high-fast
+    capabilities: [read_code, write_code, write_tests, create_pr]
+    autonomy: T1
+    timeoutMs: 2400000
+
+  # ── Committee ───────────────────────────────────────────────────
+  #
+  # The agents with `vote` review proposals and vote. They sit in this file beside
+  # the implementers: the engine runs development for write_code agents and the
+  # committee for voters, each on its own labels. Grok votes here as `grok` and
+  # implements above as `grok-dev` — ids are unique, and the committee scripts run
+  # `claude,codex,grok` by default.
+  #
+  # Every member reviews inside a reviewer sandbox: it reads the repository and
+  # cannot write to it. Gemini sits here through its API; Antigravity, the GUI,
+  # cannot vote unattended and is not seated.
+
+  - id: claude
+    name: "Claude"
+    promptTemplate: "../../agents/agents/claude-reviewer.md"
+    llm:
+      provider: claude-code
+      model: opus
+      temperature: 0.3
+      maxTokens: 32000
+    capabilities: [read_code, review_rfc, vote]
+    autonomy: T1
+
+  - id: codex                 # GPT, through the Codex CLI
+    name: "Codex"
+    external: true
+    promptTemplate: "../../agents/agents/codex-reviewer.md"
+    llm:
+      provider: codex-cli     # picks the bridge: codex-agent.ts
+      model: local            # the Codex CLI's own default
+    capabilities: [review_rfc, vote]
+    autonomy: T1
+
+  # Grok does not sit on the committee while Grok is the implementer (Dr Jones,
+  # 2026-09-18): a model reviewing its own PR adds little, and its review bridge
+  # timed out at the 300 s gateway limit in three of four reviews, which set the
+  # floor of every cycle. Claude, Codex and Gemini review. The engine rule that
+  # would let it keep its RFC vote — a member never reviews a PR written by its
+  # own model — is a Linear task; until then the seat is removed.
+
+  - id: gemini
+    name: "Gemini"
+    promptTemplate: "../../agents/agents/gemini-reviewer.md"
+    llm:
+      # The Antigravity CLI (`agy`) on Dr Jones's Google AI Pro subscription
+      # (floor/agents#64): no API key, no metering, the pro model. Seated
+      # 2026-09-18. `provider: gemini` would be the metered API instead; the
+      # key on GEMINI_API_KEY is on the free tier and is not used here.
+      provider: antigravity
+      model: gemini-3.1-pro-high
+      temperature: 0.3
+      maxTokens: 32000
+    # Off routine PR review until 3.0.0 / 1.0.0 ship (Dr Jones, 2026-09-18): a
+    # cycle lasted as long as this seat — 5 to 9 minutes, or an empty answer
+    # (FLO-181). Codex and Claude review every PR; the coordinator asks Gemini by
+    # hand on design-sized changes, where its reviews found what others missed.
+    capabilities: [read_code, review_rfc]
+    autonomy: T1
+
+# ── Guardrails ─────────────────────────────────────────────────────
+#
+# Visibility decides provider eligibility, not just where an issue is filed.
+# Whatever an agent reads becomes part of a prompt sent to its provider, so
+# privateSourceProviders is a list of companies trusted with private material —
+# not of local tools: claude-code sends to Anthropic, cursor to Cursor and the
+# model's vendor. Agents on any other provider (codex-cli, today) cannot read
+# private sources.
+#
+# Enforced by the operating system, not by instruction (floor/agents#45): every
+# agent whose provider is not listed runs in a sandbox that denies each private
+# source path. A bridge that cannot be sandboxed (the xAI grok CLI, Antigravity)
+# is refused for an untrusted provider. `floor-agents doctor` checks the paths
+# exist, since a denial on a mistyped path protects nothing. Only the declared
+# paths are denied; the rest of the docs checkout stays readable.
+
+guardrails:
+  maxFilesPerTask: 20
+  # CHANGELOG.md is 103,828 bytes and every release-bound change touches it: the
+  # 100 KB cap stopped FLO-163 after a finished 27-minute turn. 256 KB keeps the
+  # guard against a generated blob and lets the changelog grow.
+  maxFileSizeBytes: 262144
+  # The engine sums the whole of every touched file, not the diff (FLO-201): a
+  # one-line changelog entry plus a few large test files crossed the 512 KB
+  # default and stopped a gate-green revision (FLO-185). 2 MB until it measures
+  # the diff.
+  maxTotalOutputBytes: 2097152
+  blockedPaths:
+    - ".env*"
+    - "*.pem"
+    - "*.key"
+    - ".github/workflows/*"
+    - "package.json"
+    - "bun.lock"
+    - ".gitignore"
+  # cursor added 2026-09-17 by Dr Jones's decision: Grok may use the private
+  # findings for context when it implements or reviews.
+  # antigravity added 2026-09-18 by Dr Jones's decision: Gemini, through the
+  # Antigravity CLI on his Google AI Pro account (telemetry off), may read the
+  # private record like Claude and Grok — same trust class as cursor.
+  privateSourceProviders: [claude-code, lmstudio, cursor, antigravity]
+
+# ── Record ─────────────────────────────────────────────────────────
+#
+# Mechanical, never an agent's decision. Append-only events so concurrent
+# writers cannot conflict; greppable and diffable so the record survives the
+# tooling. Any query index is rebuilt from this and is never authoritative.
+
+record:
+  format: "jsonl"
+  path: "../../docs/activity/2026/vlist-events.jsonl"
+  events: [claimed, promoted, pr_opened, review_passed, review_rejected, status_changed]

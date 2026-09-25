@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Scroll Bounds & Clamping Tests
+ * vlist — Scroll Bounds & Clamping Tests
  *
  * Verifies that the scroll handler correctly clamps scroll positions
  * within valid bounds during wheel events, filters sub-pixel deltas,

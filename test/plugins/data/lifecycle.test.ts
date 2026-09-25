@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Async Plugin Lifecycle & Deep Coverage Tests
+ * vlist — Async Plugin Lifecycle & Deep Coverage Tests
  *
  * Recovers missing coverage from v1 features/async/feature.test.ts and
  * features/async/integration.test.ts. Tests velocity-gated loading,
@@ -7,8 +7,8 @@
  * reload lifecycle, and race condition guards.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { data as dataPlugin } from "../../../src/plugins/data/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -24,8 +24,8 @@ import {
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers
@@ -99,7 +99,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -120,7 +120,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -140,7 +140,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 100,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -170,7 +170,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 100,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -181,7 +181,7 @@ describe("async lifecycle — velocity-gated loading", () => {
     expect(adapter.read).toHaveBeenCalled();
     // It loaded the chunk covering the visible range [100..109], not the top.
     const calls = (adapter.read as any).mock.calls.map((c: any[]) => c[0] as { offset: number; limit: number });
-    expect(calls.some((p) => p.offset <= 100 && 100 < p.offset + p.limit)).toBe(true);
+    expect(calls.some((p: { offset: number; limit: number }) => p.offset <= 100 && 100 < p.offset + p.limit)).toBe(true);
   });
 
   it("does not load on afterScroll when destroyed", async () => {
@@ -192,7 +192,7 @@ describe("async lifecycle — velocity-gated loading", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -219,7 +219,7 @@ describe("async lifecycle — preload behavior", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -245,7 +245,7 @@ describe("async lifecycle — preload behavior", () => {
       startIndex: 200,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -271,7 +271,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 100,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -295,7 +295,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -321,7 +321,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     engineState.destroyed = true;
 
@@ -337,7 +337,7 @@ describe("async lifecycle — idle hook", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -379,7 +379,7 @@ describe("async lifecycle — error handling", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -397,7 +397,7 @@ describe("async lifecycle — error handling", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     // loadInitial uses queueMicrotask → loadRange which catches errors internally
     await wait(100);
@@ -417,7 +417,7 @@ describe("async lifecycle — error handling", () => {
     const errors: Array<{ error: Error; context: string }> = [];
     emitter.on("error", (e) => errors.push(e as any));
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -435,7 +435,7 @@ describe("async lifecycle — error handling", () => {
     const errors: Array<{ error: Error; context: string }> = [];
     emitter.on("error", (e) => errors.push(e as any));
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -455,10 +455,10 @@ describe("async lifecycle — reload", () => {
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
     let forceRenderCount = 0;
-    const origForceRender = ctx.forceRender.bind(ctx);
-    (ctx as any).forceRender = () => { forceRenderCount++; origForceRender(); };
+    const origForceRender = ctx.render.force.bind(ctx);
+    (ctx as any).render.force = () => { forceRenderCount++; origForceRender(); };
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -477,7 +477,7 @@ describe("async lifecycle — reload", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -511,7 +511,7 @@ describe("async lifecycle — ARIA attributes", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -525,7 +525,7 @@ describe("async lifecycle — ARIA attributes", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState, emitter } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -545,7 +545,7 @@ describe("async lifecycle — autoLoad", () => {
     const plugin = dataPlugin({ adapter, autoLoad: true });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -557,7 +557,7 @@ describe("async lifecycle — autoLoad", () => {
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await wait(50);
 
@@ -569,7 +569,7 @@ describe("async lifecycle — autoLoad", () => {
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 500 });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -594,7 +594,7 @@ describe("async lifecycle — loadVisibleRange", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -614,7 +614,7 @@ describe("async lifecycle — loadVisibleRange", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -631,8 +631,12 @@ describe("async lifecycle — loadVisibleRange", () => {
 // Network Recovery
 // =============================================================================
 
+// `online` is dispatched on the one `window` that every live data() plugin
+// listens to, so these tests reach other tests' adapters. They are `it.serial`
+// (not `describe.serial`, which Bun 1.4 does not honour) so nothing else is in
+// flight while the event fans out.
 describe("async lifecycle — network recovery", () => {
-  it("online event triggers load for visible range", async () => {
+  it.serial("online event triggers load for visible range", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState, emitter } = createContextWithEmitter({
@@ -640,7 +644,7 @@ describe("async lifecycle — network recovery", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -651,7 +655,7 @@ describe("async lifecycle — network recovery", () => {
     expect(adapter.read).toHaveBeenCalled();
   });
 
-  it("online event is ignored when destroyed", async () => {
+  it.serial("online event is ignored when destroyed", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
@@ -659,7 +663,7 @@ describe("async lifecycle — network recovery", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     engineState.destroyed = true;
 
@@ -684,7 +688,7 @@ describe("async lifecycle — chunk deduplication", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -710,7 +714,7 @@ describe("async lifecycle — chunk deduplication", () => {
       startIndex: 0,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
@@ -738,13 +742,15 @@ describe("async lifecycle — destroy cleanup", () => {
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 100 });
     const { ctx, engineState } = createContextWithEmitter();
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
 
     expect(() => plugin.destroy!()).not.toThrow();
   });
 
-  it("online listener is removed on destroy", async () => {
+  // Serial for the same reason as the network-recovery tests: the `online`
+  // event reaches every live data() plugin, not just this one.
+  it.serial("online listener is removed on destroy", async () => {
     const adapter = createMockAdapter(1000);
     const plugin = dataPlugin({ adapter, autoLoad: false, total: 1000 });
     const { ctx, engineState } = createContextWithEmitter({
@@ -752,11 +758,11 @@ describe("async lifecycle — destroy cleanup", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 
-    // Run destroy handlers registered via ctx.registerDestroyHandler
+    // Run destroy handlers registered via ctx.hooks.onDestroy
     const destroyHandlers = (ctx as any)._destroyHandlers ?? [];
     for (const handler of destroyHandlers) handler();
 
@@ -776,7 +782,7 @@ describe("async lifecycle — destroy cleanup", () => {
       startIndex: 50,
     });
 
-    plugin.setup(ctx);
+    plugin.setup!(ctx);
     engineState.initialized = true;
     await flush();
 

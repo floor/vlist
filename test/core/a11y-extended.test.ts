@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Extended A11y Tests
+ * vlist — Extended A11y Tests
  *
  * Covers a11y plugin gaps: PageUp/PageDown navigation, empty list
  * handling, and destroy cleanup (event listener removal).

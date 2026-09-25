@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -7,8 +8,9 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -20,19 +22,11 @@ import { groups } from "../../src/plugins/groups/plugin";
 import { grid } from "../../src/plugins/grid/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -47,20 +41,11 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
@@ -470,8 +455,8 @@ describe("groups + grid integration", () => {
   describe("padding", () => {
     const PADDING = 16;
 
-    function createPaddedGrid(itemCount: number = 40) {
-      list = createVList(
+    function createPaddedGrid(itemCount: number = 40, factory = createVList<TestItem>) {
+      list = factory(
         {
           container,
           items: createTestItems(itemCount),
@@ -563,7 +548,7 @@ describe("groups + grid integration", () => {
     });
 
     it("should include mainAxisPadding in content height", () => {
-      createPaddedGrid();
+      createPaddedGrid(40, createNative);
       const content = container.querySelector(".vlist-content") as HTMLElement;
       const height = parseFloat(content.style.height);
       // mainAxisPadding = PADDING * 2 = 32. Content height must include it.
@@ -596,7 +581,7 @@ describe("groups + grid integration", () => {
       // 40 items, 4 cols, 100px rows, 4 groups with 30px headers,
       // padding 16 (mainAxisPadding 32). Last item end-align must reach
       // maxScroll (content bottom), accounting for bottom padding.
-      list = createVList(
+      list = createNative(
         {
           container,
           items: createTestItems(40),
@@ -763,7 +748,7 @@ describe("groups + grid integration", () => {
       const dynamicHeight = ((_i: number, ctx: any) => ctx ? Math.round(ctx.columnWidth * 0.75) : 100) as any;
 
       // Create at 300px
-      list = createVList(
+      list = createNative(
         {
           container,
           items: createTestItems(40),
@@ -790,7 +775,7 @@ describe("groups + grid integration", () => {
         configurable: true,
       });
 
-      list = createVList(
+      list = createNative(
         {
           container,
           items: createTestItems(40),

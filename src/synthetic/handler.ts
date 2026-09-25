@@ -1,5 +1,8 @@
 /** RFC-014 input provider. No native main-axis scroll position writes. */
 import type { BoundedScrollConfig, BoundedScrollHandler } from "../core/runway";
+// Wrap folds go through this commit, not runway.wrapRebase. Importing fold
+// from create.ts would charge every native list that never wraps.
+import { applyWrapFold, wrapLaps } from "../core/fold";
 import { SCROLL_IDLE_TIMEOUT, SCROLL_EASING } from "../constants";
 import { createMotion, TRACKING, PENDING } from "./motion";
 
@@ -16,14 +19,14 @@ type SyntheticScrollConfig = BoundedScrollConfig & {
 };
 
 export function createSyntheticScrollHandler(config: SyntheticScrollConfig): BoundedScrollHandler {
-  const { state, viewport, content, isX, onFrame, onIdle, mainAxisPadding } = config;
+  const { state, viewport, content, isX, onFrame, onIdle, mainAxisPadding, wrap } = config;
   const root = viewport.parentElement ?? viewport;
   const win = viewport.ownerDocument.defaultView!;
   const doc = viewport.ownerDocument;
   const reduced = win.matchMedia("(prefers-reduced-motion: reduce)");
   let max = 0, frame: number | null = null;
   let idle: ReturnType<typeof setTimeout> | null = null;
-  let attached = false, refreshing = false;
+  let attached = false, refreshing = false, folding = false;
   let previousSize = -1, previousCross = -1;
   let gesture: number | null = null, suppressed: number | null = null;
   let dragged = false, caught = false, blocked = false, captured = false;
@@ -31,7 +34,24 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
   const pointers = new Set<number>();
 
   function commit(position: number): void {
-    const previous = state.scrollPosition;
+    let previous = state.scrollPosition;
+    if (wrap) {
+      const lap = wrap.lapSize();
+      const laps = lap > 0 ? wrapLaps((position - wrap.home()) / lap, wrap.thresholdLaps) : 0;
+      if (laps !== 0) {
+        const shift = laps * lap;
+        // shiftBy preserves the pointer, velocity and animation target. Suppress
+        // only its notification; this outer commit renders the folded frame once.
+        folding = true;
+        motion.shiftBy(-shift);
+        folding = false;
+        position = motion.position;
+        previous -= shift;
+        applyWrapFold(wrap, shift, state, content, config.rendered, config.classPrefix ?? "", config.oddClass);
+        config.onFold?.(shift);
+        wrap.onFold?.(shift);
+      }
+    }
     state.prevScrollPosition = previous;
     state.scrollPosition = state.baseOffset = position;
     state.scrollDirection = position > previous ? 1 : position < previous ? -1 : 0;
@@ -58,8 +78,8 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     if (motion.active) schedule(); else scheduleIdle();
   }
   const motion = createMotion({
-    axis: isX ? "x" : "y", getMax: () => max, reducedMotion: () => reduced.matches,
-    onChange: commit,
+    axis: isX ? "x" : "y", getMax: () => wrap ? Infinity : max, reducedMotion: () => reduced.matches,
+    onChange(position) { if (!folding) commit(position); },
     onFinish() {
       const callback = complete; complete = undefined; callback?.();
     },
@@ -169,7 +189,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     const previous = motion.position;
     cancelScroll(); motion.jump(position);
     // Even an unchanged jump completes the external navigation/idle contract.
-    if (previous === motion.position) commit(motion.position);
+    if (previous === (wrap ? position : Math.max(0, Math.min(max, position)))) commit(motion.position);
     scheduleIdle();
   }
   function refresh(totalSize: number): void {

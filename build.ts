@@ -1,7 +1,8 @@
 // build.ts - Build vlist library
 import { $ } from "bun";
-import { readFileSync, writeFileSync, rmSync, mkdtempSync } from "fs";
+import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs";
 import { resolve } from "path";
+import { versionStamp } from "./scripts/version-stamp";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -11,10 +12,30 @@ async function build() {
   const totalStart = performance.now();
   console.log("Building vlist...\n");
 
+  // Shipped browser bundles have no `process`. Without this replace, a
+  // `process.env.NODE_ENV !== "production"` guard either always logs or
+  // throws; with it, the production log is dropped. Watch builds keep
+  // development so setup failures still print.
+  const define = {
+    "process.env.NODE_ENV": isDev ? '"development"' : '"production"',
+  };
+
   // Clean dist folder before building to avoid stale files
   const cleanStart = performance.now();
   if (!isDev) {
     rmSync("./dist", { recursive: true, force: true });
+    // Recreate it rather than leaving the outdir to Bun.build. There are four
+    // separate build calls writing into ./dist, and only the first would create
+    // it; the rest assume it is there. That produced one failure in thirty
+    // builds, always on a later chunk after the first had been written:
+    //
+    //   Bundle  11ms  dist/index.js (184.6 KB)
+    //   error: No such file or directory: writing chunk "./config.js"
+    //
+    // The cause was never reproduced — 29 consecutive builds after it were
+    // clean — so this is not a diagnosis. It removes the window in which the
+    // directory can be absent while a build writes into it, whatever opened it.
+    mkdirSync("./dist", { recursive: true });
     console.log(
       `  Clean       ${(performance.now() - cleanStart).toFixed(0).padStart(6)}ms  dist/`,
     );
@@ -43,6 +64,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "index.js",
+    define,
   });
 
   if (!bundleResult.success) {
@@ -60,15 +82,31 @@ async function build() {
     `  Bundle      ${bundleTime.toFixed(0).padStart(6)}ms  dist/index.js (${bundleSize} KB)`,
   );
 
-  // Separate opt-in entry: never re-export the synthetic driver from index.ts.
-  const syntheticResult = await Bun.build({
-    entrypoints: [resolve("./src/synthetic.ts")], outdir: "./dist",
-    format: "esm", target: "browser", minify: !isDev,
-    sourcemap: isDev ? "inline" : "none", naming: "synthetic.js",
-  });
-  if (!syntheticResult.success) {
-    for (const log of syntheticResult.logs) console.error(log);
-    process.exit(1);
+  // Opt-in synthetic entry and the native compatibility alias.
+  for (const name of ["synthetic"]) {
+    const result = await Bun.build({
+      entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
+      format: "esm", target: "browser", minify: !isDev,
+      sourcemap: isDev ? "inline" : "none", naming: `${name}.js`,
+      define,
+    });
+    if (!result.success) {
+      for (const log of result.logs) console.error(log);
+      process.exit(1);
+    }
+  }
+
+  await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
+
+  for (const name of ["index", "native", "synthetic"]) {
+    const text = await Bun.file(`./dist/${name}.js`).text();
+    const hasDriver = text.includes("pan-x pinch-zoom");
+    if (hasDriver !== (name === "synthetic")) {
+      throw new Error(`Unexpected synthetic driver presence in dist/${name}.js`);
+    }
+    if (name !== "native" && text.includes("setup failed")) {
+      throw new Error(`Production dist/${name}.js still logs plugin setup failures`);
+    }
   }
 
   // Build config bundle (framework-adapter convenience config + resolver)
@@ -86,6 +124,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "config.js",
+    define,
   });
 
   if (!configResult.success) {
@@ -118,6 +157,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "internals.js",
+    define,
   });
 
   if (!internalsResult.success) {
@@ -196,14 +236,21 @@ async function build() {
   const scenarios = [
     { name: "base", imports: ["createVList"] },
     { name: "synthetic", imports: ["createVList"] },
+    { name: "synthetic + carousel", imports: ["createVList", "carousel"] },
+    { name: "synthetic + sortable", imports: ["createVList", "sortable"] },
+    { name: "createStats", imports: ["createVList", "createStats"] },
+    { name: "synthetic + createStats", imports: ["createVList", "createStats"] },
+    { name: "native", imports: ["createVList"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
   const sizes: Record<string, { minified: string; gzipped: string; minBytes: number; gzBytes: number }> = {};
 
   for (const { name, imports } of scenarios) {
-    const scenarioEntry = name === "synthetic" ? resolve("./src/synthetic.ts") : entryAbs;
-    const code = `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
+    const scenarioEntry = ["synthetic", "native"].includes(name) ? resolve(`./src/${name}.ts`) : entryAbs;
+    const code = name.startsWith("synthetic +")
+      ? `import { createVList } from "${resolve("./src/synthetic.ts")}"; import { ${imports.slice(1).join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`
+      : `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `${scratch}/size_${name}.ts`;
     writeFileSync(tmp, code);
 
@@ -218,8 +265,11 @@ async function build() {
     if (result.success) {
       const output = await result.outputs[0]!.arrayBuffer();
       const bytes = new Uint8Array(output);
-      if (name !== "synthetic" && new TextDecoder().decode(bytes).includes("pan-x pinch-zoom")) {
-        throw new Error(`Synthetic driver leaked into ${name}`);
+      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") !== (name.startsWith("synthetic"))) {
+        throw new Error(`Unexpected synthetic driver presence in ${name}`);
+      }
+      if (new TextDecoder().decode(bytes).includes(".runwayFactor") !== imports.includes("carousel")) {
+        throw new Error(`Unexpected private runway presence in ${name}`);
       }
       const compressed = Bun.gzipSync(bytes);
       sizes[name] = {
@@ -232,6 +282,8 @@ async function build() {
   }
 
   writeFileSync("./dist/size.json", JSON.stringify(sizes) + "\n");
+  // Which vlist this dist is: a site serving the bundle reads it from here.
+  writeFileSync("./dist/version.json", JSON.stringify(versionStamp(resolve("."))) + "\n");
 
   const base = sizes.base ?? { minified: "0", gzipped: "0" };
   const baseGz = parseFloat(base.gzipped);

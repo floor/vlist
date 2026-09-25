@@ -73,7 +73,7 @@ export const isGroupHeader = (item: unknown): item is GroupHeaderItem => {
 // =============================================================================
 
 /** Group layout — maps between data indices and layout indices */
-export interface GroupLayout {
+export interface GroupLayout<T extends VListItem = VListItem> {
   /** Total layout entries (data items + group headers) */
   readonly totalEntries: number;
 
@@ -83,7 +83,12 @@ export interface GroupLayout {
   /** All group boundaries, in order */
   readonly groups: readonly GroupBoundary[];
 
-  /** Get the layout entry at a layout index — O(log g) */
+  /**
+   * Get the layout entry at a layout index — O(log g).
+   *
+   * The returned object is reused and mutated in place. Read fields
+   * immediately; do not retain the reference across calls.
+   */
   getEntry: (layoutIndex: number) => LayoutEntry;
 
   /** Map layout index → data index, or -1 if it's a header — O(log g) */
@@ -108,7 +113,7 @@ export interface GroupLayout {
    * @param itemCount - Number of data items
    * @param getItem - Optional item accessor for passing items to getGroupForIndex
    */
-  rebuild: (itemCount: number, getItem?: (index: number) => any) => void;
+  rebuild: (itemCount: number, getItem?: (index: number) => T | undefined) => void;
 }
 
 // =============================================================================

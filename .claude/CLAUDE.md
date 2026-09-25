@@ -2,7 +2,7 @@
 
 High-performance virtual scrolling library. Zero dependencies, plugin architecture, TypeScript strict mode.
 
-- **Staging:** [staging.vlist.io](https://staging.vlist.io) (uses latest staging branch code)
+- **Staging:** [staging.vlist.io](https://staging.vlist.io) (uses the latest `next` branch code, the 3.0 prerelease line)
 
 **Use `trash` instead of `rm` for all file deletions.** The `rm` command is denied in permissions.
 
@@ -29,15 +29,15 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 
 - `bun install` — install deps
 - `bun test` — run all tests
-- `bun test --concurrent` — run all tests in parallel (~2x faster)
+- `bun test --concurrent` — run all tests in parallel (~2x faster); gated in CI
 - `bun test --changed` — run only tests affected by uncommitted changes
-- `bun test --changed=staging` — run tests affected by changes since staging
+- `bun test --changed=next` — run tests affected by changes since `next`
 - `bun test test/plugins/grid/` — run one folder
 - `bun test --watch` — watch mode
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
-- `bun run release [patch|minor|major]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI)
+- `bun run release [patch|minor|major|<version>] [--from next|staging]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `next`, 2.x from `staging`.
 
 ## Project Structure
 
@@ -161,6 +161,14 @@ Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `
 - `useFakeTimers()`: custom utility (Bun lacks `mock.timers`) — intercepts setTimeout/setInterval, use `fakeTimers.tick(ms)` to advance
 - Each plugin tested by: factory/validation, setup/registration, public methods, cross-plugin integration
 - Plugins are unit-tested via mock `PluginContext` — see existing tests for the pattern
+- **Tests must pass under `bun test --concurrent`**, which CI runs alongside the
+  sequential suite. `--concurrent` runs the tests *within a file* at the same
+  time, so a test owns what it builds: create the list and container inside the
+  test and dispose them in a `finally`, never through a module-level `let` plus
+  an `afterEach`. A test that owns a process global — `document.activeElement`,
+  a mutable `HTMLElement.prototype` geometry getter, a single mocked
+  `ResizeObserver`, `window.dispatchEvent` — gets `it.serial` / `test.serial`
+  and a comment naming the global. `describe.serial` is not honoured by Bun 1.4
 - 2 files still use JSDOM for per-test DOM isolation (controller.test.ts, scale/plugin.test.ts)
 
 ## Adding a New Plugin
@@ -182,25 +190,36 @@ Conventional Commits: `type(scope): description`
 
 ## Git Workflow
 
-**Working branch is `staging`.** The `main` branch is protected and requires a pull request.
+**Working branch is `next`.** The 3.0 line integrates there. `main` is the released
+2.x line and is protected. `staging` is the frozen 2.x maintenance branch: it holds
+nothing `next` does not, and staging.vlist.io deploys from `next`, not from it.
 
-- ❌ **NEVER push directly to `main`** — it is protected on GitHub and will be rejected
-- ❌ **NEVER commit on `main`** — always work on `staging` or feature branches
-- ❌ **NEVER commit or push without explicit user permission**
-- ✅ Push to `staging`: `git push origin staging`
-- ✅ Merge to `main` via PR: `staging` → `main`
-- ✅ Feature branches branch off `staging`, merge back to `staging`
+- ❌ **NEVER commit or push to `main`** — it is protected and will be rejected
+- ❌ **NEVER merge, tag, release, deploy, or post publicly without explicit permission**
+- ✅ Feature branches branch off `next` and merge back into `next` through a PR
+- ✅ Committing on your own branch and opening a PR is ordinary work — no need to ask
+- ✅ A PR merges only after the gate in `.agents/agents.yaml` passes on a clean export
+- ✅ **A PR merges only when `next` is green at its base.** If `next` is red, the first PR is
+  the one that makes it green — nothing else merges on top. Ten PRs merged onto a red `next`
+  in 2026-09 and hid five layers of failure for three days
+
+The boundary is at publication, not at authorship: writing code and proposing it is
+the work, while anything the outside world sees as final — a merge, a tag, a release,
+a deploy, a public post — is a decision someone takes deliberately. The same line
+applies to every contributor, human or agent.
 
 **Before any git operation**, verify you're on the right branch:
 ```
-git branch --show-current  # Should show 'staging' or a feature branch, NEVER 'main'
+git branch --show-current  # a feature branch or `next`, NEVER `main`
 ```
 
 ## CI/CD
 
 ### CI (`ci.yml`)
-Runs on push to `staging`/`main` and on PRs:
-- Typecheck → Test → Coverage threshold (85%) → Build → Bundle size
+Runs on push to `next`, `staging` and `main`, and on PRs targeting any of them:
+- Typecheck, Test, Test `--concurrent`, Coverage threshold (85%), Build, Bundle size, Heap growth —
+  **every gate runs even when an earlier one is red**, and the final `Gate` step fails the job
+  naming each red one. Read the `Gate` step's log, not the first red step
 
 ### Publish (`publish.yml`)
 Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
@@ -211,15 +230,21 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major]` automates the full release flow:
-1. Verifies you're on `staging` with a clean tree, pulls latest
-2. Bumps version in `package.json`
+`bun run release [patch|minor|major|<version>] [--from next|staging]` automates
+the full release flow. The source branch is derived from the version being
+released: `next` for 3.x, `staging` for 2.x. `--from` confirms that branch; it
+cannot send 3.x through `staging`.
+
+1. Verifies you're on the source branch with a clean tree, pulls latest
+2. Bumps version in `package.json`. A prerelease (`3.0.0-next.2`) is never
+   bumped: its stable release is named explicitly (`bun run release 3.0.0`), and
+   a version not above the current one is refused
 3. Updates README version badge and changelog stats
-4. Commits `chore(release): vX.Y.Z` and pushes `staging`
-5. Creates PR `staging → main` via `gh` CLI
+4. Commits `chore(release): vX.Y.Z` and pushes the source branch
+5. Creates PR `<source> → main` via `gh` CLI
 6. Polls every 10s until the PR is merged (max 10 min)
 7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
-8. Returns to `staging`
+8. Returns to the source branch
 
 ### Pre-Release Checklist
 Before tagging a new version, complete ALL of these steps:
@@ -230,7 +255,7 @@ Before tagging a new version, complete ALL of these steps:
 5. Update `npm-readme.md` — version reference and base size
 
 ### Cross-Repo Staging Deploy (`notify-staging.yml`)
-When `staging` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
+When `next` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
 
 ## Zero Dependencies
 

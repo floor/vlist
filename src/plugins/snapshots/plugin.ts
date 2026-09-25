@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Snapshots Plugin
+ * vlist — Snapshots Plugin
  *
  * Scroll save/restore for SPA navigation and tab switching.
  * Captures the first visible item index + sub-pixel offset,
@@ -38,9 +38,17 @@ const readSnapshot = (key: string): ScrollSnapshot | undefined => {
 // Factory
 // =============================================================================
 
+/** Methods the snapshots plugin adds to the list instance. */
+export interface SnapshotsMethods {
+  /** Capture the scroll position, anchor item and selection. */
+  getScrollSnapshot(): ScrollSnapshot;
+  /** Restore a snapshot; pass false to keep the current selection. */
+  restoreScroll(snapshot: ScrollSnapshot, restoreSelection?: boolean): Promise<void>;
+}
+
 export function snapshots<T extends VListItem = VListItem>(
   config?: SnapshotsPluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, SnapshotsMethods> {
   const autoSaveKey = config?.autoSave;
 
   const restoreSnapshot = config?.restore
@@ -54,16 +62,17 @@ export function snapshots<T extends VListItem = VListItem>(
     priority: 50,
 
     setup(ctx: PluginContext<T>): void {
-      const { sizeCache, emitter } = ctx;
+      const { emitter, scroll } = ctx;
+      const sizeCache = ctx.sizes.cache;
       const state = ctx.getState();
 
       // ── getScrollSnapshot ──────────────────────────────────────
 
       const getScrollSnapshot = (): ScrollSnapshot => {
-        const scrollTop = state.scrollPosition;
+        const scrollTop = scroll.getPixelEquivalent();
         const totalItems = state.totalItems;
 
-        const getSelected = ctx.getMethod("getSelected") as
+        const getSelected = ctx.hooks.get("getSelected") as
           | (() => Array<string | number>)
           | undefined;
         const selectedIds = getSelected?.();
@@ -88,7 +97,7 @@ export function snapshots<T extends VListItem = VListItem>(
         const itemSize = sizeCache.getSize(index);
         if (itemSize) snap.offsetRatio = offsetInItem / itemSize;
 
-        const layoutToData = ctx.getMethod("_layoutToDataIndex") as
+        const layoutToData = ctx.hooks.get("_layoutToDataIndex") as
           | ((layoutIndex: number) => number)
           | undefined;
         if (layoutToData) {
@@ -102,14 +111,14 @@ export function snapshots<T extends VListItem = VListItem>(
           if (di >= 0) snap.dataIndex = di;
         }
 
-        const getDataTotal = ctx.getMethod("_getTotal") as
+        const getDataTotal = ctx.hooks.get("_getTotal") as
           | (() => number)
           | undefined;
         if (getDataTotal) snap.dataTotal = getDataTotal();
 
         if (selectedIds?.length) snap.selectedIds = selectedIds;
 
-        const getFocusedId = ctx.getMethod("_getFocusedId") as
+        const getFocusedId = ctx.hooks.get("_getFocusedId") as
           | (() => string | number | undefined)
           | undefined;
         if (getFocusedId) {
@@ -120,7 +129,7 @@ export function snapshots<T extends VListItem = VListItem>(
         return snap;
       };
 
-      ctx.registerMethod("getScrollSnapshot", getScrollSnapshot);
+      ctx.hooks.method("getScrollSnapshot", getScrollSnapshot);
 
       // ── restoreScroll ──────────────────────────────────────────
 
@@ -130,7 +139,7 @@ export function snapshots<T extends VListItem = VListItem>(
 
         const bootstrapTotal = snapshot.dataTotal ?? snapshot.total;
         if (effectiveTotal === 0 && bootstrapTotal && bootstrapTotal > 0) {
-          const setTotal = ctx.getMethod("_setTotal") as
+          const setTotal = ctx.hooks.get("_setTotal") as
             | ((total: number) => void)
             | undefined;
           if (setTotal) {
@@ -139,7 +148,7 @@ export function snapshots<T extends VListItem = VListItem>(
           }
 
           sizeCache.rebuild(effectiveTotal);
-          ctx.updateContentSize(sizeCache.getTotalSize());
+          ctx.render.contentSize(sizeCache.getTotalSize());
           state.totalSize = sizeCache.getTotalSize();
         }
 
@@ -152,11 +161,11 @@ export function snapshots<T extends VListItem = VListItem>(
         const sizeCacheTotal = sizeCache.getTotal();
         if (sizeCacheTotal === 0) {
           sizeCache.rebuild(effectiveTotal);
-          ctx.updateContentSize(sizeCache.getTotalSize());
+          ctx.render.contentSize(sizeCache.getTotalSize());
           state.totalSize = sizeCache.getTotalSize();
         }
 
-        const dataToLayout = ctx.getMethod("_dataToLayoutIndex") as
+        const dataToLayout = ctx.hooks.get("_dataToLayoutIndex") as
           | ((dataIndex: number) => number)
           | undefined;
         let resolvedIndex = index;
@@ -175,7 +184,7 @@ export function snapshots<T extends VListItem = VListItem>(
           ? snapshot.offsetRatio * currentItemSize
           : Math.min(offsetInItem, currentItemSize);
 
-        const currentDataTotal = (ctx.getMethod("_getTotal") as (() => number) | undefined)?.();
+        const currentDataTotal = (ctx.hooks.get("_getTotal") as (() => number) | undefined)?.();
         const totalMatch = snapshot.total === effectiveTotal
           || (currentDataTotal !== undefined && snapshot.dataTotal === currentDataTotal);
 
@@ -190,25 +199,27 @@ export function snapshots<T extends VListItem = VListItem>(
         const maxScroll = Math.max(0, state.totalSize - state.containerSize);
         scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
 
-        ctx.scrollTo(scrollPosition);
+        ctx.scroll.to(scrollPosition);
 
         if (restoreSelection && selectedIds?.length) {
-          const selectFn = ctx.getMethod("select") as
+          const selectFn = ctx.hooks.get("select") as
             | ((...ids: Array<string | number>) => void)
             | undefined;
           if (selectFn) selectFn(...selectedIds);
         }
 
-        const loadVisibleFn = ctx.getMethod("loadVisibleRange") as
+        const loadVisibleFn = ctx.hooks.get("loadVisibleRange") as
           | (() => Promise<void>)
           | undefined;
 
         const restoreFocus = (): void => {
           if (focusedId === undefined) return;
-          const focusByIdFn = ctx.getMethod("_focusById") as
-            | ((id: string | number) => void)
+          const focusByIdFn = ctx.hooks.get("_focusById") as
+            | ((id: string | number, keyboard?: boolean | "preserve") => void)
             | undefined;
-          if (focusByIdFn) focusByIdFn(focusedId);
+          // A restore is not a key press. Keep the ring only if it is already
+          // showing, and move it onto the restored row.
+          if (focusByIdFn) focusByIdFn(focusedId, "preserve");
         };
 
         // Resolve once data has loaded and focus restored, so callers can
@@ -224,8 +235,8 @@ export function snapshots<T extends VListItem = VListItem>(
             let polls = 0;
             const pollUntilReady = (): void => {
               if (state.containerSize > 0) {
-                if (Math.abs(state.scrollPosition - scrollPosition) > 1) {
-                  ctx.scrollTo(scrollPosition);
+                if (Math.abs(scroll.getPixelEquivalent() - scrollPosition) > 1) {
+                  ctx.scroll.to(scrollPosition);
                 }
                 loadVisibleFn().then(() => settle(true), () => settle(false));
               } else if (++polls < 10) {
@@ -238,7 +249,7 @@ export function snapshots<T extends VListItem = VListItem>(
             };
             requestAnimationFrame(pollUntilReady);
           } else {
-            const reloadFn = ctx.getMethod("reload") as
+            const reloadFn = ctx.hooks.get("reload") as
               | (() => Promise<void>)
               | undefined;
             if (reloadFn) {
@@ -252,13 +263,13 @@ export function snapshots<T extends VListItem = VListItem>(
         });
       };
 
-      ctx.registerMethod("restoreScroll", restoreScroll);
+      ctx.hooks.method("restoreScroll", restoreScroll);
 
       // ── Auto-save ──────────────────────────────────────────────
 
       let restoreGuard = !!(restoreSnapshot && autoSaveKey);
 
-      ctx.registerDestroyHandler(() => { disposed = true; });
+      ctx.hooks.onDestroy(() => { disposed = true; });
 
       if (autoSaveKey) {
         saveToStorage = (): void => {
@@ -269,7 +280,7 @@ export function snapshots<T extends VListItem = VListItem>(
           } catch { /* sessionStorage full or unavailable */ }
         };
 
-        ctx.registerMethod("_saveSnapshot", saveToStorage);
+        ctx.hooks.method("_saveSnapshot", saveToStorage);
 
         let saveTimer = 0;
         const debouncedSave = (): void => {
@@ -298,19 +309,19 @@ export function snapshots<T extends VListItem = VListItem>(
         const onBeforeUnload = (): void => { saveToStorage?.(); };
         window.addEventListener("beforeunload", onBeforeUnload);
 
-        ctx.registerDestroyHandler(() => {
+        ctx.hooks.onDestroy(() => {
           if (saveTimer) cancelAnimationFrame(saveTimer);
           if (scrollSaveTimer) clearTimeout(scrollSaveTimer);
           window.removeEventListener("beforeunload", onBeforeUnload);
         });
 
         if (restoreSnapshot && restoreSnapshot.total && restoreSnapshot.total > 0) {
-          const cancelAutoLoad = ctx.getMethod("_cancelAutoLoad") as
+          const cancelAutoLoad = ctx.hooks.get("_cancelAutoLoad") as
             | (() => void)
             | undefined;
           if (cancelAutoLoad) cancelAutoLoad();
 
-          const setTotal = ctx.getMethod("_setTotal") as
+          const setTotal = ctx.hooks.get("_setTotal") as
             | ((total: number) => void)
             | undefined;
           if (setTotal) setTotal(restoreSnapshot.total);
@@ -322,7 +333,7 @@ export function snapshots<T extends VListItem = VListItem>(
       if (restoreSnapshot) {
         let restoreSelection = true;
         if (restoreSnapshot.selectedIds?.length) {
-          const seedFn = ctx.getMethod("_seedSelection") as
+          const seedFn = ctx.hooks.get("_seedSelection") as
             | ((ids: Array<string | number>) => void)
             | undefined;
           if (seedFn) {

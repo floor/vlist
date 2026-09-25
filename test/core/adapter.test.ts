@@ -135,17 +135,37 @@ describe("normalizeLogical", () => {
 // =============================================================================
 
 describe("createScrollAdapter", () => {
-  function setup(total = 1000, itemSize = 48, containerSize = 600) {
+  function setup(total = 1000, itemSize = 48, containerSize = 600, padding = 0) {
     const sizeCache = createSizeCache(itemSize, total);
     let pixel = 0;
+    let origin = 0;
     const adapter = createScrollAdapter({
       sizeCache,
       getPixel: () => pixel,
       setPixel: (px) => { pixel = px; },
+      getRenderOrigin: () => origin,
       getContainerSize: () => containerSize,
+      padding,
     });
-    return { adapter, getPixel: () => pixel };
+    return { adapter, getPixel: () => pixel, setOrigin: (value: number) => { origin = value; } };
   }
+
+  it("includes main-axis padding in the maximum and clamping", () => {
+    const { adapter } = setup(100, 40, 400, 40);
+    expect(adapter.getMaxPixelEquivalent()).toBe(3640);
+    adapter.setPixelEquivalent(9999);
+    expect(adapter.getPixelEquivalent()).toBe(3640);
+  });
+
+  it("reads the render origin independently of logical position", () => {
+    const { adapter, setOrigin } = setup();
+    adapter.setPixelEquivalent(500);
+    setOrigin(420);
+    expect(adapter.getRenderOrigin()).toBe(420);
+    setOrigin(430);
+    expect(adapter.getRenderOrigin()).toBe(430);
+    expect(adapter.getPixelEquivalent()).toBe(500);
+  });
 
   it("getPixelEquivalent reflects the source", () => {
     const { adapter } = setup();

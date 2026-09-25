@@ -17,15 +17,28 @@
 // Types
 // =============================================================================
 
+import type { SizeCache } from "../../rendering/sizes";
 import type { ScrollbarPadding } from "../../types";
 export type { ScrollbarPadding } from "../../types";
 
 /** Scrollbar configuration */
 export interface ScrollbarConfig {
-  /** Enable scrollbar (default: true when compressed) */
+  /** Override the platform appearance selected once at setup. */
+  platform?: 'macos' | 'windows' | 'android';
+  /** Width in pixels, or a standard scrollbar-width keyword. */
+  width?: number | 'auto' | 'thin' | 'none';
+  /** Thumb radius in pixels; overrides the author CSS variable. */
+  radius?: number;
+  /** Explicit colors override author scrollbar-color. */
+  thumbColor?: string;
+  trackColor?: string;
+  /** Reserve a gutter while the scrollbar is enabled. */
+  gutter?: boolean;
+
+  /** Enable scrollbar (default: true; width:none also disables it). */
   enabled?: boolean;
 
-  /** Auto-hide scrollbar after idle (default: true) */
+  /** Auto-hide after idle (default: true for overlays, false for Windows). */
   autoHide?: boolean;
 
   /** Auto-hide delay in milliseconds (default: 1000) */
@@ -86,6 +99,9 @@ export interface ScrollbarConfig {
 
 /** Scrollbar instance */
 export interface Scrollbar {
+  /** Re-read the container’s standard scrollbar CSS properties. */
+  refresh: () => void;
+
   /** Show the scrollbar */
   show: () => void;
 
@@ -112,7 +128,7 @@ export type ScrollCallback = (position: number) => void;
 // Constants
 // =============================================================================
 
-const AUTO_HIDE = true;
+let nextViewportId = 0;
 const AUTO_HIDE_DELAY = 1000;
 const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
@@ -170,9 +186,13 @@ export const createScrollbar = (
   classPrefix = "vlist",
   isX = false,
   parent?: HTMLElement,
+  getSizeCache?: () => SizeCache,
+  styleSource?: HTMLElement,
 ): Scrollbar => {
+  const os = (navigator as Navigator & {userAgentData?: {platform: string}}).userAgentData?.platform || navigator.platform + navigator.userAgent;
+  const classic = config.platform ? config.platform === 'windows' : !/Mac|Android/i.test(os);
   const {
-    autoHide = AUTO_HIDE,
+    autoHide = !classic,
     autoHideDelay = AUTO_HIDE_DELAY,
     minThumbSize = MIN_THUMB_SIZE,
     showOnHover = SHOW_ON_HOVER,
@@ -194,6 +214,7 @@ export const createScrollbar = (
   const hoverZoneWidth = config.hoverZoneWidth ?? (wallPad + HOVER_ZONE_REACH);
 
   // State
+  let enabled = true;
   let totalSize = 0;
   let containerSize = 0;
   let thumbSize = 0;
@@ -205,7 +226,16 @@ export const createScrollbar = (
   let currentScrollPosition = 0;
   let hideTimeout: ReturnType<typeof setTimeout> | null = null;
   let visible = false;
-  let animationFrameId: number | null = null;
+  let pointerId: number | null = null;
+  let captureTarget: HTMLElement | null = null;
+  let lastMax = -1, lastNow = -1, lastRow = -1, lastTotal = -1;
+  let lastThumbPosition = -1;
+  const ownedViewportId = viewport.id ? '' : (() => {
+    let id: string;
+    do { id = `${classPrefix}-scrollport-${++nextViewportId}`; } while (document.getElementById(id));
+    viewport.id = id;
+    return id;
+  })();
   let pageClickPos = 0;
   let pageScrollPosition = 0; // internal tracker — updated synchronously each tick
   let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -247,6 +277,12 @@ export const createScrollbar = (
 
   const setupDOM = (): void => {
     track.className = `${classPrefix}-scrollbar`;
+    track.setAttribute('role', 'scrollbar');
+    track.setAttribute('aria-controls', viewport.id);
+    track.setAttribute('aria-orientation', isX ? 'horizontal' : 'vertical');
+    track.setAttribute('aria-label', viewport.getAttribute('aria-label') || 'Scroll');
+    track.setAttribute('aria-valuemin', '0');
+    track.tabIndex = 0;
     thumb.className = `${classPrefix}-scrollbar__thumb`;
 
     if (isX) {
@@ -313,7 +349,7 @@ export const createScrollbar = (
    * When called from hover events, no auto-hide is scheduled.
    */
   const show = (): void => {
-    if (totalSize <= containerSize) return;
+    if (!enabled || totalSize <= containerSize) return;
 
     clearHideTimeout();
 
@@ -323,13 +359,13 @@ export const createScrollbar = (
     }
 
     // Schedule auto-hide only if not hovering and not dragging
-    if (autoHide && !isDragging && !isHovering) {
+    if (autoHide && !isDragging && !isHovering && document.activeElement !== track) {
       scheduleHide();
     }
   };
 
   const hide = (): void => {
-    if (isDragging || isHovering) return;
+    if (isDragging || isHovering || document.activeElement === track) return;
 
     track.classList.remove(`${classPrefix}-scrollbar--visible`);
     visible = false;
@@ -347,10 +383,13 @@ export const createScrollbar = (
     containerSize = newContainerSize;
     syncTrackOffset();
 
+    updatePosition(currentScrollPosition);
+
     // Check if scrollbar is needed
-    if (totalSize <= containerSize) {
+    if (!enabled || totalSize <= containerSize) {
       track.style.display = "none";
-      hide();
+      track.classList.remove(`${classPrefix}-scrollbar--visible`);
+      visible = false;
       return;
     }
     track.style.display = "";
@@ -375,16 +414,51 @@ export const createScrollbar = (
   };
 
   const updatePosition = (scrollTop: number): void => {
-    currentScrollPosition = scrollTop;
+    const maxScroll = Math.max(0, totalSize - containerSize);
+    currentScrollPosition = Math.max(0, Math.min(scrollTop, maxScroll));
+    if (lastMax !== maxScroll) {
+      lastMax = maxScroll;
+      track.setAttribute('aria-valuemax', String(maxScroll));
+    }
+    if (lastNow !== currentScrollPosition) {
+      lastNow = currentScrollPosition;
+      track.setAttribute('aria-valuenow', String(currentScrollPosition));
+    }
+    const cache = getSizeCache?.();
+    const total = cache?.getTotal() ?? 0;
+    const row = total ? cache!.indexAtOffset(currentScrollPosition) + 1 : 0;
+    if (row !== lastRow || total !== lastTotal) {
+      lastRow = row; lastTotal = total;
+      track.setAttribute('aria-valuetext', `Row ${row} of ${total}`);
+    }
+    if (maxScroll <= 0 || maxThumbTravel <= 0) return;
+    const position = currentScrollPosition / maxScroll * maxThumbTravel;
+    if (position !== lastThumbPosition) {
+      lastThumbPosition = position;
+      thumb.style.transform = `${translateFn}(${position}px)`;
+    }
+  };
 
-    if (totalSize <= containerSize || maxThumbTravel <= 0) return;
-
-    // Calculate scroll percentage
-    const maxScroll = totalSize - containerSize;
-    const scrollRatio = Math.min(1, Math.max(0, scrollTop / maxScroll));
-
-    // Position thumb
-    thumb.style.transform = `${translateFn}(${scrollRatio * maxThumbTravel}px)`;
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!enabled || event.target !== track || document.activeElement !== track) return;
+    // A focused scrollbar must not forward Space/Enter to list selection.
+    event.stopPropagation();
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const cache = getSizeCache?.();
+    const step = cache?.getSize(cache.indexAtOffset(currentScrollPosition)) ?? 40;
+    let position = currentScrollPosition;
+    switch (event.key) {
+      case isX ? 'ArrowLeft' : 'ArrowUp': position -= step; break;
+      case isX ? 'ArrowRight' : 'ArrowDown': position += step; break;
+      case 'PageUp': position -= containerSize; break;
+      case 'PageDown': position += containerSize; break;
+      case 'Home': position = 0; break;
+      case 'End': position = totalSize; break;
+      default: return;
+    }
+    event.preventDefault();
+    onScroll(Math.max(0, Math.min(position, Math.max(0, totalSize - containerSize))));
+    show();
   };
 
   // =============================================================================
@@ -477,152 +551,51 @@ export const createScrollbar = (
     repeatRafId = requestAnimationFrame(tickContinuousScroll);
   };
 
-  const handleRepeatMouseUp = (): void => {
+  const handlePointerEnd = (event?: PointerEvent): void => {
+    if (event && event.pointerId !== pointerId) return;
+    const id = pointerId, target = captureTarget;
+    pointerId = null; captureTarget = null;
+    isDragging = false;
+    track.classList.remove(`${classPrefix}-scrollbar--dragging`);
     clearRepeat();
-    // Begin auto-hide now that the hold has ended
+    if (id !== null && target?.hasPointerCapture(id)) target.releasePointerCapture(id);
     scheduleHide();
-    document.removeEventListener('mouseup', handleRepeatMouseUp);
   };
 
-  // 'scroll' — immediate first scroll then smooth continuous scroll while held
-  const handleTrackMouseDown = (e: MouseEvent): void => {
-    if (e.target === thumb || clickBehavior !== 'scroll') return;
-    e.preventDefault();
-
-    const trackRect = track.getBoundingClientRect();
-    pageClickPos = mousePos(e) - trackRect[rectStart];
-    pageScrollPosition = currentScrollPosition;
-
-    firePageScroll();
-
-    // After initial delay, begin smooth RAF-driven continuous scroll
-    repeatTimeout = setTimeout(() => {
-      repeatRafId = requestAnimationFrame(tickContinuousScroll);
-    }, PAGE_SCROLL_INITIAL_DELAY);
-
-    document.addEventListener('mouseup', handleRepeatMouseUp);
-  };
-
-  // =============================================================================
-  // Thumb Drag Handlers
-  // =============================================================================
-
-  const handleThumbMouseDown = (e: MouseEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    isDragging = true;
-    dragStartPos = mousePos(e);
-    dragStartScrollPosition = currentScrollPosition;
-
-    // Cancel any hide while dragging
+  const handlePointerDown = (event: PointerEvent): void => {
+    if (!enabled || event.button !== 0 || pointerId !== null || maxThumbTravel <= 0) return;
+    event.preventDefault(); event.stopPropagation();
+    pointerId = event.pointerId;
+    isDragging = event.target === thumb;
+    captureTarget = isDragging ? thumb : event.currentTarget as HTMLElement;
+    captureTarget.setPointerCapture(pointerId);
     clearHideTimeout();
-
-    track.classList.add(`${classPrefix}-scrollbar--dragging`);
-
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
-  };
-
-  const handleMouseMove = (e: MouseEvent): void => {
-    if (!isDragging) return;
-
-    const delta = mousePos(e) - dragStartPos;
-
-    // Convert thumb movement to scroll movement
-    const scrollRatio = maxThumbTravel > 0 ? delta / maxThumbTravel : 0;
-    const maxScroll = totalSize - containerSize;
-    const deltaScroll = scrollRatio * maxScroll;
-
-    const newPosition = Math.max(
-      0,
-      Math.min(dragStartScrollPosition + deltaScroll, maxScroll),
-    );
-    // Update thumb immediately for responsive feel
-    thumb.style.transform = `${translateFn}(${(newPosition / maxScroll) * maxThumbTravel}px)`;
-
-    // Call synchronously — rAF throttle causes a one-frame lag because
-    // the HTML spec processes scroll events BEFORE rAF callbacks, so the
-    // pipeline would always render for the previous frame's scroll position.
-    onScroll(newPosition);
-  };
-
-  const handleMouseUp = (): void => {
-    isDragging = false;
-    track.classList.remove(`${classPrefix}-scrollbar--dragging`);
-
-    // Schedule auto-hide only if not hovering
-    if (autoHide && !isHovering) {
-      scheduleHide();
-    }
-
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("mouseup", handleMouseUp);
-  };
-
-  // =============================================================================
-  // Touch Handlers (thumb drag)
-  // =============================================================================
-
-  const touchPos = isX
-    ? (e: TouchEvent) => e.touches[0]!.clientX
-    : (e: TouchEvent) => e.touches[0]!.clientY;
-
-  const handleThumbTouchStart = (e: TouchEvent): void => {
-    e.stopPropagation();
-
-    isDragging = true;
-    dragStartPos = touchPos(e);
-    dragStartScrollPosition = currentScrollPosition;
-
-    clearHideTimeout();
-    track.classList.add(`${classPrefix}-scrollbar--dragging`);
-  };
-
-  const handleThumbTouchMove = (e: TouchEvent): void => {
-    if (!isDragging) return;
-    e.preventDefault();
-
-    const delta = touchPos(e) - dragStartPos;
-    const scrollRatio = maxThumbTravel > 0 ? delta / maxThumbTravel : 0;
-    const maxScroll = totalSize - containerSize;
-    const deltaScroll = scrollRatio * maxScroll;
-
-    const newPosition = Math.max(
-      0,
-      Math.min(dragStartScrollPosition + deltaScroll, maxScroll),
-    );
-    thumb.style.transform = `${translateFn}(${(newPosition / maxScroll) * maxThumbTravel}px)`;
-    onScroll(newPosition);
-  };
-
-  const handleThumbTouchEnd = (): void => {
-    isDragging = false;
-    track.classList.remove(`${classPrefix}-scrollbar--dragging`);
-
-    if (autoHide) {
-      scheduleHide();
-    }
-  };
-
-  const handleTrackTouchStart = (e: TouchEvent): void => {
-    if (e.target === thumb) return;
-    if (maxThumbTravel <= 0) return;
-
-    const touch = e.touches[0]!;
-    const trackRect = track.getBoundingClientRect();
-    const pos = (isX ? touch.clientX : touch.clientY) - trackRect[rectStart];
-
-    if (clickBehavior === 'jump') {
-      const maxScroll = totalSize - containerSize;
-      const clampedThumbStart = Math.max(0, Math.min(pos - thumbSize / 2, maxThumbTravel));
-      onScroll((clampedThumbStart / maxThumbTravel) * maxScroll);
+    if (isDragging) {
+      dragStartPos = mousePos(event);
+      dragStartScrollPosition = currentScrollPosition;
+      track.classList.add(`${classPrefix}-scrollbar--dragging`);
+    } else if (clickBehavior === 'jump') {
+      handleTrackClick(event);
     } else {
-      pageClickPos = pos;
+      pageClickPos = mousePos(event) - track.getBoundingClientRect()[rectStart];
       pageScrollPosition = currentScrollPosition;
       firePageScroll();
+      repeatTimeout = setTimeout(() => {
+        repeatRafId = requestAnimationFrame(tickContinuousScroll);
+      }, PAGE_SCROLL_INITIAL_DELAY);
     }
     show();
+  };
+
+  const handlePointerMove = (event: PointerEvent): void => {
+    if (!isDragging || event.pointerId !== pointerId) return;
+    event.stopPropagation();
+    const delta = mousePos(event) - dragStartPos;
+    const maxScroll = Math.max(0, totalSize - containerSize);
+    const position = Math.max(0, Math.min(dragStartScrollPosition + delta / maxThumbTravel * maxScroll, maxScroll));
+    // Immediate visual response even if the consumer's scroll event is deferred.
+    updatePosition(position);
+    onScroll(position);
   };
 
   // =============================================================================
@@ -665,6 +638,39 @@ export const createScrollbar = (
     }
   };
 
+  const styleNames = ['width', 'radius', 'thumb-color', 'track-color'];
+  const setStyle = (name: string, value: string): void => attachTo.style.setProperty(`--vlist-custom-scrollbar-${name}`, value);
+  const originalStyles = styleNames.map(name => attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`));
+  const authoredSizing = originalStyles.slice(0, 2);
+  let appliedSizing: string[] = [];
+  const refresh = (): void => {
+    // Remove our previous sizing before reading author CSS, including when the
+    // standalone component's style source is the element we write to.
+    for (let i = 0; i < 2; i++) {
+      const name = styleNames[i]!;
+      const inline = attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`);
+      if (inline !== appliedSizing[i]) authoredSizing[i] = inline;
+      setStyle(name, authoredSizing[i]!);
+    }
+    const css = getComputedStyle(styleSource ?? attachTo);
+    const width = config.width ?? css.getPropertyValue('scrollbar-width');
+    const colors = css.getPropertyValue('scrollbar-color').match(/[\w-]+\([^)]*\)|\S+/g);
+    enabled = config.enabled !== false && width !== 'none';
+    const values = [
+      typeof config.width === 'number' ? `${config.width}px` :
+        css.getPropertyValue('--vlist-custom-scrollbar-width').trim() || (width === 'thin' || !classic ? '6px' : '14px'),
+      typeof config.radius === 'number' ? `${config.radius}px` :
+        css.getPropertyValue('--vlist-custom-scrollbar-radius').trim() || (classic ? '0px' : '4px'),
+      config.thumbColor ?? (colors?.length === 2 ? colors[0]! : originalStyles[2]!),
+      config.trackColor ?? (colors?.length === 2 ? colors[1]! : originalStyles[3]!)];
+    for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, values[i]!);
+    appliedSizing = values.slice(0, 2);
+    hoverZone.style.display = enabled ? '' : 'none';
+    viewport.classList.toggle(`${classPrefix}-viewport--gutter`, enabled && !!config.gutter);
+    if (!enabled) handlePointerEnd();
+    updateBounds(totalSize, containerSize);
+  };
+
   // =============================================================================
   // Cleanup
   // =============================================================================
@@ -674,31 +680,11 @@ export const createScrollbar = (
     clearHideTimeout();
     clearRepeat();
 
-    if (animationFrameId !== null) {
-      cancelAnimationFrame(animationFrameId);
-      animationFrameId = null;
-    }
-
-    // Remove event listeners
-    track.removeEventListener("click", handleTrackClick);
-    track.removeEventListener("mousedown", handleTrackMouseDown);
-    track.removeEventListener("mouseenter", handleScrollbarAreaEnter);
-    document.removeEventListener("mouseup", handleRepeatMouseUp);
-    track.removeEventListener("mouseleave", handleScrollbarAreaLeave);
-    track.removeEventListener("touchstart", handleTrackTouchStart);
-    thumb.removeEventListener("mousedown", handleThumbMouseDown);
-    thumb.removeEventListener("touchstart", handleThumbTouchStart);
-    thumb.removeEventListener("touchmove", handleThumbTouchMove);
-    thumb.removeEventListener("touchend", handleThumbTouchEnd);
-    viewport.removeEventListener("mouseenter", handleViewportEnter);
-    viewport.removeEventListener("mouseleave", handleViewportLeave);
-    document.removeEventListener("mousemove", handleMouseMove);
-    document.removeEventListener("mouseup", handleMouseUp);
-
-    hoverZone.removeEventListener("click", handleTrackClick);
-    hoverZone.removeEventListener("mousedown", handleTrackMouseDown);
-    hoverZone.removeEventListener("mouseenter", handleScrollbarAreaEnter);
-    hoverZone.removeEventListener("mouseleave", handleScrollbarAreaLeave);
+    handlePointerEnd();
+    clearHideTimeout();
+    for (const remove of removeListeners) remove();
+    for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, originalStyles[i]!);
+    viewport.classList.remove(`${classPrefix}-viewport--gutter`);
     hoverZone.remove();
 
     // Remove inline CSS variable overrides
@@ -709,6 +695,7 @@ export const createScrollbar = (
 
     // Remove DOM elements
     track.remove();
+    if (ownedViewportId && viewport.id === ownedViewportId) viewport.removeAttribute('id');
   };
 
   // =============================================================================
@@ -717,33 +704,38 @@ export const createScrollbar = (
 
   setupDOM();
 
-  // Attach event listeners
-  track.addEventListener("click", handleTrackClick);
-  track.addEventListener("mousedown", handleTrackMouseDown);
-  track.addEventListener("mouseenter", handleScrollbarAreaEnter);
-  track.addEventListener("mouseleave", handleScrollbarAreaLeave);
-  track.addEventListener("touchstart", handleTrackTouchStart, { passive: true });
-  thumb.addEventListener("mousedown", handleThumbMouseDown);
-  thumb.addEventListener("touchstart", handleThumbTouchStart, { passive: true });
-  thumb.addEventListener("touchmove", handleThumbTouchMove, { passive: false });
-  thumb.addEventListener("touchend", handleThumbTouchEnd, { passive: true });
-  viewport.addEventListener("mouseenter", handleViewportEnter);
-  viewport.addEventListener("mouseleave", handleViewportLeave);
-
-  // Always: clicks in the padding margin behave the same as track clicks
-  hoverZone.addEventListener("click", handleTrackClick);
-  hoverZone.addEventListener("mousedown", handleTrackMouseDown);
-  // Conditional: hover-to-reveal behavior
-  if (showOnHover) {
-    hoverZone.addEventListener("mouseenter", handleScrollbarAreaEnter);
-    hoverZone.addEventListener("mouseleave", handleScrollbarAreaLeave);
+  // Registration allocates only at setup; pointer capture keeps drag listeners local.
+  const removeListeners: (() => void)[] = [];
+  const listen = (element: HTMLElement, type: string, handler: EventListener): void => {
+    element.addEventListener(type, handler);
+    removeListeners.push(() => element.removeEventListener(type, handler));
+  };
+  for (const element of [track, thumb, hoverZone]) {
+    listen(element, 'pointerdown', handlePointerDown as EventListener);
+    listen(element, 'pointermove', handlePointerMove as EventListener);
+    listen(element, 'pointerup', handlePointerEnd as EventListener);
+    listen(element, 'pointercancel', handlePointerEnd as EventListener);
+    listen(element, 'lostpointercapture', handlePointerEnd as EventListener);
   }
+  listen(track, 'keydown', handleKeyDown as EventListener);
+  listen(track, 'focus', show);
+  listen(track, 'blur', scheduleHide);
+  listen(viewport, 'mouseenter', handleViewportEnter);
+  listen(viewport, 'mouseleave', handleViewportLeave);
+  listen(track, 'mouseenter', handleScrollbarAreaEnter);
+  listen(track, 'mouseleave', handleScrollbarAreaLeave);
+  if (showOnHover) {
+    listen(hoverZone, 'mouseenter', handleScrollbarAreaEnter);
+    listen(hoverZone, 'mouseleave', handleScrollbarAreaLeave);
+  }
+  refresh();
 
   // =============================================================================
   // Public API
   // =============================================================================
 
   return {
+    refresh,
     show,
     hide,
     updateBounds,

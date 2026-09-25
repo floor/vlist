@@ -6,8 +6,8 @@
  *
  * The content element is sized to a bounded *runway* (a multiple of the
  * viewport, capped at the real virtual size) instead of `totalItems × itemSize`.
- * This sidesteps the browser's ~16.7M px element-size limit without the scale
- * plugin's compression — no compression ratio leaks into offsets or hit-testing.
+ * This sidesteps the browser's ~16.7M px element-size limit without compressing
+ * the coordinate space — no compression ratio leaks into offsets or hit-testing.
  *
  * Coordinates:
  *   logical = baseOffset + scrollTop        (absolute virtual pixel position)
@@ -29,6 +29,7 @@
 
 import type { SizeCache } from "./sizes";
 import type { EngineState } from "./state";
+import { applyWrapFold, wrapLaps } from "./fold";
 import {
   SCROLL_IDLE_TIMEOUT,
   WHEEL_SENSITIVITY,
@@ -67,10 +68,18 @@ export interface BoundedScrollHandler extends ScrollHandler {
 export interface WrapConfig {
   /** Current lap period in virtual px (`realTotal × stepSize`). */
   readonly lapSize: () => number;
-  /** Logical position to fold back toward (e.g. the middle cycle). */
+  /**
+   * Real items in one lap (e.g. the carousel's `realTotal`). The wrap handler
+   * uses this to re-key mounted elements on a fold so the same DOM nodes
+   * survive the virtual-index shift — only the key changed; paint did not.
+   */
+  readonly itemsPerLap: () => number;
+  /** Logical position to fold back toward (the home lap). */
   readonly home: () => number;
   /** Fold the logical position back toward `home` once it drifts this many laps away. */
   readonly thresholdLaps: number;
+  /** @internal Notify the wrap owner when its logical coordinates fold. */
+  readonly onFold?: (shift: number) => void;
 }
 
 export interface BoundedScrollConfig {
@@ -90,6 +99,24 @@ export interface BoundedScrollConfig {
   /** Infinite-loop config (carousel). When set, the logical position wraps by
    *  whole laps toward `home` instead of clamping to a maximum. */
   readonly wrap?: WrapConfig;
+  /**
+   * Mounted row map. A wrap fold re-keys it in place so phase 2 finds the
+   * same nodes; omitted when the handler is constructed without a viewport.
+   */
+  readonly rendered?: Map<number, HTMLElement>;
+  /**
+   * Class prefix for rewriting `id` / `aria-activedescendant` on a wrap fold.
+   * Passed explicitly — a prefix containing `-content` cannot be recovered
+   * from the content element's class name.
+   */
+  readonly classPrefix?: string;
+  /**
+   * Stripe class (`{prefix}-item--odd`). Re-toggled on a wrap fold when
+   * `indexShift` is odd, so virtual-index parity survives the re-key.
+   */
+  readonly oddClass?: string;
+  /** @internal Coordinate fold: shift core telemetry references before rendering. */
+  readonly onFold?: (shift: number) => void;
   /** Called synchronously per frame — triggers the 2-phase pipeline. */
   readonly onFrame: () => void;
   /** Called when scrolling becomes idle. */
@@ -117,6 +144,12 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
 
   let idleTimer: ReturnType<typeof setTimeout> | null = null;
   let animationId: number | null = null;
+  // Fold-along origin for an in-flight smooth scroll. wrapRebase shifts these
+  // by the same delta as scrollPosition so a snap that crosses a lap does not
+  // jump by a whole lap on the next tick (from/dest would otherwise stay in
+  // the pre-fold coordinate space).
+  let animFrom = 0;
+  let animShift = 0;
 
   function getScrollTop(): number {
     return isX ? viewport.scrollLeft : viewport.scrollTop;
@@ -142,6 +175,7 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     if (isWrap) {
       state.baseOffset = clamped - centre;
       setScrollTop(centre);
+      wrapRebase();
       return;
     }
     const base = clamp(clamped - centre, 0, maxBaseOffset);
@@ -205,16 +239,23 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   // number of laps leaves scrollTop (and therefore every on-screen position)
   // untouched — the modulo index mapping resolves the shifted window to the same
   // real items, so the loop is seamless and the render window stays bounded.
+  // applyWrapFold re-keys the mounted map by the same lap shift so phase 2
+  // finds those nodes instead of releasing and re-creating the viewport.
   function wrapRebase(): void {
     const lap = wrap!.lapSize();
     if (lap <= 0) return;
     const drift = state.scrollPosition - wrap!.home();
-    const laps = Math.trunc(drift / lap);
-    if (Math.abs(laps) < wrap!.thresholdLaps) return;
+    const laps = wrapLaps(drift / lap, wrap!.thresholdLaps);
+    if (laps === 0) return;
     const shift = laps * lap;
     state.scrollPosition -= shift;
     state.prevScrollPosition -= shift;
     state.baseOffset -= shift;
+    animFrom -= shift;
+    animShift -= shift;
+    applyWrapFold(wrap!, shift, state, content, config.rendered, config.classPrefix ?? "", config.oddClass);
+    config.onFold?.(shift);
+    wrap!.onFold?.(shift);
   }
 
   // ── Wheel (synchronous; driven entirely in logical space) ────────
@@ -246,8 +287,10 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     if (Math.abs(next - current) < 1) return;
 
     event.preventDefault();
-    setLogical(next);
+    applySplit(next);
     if (isWrap) wrapRebase();
+    onFrame();
+    scheduleIdle();
   }
 
   // ── Idle detection ───────────────────────────────────────────────
@@ -276,11 +319,12 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
     onComplete?: () => void,
   ): void {
     cancelScroll();
-    const from = state.scrollPosition;
+    animFrom = state.scrollPosition;
+    animShift = 0;
     const getTarget = typeof targetOrFn === "function" ? targetOrFn : (): number => targetOrFn;
     let dest = getTarget();
 
-    if (Math.abs(dest - from) < 1) {
+    if (Math.abs(dest - animFrom) < 1) {
       setLogical(dest);
       onComplete?.();
       return;
@@ -288,9 +332,9 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
 
     const start = performance.now();
     function tick(now: number): void {
-      dest = getTarget();
+      dest = getTarget() + animShift;
       const t = Math.min((now - start) / duration, 1);
-      applySplit(from + (dest - from) * easing(t));
+      applySplit(animFrom + (dest - animFrom) * easing(t));
       onFrame();
       if (t < 1) {
         animationId = requestAnimationFrame(tick);

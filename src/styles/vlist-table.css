@@ -92,6 +92,12 @@
     flex-shrink: 0;
 }
 
+/* Body cells use physical left offsets even on RTL pages. Keep the header's
+   flex order aligned with those cells while preserving inherited text direction. */
+.vlist-table-header-scroll:dir(rtl) {
+    flex-direction: row-reverse;
+}
+
 /* Header cell */
 .vlist-table-header-cell {
     position: relative;

@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -7,7 +8,7 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import {
@@ -22,19 +23,11 @@ import { scrollbar } from "../../src/plugins/scrollbar/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -49,25 +42,29 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 function measure(fn: () => void): number {
   const start = performance.now();
   fn();
   return performance.now() - start;
+}
+
+/**
+ * The median of `n` timed runs. A single sample on a shared CI runner is one
+ * GC pause or scheduler hiccup away from any budget under ~10 ms -- measured:
+ * a 1 ms x 5 budget read 5.9 ms once and 0.4 ms on the rerun. The median of
+ * seven ignores the outlier without loosening the budget.
+ */
+function median(n: number, fn: () => void): number {
+  const samples: number[] = [];
+  for (let i = 0; i < n; i++) samples.push(measure(fn));
+  samples.sort((a, b) => a - b);
+  return samples[Math.floor(n / 2)]!;
 }
 
 const CI_MULT = process.env.CI ? 5 : 1;
@@ -224,9 +221,9 @@ describe("performance — render cycles", () => {
     // Warm up
     simulateScroll(viewport, 100);
 
-    const start = performance.now();
-    simulateScroll(viewport, 500);
-    const elapsed = performance.now() - start;
+    // Each sample scrolls to a fresh range so every cycle does the full diff.
+    let position = 100;
+    const elapsed = median(7, () => simulateScroll(viewport, (position += 500)));
 
     expect(elapsed).toBeLessThan(5 * CI_MULT);
     list.destroy();
@@ -243,11 +240,12 @@ describe("performance — render cycles", () => {
     );
 
     const viewport = getViewport(container);
+    // Warm up
     simulateScroll(viewport, 100);
 
-    const start = performance.now();
-    simulateScroll(viewport, 5000);
-    const elapsed = performance.now() - start;
+    // Each sample scrolls to a fresh range so every cycle does the full diff.
+    let position = 100;
+    const elapsed = median(7, () => simulateScroll(viewport, (position += 5000)));
 
     expect(elapsed).toBeLessThan(5 * CI_MULT);
     list.destroy();
@@ -356,21 +354,33 @@ describe("performance — data operations extended", () => {
     list.destroy();
   });
 
-  it("updateItem in under 1ms", () => {
+  // Was "updateItem in under 1ms": a wall-clock millisecond is not a property
+  // of the code, it is a property of the runner. The property worth guarding
+  // is that an update touches one element and nothing else -- that is what
+  // made it fast, and it is what a regression would break.
+  it("updateItem renders exactly the one element, and none when it is off-screen", () => {
+    let renders = 0;
     const list = createVList(
       {
         container,
         items: createTestItems(10_000),
-        item: { height: 50, template: simpleTemplate },
+        item: { height: 50, template: (item: TestItem) => { renders++; return simpleTemplate(item); } },
       },
       [],
     );
+    const before = container.querySelectorAll("[data-index]").length;
+    const untouched = container.querySelector("[data-id=\"3\"]")!.innerHTML;
+    renders = 0;
 
-    const elapsed = measure(() => {
-      list.updateItem(500, { name: "Updated" });
-    });
+    // updateItem addresses the item by id; id 5 is rendered, id 5000 is not.
+    list.updateItem(5, { name: "Updated" });
+    expect(renders).toBe(1);
+    expect(container.querySelector("[data-id=\"5\"]")!.textContent).toBe("Updated");
+    expect(container.querySelector("[data-id=\"3\"]")!.innerHTML).toBe(untouched);
+    expect(container.querySelectorAll("[data-index]").length).toBe(before);
 
-    expect(elapsed).toBeLessThan(1 * CI_MULT);
+    list.updateItem(5000, { name: "Updated" });
+    expect(renders).toBe(1);
     list.destroy();
   });
 
@@ -384,9 +394,9 @@ describe("performance — data operations extended", () => {
       [],
     );
 
-    const elapsed = measure(() => {
-      list.removeItem(5000);
-    });
+    // Each sample removes a different off-screen item, so none is a no-op.
+    let index = 5000;
+    const elapsed = median(7, () => list.removeItem(index++));
 
     expect(elapsed).toBeLessThan(5 * CI_MULT);
     list.destroy();

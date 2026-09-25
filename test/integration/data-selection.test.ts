@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -8,7 +9,7 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
@@ -26,19 +27,11 @@ function waitForLoad(list: VList<TestItem>): Promise<void> {
   });
 }
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -53,20 +46,11 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 function createMockAdapter(total: number = 100): VListAdapter<TestItem> {
   return {
@@ -180,8 +164,8 @@ describe("async + selection integration", () => {
       (list as any).select(1, 2);
       const items: TestItem[] = (list as any).getSelectedItems();
       expect(items.length).toBe(2);
-      expect(items[0].id).toBe(1);
-      expect(items[1].id).toBe(2);
+      expect(items[0]!.id).toBe(1);
+      expect(items[1]!.id).toBe(2);
     });
   });
 

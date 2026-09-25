@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -8,7 +9,7 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import {
@@ -20,19 +21,11 @@ import {
 import { grid } from "../../src/plugins/grid/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientHeight",
-  );
-  origClientWidth = Object.getOwnPropertyDescriptor(
-    HTMLElement.prototype,
-    "clientWidth",
-  );
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
       return 500;
@@ -47,20 +40,11 @@ beforeAll(() => {
   });
 });
 afterAll(() => {
-  if (origClientHeight)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientHeight",
-      origClientHeight,
-    );
-  if (origClientWidth)
-    Object.defineProperty(
-      HTMLElement.prototype,
-      "clientWidth",
-      origClientWidth,
-    );
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
@@ -271,6 +255,40 @@ describe("grid + selection integration", () => {
 
       const selected: number[] = (list as any).getSelected();
       expect(selected.length).toBeGreaterThan(0);
+    });
+
+    it("selectNext past the fold leaves the selected grid item rendered", () => {
+      const itemSize = 40;
+      const columns = 3;
+      const viewport = 500;
+      list = createVList(
+        {
+          container,
+          items: createTestItems(80),
+          item: { height: itemSize, template: simpleTemplate },
+        },
+        [grid({ columns }), selection({ mode: "single" })],
+      );
+
+      const visibleItems = Math.floor(viewport / itemSize) * columns;
+      const steps = visibleItems + 5;
+      for (let i = 0; i < steps; i++) (list as any).selectNext();
+
+      const selected: number[] = (list as any).getSelected();
+      expect(selected.length).toBe(1);
+      expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+      const row = container.querySelector(".vlist-item--selected") as HTMLElement | null;
+      expect(row).not.toBeNull();
+      expect(row!.getAttribute("data-id")).toBe(String(selected[0]));
+
+      const transform = row!.style.transform;
+      const xy = /translate\((-?\d+(?:\.\d+)?)px,\s*(-?\d+(?:\.\d+)?)px\)/.exec(transform);
+      expect(xy).not.toBeNull();
+      const rowY = Number(xy![2]);
+      const visibleTop = rowY - list.getScrollPosition();
+      expect(visibleTop).toBeGreaterThanOrEqual(-1);
+      expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
     });
   });
 });

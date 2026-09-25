@@ -1,38 +1,41 @@
 /**
- * vlist v2 -- Selection Plugin Extended E2E Tests
+ * vlist — Selection Plugin Extended E2E Tests
  *
  * Integration tests that exercise selection behaviors through createVList
  * rather than mock plugin contexts. Each test creates its own isolated
  * VList instance to be safe under --concurrent.
  */
 
+import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../../helpers/factory";
 import type { TestItem } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
-import { selection } from "../../../src/plugins/selection";
+import { selection, type SelectionMethods } from "../../../src/plugins/selection";
+import { groups } from "../../../src/plugins/groups";
 import type { VList } from "../../../src/core/types";
+import { advanceTimers } from "../../helpers/timers";
 
 // =============================================================================
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -61,7 +64,25 @@ function makeList(
 }
 
 function getSelected(vlist: VList<TestItem>): Array<string | number> {
-  return (vlist as unknown as Record<string, Function>)["getSelected"]() as Array<string | number>;
+  return (vlist as unknown as Record<string, Function>)["getSelected"]!() as Array<string | number>;
+}
+
+type SelectableList = VList<TestItem> & SelectionMethods<TestItem>;
+
+function asSelectable(vlist: VList<TestItem>): SelectableList {
+  return vlist as SelectableList;
+}
+
+function selectedRow(root: HTMLElement): HTMLElement | null {
+  return root.querySelector(".vlist-item--selected");
+}
+
+function itemOffsetY(el: HTMLElement): number | null {
+  const transform = el.style.transform;
+  const yOnly = /translateY\((-?\d+(?:\.\d+)?)px\)/.exec(transform);
+  if (yOnly) return Number(yOnly[1]);
+  const xy = /translate\([^,]+,\s*(-?\d+(?:\.\d+)?)px\)/.exec(transform);
+  return xy ? Number(xy[1]) : null;
 }
 
 // =============================================================================
@@ -335,48 +356,233 @@ describe("selection -- followFocus", () => {
 // =============================================================================
 
 describe("selection -- scroll on focus move", () => {
-  it("selectNext scrolls when item is below viewport", () => {
-    const { list, container } = makeList(30, { mode: "single" });
+  it("selectNext past the fold leaves the selected item in the viewport and rendered", () => {
+    const itemSize = 50;
+    const viewport = 500;
+    const { list, container } = makeList(40, { mode: "single" });
+    const sel = asSelectable(list);
+    const visibleCount = Math.floor(viewport / itemSize);
+    const steps = visibleCount + 5;
 
-    const selNext = (list as Record<string, Function>).selectNext as () => void;
-    for (let i = 0; i <= 12; i++) selNext();
+    for (let i = 0; i < steps; i++) sel.selectNext();
 
     const selected = getSelected(list);
     expect(selected.length).toBe(1);
-    expect(selected).toContain(13);
+    expect(selected).toContain(steps);
+
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-id")).toBe(String(steps));
+    expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+    const y = itemOffsetY(row!);
+    expect(y).not.toBeNull();
+    const visibleTop = y! - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
+
+    const content = container.querySelector(".vlist-content");
+    expect(content?.getAttribute("aria-activedescendant")).toBe(`vlist-item-${steps - 1}`);
 
     list.destroy();
     container.remove();
   });
 
-  it("selectPrevious scrolls when item is above viewport", () => {
-    const { list, container } = makeList(30, { mode: "single" });
+  it("selectPrevious back to 0 returns scroll position to 0", () => {
+    const itemSize = 50;
+    const viewport = 500;
+    const { list, container } = makeList(40, { mode: "single" });
+    const sel = asSelectable(list);
+    const steps = Math.floor(viewport / itemSize) + 5;
 
-    const selNext = (list as Record<string, Function>).selectNext as () => void;
-    const selPrev = (list as Record<string, Function>).selectPrevious as () => void;
-    for (let i = 0; i < 15; i++) selNext();
-    selPrev();
+    for (let i = 0; i < steps; i++) sel.selectNext();
+    expect(list.getScrollPosition()).toBeGreaterThan(0);
 
-    const selected = getSelected(list);
-    expect(selected.length).toBe(1);
-    expect(selected).toContain(14);
+    for (let i = 0; i < steps; i++) sel.selectPrevious();
 
-    list.destroy();
-    container.remove();
-  });
-
-  it("no scroll when focused item is within viewport", () => {
-    const { list, container } = makeList(30, { mode: "single" });
-
-    const selNext = (list as Record<string, Function>).selectNext as () => void;
-    selNext(); // index 0
-    selNext(); // index 1
-    selNext(); // index 2
-
-    const selected = getSelected(list);
-    expect(selected.length).toBe(1);
-    expect(selected).toContain(3);
+    expect(getSelected(list)).toEqual([1]);
     expect(list.getScrollPosition()).toBe(0);
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-id")).toBe("1");
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectNext does not scroll when the item is already fully visible", () => {
+    const { list, container } = makeList(30, { mode: "single" });
+    const sel = asSelectable(list);
+
+    sel.selectNext(); // index 0
+    sel.selectNext(); // index 1
+    sel.selectNext(); // index 2
+
+    expect(getSelected(list)).toEqual([3]);
+    expect(list.getScrollPosition()).toBe(0);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectNext during a smooth scroll keeps the selection visible after the animation would have finished", async () => {
+    const itemSize = 50;
+    const viewport = 500;
+    const { list, container } = makeList(200, { mode: "single" });
+    const sel = asSelectable(list);
+
+    list.scrollToIndex(100, { align: "start", behavior: "smooth", duration: 300 });
+    await advanceTimers(50);
+    sel.selectNext();
+
+    // The in-flight animation targeted index 100 (5000px). If it is not
+    // cancelled, waiting past its end leaves the newly selected item
+    // off-screen and unrendered.
+    await advanceTimers(400);
+
+    expect(getSelected(list)).toEqual([1]);
+    expect(list.getScrollPosition()).toBeLessThan(viewport);
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-id")).toBe("1");
+    const y = itemOffsetY(row!);
+    expect(y).not.toBeNull();
+    const visibleTop = y! - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectNext cancels an in-flight smooth scroll even when the selected item is already visible", async () => {
+    const itemSize = 50;
+    const viewport = 500;
+    const { list, container } = makeList(200, { mode: "single" });
+    const sel = asSelectable(list);
+
+    sel.selectNext();
+    sel.selectNext();
+    sel.selectNext();
+    expect(getSelected(list)).toEqual([3]);
+    expect(list.getScrollPosition()).toBe(0);
+
+    list.scrollToIndex(100, { align: "start", behavior: "smooth", duration: 300 });
+    await advanceTimers(16);
+    sel.selectNext();
+
+    await advanceTimers(400);
+
+    expect(getSelected(list)).toEqual([4]);
+    expect(list.getScrollPosition()).toBeLessThan(viewport);
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.getAttribute("data-id")).toBe("4");
+    const y = itemOffsetY(row!);
+    expect(y).not.toBeNull();
+    const visibleTop = y! - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectNext with groups leaves the item visible below the sticky header", () => {
+    const itemSize = 40;
+    const headerHeight = 30;
+    const viewport = 500;
+    const container = createContainer({ width: 300, height: viewport });
+    const items = createTestItems(40);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: { height: itemSize, template: simpleTemplate },
+      },
+      [
+        groups({
+          getGroupForIndex: (index) => `G${Math.floor(index / 10)}`,
+          header: {
+            height: headerHeight,
+            template: (key) => `<div class="group-header">${key}</div>`,
+          },
+        }),
+        selection<TestItem>({ mode: "single" }),
+      ],
+    );
+    const sel = asSelectable(list);
+    const visibleCount = Math.floor(viewport / itemSize);
+    const steps = visibleCount + 5;
+
+    for (let i = 0; i < steps; i++) sel.selectNext();
+
+    expect(getSelected(list).length).toBe(1);
+    expect(list.getScrollPosition()).toBeGreaterThan(0);
+
+    const sticky = container.querySelector(".vlist-sticky-header") as HTMLElement | null;
+    expect(sticky).not.toBeNull();
+    expect(sticky!.style.height).toBe(`${headerHeight}px`);
+
+    const row = selectedRow(container);
+    expect(row).not.toBeNull();
+    expect(row!.classList.contains("vlist-group-header")).toBe(false);
+
+    const y = itemOffsetY(row!);
+    expect(y).not.toBeNull();
+    // Sticky header sits above the viewport (not over it); the item must
+    // occupy the usable viewport, not hide under the header row.
+    const visibleTop = y! - list.getScrollPosition();
+    expect(visibleTop).toBeGreaterThanOrEqual(-1);
+    expect(visibleTop + itemSize).toBeLessThanOrEqual(viewport + 1);
+
+    list.destroy();
+    container.remove();
+  });
+
+  it("selectPrevious across a group boundary skips the header and stays in view", () => {
+    const itemSize = 40;
+    const headerHeight = 30;
+    const viewport = 500;
+    const container = createContainer({ width: 300, height: viewport });
+    const items = createTestItems(40);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items,
+        item: { height: itemSize, template: simpleTemplate },
+      },
+      [
+        groups({
+          getGroupForIndex: (index) => `G${Math.floor(index / 10)}`,
+          header: {
+            height: headerHeight,
+            template: (key) => `<div class="group-header">${key}</div>`,
+          },
+        }),
+        selection<TestItem>({ mode: "single" }),
+      ],
+    );
+    const sel = asSelectable(list);
+
+    const sticky = container.querySelector(".vlist-sticky-header") as HTMLElement | null;
+    expect(sticky).not.toBeNull();
+    expect(sticky!.style.height).toBe(`${headerHeight}px`);
+
+    // First item of group 1 is data index 10, id 11 (createTestItems is 1-based).
+    while (getSelected(list)[0] !== 11) sel.selectNext();
+    expect(getSelected(list)).toEqual([11]);
+
+    sel.selectPrevious();
+    expect(getSelected(list)).toEqual([10]);
+    const prev = selectedRow(container);
+    expect(prev).not.toBeNull();
+    expect(prev!.classList.contains("vlist-group-header")).toBe(false);
+    const prevY = itemOffsetY(prev!);
+    expect(prevY).not.toBeNull();
+    const prevTop = prevY! - list.getScrollPosition();
+    expect(prevTop).toBeGreaterThanOrEqual(-1);
+    expect(prevTop + itemSize).toBeLessThanOrEqual(viewport + 1);
 
     list.destroy();
     container.remove();
@@ -391,7 +597,7 @@ describe("selection -- Delete/Backspace", () => {
   it("Delete emits delete event with selected items", () => {
     const { list, content, container } = makeList(10, { mode: "multiple" });
 
-    const selectFn = (list as Record<string, Function>).select as (...ids: Array<string | number>) => void;
+    const selectFn = (list as unknown as Record<string, Function>).select as (...ids: Array<string | number>) => void;
     selectFn(2, 4);
 
     const deleteEvents: Array<{ selected: Array<string | number>; items: TestItem[] }> = [];
@@ -413,7 +619,7 @@ describe("selection -- Delete/Backspace", () => {
   it("Backspace emits delete event with selected items", () => {
     const { list, content, container } = makeList(10, { mode: "multiple" });
 
-    const selectFn = (list as Record<string, Function>).select as (...ids: Array<string | number>) => void;
+    const selectFn = (list as unknown as Record<string, Function>).select as (...ids: Array<string | number>) => void;
     selectFn(3);
 
     const deleteEvents: Array<{ selected: Array<string | number> }> = [];

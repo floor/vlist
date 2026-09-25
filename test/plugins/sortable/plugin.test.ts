@@ -1,13 +1,13 @@
 /**
- * vlist v2 — Sortable Plugin Tests
+ * vlist — Sortable Plugin Tests
  * Tests for sortable(): factory, setup wiring, pointer handlers,
  * drag ghost/placeholder, sort events, handle configuration, destroy cleanup.
  *
  * Adapted from v1 withSortable feature tests to v2 PluginContext API.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { sortable } from "../../../src/plugins/sortable/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -94,7 +94,7 @@ let origRAF: typeof globalThis.requestAnimationFrame;
 let origCAF: typeof globalThis.cancelAnimationFrame;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   origRAF = global.requestAnimationFrame;
   origCAF = global.cancelAnimationFrame;
   global.requestAnimationFrame = (cb: FrameRequestCallback): number =>
@@ -105,7 +105,7 @@ beforeAll(() => {
 afterAll(() => {
   global.requestAnimationFrame = origRAF;
   global.cancelAnimationFrame = origCAF;
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 // =============================================================================
@@ -175,12 +175,14 @@ describe("sortable — factory", () => {
     expect(plugin.setup).toBeInstanceOf(Function);
   });
 
-  it("declares conflicts with grid, masonry, table, and scale", () => {
+  it("declares conflicts with grid, masonry, table and tree", () => {
     const plugin = sortable<TestItem>();
     expect(plugin.conflicts).toContain("grid");
     expect(plugin.conflicts).toContain("masonry");
     expect(plugin.conflicts).toContain("table");
-    expect(plugin.conflicts).toContain("scale");
+    expect(plugin.conflicts).toContain("tree");
+    // The conflict with scale() outlived the plugin itself, removed in 3.0.
+    expect(plugin.conflicts).not.toContain("scale");
   });
 
   it("accepts config with handle selector", () => {
@@ -483,6 +485,19 @@ describe("sortable — sort events", () => {
     return emitSpy;
   }
 
+  it("computes the drop position from the adapter pixel offset", () => {
+    const t = createMockContext();
+    t.ctx.scroll.getPixelEquivalent = () => 112;
+    t.engineState.scrollPosition = 0;
+    const plugin = sortable<TestItem>();
+    try {
+      plugin.setup!(t.ctx);
+      const calls = simulateDrag(t.ctx, t.emitSpy, 2, 20).mock.calls;
+      const moved = calls.find(c => c[0] === "sort:move");
+      expect(moved?.[1]).toEqual({ fromIndex: 2, currentIndex: 4 });
+    } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
+  });
+
   it("emits sort:start when drag threshold is crossed", () => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
@@ -559,6 +574,51 @@ describe("sortable — sort events", () => {
 
     mockCtx.cleanup();
   });
+
+  // The drop commits its style changes under `vlist--settling` (transition:
+  // none). finalize runs from transitionend or a timeout, so the frame
+  // callback that removes the class fires before the next style calculation;
+  // without a forced calculation while the class is on, the drag source's
+  // opacity went 0 -> 1 through the base .vlist-item transition. Measured on
+  // the sortable example before the fix: 0.09, 0.40, 0.77 over three frames.
+  // Happy DOM has no transitions, so the test pins the mechanism: a layout
+  // read on the root while settling is on, sorting is off, and no row is a
+  // drag source any more. The browser suite measures the opacity itself.
+  const settledReads = (root: HTMLElement, content: HTMLElement): Array<{ settling: boolean; sorting: boolean; dragSource: boolean }> => {
+    const reads: Array<{ settling: boolean; sorting: boolean; dragSource: boolean }> = [];
+    Object.defineProperty(root, "offsetWidth", {
+      configurable: true,
+      get() {
+        reads.push({
+          settling: root.classList.contains("vlist--settling"),
+          sorting: root.classList.contains("vlist--sorting"),
+          dragSource: content.querySelector(".vlist-item--drag-source") !== null,
+        });
+        return 400;
+      },
+    });
+    return reads;
+  };
+
+  for (const [name, moveY] of [["a drop back at the origin", 20], ["a drop two rows down", 120]] as const) {
+    it(`forces a style calculation under settling before the frame that removes it: ${name}`, () => {
+      const plugin = sortable<TestItem>();
+      const mockCtx = createMockContext();
+      mockCtx.ctx.dom.viewport.getBoundingClientRect = () =>
+        ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+      plugin.setup!(mockCtx.ctx);
+      const reads = settledReads(mockCtx.ctx.dom.root, mockCtx.ctx.dom.content);
+
+      simulateDrag(mockCtx.ctx, mockCtx.emitSpy, 3, moveY);
+      const PointerEventCtor = PointerEvent ?? MouseEvent;
+      document.dispatchEvent(new PointerEventCtor("pointerup", { bubbles: true, clientX: 200, clientY: 3 * 56 + 28 + moveY, button: 0 }));
+      fakeTimers.tick(250);
+
+      expect(mockCtx.ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
+      expect(reads.some((r) => r.settling && !r.sorting && !r.dragSource)).toBe(true);
+      mockCtx.cleanup();
+    });
+  }
 
   it("emits sort:move when drop position changes during drag", () => {
     const plugin = sortable<TestItem>();
@@ -684,6 +744,129 @@ describe("sortable — sort events", () => {
 // =============================================================================
 // Ghost Container Tests
 // =============================================================================
+
+describe("sortable — ghost position", () => {
+  // Measured on an iPhone (FLO-87, 2026-09-25): pinch-zoomed and panned by
+  // (86, 215), a `position: fixed` ghost at the pointer's client coordinates
+  // rendered exactly (86, 215) away from the finger -- fixed positioning and
+  // the client space disagree by the visual viewport's offset on WebKit. The
+  // ghost is absolute now and placed by feedback: read its rect, correct by
+  // the difference to the pointer. A test cannot pinch-zoom Happy DOM, but it
+  // can make the ghost's rect report any relation to its inline position --
+  // including the one the phone reported -- and read where the ghost went.
+  const PointerEventCtor = PointerEvent ?? MouseEvent;
+  const at = (type: string, clientX: number, clientY: number): PointerEvent =>
+    new PointerEventCtor(type, { bubbles: true, clientX, clientY, button: 0 }) as PointerEvent;
+  const rectOf = (el: HTMLElement, left: number, top: number, width = 400, height = 56): void => {
+    el.getBoundingClientRect = () =>
+      ({ left, top, right: left + width, bottom: top + height, width, height, x: left, y: top, toJSON: () => {} }) as DOMRect;
+  };
+  /** The ghost's rect reports its inline position shifted by (dx, dy): a containing block not at the origin, or the phone's viewport split. */
+  const shiftRect = (ghost: HTMLElement, dx: number, dy: number): void => {
+    ghost.getBoundingClientRect = () => {
+      const left = parseFloat(ghost.style.left) + dx, top = parseFloat(ghost.style.top) + dy;
+      return { left, top, right: left + 400, bottom: top + 56, width: 400, height: 56, x: left, y: top, toJSON: () => {} } as DOMRect;
+    };
+  };
+  const start = (ctx: ReturnType<typeof createMockContext>["ctx"]): HTMLElement => {
+    const itemEl = ctx.dom.content.querySelector("[data-index='2']") as HTMLElement;
+    rectOf(itemEl, 0, 112);
+    itemEl.dispatchEvent(at("pointerdown", 200, 140)); // grabbed 200 in, 28 down
+    document.dispatchEvent(at("pointermove", 200, 160)); // crosses the threshold: drag starts
+    return document.body.querySelector(".vlist-sort-ghost") as HTMLElement;
+  };
+  const finish = (mockCtx: ReturnType<typeof createMockContext>): void => {
+    document.dispatchEvent(at("pointerup", 200, 160));
+    for (const h of mockCtx.destroyHandlers) h();
+    document.body.querySelector(".vlist-sort-ghost")?.remove();
+    mockCtx.cleanup();
+  };
+
+  it("is absolute and placed the moment the drag starts, under the pointer", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      expect(ghost).not.toBeNull();
+      expect(ghost.style.position).toBe("absolute");
+      // Happy DOM reports every rect at the origin, so inline equals client.
+      expect(ghost.style.left).toBe("0px");
+      expect(ghost.style.top).toBe("132px");
+    } finally {
+      finish(mockCtx);
+    }
+  });
+
+  it("corrects by whatever its containing block adds: a block at (100, 300)", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      shiftRect(ghost, 100, 300);
+      document.dispatchEvent(at("pointermove", 200, 180));
+      expect(ghost.style.left).toBe("-100px");
+      expect(ghost.style.top).toBe("-148px");
+      // And stays put once it is right: the next move corrects by the move only.
+      document.dispatchEvent(at("pointermove", 210, 190));
+      expect(ghost.style.left).toBe("-90px");
+      expect(ghost.style.top).toBe("-138px");
+    } finally {
+      finish(mockCtx);
+    }
+  });
+
+  it("animates the drop to the slot through its containing block, not client space", () => {
+    // The drop animation wrote viewport coordinates straight into left/top.
+    // With the ghost absolute (#303) that is only right when its containing
+    // block sits at the viewport origin -- on a scrolled page the drop flew
+    // to the top, and pinch-zoomed on an iPhone the ghost "went up" on
+    // release after following the finger. Same feedback as placeGhost.
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    mockCtx.ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      shiftRect(ghost, 100, 300); // the containing block sits at client (100, 300)
+      document.dispatchEvent(at("pointermove", 200, 180));
+      expect(ghost.style.top).toBe("-148px");
+      // Release: the drop animates to the slot of index 3 (top 168 in client
+      // space), which is inline top 168 - 300 in the containing block.
+      document.dispatchEvent(at("pointerup", 200, 180));
+      expect(ghost.style.left).toBe("-100px");
+      expect(ghost.style.top).toBe("-132px");
+      expect(ghost.style.transition).toContain("top");
+    } finally {
+      fakeTimers.tick(300);
+      for (const h of mockCtx.destroyHandlers) h();
+      document.body.querySelector(".vlist-sort-ghost")?.remove();
+      mockCtx.cleanup();
+    }
+  });
+
+  it("corrects the viewport split the phone measured: rect = inline - (86, 215)", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      shiftRect(ghost, -86, -215);
+      document.dispatchEvent(at("pointermove", 200, 180));
+      // The fixed ghost read `top: 152px` here and rendered 215 px above the
+      // finger. The rect now lands on the pointer: (0, 152) + (86, 215).
+      expect(ghost.style.left).toBe("86px");
+      expect(ghost.style.top).toBe("367px");
+      const r = ghost.getBoundingClientRect();
+      expect(r.left).toBe(0);
+      expect(r.top).toBe(152);
+    } finally {
+      finish(mockCtx);
+    }
+  });
+});
 
 describe("sortable — ghostContainer", () => {
   function startDrag(
@@ -873,6 +1056,52 @@ describe("sortable — keyboard reordering", () => {
     target.dispatchEvent(event);
     return event;
   }
+
+  // #115: click into the list, press Space, arrows do nothing; press Space
+  // again and they work. With the default `focusOnClick: false` a click
+  // remembers the row but hides the ring, `_getFocusedIndex` answers -1 while
+  // the ring is off, and the first arrow -- which shows the ring -- is what
+  // made the second Space find a row.
+  it("Space grabs the clicked row while its ring is hidden (#115)", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    const focusById = mock(() => {});
+    mockCtx.methods.set("_getFocusedIndex", () => -1);
+    mockCtx.methods.set("_getFocusedId", () => mockCtx.ctx.items.all()[3]!.id);
+    mockCtx.methods.set("_focusById", focusById);
+    plugin.setup!(mockCtx.ctx);
+
+    const event = dispatchKey(mockCtx.ctx.dom.content, " ");
+    expect(event.defaultPrevented).toBe(true);
+    expect(mockCtx.ctx.dom.root.classList.contains("vlist--sorting")).toBe(true);
+    const start = mockCtx.emitSpy.mock.calls.find((c: unknown[]) => c[0] === "sort:start");
+    expect(start).toBeDefined();
+    expect((start![1] as { index: number }).index).toBe(3);
+    // The grab is a key press: the ring comes back on the grabbed row.
+    expect(focusById).toHaveBeenCalledWith(mockCtx.ctx.items.all()[3]!.id, true);
+
+    // And the arrows move it from there, as only the second Space used to:
+    // a keyboard step is a sort:end of one position.
+    dispatchKey(mockCtx.ctx.dom.content, "ArrowDown");
+    const step = mockCtx.emitSpy.mock.calls.find((c: unknown[]) => c[0] === "sort:end");
+    expect(step).toBeDefined();
+    expect(step![1]).toEqual({ fromIndex: 3, toIndex: 4 });
+
+    dispatchKey(mockCtx.ctx.dom.content, "Escape");
+    mockCtx.cleanup();
+  });
+
+  it("Space with no focused row at all still grabs nothing", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    mockCtx.methods.set("_getFocusedIndex", () => -1);
+    mockCtx.methods.set("_getFocusedId", () => undefined);
+    plugin.setup!(mockCtx.ctx);
+    const event = dispatchKey(mockCtx.ctx.dom.content, " ");
+    expect(event.defaultPrevented).toBe(false);
+    expect(mockCtx.emitSpy.mock.calls.some((c: unknown[]) => c[0] === "sort:start")).toBe(false);
+    mockCtx.cleanup();
+  });
 
   it("Space on focused item enters grab mode and emits sort:start", () => {
     const setup = setupKeyboard(3);

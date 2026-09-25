@@ -1,6 +1,6 @@
 {
   "name": "vlist",
-  "version": "2.8.1",
+  "version": "3.0.0",
   "description": "Lightweight, high-performance virtual list with zero dependencies",
   "author": {
     "name": "Floor IO",
@@ -39,6 +39,11 @@
       "import": "./dist/synthetic.js",
       "default": "./dist/synthetic.js"
     },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "import": "./dist/native.js",
+      "default": "./dist/native.js"
+    },
     "./config": {
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js",
@@ -74,12 +79,15 @@
     "dev": "bun run build.ts --watch",
     "test": "bun test",
     "test:changed": "bun test --changed",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "test:browser": "bun scripts/rtl-cross-axis-browser.mjs && bun scripts/synthetic-browser.mjs && bun scripts/synthetic-carousel-browser.mjs && bun scripts/synthetic-sortable-browser.mjs && bun scripts/select-next-browser.mjs && bun scripts/item-fill-browser.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.types.json && tsc --noEmit -p tsconfig.test.json",
     "bench": "bun run scripts/bench.ts",
     "bench:quick": "bun run scripts/bench.ts --quick",
     "bench:full": "bun run scripts/bench.ts --full",
     "bench:compare": "bun run scripts/bench.ts --quick --compare",
     "size": "bun run scripts/size.ts",
+    "heap": "bun run scripts/heap.ts",
+    "docs:check": "bun run scripts/docs-check.ts",
     "release": "bun run scripts/release.ts",
     "prepublishOnly": "bun run build -- --types && cp README.md README.github.md && cp npm-readme.md README.md",
     "postpublish": "cp README.github.md README.md && rm README.github.md"
@@ -94,6 +102,7 @@
     "@types/jsdom": "^27.0.0",
     "happy-dom": "^20.9.0",
     "jsdom": "^28.0.0",
+    "puppeteer-core": "^24.43.1",
     "typescript": "^5.0.0"
   }
 }

@@ -4,6 +4,8 @@
  * correctly to item transforms when using grid() or masonry() plugins.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -13,8 +15,8 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import {
   createTestItems,
@@ -25,13 +27,12 @@ import {
 import { grid } from "../../src/plugins/grid/plugin";
 import { masonry } from "../../src/plugins/masonry/plugin";
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
     configurable: true,
@@ -43,10 +44,11 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 let container: HTMLElement;
 let list: VList<TestItem> | null = null;
@@ -138,7 +140,7 @@ describe("grid + padding", () => {
   });
 
   it("content height includes main-axis padding", () => {
-    list = createVList({
+    list = createNative({
       container,
       item: { height: 100, template: simpleTemplate },
       items: createTestItems(6),

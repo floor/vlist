@@ -1,11 +1,13 @@
 /**
- * vlist v2 — Cross-Feature Integration Tests
+ * vlist — Cross-Feature Integration Tests
  *
  * Recovers missing coverage from v1 integration/features.test.ts.
  * Tests multi-plugin combos, data ops with features, horizontal mode
  * with features, concurrent operations, and feature interaction edge cases.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
   it,
@@ -16,9 +18,9 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
-import type { VList } from "../../src/core/types";
+import { createVList as createNative } from "../../src/native";
+import type { PluginContext, VList } from "../../src/core/types";
 import {
   createTestItems,
   createContainer,
@@ -32,27 +34,28 @@ import { groups } from "../../src/plugins/groups/plugin";
 import { snapshots } from "../../src/plugins/snapshots/plugin";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { table } from "../../src/plugins/table/plugin";
+import { autosize } from "../../src/plugins/autosize/plugin";
 import type { VListAdapter } from "../../src/types";
 
 // =============================================================================
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -669,10 +672,11 @@ describe("cross-feature — group header interaction", () => {
 
     const content = getContent(container);
     const itemEl = content.querySelector("[data-index]:not(.vlist-group-header)");
-    if (itemEl) {
-      itemEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      expect(itemClicked).toBe(true);
-    }
+    // This was wrapped in `if (itemEl)`, so a list that rendered nothing at all
+    // passed the test in silence.
+    expect(itemEl).not.toBeNull();
+    itemEl!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(itemClicked).toBe(true);
   });
 
   it("item:click delivers the correct item (not off-by-one from group header)", () => {
@@ -701,6 +705,10 @@ describe("cross-feature — group header interaction", () => {
 
     expect(clickedItems.length).toBe(1);
     expect(clickedItems[0]!.id).toBe(2); // data item at index 1 has id=2
+    // The index is the data index too, not the layout index: feeding it back to
+    // getItemAt or removeItem used to land one row off per header above it.
+    expect(clickedItems[0]!.index).toBe(1);
+    expect(list!.getItemAt(clickedItems[0]!.index)!.id).toBe(2);
   });
 
   it("item:click on group header is suppressed", () => {
@@ -721,16 +729,65 @@ describe("cross-feature — group header interaction", () => {
     const content = getContent(container);
     // Layout index 0 is the group header
     const headerEl = content.querySelector('[data-index="0"]');
-    if (headerEl) {
-      headerEl.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      expect(clicked).toBe(false);
-    }
+    // Same guard as above: without the header rendered, "no click fired" was
+    // true for the wrong reason.
+    expect(headerEl).not.toBeNull();
+    headerEl!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(clicked).toBe(false);
   });
 
-  // NOTE: table+groups click test requires a real browser (table plugin
-  // rendering in happy-dom doesn't produce clickable data-index rows).
-  // The resolveClickedItem fix is covered by the list+groups tests above
-  // and verified manually in the desk's table view.
+  // Regression for P8: a click on the first row of a group was dropped. Two
+  // defects with one root, and the test needs both fixed.
+  //
+  // `groups()` defers its table-mode wiring to a microtask and never re-rendered
+  // afterwards, so the rows kept data-space indices and no header class while
+  // core resolves clicks through the layout space: layout index 0 is a header,
+  // layoutToDataIndex returned -1, and the click was discarded for good. Behind
+  // that sat the second fault — with the DOM in layout space, core fetched the
+  // item with a data index against the layout-aware accessor groups installs,
+  // so a row answered as the header above it.
+  //
+  // The assertion that binds is the emitted item against the clicked row's own
+  // data-id. Feeding the reported index back into getItemAt does NOT bind here:
+  // under table+groups getItemAt takes layout indices (pinned by
+  // groups-table-data.test.ts), so before the fix that round-trip agreed with
+  // itself while the reported item was wrong — which is how this sat green.
+  it("item:click reports the clicked row with table and groups together (P8)", async () => {
+    const items = createTestItems(50);
+    list = createVList<TestItem>(
+      { container, items, item: { height: 40, template: simpleTemplate } },
+      [
+        table({ columns: [{ key: "id", label: "ID", width: 100 }], rowHeight: 40 }),
+        groups({
+          getGroupForIndex: (i: number) => (i < 25 ? "A" : "B"),
+          header: { height: 30, template: (g: string) => `<div>${g}</div>` },
+        }),
+      ],
+    );
+
+    // groups wires table mode in a microtask and re-renders there. Measured:
+    // with no await at all this emits nothing, because the rows still carry
+    // data-space indices; one microtask is enough.
+    await Promise.resolve();
+
+    const seen: Array<{ id: string | number; index: number }> = [];
+    list.on("item:click", ({ item, index }) => seen.push({ id: item.id, index }));
+
+    const content = getContent(container);
+    const rows = content.querySelectorAll("[data-index]:not(.vlist-table-group-header)");
+    expect(rows.length).toBeGreaterThan(0);
+
+    const row = rows[0] as HTMLElement;
+    const rowId = row.getAttribute("data-id");
+    expect(rowId).toBeTruthy();
+    row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(seen.length).toBe(1);
+    // The item is the row clicked, not the header above it.
+    expect(String(seen[0]!.id)).toBe(String(rowId));
+    // And the index is the data index the event documents: layout 1 -> data 0.
+    expect(seen[0]!.index).toBe(0);
+  });
 });
 
 // =============================================================================
@@ -779,7 +836,7 @@ describe("cross-feature — grid with variable height", () => {
 
 describe("cross-feature — scroll idle", () => {
   it("adds scrolling class during scroll", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate } },
       [],
     );
@@ -791,7 +848,7 @@ describe("cross-feature — scroll idle", () => {
   });
 
   it("scroll idle event fires after timeout", async () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate }, scroll: { idleTimeout: 30 } },
       [],
     );
@@ -807,7 +864,7 @@ describe("cross-feature — scroll idle", () => {
   });
 
   it("removes scrolling class after idle fires", async () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       { container, items: createTestItems(100), item: { height: 50, template: simpleTemplate }, scroll: { idleTimeout: 20 } },
       [],
     );
@@ -891,5 +948,78 @@ describe("grid + snapshots", () => {
     expect(contentHeight).toBeGreaterThan(0);
 
     sessionStorage.removeItem(autoSaveKey);
+  });
+});
+
+// =============================================================================
+// Autosize + reverse data ops
+// =============================================================================
+
+describe("cross-feature — autosize + prependItems in reverse mode", () => {
+  /**
+   * A ResizeObserver whose callback is triggered by the test rather than on
+   * observe: firing synchronously from inside `observe` would re-enter the
+   * render that is installing the observation.
+   */
+  function captureResizeObserver() {
+    const original = globalThis.ResizeObserver;
+    const observed = new Set<Element>();
+    let callback: ResizeObserverCallback | null = null;
+
+    globalThis.ResizeObserver = class {
+      constructor(cb: ResizeObserverCallback) { callback = cb; }
+      observe(el: Element): void { observed.add(el); }
+      unobserve(el: Element): void { observed.delete(el); }
+      disconnect(): void { observed.clear(); }
+    } as unknown as typeof ResizeObserver;
+
+    return {
+      /** Report `size` for every element observed so far. */
+      measureAll(size: number): void {
+        const entries = [...observed]
+          .filter((el) => (el as HTMLElement).hasAttribute("data-index"))
+          .map((el) => ({
+            target: el,
+            borderBoxSize: [{ blockSize: size, inlineSize: 300 }],
+          }) as unknown as ResizeObserverEntry);
+        if (entries.length > 0) callback!(entries, {} as ResizeObserver);
+      },
+      restore(): void { globalThis.ResizeObserver = original; },
+    };
+  }
+
+  it("compensates by the measured size cache, not the estimate", () => {
+    // With autosize seated there is no `item.height` to multiply by: the
+    // inserted size has to come from the cache the plugin owns.
+    const ro = captureResizeObserver();
+    try {
+      let ctx!: PluginContext<TestItem>;
+      const vlist = createVList<TestItem>(
+        {
+          container,
+          items: createTestItems(40),
+          item: { estimatedHeight: 50, template: simpleTemplate },
+          reverse: true,
+        },
+        [autosize(), { name: "capture-context", setup(value: PluginContext<TestItem>): void { ctx = value; } }],
+      );
+      list = vlist;
+
+      vlist.scrollToIndex(20, "start");
+      ro.measureAll(80);
+
+      const before = vlist.getScrollPosition();
+      const totalBefore = ctx.sizes.cache.getTotalSize();
+      // Measurements landed: the cache no longer reports 40 x the estimate.
+      expect(totalBefore).not.toBe(40 * 50);
+
+      vlist.prependItems(createTestItems(4, 100));
+
+      const grew = ctx.sizes.cache.getTotalSize() - totalBefore;
+      expect(grew).toBeGreaterThan(0);
+      expect(vlist.getScrollPosition()).toBe(before + grew);
+    } finally {
+      ro.restore();
+    }
   });
 });

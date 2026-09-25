@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Autosize Gap Handling Tests
+ * vlist — Autosize Gap Handling Tests
  *
  * Verifies that the autosize plugin correctly handles gap configuration:
  * gap added to estimatedSize, gap added to measured sizes, gap subtracted
@@ -121,12 +121,12 @@ describe("autosize — gap config", () => {
 
   it("sizeFn returns estimatedSize + gap for unmeasured items", () => {
     let registeredSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: number | ((index: number) => number)) => {
+    mockCtx.ctx.sizes.setConfig = (fn: number | ((index: number) => number)) => {
       if (typeof fn === "function") registeredSizeFn = fn;
     };
 
-    const plugin = autosize({ gap: 8 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 8 });
+    plugin.setup!(mockCtx.ctx);
 
     // estimatedSize = rawSizeSpec (50) + gap (8) = 58
     expect(registeredSizeFn).not.toBeNull();
@@ -138,12 +138,12 @@ describe("autosize — gap config", () => {
 
   it("sizeFn returns measured size + gap after measurement", () => {
     let registeredSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: number | ((index: number) => number)) => {
+    mockCtx.ctx.sizes.setConfig = (fn: number | ((index: number) => number)) => {
       if (typeof fn === "function") registeredSizeFn = fn;
     };
 
-    const plugin = autosize({ gap: 8 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 8 });
+    plugin.setup!(mockCtx.ctx);
 
     // Manually set a measured size
     const setMeasuredSize = mockCtx.methods.get("setMeasuredSize") as (i: number, s: number) => void;
@@ -157,15 +157,15 @@ describe("autosize — gap config", () => {
 
   it("falls back to ctx.config.gap when plugin gap is 0", () => {
     let registeredSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: number | ((index: number) => number)) => {
+    mockCtx.ctx.sizes.setConfig = (fn: number | ((index: number) => number)) => {
       if (typeof fn === "function") registeredSizeFn = fn;
     };
 
     // Set gap on the resolved config
     (mockCtx.ctx.config as any).gap = 12;
 
-    const plugin = autosize(); // no explicit gap
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>(); // no explicit gap
+    plugin.setup!(mockCtx.ctx);
 
     // estimatedSize = rawSizeSpec (50) + gap (12) = 62
     expect(registeredSizeFn!(0)).toBe(62);
@@ -174,23 +174,23 @@ describe("autosize — gap config", () => {
   });
 
   it("getTotalSize is adjusted by subtracting gap when gap > 0", () => {
-    const plugin = autosize({ gap: 8 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 8 });
+    plugin.setup!(mockCtx.ctx);
 
-    // The plugin wraps sizeCache.getTotalSize to subtract gap
-    const totalSize = mockCtx.ctx.sizeCache.getTotalSize();
-    const rawTotal = 10 * 50; // 10 items × 50px
-    // Adjusted: rawTotal - gap = 500 - 8 = 492
-    expect(totalSize).toBe(rawTotal - 8);
+    // The gap is a size-cache parameter now, so each slot is 50 + 8 and the
+    // total drops one trailing gap. Checked against a real list: the same
+    // configuration totals 572 with autosize and without it.
+    const totalSize = mockCtx.ctx.sizes.cache.getTotalSize();
+    expect(totalSize).toBe(10 * (50 + 8) - 8);
 
     plugin.destroy!();
   });
 
   it("getTotalSize is not adjusted when gap is 0", () => {
-    const plugin = autosize({ gap: 0 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 0 });
+    plugin.setup!(mockCtx.ctx);
 
-    const totalSize = mockCtx.ctx.sizeCache.getTotalSize();
+    const totalSize = mockCtx.ctx.sizes.cache.getTotalSize();
     const rawTotal = 10 * 50;
     expect(totalSize).toBe(rawTotal);
 
@@ -220,12 +220,12 @@ describe("autosize — measurement with gap", () => {
 
   it("ResizeObserver stores measured size + gap in measuredSizes", () => {
     let registeredSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: number | ((index: number) => number)) => {
+    mockCtx.ctx.sizes.setConfig = (fn: number | ((index: number) => number)) => {
       if (typeof fn === "function") registeredSizeFn = fn;
     };
 
-    const plugin = autosize({ gap: 8 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 8 });
+    plugin.setup!(mockCtx.ctx);
 
     // Simulate rendering and observation
     const el = document.createElement("div");
@@ -234,7 +234,7 @@ describe("autosize — measurement with gap", () => {
 
     mockCtx.engineState.visibleCount = 1;
     mockCtx.engineState.visibleIndices[0] = 2;
-    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 2 ? el : null);
+    mockCtx.ctx.dom.renderedElement = (idx: number) => (idx === 2 ? el : null);
 
     plugin.hooks!.onCommit!(mockCtx.engineState);
 
@@ -251,12 +251,12 @@ describe("autosize — measurement with gap", () => {
 
   it("scroll compensation delta includes gap", () => {
     let registeredSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: number | ((index: number) => number)) => {
+    mockCtx.ctx.sizes.setConfig = (fn: number | ((index: number) => number)) => {
       if (typeof fn === "function") registeredSizeFn = fn;
     };
 
-    const plugin = autosize({ gap: 8 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 8 });
+    plugin.setup!(mockCtx.ctx);
 
     // Position viewport at index 5 (items 0-4 are above)
     mockCtx.engineState.startIndex = 5;
@@ -269,7 +269,7 @@ describe("autosize — measurement with gap", () => {
 
     mockCtx.engineState.visibleCount = 1;
     mockCtx.engineState.visibleIndices[0] = 2;
-    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 2 ? el : null);
+    mockCtx.ctx.dom.renderedElement = (idx: number) => (idx === 2 ? el : null);
 
     plugin.hooks!.onCommit!(mockCtx.engineState);
 
@@ -287,12 +287,12 @@ describe("autosize — measurement with gap", () => {
 
   it("no scroll compensation for items at or after viewport start", () => {
     let registeredSizeFn: ((index: number) => number) | null = null;
-    mockCtx.ctx.setSizeConfig = (fn: number | ((index: number) => number)) => {
+    mockCtx.ctx.sizes.setConfig = (fn: number | ((index: number) => number)) => {
       if (typeof fn === "function") registeredSizeFn = fn;
     };
 
-    const plugin = autosize({ gap: 8 });
-    plugin.setup(mockCtx.ctx);
+    const plugin = autosize<TestItem>({ gap: 8 });
+    plugin.setup!(mockCtx.ctx);
 
     // Position viewport at index 2
     mockCtx.engineState.startIndex = 2;
@@ -305,7 +305,7 @@ describe("autosize — measurement with gap", () => {
 
     mockCtx.engineState.visibleCount = 1;
     mockCtx.engineState.visibleIndices[0] = 3;
-    mockCtx.ctx.getRenderedElement = (idx: number) => (idx === 3 ? el : null);
+    mockCtx.ctx.dom.renderedElement = (idx: number) => (idx === 3 ? el : null);
 
     plugin.hooks!.onCommit!(mockCtx.engineState);
 

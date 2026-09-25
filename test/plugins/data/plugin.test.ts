@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Async Plugin Tests
+ * vlist — Async Plugin Tests
  * Unit tests for async() plugin: setup, lifecycle, reload, ARIA, network recovery,
  * onIdle hook, autoLoad flag, and edge cases.
  *
@@ -7,20 +7,19 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { data as dataPlugin } from "../../../src/plugins/data/plugin";
 import type { VListItem, VListAdapter } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import { createEmitter } from "../../../src/events/emitter";
-import { useFakeTimers } from "../../helpers/dom";
+import { useFakeTimers, registerDOM, unregisterDOM } from "../../helpers/dom";
 import type { VListEvents } from "../../../src/types";
 
 // =============================================================================
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers
@@ -82,16 +81,16 @@ function createContextWithRealEmitter(options?: {
 
   // Track forceRender calls
   let forceRenderCallCount = 0;
-  const originalForceRender = result.ctx.forceRender.bind(result.ctx);
-  (result.ctx as any).forceRender = () => {
+  const originalForceRender = result.ctx.render.force.bind(result.ctx);
+  (result.ctx as any).render.force = () => {
     forceRenderCallCount++;
     originalForceRender();
   };
 
   // Track renderIfNeeded calls
   let renderIfNeededCallCount = 0;
-  const originalRenderIfNeeded = result.ctx.renderIfNeeded.bind(result.ctx);
-  (result.ctx as any).renderIfNeeded = () => {
+  const originalRenderIfNeeded = result.ctx.render.ifNeeded.bind(result.ctx);
+  (result.ctx as any).render.ifNeeded = () => {
     renderIfNeededCallCount++;
     originalRenderIfNeeded();
   };
@@ -667,8 +666,12 @@ describe("async - onResize Hook", () => {
 // Network Recovery — online event
 // =============================================================================
 
+// `online` is dispatched on the one `window` that every live data() plugin
+// listens to, so these tests reach other tests' adapters. They are `it.serial`
+// (not `describe.serial`, which Bun 1.4 does not honour) so nothing else is in
+// flight while the event fans out.
 describe("async - Network Recovery", () => {
-  it("should not crash when 'online' event fires", async () => {
+  it.serial("should not crash when 'online' event fires", async () => {
     const adapter = createMockAdapter();
     const plugin = dataPlugin({ adapter });
     const { ctx } = createContextWithRealEmitter({
@@ -686,7 +689,7 @@ describe("async - Network Recovery", () => {
     }).not.toThrow();
   });
 
-  it("should not call ensureRange on 'online' when destroyed", async () => {
+  it.serial("should not call ensureRange on 'online' when destroyed", async () => {
     const adapter = createMockAdapter();
     // Use autoLoad: false so the initial queueMicrotask path is skipped.
     // We mark the list as destroyed before dispatching 'online' to verify
@@ -710,7 +713,7 @@ describe("async - Network Recovery", () => {
     expect(adapter.read).not.toHaveBeenCalled();
   });
 
-  it("should clean up online listener on destroy", () => {
+  it.serial("should clean up online listener on destroy", () => {
     const adapter = createMockAdapter();
     const plugin = dataPlugin({ adapter });
     const { ctx, destroyHandlers } = createContextWithRealEmitter();

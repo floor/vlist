@@ -1,15 +1,16 @@
 /**
- * vlist v2 — Horizontal Mode Tests
+ * vlist — Horizontal Mode Tests
  *
  * Tests orientation="horizontal": DOM structure, scroll axis,
  * content sizing, scrollToIndex, and ARIA orientation.
  */
 
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
-import { createVList } from "../../src/core/create";
+import { createVList } from "../../src/native";
 import { grid } from "../../src/plugins/grid/plugin";
 import type { VList, VListPlugin, PluginContext, ResolvedConfig } from "../../src/core/types";
 
@@ -17,21 +18,21 @@ import type { VList, VListPlugin, PluginContext, ResolvedConfig } from "../../sr
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 300, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 500, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers

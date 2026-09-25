@@ -7,6 +7,9 @@
 // Core
 // =============================================================================
 
+/** Conservative native document element size limit, in CSS pixels. */
+export const MAX_ELEMENT_SIZE = 16_777_216;
+
 /** Default number of extra items to render outside viewport */
 export const OVERSCAN = 3;
 
@@ -88,19 +91,6 @@ export const SCROLL_DURATION = 300;
  * scrollbar room to move before a rebase shifts the logical origin.
  */
 export const BOUNDED_RUNWAY_FACTOR = 2;
-
-/**
- * Minimum runway multiple. The runway must exceed the viewport so native scroll
- * and touch/trackpad momentum have room before a rebase; below this there would
- * be little-to-no native scrollable range. User-supplied `scroll.runway` values
- * are clamped up to this floor.
- *
- * 1.5 keeps a half-viewport of native scroll travel — enough for the native
- * scrollbar and most touch gestures. The wheel/trackpad path is already fully
- * synthetic (driven in logical space), so it is unaffected by the runway size;
- * a small runway only risks interrupting native touch momentum at the edges.
- */
-export const BOUNDED_RUNWAY_MIN = 1.5;
 
 /**
  * Lower rebase trigger: when native scrollTop drops below this fraction of the

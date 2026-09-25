@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Core Type Definitions
+ * vlist — Core Type Definitions
  *
  * Zero-allocation pipeline types. All hot-path state lives in TypedArrays
  * on the EngineState singleton — no intermediate object allocation.
@@ -92,6 +92,8 @@ export interface ElementPool {
   acquire(): HTMLElement;
   release(element: HTMLElement): void;
   readonly size: number;
+  /** Drop spare nodes until at most `keep` remain. Does not touch mounted rows. */
+  trim(keep: number): void;
   clear(): void;
 }
 
@@ -99,99 +101,172 @@ export interface ElementPool {
 // Plugin Context — cold path only, scoped access for setup()
 // =============================================================================
 
-export interface PluginContext<T extends VListItem = VListItem> {
-  readonly dom: DOMStructure;
-  readonly sizeCache: SizeCache;
-  /**
-   * Logical scroll model boundary (RFC-012). Plugins read and write scroll
-   * position through this adapter rather than touching `getState().scrollPosition`
-   * or raw `scrollTop`/`scrollLeft`. Its pixel-equivalent view keeps existing
-   * pixel-based code paths working during the migration.
-   */
-  readonly scroll: ScrollAdapter;
-  readonly pool: ElementPool;
-  readonly config: ResolvedConfig;
-  readonly emitter: Emitter<import("../types").VListEvents<T>>;
-  readonly template: ItemTemplate<T>;
+/**
+ * DOM structure, plus the element and role helpers that act on it.
+ */
+export interface DomCapability extends DOMStructure {
+  /** The rendered element for a layout index, honouring a plugin's override. */
+  renderedElement(index: number): HTMLElement | null;
+  /** Adopt the WAI-ARIA listbox roles. Selection and a11y call this; a list
+   * with neither stays a display-only `role="list"`. */
+  enableListbox(): void;
+}
 
-  registerMethod(name: string, fn: Function): void;
-  getMethod(name: string): Function | undefined;
-  registerClickHandler(handler: (event: MouseEvent) => void): void;
-  registerKeydownHandler(handler: (event: KeyboardEvent) => void): void;
-  registerDestroyHandler(handler: () => void): void;
-  enableListboxRole(): void;
-
-  setSizeConfig(config: number | ((index: number) => number)): void;
-  /** @deprecated Use setScrollSource in 3.0; removed in 3.0.
-   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
-  setScrollFns(get: () => number, set: (pos: number) => void): void;
-  /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
-  setBoundedWrap(config: import("./runway").WrapConfig): void;
-  setVirtualTotalFn(fn: () => number): void;
-  setIndexMapFn(fn: (renderIndex: number) => number): void;
-
-  getItems(): readonly T[];
-  getItem(index: number): T | undefined;
-  getState(): EngineState;
-  rebuildSizeCache(): void;
-  updateContentSize(size: number): void;
-  setRenderFn(renderIfNeeded: () => void, forceRender: () => void): void;
-  renderIfNeeded(): void;
-  forceRender(): void;
-
-  setGetItemFn(fn: (index: number) => T | undefined): void;
-  setItemStateFn(fn: (index: number, state: ItemState) => void): void;
-  getItemStateFn(): ((index: number, state: ItemState) => void) | null;
-  readonly rawSizeSpec: number | ((index: number, ...args: unknown[]) => number);
-
-  scrollTo(position: number): void;
+/**
+ * Logical scroll model boundary (RFC-012): the adapter's reads, plus the
+ * controls that write. Plugins go through this rather than touching
+ * `getState().scrollPosition` or raw `scrollTop`/`scrollLeft`.
+ */
+export interface ScrollCapability extends ScrollAdapter {
+  to(position: number): void;
   /** Preserve synthetic motion during a measurement/anchor correction. */
-  shiftScroll(delta: number): void;
-  smoothScrollTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
+  shiftBy(delta: number): void;
+  smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void;
   /** Cancel any in-flight smooth-scroll animation on the active handler. */
-  cancelScroll(): void;
-  /** @deprecated Use setScrollSource in 3.0; removed in 3.0.
-   * See https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model */
-  disableDefaultScroll(): void;
-  disableDefaultResize(): void;
-  setScrollTarget(target: EventTarget): void;
-  setScrollToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
-  setScrollToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;
-  onScrollFrame(): void;
-  onScrollIdle(): void;
+  cancel(): void;
+  /** Commit an external position, render synchronously and schedule idle. */
+  commit(px: number): void;
+  /** Install an external writer and disable default scroll/wheel listeners. */
+  setSource(source: { write(px: number): void; onContentSize?(px: number): void }): void;
+  setTarget(target: EventTarget): void;
+  /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
+  setBoundedWrap(
+    config: import("./runway").WrapConfig,
+    createHandler: (config: import("./runway").BoundedScrollConfig) => import("./runway").BoundedScrollHandler,
+  ): void;
+  setToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
+  setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;
+  onFrame(): void;
+  onIdle(): void;
+  disableResize(): void;
+}
 
-  removeItemById(id: string | number): number;
-  insertItemAt(item: T, index: number): void;
-  setRemoveItemFn(fn: (id: string | number) => number): void;
-  setInsertItemFn(fn: (item: T, index: number) => void): void;
-  setUpdateItemFn(fn: (id: string | number, updates: Partial<T>) => boolean): void;
-  setGetIndexByIdFn(fn: (id: string | number) => number): void;
-  getRenderedElement(index: number): HTMLElement | null;
+/**
+ * The item space: reads, mutations, and the inversion hooks a plugin installs
+ * to own them. One owner per hook — two plugins claiming the same one is how
+ * tree with data rendered nothing.
+ */
+export interface ItemsCapability<T extends VListItem = VListItem> {
+  all(): readonly T[];
+  at(index: number): T | undefined;
+  removeById(id: string | number): number;
+  insertAt(item: T, index: number): void;
+  setGetFn(fn: (index: number) => T | undefined): void;
+  setRemoveFn(fn: (id: string | number) => number): void;
+  setInsertFn(fn: (item: T, index: number) => void): void;
+  setUpdateFn(fn: (id: string | number, updates: Partial<T>) => boolean): void;
+  setIndexByIdFn(fn: (id: string | number) => number): void;
+  /** The public total. Also feeds `aria-setsize`. */
+  setTotalFn(fn: () => number): void;
+  setIndexMapFn(fn: (renderIndex: number) => number): void;
+}
 
-  setNavConfig(config: {
+/** The size cache and the spec behind it. */
+export interface SizesCapability {
+  readonly cache: SizeCache;
+  readonly rawSpec: number | ((index: number, ...args: unknown[]) => number);
+  /** Replace the size spec. `gap` is the spacing baked into the spec, so the
+   * cache can keep excluding one trailing gap from the total; omit it when the
+   * spec carries none (table's fixed row height, for instance). */
+  setConfig(config: number | ((index: number) => number), gap?: number): void;
+  rebuild(): void;
+}
+
+/** The render pipeline: run it, replace it, or describe item state to it. */
+export interface RenderCapability {
+  force(): void;
+  ifNeeded(): void;
+  contentSize(size: number): void;
+  setFn(renderIfNeeded: () => void, forceRender: () => void): void;
+  setStateFn(fn: (index: number, state: ItemState) => void): void;
+  getStateFn(): ((index: number, state: ItemState) => void) | null;
+}
+
+/** The cross-plugin method bus and the shared event handlers. */
+export interface HooksCapability {
+  /** Register a public method on the list. Public names are a contract:
+   * a second claimant throws. Underscore names are the internal protocol. */
+  method(name: string, fn: Function): void;
+  get(name: string): Function | undefined;
+  onClick(handler: (event: MouseEvent) => void): void;
+  onKeydown(handler: (event: KeyboardEvent) => void): void;
+  onDestroy(handler: () => void): void;
+}
+
+/** Keyboard navigation geometry, shared between layout plugins and selection. */
+export interface NavCapability {
+  set(config: {
     total?: () => number;
     ud?: number;
     lr?: number;
     scrollIndex?: (itemIndex: number) => number;
     navigate?: (currentIndex: number, key: string, total: number) => number;
+    /**
+     * Bring this navigation / focus index into view, the layout plugin's way.
+     * The index is the same space as `nav.total` (carousel: logical item
+     * index; grid: item index) — not a size-cache index and not a layout
+     * index that counts group headers or carousel laps.
+     * `selectNext` / `selectPrevious` call this when present so a plugin that
+     * owns motion (carousel snap, current virtual lap) reveals the item
+     * without selection falling back to a raw size-cache offset.
+     */
+    reveal?: (index: number) => void;
   }): void;
-  getNavConfig(): {
+  get(): {
     ud: number;
     lr: number;
     scrollIndex: ((itemIndex: number) => number) | null;
     navigate: ((currentIndex: number, key: string, total: number) => number) | null;
     total: (() => number) | null;
+    /**
+     * Always present on the returned object: the owner's reveal, or `null`
+     * when no plugin published one. Plugin authors must read this property
+     * rather than treating a missing key as "no owner".
+     */
+    reveal: ((index: number) => void) | null;
   };
+}
+
+/**
+ * What a plugin receives in `setup()`. Grouped by capability rather than laid
+ * out flat: the flat form had fifty members with no map from a member to the
+ * part of the engine it reached.
+ */
+export interface PluginContext<T extends VListItem = VListItem> {
+  readonly dom: DomCapability;
+  readonly scroll: ScrollCapability;
+  readonly items: ItemsCapability<T>;
+  readonly sizes: SizesCapability;
+  readonly render: RenderCapability;
+  readonly hooks: HooksCapability;
+  readonly nav: NavCapability;
+
+  readonly pool: ElementPool;
+  readonly config: ResolvedConfig;
+  readonly emitter: Emitter<import("../types").VListEvents<T>>;
+  readonly template: ItemTemplate<T>;
+  getState(): EngineState;
 }
 
 // =============================================================================
 // Plugin Interface
 // =============================================================================
 
-export interface VListPlugin<T extends VListItem = VListItem> {
+export interface VListPlugin<T extends VListItem = VListItem, M = {}> {
   readonly name: string;
   readonly priority?: number;
   readonly conflicts?: readonly string[];
+
+  /**
+   * Cold path: reject a list configuration this plugin cannot support.
+   *
+   * Runs before setup and outside its catch, so throwing here reaches the
+   * caller. A throw from `setup()` cannot: it is reported as an `error` event
+   * so that one plugin's failure does not stop the others, which is the right
+   * behaviour for a fault and the wrong one for a configuration the plugin has
+   * already decided it cannot serve.
+   */
+  validateConfig?(config: ResolvedConfig): void;
 
   /** Cold path: one-time wiring during createVList(). */
   setup?(ctx: PluginContext<T>): void;
@@ -207,7 +282,30 @@ export interface VListPlugin<T extends VListItem = VListItem> {
 
   /** Cleanup on destroy. */
   destroy?(): void;
+
+  /**
+   * Phantom marker: the methods this plugin adds to the list instance.
+   * Never set at runtime; `createVList` reads it to type the returned list.
+   */
+  readonly __methods?: M;
 }
+
+/** @internal Turns a union into an intersection. */
+type UnionToIntersection<U> =
+  (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;
+
+/**
+ * @internal The method map a single plugin declares. The item type is matched
+ * loosely: a plugin typed for a specific item is not assignable to
+ * `VListPlugin<VListItem, ...>` under strict function types.
+ */
+type MethodsOf<P> = P extends VListPlugin<any, infer M> ? M : {};
+
+/**
+ * The methods a plugin array adds to the list instance. A plugin that declares
+ * no methods contributes nothing, so `createVList(config)` stays exactly `VList<T>`.
+ */
+export type PluginMethods<P extends readonly unknown[]> = UnionToIntersection<MethodsOf<P[number]>>;
 
 // =============================================================================
 // VList Instance — returned by createVList()
@@ -242,8 +340,6 @@ export interface VList<T extends VListItem = VListItem> {
   ): void;
 
   destroy(): void;
-
-  [key: string]: unknown;
 }
 
 // =============================================================================

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — DOM Structure Snapshot Tests
+ * vlist — DOM Structure Snapshot Tests
  *
  * Verifies that createVList() produces the correct DOM tree for
  * different configurations: vertical list, horizontal list, and
@@ -8,6 +8,7 @@
  * Hierarchy: container > root > viewport > content > items
  */
 
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
@@ -19,22 +20,22 @@ import type { VList } from "../../src/core/types";
 // Global DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 500, configurable: true });
 });
 
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -102,11 +103,11 @@ describe("DOM snapshots — base list", () => {
     expect(viewport).toBeTruthy();
     expect(viewport.classList.contains("vlist-viewport")).toBe(true);
 
-    // Vertical viewport should have overflow:auto
+    // Synthetic main-axis input keeps native scrolling hidden.
     const style = viewport.getAttribute("style") ?? "";
     expect(style).toContain("overflow");
-    expect(style).toContain("height:100%");
-    expect(style).toContain("width:100%");
+    expect(viewport.style.height).toBe("100%");
+    expect(viewport.style.width).toBe("100%");
 
     // Viewport should have tabindex=-1 for programmatic focus
     expect(viewport.getAttribute("tabindex")).toBe("-1");

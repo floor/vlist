@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Baseline A11y Tests
+ * vlist — Baseline A11y Tests
  *
  * Tests the baseline accessibility behaviour wired in createVList when
  * `interactive: true` (default) and no selection plugin is provided.
@@ -12,6 +12,7 @@ import { createTestItems, createContainer, simpleTemplate } from "../helpers/fac
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
 import { a11y } from "../../src/plugins/a11y";
+import { selection } from "../../src/plugins/selection";
 
 // =============================================================================
 // DOM Setup
@@ -462,6 +463,41 @@ describe("baseline a11y — interactive: false", () => {
 });
 
 // =============================================================================
+// selection({ mode: "none" })
+// =============================================================================
+
+describe("baseline a11y — selection in none mode", () => {
+  function createNoneList() {
+    const container = createContainer({ width: 300, height: 500 });
+    const vlist = createVList<TestItem>(
+      { container, items: createTestItems(10), item: { height: 50, template: simpleTemplate } },
+      [selection<TestItem>({ mode: "none" })],
+    );
+    return { vlist, container };
+  }
+
+  it("keeps role=list and stays out of the tab order", () => {
+    // "none" carries no selection semantics, so announcing a listbox and taking
+    // a tab stop promised arrow-key navigation that nothing implemented.
+    const { vlist, container } = createNoneList();
+    const content = getContent(container);
+    expect(content.getAttribute("role")).toBe("list");
+    expect(content.hasAttribute("tabindex")).toBe(false);
+    vlist.destroy();
+    container.remove();
+  });
+
+  it("leaves item roles as listitem", async () => {
+    const { vlist, container } = createNoneList();
+    await flush();
+    const item = getContent(container).querySelector<HTMLElement>('[data-index="0"]');
+    expect(item?.getAttribute("role")).toBe("listitem");
+    vlist.destroy();
+    container.remove();
+  });
+});
+
+// =============================================================================
 // a11y({ keyboard: false }) — opt out of keyboard nav, keep ARIA + click
 // =============================================================================
 
@@ -505,7 +541,10 @@ describe("baseline a11y — keyboard: false", () => {
 
     const content = getContent(container);
     const item = content.querySelector<HTMLElement>('[data-index="0"]');
-    item?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    // Optional-chained before: a list that rendered nothing failed on the
+    // selection assertion below, which reported the wrong cause.
+    expect(item).not.toBeNull();
+    item!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flush();
 
     expect(selectionEvents.length).toBeGreaterThan(0);

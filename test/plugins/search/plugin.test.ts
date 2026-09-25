@@ -6,11 +6,19 @@
  * events, methods, template state, and cleanup.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
+import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../../src/core/create";
 import type { VList } from "../../../src/core/types";
 import { search } from "../../../src/plugins/search/plugin";
+import { selection } from "../../../src/plugins/selection/plugin";
+import { groups } from "../../../src/plugins/groups/plugin";
+import { table } from "../../../src/plugins/table/plugin";
+import { data } from "../../../src/plugins/data";
+import { tree } from "../../../src/plugins/tree";
+import { createTestItems } from "../../helpers/factory";
+import type { TestItem } from "../../helpers/factory";
 import type { VListItem, ItemState } from "../../../src/types";
 
 interface Fruit extends VListItem {
@@ -27,24 +35,24 @@ const FRUITS: Fruit[] = [
   { id: 5, name: "Grape", kind: "berry" },
 ];
 
-let heightDesc: PropertyDescriptor | undefined;
-let widthDesc: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
-  heightDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  widthDesc = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  registerDOM();
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return 500; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 
 afterAll(() => {
-  if (heightDesc) Object.defineProperty(HTMLElement.prototype, "clientHeight", heightDesc);
-  if (widthDesc) Object.defineProperty(HTMLElement.prototype, "clientWidth", widthDesc);
-  GlobalRegistrator.unregister();
+  geometry.restore();
+  unregisterDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
-let lists: VList<Fruit>[] = [];
+let lists: Array<VList<VListItem>> = [];
 afterEach(() => {
   for (const l of lists) l.destroy();
   lists = [];
@@ -390,6 +398,208 @@ describe("highlighting", () => {
 });
 
 // =============================================================================
+// Highlight invalidation — a commit that only moved the range rebuilds nothing
+// =============================================================================
+
+describe("highlight invalidation", () => {
+  /** Map of data index → the row's first `<mark>`, for every marked row. */
+  const markNodes = (root: HTMLElement): Map<string, Node> => {
+    const map = new Map<string, Node>();
+    const rows = root.querySelectorAll(".vlist-item");
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const mark = row.querySelector(".vlist-search-match");
+      if (mark) map.set(row.getAttribute("data-index")!, mark);
+    }
+    return map;
+  };
+
+  /** Rows marked in both snapshots whose `<mark>` nodes were re-created. */
+  const rebuiltRows = (before: Map<string, Node>, after: Map<string, Node>): number => {
+    let n = 0;
+    for (const [index, mark] of after) {
+      const prev = before.get(index);
+      if (prev !== undefined && prev !== mark) n++;
+    }
+    return n;
+  };
+
+  const withScrollableList = (
+    run: (list: VList<TestItem>, container: HTMLElement) => void,
+    mode: "filter" | "navigate" = "filter",
+  ): void => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(200),
+        item: { height: 30, template: (row: TestItem) => row.name },
+      },
+      [search<TestItem>({ field: "name", mode })],
+    );
+    try {
+      run(list, container);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  };
+
+  it("rebuilds only the newly entered rows when the range moves", () => {
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const before = markNodes(container);
+      expect(before.size).toBeGreaterThan(0);
+
+      list.scrollToIndex(3);
+      const after = markNodes(container);
+
+      // Rows that stayed in the range keep the exact <mark> nodes built for
+      // them — the whole point: a range move is not a highlight invalidation.
+      let retained = 0;
+      for (const index of after.keys()) if (before.has(index)) retained++;
+      expect(retained).toBeGreaterThan(0);
+      expect(rebuiltRows(before, after)).toBe(0);
+
+      // The rows that did enter are highlighted, so the marks are correct.
+      for (const [, mark] of after) expect(mark.textContent).toBe("1");
+    });
+  });
+
+  it("rebuilds every visible row when the query changes", () => {
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const before = markNodes(container);
+      (list as any).setQuery("11");
+      const after = markNodes(container);
+      expect(after.size).toBeGreaterThan(0);
+      expect(rebuiltRows(before, after)).toBe(after.size);
+      for (const [, mark] of after) expect(mark.textContent).toBe("11");
+    });
+  });
+
+  it("re-highlights a row whose item was updated under an active query", () => {
+    // Navigate mode keeps every row in place, so the update is the only thing
+    // that changed: the marks must follow the new text, not the old stamp.
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const row = container.querySelector('.vlist-item[data-index="1"]')!;
+      expect(row.textContent).toBe("Item 2");
+      expect(row.querySelector(".vlist-search-match")).toBeNull();
+
+      list.updateItem(list.items[1]!.id, { name: "Item 101" } as Partial<TestItem>);
+
+      const updated = container.querySelector('.vlist-item[data-index="1"]')!;
+      expect(updated.textContent).toBe("Item 101");
+      expect(updated.querySelectorAll(".vlist-search-match").length).toBe(2);
+    }, "navigate");
+  });
+
+  it("re-highlights a row whose element template returned the same node again", () => {
+    // An element template may keep one node per row and rewrite it in place.
+    // The row's first child is then the same object before and after the
+    // update, while everything the highlight pass built inside it is gone —
+    // so node identity cannot stand in for "this row still holds its marks".
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const nodes = new Map<number, HTMLElement>();
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(200),
+        item: {
+          height: 30,
+          template: (row: TestItem): HTMLElement => {
+            let node = nodes.get(row.id);
+            if (node === undefined) {
+              node = document.createElement("span");
+              nodes.set(row.id, node);
+            }
+            node.textContent = row.name;
+            return node;
+          },
+        },
+      },
+      [search<TestItem>({ field: "name", mode: "navigate" })],
+    );
+    try {
+      (list as any).setQuery("1");
+      const row = container.querySelector('.vlist-item[data-index="1"]')!;
+      expect(row.textContent).toBe("Item 2");
+      expect(row.querySelector(".vlist-search-match")).toBeNull();
+      const reused = row.firstChild;
+
+      list.updateItem(list.items[1]!.id, { name: "Item 101" } as Partial<TestItem>);
+
+      const updated = container.querySelector('.vlist-item[data-index="1"]')!;
+      // The premise: the template really did hand back the same node object.
+      expect(updated.firstChild).toBe(reused);
+      expect(updated.textContent).toBe("Item 101");
+      expect(updated.querySelectorAll(".vlist-search-match").length).toBe(2);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("re-highlights a row that left the range and came back", () => {
+    withScrollableList((list, container) => {
+      (list as any).setQuery("1");
+      const before = markNodes(container);
+      list.scrollToIndex(150);
+      list.scrollToIndex(0);
+      const after = markNodes(container);
+      // Same indices, freshly rendered rows: the pool cleared their content,
+      // so the marks must have been rebuilt rather than assumed still there.
+      expect(after.size).toBe(before.size);
+      for (const [index, mark] of after) {
+        expect(before.has(index)).toBe(true);
+        expect(mark.textContent).toBe("1");
+      }
+    });
+  });
+});
+
+describe("navigate mode — current match", () => {
+  const currentRow = (container: HTMLElement): string | null => {
+    const mark = container.querySelector(".vlist-search-match--current");
+    return mark ? mark.closest(".vlist-item")!.getAttribute("data-index") : null;
+  };
+
+  it("moves the --current class without rebuilding the marks", () => {
+    // All five fruits fit the viewport, so nothing scrolls out: any change to
+    // the <mark> nodes would be a rebuild the current-match move did not need.
+    const { container, list } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("a"); // Apple, Banana, Apricot, Grape
+
+    const marks = Array.from(container.querySelectorAll(".vlist-search-match"));
+    expect(marks.length).toBeGreaterThan(1);
+    const first = currentRow(container);
+    expect(first).not.toBeNull();
+
+    q(list, "nextMatch")();
+
+    // Node identity, not deep equality: the marks must be the very same nodes.
+    const after = Array.from(container.querySelectorAll(".vlist-search-match"));
+    expect(after.length).toBe(marks.length);
+    for (let i = 0; i < after.length; i++) expect(after[i] === marks[i]).toBe(true);
+    expect(currentRow(container)).not.toBe(first);
+  });
+
+  it("removes the marks when the query is cleared", () => {
+    // Navigate mode keeps every item rendered, so no re-render sweeps the
+    // marks away — the highlight pass has to clear them itself.
+    const { container, list } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("err");
+    expect(container.querySelector(".vlist-search-match")).not.toBeNull();
+    q(list, "setQuery")("");
+    expect(container.querySelector(".vlist-search-match")).toBeNull();
+    expect(container.textContent).toContain("Cherry");
+  });
+});
+
+// =============================================================================
 // Template state
 // =============================================================================
 
@@ -470,6 +680,204 @@ describe("search bar input", () => {
 });
 
 // =============================================================================
+// Search bar buttons — what a pointer user reaches
+// =============================================================================
+
+describe("search bar buttons", () => {
+  const click = (el: Element): void => {
+    el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  };
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("the clear button empties the query, brings every item back and returns focus to the input", () => {
+    const { container, list } = makeList({ mode: "filter" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    const clear = container.querySelector(".vlist-search__clear-button")!;
+    input.value = "ap";
+    input.dispatchEvent(new Event("input"));
+    expect(list.total).toBe(3);
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(false);
+
+    click(clear);
+
+    expect(q(list, "getQuery")()).toBe("");
+    expect(input.value).toBe("");
+    expect(list.total).toBe(FRUITS.length);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("");
+    expect(container.querySelector("mark")).toBeNull();
+    // The button hides itself once there is nothing left to clear.
+    expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(true);
+    // The user clicked a button; typing must go on in the field, not the button.
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("the clear button announces the emptied query through search:change", () => {
+    const { container, list } = makeList({ mode: "filter" });
+    q(list, "setQuery")("ap");
+    const changes: Array<{ query: string; matches: number; total: number }> = [];
+    list.on("search:change" as any, (e: any) => changes.push(e));
+
+    click(container.querySelector(".vlist-search__clear-button")!);
+
+    expect(changes).toEqual([{ query: "", matches: 0, total: FRUITS.length }]);
+  });
+
+  it("the next and previous buttons step through the matches in navigate mode", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    const counter = container.querySelector(".vlist-search__counter")!;
+    const matched: number[] = [];
+    list.on("search:match" as any, (e: any) => matched.push(e.index));
+    expect(counter.textContent).toBe("1 of 3");
+
+    click(container.querySelector(".vlist-search__nav-next")!);
+    expect(counter.textContent).toBe("2 of 3");
+    click(container.querySelector(".vlist-search__nav-next")!);
+    expect(counter.textContent).toBe("3 of 3");
+    click(container.querySelector(".vlist-search__nav-prev")!);
+    expect(counter.textContent).toBe("2 of 3");
+
+    // Apple (0), Apricot (3) and Grape (4) match "ap"; the buttons walked 3 → 4 → 3.
+    expect(matched).toEqual([3, 4, 3]);
+  });
+
+  it("the previous button wraps from the first match to the last", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("ap");
+    click(container.querySelector(".vlist-search__nav-prev")!);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("3 of 3");
+  });
+
+  it("shows the step buttons in navigate mode and hides them in filter mode", () => {
+    const nav = makeList({ mode: "navigate" }).container;
+    expect(nav.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(false);
+    expect(nav.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(false);
+
+    const filter = makeList({ mode: "filter" }).container;
+    expect(filter.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(true);
+    expect(filter.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(true);
+  });
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("clicking the magnifier puts the caret in the input", () => {
+    const { container } = makeList();
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    expect(document.activeElement).not.toBe(input);
+    click(container.querySelector(".vlist-search__leading-icon")!);
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("typing into a destroyed bar no longer filters the list", () => {
+    const { container, list } = makeList({ mode: "filter" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+
+    list.destroy();
+    lists = lists.filter((l) => l !== list);
+    expect(list.total).toBe(FRUITS.length);
+
+    // The node is detached but still reachable by whoever kept a reference.
+    input.value = "ap";
+    input.dispatchEvent(new Event("input"));
+    expect(list.total).toBe(FRUITS.length);
+  });
+});
+
+// =============================================================================
+// Keys pressed while the caret is in the search input
+// =============================================================================
+
+describe("search bar keys", () => {
+  /** A real, cancelable keydown; reports whether the plugin claimed it. */
+  function pressIn(el: HTMLElement, key: string, opts: KeyboardEventInit = {}): boolean {
+    const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...opts });
+    el.dispatchEvent(event);
+    return event.defaultPrevented;
+  }
+
+  function openAndType(value: string) {
+    const made = makeList({ mode: "navigate" });
+    const input = made.container.querySelector(".vlist-search__input") as HTMLInputElement;
+    const counter = made.container.querySelector(".vlist-search__counter")!;
+    // Ctrl+F from the list opens search; the user then types in the field.
+    pressIn(made.list.element, "f", { ctrlKey: true });
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    return { ...made, input, counter };
+  }
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("Ctrl+F on the list moves the caret into the search field", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    expect(document.activeElement).not.toBe(input);
+
+    expect(pressIn(list.element, "f", { ctrlKey: true })).toBe(true);
+
+    expect(document.activeElement).toBe(input);
+    expect(list.element.classList.contains("vlist--search-open")).toBe(true);
+  });
+
+  it("Enter in the input steps exactly one match forward, Shift+Enter one back", () => {
+    const { input, counter } = openAndType("ap");
+    expect(counter.textContent).toBe("1 of 3");
+
+    // The keydown also bubbles to the list root; it must not be counted twice.
+    expect(pressIn(input, "Enter")).toBe(true);
+    expect(counter.textContent).toBe("2 of 3");
+    expect(pressIn(input, "Enter", { shiftKey: true })).toBe(true);
+    expect(counter.textContent).toBe("1 of 3");
+  });
+
+  it("ArrowDown and ArrowUp in the input walk the matches instead of moving the caret", () => {
+    const { input, counter } = openAndType("ap");
+
+    expect(pressIn(input, "ArrowDown")).toBe(true);
+    expect(counter.textContent).toBe("2 of 3");
+    expect(pressIn(input, "ArrowUp")).toBe(true);
+    expect(counter.textContent).toBe("1 of 3");
+  });
+
+  it("Escape in the input clears the query and closes search", () => {
+    const { list, input } = openAndType("ap");
+    expect(list.element.classList.contains("vlist--searching")).toBe(true);
+
+    expect(pressIn(input, "Escape")).toBe(true);
+
+    expect(q(list, "getQuery")()).toBe("");
+    expect(input.value).toBe("");
+    expect(list.element.classList.contains("vlist--searching")).toBe(false);
+    expect(list.element.classList.contains("vlist--search-open")).toBe(false);
+  });
+
+  it("leaves every other key to the text field", () => {
+    const { input, counter } = openAndType("ap");
+
+    // Letters, Backspace and the horizontal arrows belong to the input: if the
+    // plugin claimed them the user could not edit the query.
+    for (const key of ["p", "Backspace", "ArrowLeft", "ArrowRight", "Home"]) {
+      expect(pressIn(input, key)).toBe(false);
+    }
+    expect(counter.textContent).toBe("1 of 3");
+  });
+
+  it("the same keys work when the user simply clicked into the bar and typed", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
+    const counter = container.querySelector(".vlist-search__counter")!;
+    input.focus();
+    input.value = "ap";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(counter.textContent).toBe("1 of 3");
+
+    expect(pressIn(input, "Enter")).toBe(true);
+    expect(counter.textContent).toBe("2 of 3");
+    expect(list.element.classList.contains("vlist--searching")).toBe(true);
+    expect(pressIn(input, "Escape")).toBe(true);
+    expect(q(list, "getQuery")()).toBe("");
+  });
+});
+
+// =============================================================================
 // Keyboard handler
 // =============================================================================
 
@@ -479,9 +887,9 @@ describe("keyboard", () => {
       key,
       bubbles: true,
       cancelable: true,
-      ctrlKey: opts?.ctrlKey,
-      metaKey: opts?.metaKey,
-      shiftKey: opts?.shiftKey,
+      ctrlKey: opts?.ctrlKey ?? false,
+      metaKey: opts?.metaKey ?? false,
+      shiftKey: opts?.shiftKey ?? false,
     });
     (event as any).preventDefault = () => {};
     root.dispatchEvent(event);
@@ -552,9 +960,9 @@ describe("type-ahead (invisible mode)", () => {
       key,
       bubbles: true,
       cancelable: true,
-      ctrlKey: opts?.ctrlKey,
-      metaKey: opts?.metaKey,
-      shiftKey: opts?.shiftKey,
+      ctrlKey: opts?.ctrlKey ?? false,
+      metaKey: opts?.metaKey ?? false,
+      shiftKey: opts?.shiftKey ?? false,
     });
     (event as any).preventDefault = () => {};
     root.dispatchEvent(event);
@@ -578,5 +986,231 @@ describe("type-ahead (invisible mode)", () => {
     expect(q(list, "getQuery")()).toBe("c");
     pressKey(root, "Backspace");
     expect(q(list, "getQuery")()).toBe("");
+  });
+});
+
+
+// =============================================================================
+// search + data
+// =============================================================================
+
+describe("search — conflicts with data", () => {
+  const adapter = { read: async () => ({ items: [] as Fruit[], total: 0 }) };
+
+  it("declares the conflict", () => {
+    expect(search<Fruit>().conflicts).toContain("data");
+  });
+
+  it("throws at creation in either plugin order", () => {
+    // It used to build a list that then broke in two steps: matching read the
+    // static items array, which an adapter leaves empty, so every query matched
+    // nothing and filtered the list to zero; clearing the filter then reinstated
+    // static item functions over the ones data() owns, so the total stayed zero.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const config = { container, item: { height: 48, template: (f: Fruit) => f.name } };
+    try {
+      expect(() =>
+        createVList<Fruit>(config, [search<Fruit>(), data<Fruit>({ adapter })]),
+      ).toThrow('Plugin "search" conflicts with "data"');
+      // The name set is complete before conflicts are checked, so order is moot.
+      expect(() =>
+        createVList<Fruit>(config, [data<Fruit>({ adapter }), search<Fruit>()]),
+      ).toThrow('Plugin "search" conflicts with "data"');
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
+  });
+});
+
+
+// =============================================================================
+// search + selection (filtered index space)
+// =============================================================================
+
+describe("search + selection", () => {
+  function fireKey(el: HTMLElement, key: string, opts: KeyboardEventInit = {}): void {
+    el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...opts }));
+  }
+
+  it("click, keyboard, and Ctrl+A select the rendered items on a filtered list", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(20),
+        item: { height: 30, template: (item) => item.name },
+      },
+      [selection<TestItem>({ mode: "multiple" }), search<TestItem>({ field: "name" })],
+    );
+    lists.push(list);
+
+    // "Item 9" and "Item 19" — first filtered row is original index 8, not 0.
+    // The bug selected getItems()[0] (id=1) for a click on this row.
+    (list as any).setQuery("9");
+    expect(list.total).toBe(2);
+
+    const row = container.querySelector<HTMLElement>("[data-index='0']");
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain("Item 9");
+    expect(row!.getAttribute("data-id")).toBe("9");
+
+    let clickedId: string | number | undefined;
+    list.on("item:click", ({ item }) => {
+      clickedId = item.id;
+    });
+    let selectionIds: Array<string | number> = [];
+    list.on("selection:change", ({ selected }) => {
+      selectionIds = selected;
+    });
+
+    fireKey(list.element, "ArrowDown");
+    fireKey(list.element, " ");
+    expect((list as any).getSelected()).toEqual([9]);
+
+    (list as any).clearSelection();
+    expect((list as any).getSelected()).toEqual([]);
+
+    row!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(clickedId).toBe(9);
+    expect(selectionIds).toEqual([9]);
+    expect((list as any).getSelected()).toEqual([9]);
+
+    (list as any).clearSelection();
+    fireKey(list.element, "a", { ctrlKey: true });
+    expect((list as any).getSelected()).toEqual([9, 19]);
+  });
+});
+
+describe("search + groups", () => {
+  it("highlights the same rows with groups() as without, and never a header", () => {
+    // "1" matches Item 1 and Item 10–19 — 11 rows, the measured ungrouped count.
+    const items = createTestItems(20);
+    const item = { height: 30, template: (row: TestItem) => row.name };
+    const query = "1";
+    const highlightedRows = (root: HTMLElement): number => {
+      let n = 0;
+      const rows = root.querySelectorAll(".vlist-item");
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i]!.querySelector(".vlist-search-match")) n++;
+      }
+      return n;
+    };
+
+    const plainContainer = document.createElement("div");
+    document.body.appendChild(plainContainer);
+    const plain = createVList<TestItem>(
+      { container: plainContainer, items: items.slice(), item },
+      [search<TestItem>({ field: "name" })],
+    );
+    lists.push(plain);
+    (plain as any).setQuery(query);
+    const plainCount = highlightedRows(plainContainer);
+
+    const groupedContainer = document.createElement("div");
+    document.body.appendChild(groupedContainer);
+    const grouped = createVList<TestItem>(
+      { container: groupedContainer, items: items.slice(), item },
+      [
+        groups<TestItem>({
+          getGroupForIndex: (index) => (index < 10 ? "A" : "B"),
+          header: { height: 24, template: (key) => key },
+        }),
+        search<TestItem>({ field: "name" }),
+      ],
+    );
+    lists.push(grouped);
+    (grouped as any).setQuery(query);
+
+    expect(plainCount).toBe(11);
+    expect(highlightedRows(groupedContainer)).toBe(plainCount);
+    expect(groupedContainer.querySelectorAll(".vlist-group-header .vlist-search-match").length).toBe(0);
+    expect(groupedContainer.querySelectorAll(".vlist-group-header").length).toBeGreaterThan(0);
+  });
+});
+
+describe("search + table", () => {
+  const columns = [
+    { key: "name", label: "Name", width: 160 },
+    { key: "kind", label: "Kind", width: 120 },
+  ];
+
+  function tableList(mode: "filter" | "navigate", withGroups = false) {
+    const container = document.createElement("div");
+    container.style.cssText = "width:800px;height:400px";
+    document.body.appendChild(container);
+    const plugins = [
+      table<Fruit>({ columns, rowHeight: 36 }),
+      ...(withGroups
+        ? [groups<Fruit>({
+            getGroupForIndex: (index: number) => (index < 3 ? "A" : "B"),
+            header: { height: 28, template: (key: string) => key },
+          })]
+        : []),
+      search<Fruit>({ field: "name", mode }),
+    ];
+    const list = createVList<Fruit>({
+      container,
+      items: FRUITS.slice(),
+      item: { height: 36, template: (item) => item.name },
+    }, plugins);
+    lists.push(list);
+    return { list, container };
+  }
+
+  it("highlights the matching cells in filter mode", () => {
+    const { list, container } = tableList("filter");
+    q(list, "setQuery")("ap");
+
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+    expect(container.querySelectorAll(".vlist-search-match").length).toBe(3);
+    expect(container.querySelectorAll(".vlist-table-row").length).toBe(3);
+  });
+
+  it("highlights matches in navigate mode and marks the current one", () => {
+    const { list, container } = tableList("navigate");
+    q(list, "setQuery")("ap");
+
+    expect(container.querySelectorAll(".vlist-table-row").length).toBe(5);
+    expect(container.querySelectorAll(".vlist-search-match").length).toBe(3);
+    expect(container.querySelectorAll(".vlist-search-match--current").length).toBe(1);
+  });
+
+  it("highlights grouped rows and leaves the group header unmarked", async () => {
+    const { list, container } = tableList("navigate", true);
+    await Promise.resolve();
+    q(list, "setQuery")("ap");
+
+    expect(container.querySelectorAll(".vlist-table-group-header").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".vlist-search-match").length).toBe(3);
+    expect(container.querySelectorAll(".vlist-table-group-header .vlist-search-match").length).toBe(0);
+  });
+});
+
+describe("search — conflicts with tree", () => {
+  it("declares the conflict", () => {
+    expect(search<Fruit>().conflicts).toContain("tree");
+  });
+
+  it("throws at creation in either plugin order", () => {
+    // tree() owns the layout index space but never implemented the filterTree
+    // hook search delegates to, so filtering fell through to flat indices into
+    // the source array: a 5-item tree reported 1, then 0, then 2 after clearing.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const config = { container, items: FRUITS, item: { height: 48, template: (f: Fruit) => f.name } };
+    try {
+      expect(() =>
+        createVList<Fruit>(config, [search<Fruit>(), tree<Fruit>({ parentId: "parentId" })]),
+      ).toThrow('Plugin "search" conflicts with "tree"');
+      expect(() =>
+        createVList<Fruit>(config, [tree<Fruit>({ parentId: "parentId" }), search<Fruit>()]),
+      ).toThrow('Plugin "search" conflicts with "tree"');
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });

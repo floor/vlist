@@ -1,15 +1,17 @@
 /**
- * vlist v2 — Range Calculation, Overscan & range:change Event Tests
+ * vlist — Range Calculation, Overscan & range:change Event Tests
  *
  * Verifies visible range computation, overscan buffer application,
  * and range:change event emission when scrolling.
  */
 
+import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
+import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
 import { OVERSCAN } from "../../src/constants";
 
@@ -17,21 +19,21 @@ import { OVERSCAN } from "../../src/constants";
 // DOM Setup
 // =============================================================================
 
-let origClientHeight: PropertyDescriptor | undefined;
-let origClientWidth: PropertyDescriptor | undefined;
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
   setupDOM();
-  origClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
-  origClientWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientWidth");
+  geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
-  if (origClientHeight) Object.defineProperty(HTMLElement.prototype, "clientHeight", origClientHeight);
-  if (origClientWidth) Object.defineProperty(HTMLElement.prototype, "clientWidth", origClientWidth);
+  geometry.restore();
   teardownDOM();
 });
+// Registered after cleanup: catch a missing or incomplete restore.
+afterAll(() => geometry.assertRestored());
 
 // =============================================================================
 // Helpers
@@ -92,7 +94,7 @@ describe("range — overscan defaults", () => {
 
 describe("range — range:change event", () => {
   it("emits range:change when scroll shifts visible range", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -178,7 +180,7 @@ describe("range — range:change event", () => {
 
 describe("range — scroll event", () => {
   it("emits scroll event with position and direction", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -201,7 +203,7 @@ describe("range — scroll event", () => {
   });
 
   it("emits scroll event with direction=up when scrolling backward", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -225,7 +227,7 @@ describe("range — scroll event", () => {
   });
 
   it("emits direction=right/left for horizontal lists", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -260,7 +262,7 @@ describe("range — scroll event", () => {
 
 describe("range — velocity:change event", () => {
   it("emits velocity:change on scroll", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -283,7 +285,7 @@ describe("range — velocity:change event", () => {
   });
 
   it("velocity is unreliable with insufficient samples", () => {
-    list = createVList<TestItem>(
+    list = createNative<TestItem>(
       {
         container,
         items: createTestItems(100),
@@ -370,5 +372,57 @@ describe("range — overscan edge cases", () => {
 
     const content = container.querySelector(".vlist-content")!;
     expect(content.children.length).toBe(0);
+  });
+});
+
+
+// =============================================================================
+// Capacity for a function size spec (C7)
+// =============================================================================
+
+describe("range — capacity with a function size spec", () => {
+  it("fills a tall viewport whose rows are smaller than the 20px estimate", () => {
+    // A size function has no knowable minimum, so the engine estimates 20px to
+    // size the render buffers — and resizeCapacity re-derived demand from that
+    // same estimate, so it could never see a shortfall. A 10px row in a 3050px
+    // viewport rendered 219 of the 305 rows that fit and left the rest of the
+    // viewport blank.
+    //
+    // This needs a tall viewport: at the 500px this file pins, the estimate is
+    // ample and the defect does not appear at all. The override is restored
+    // below, so the file's geometry guard still holds.
+    const tall = 3050;
+    const rowSize = 10;
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      get: () => tall,
+      configurable: true,
+    });
+
+    let host: HTMLElement | null = null;
+    try {
+      host = createContainer({ width: 300, height: tall });
+      list = createVList<TestItem>(
+        {
+          container: host,
+          items: createTestItems(2000),
+          item: { height: () => rowSize, template: simpleTemplate },
+        },
+        [],
+      );
+
+      const fits = Math.ceil(tall / rowSize); // 305
+      const rendered = host.querySelectorAll("[data-index]").length;
+
+      // The window must cover the viewport — this was 219 against 305.
+      expect(rendered).toBeGreaterThanOrEqual(fits);
+      // ...and must not over-render beyond the window and its overscan.
+      expect(rendered).toBeLessThanOrEqual(fits + OVERSCAN * 2 + 2);
+    } finally {
+      host?.remove();
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+        get: () => 500,
+        configurable: true,
+      });
+    }
   });
 });

@@ -1,5 +1,5 @@
 /**
- * vlist v2 — Autosize Plugin
+ * vlist — Autosize Plugin
  *
  * Enables dynamic item measurement via ResizeObserver for items with
  * unknown sizes. Items are rendered without an explicit main-axis size,
@@ -32,14 +32,34 @@ export interface AutosizePluginConfig {
 // Factory
 // =============================================================================
 
+/** Methods the autosize plugin adds to the list instance. */
+export interface AutosizeMethods {
+  /** Whether the item at `index` has been measured. */
+  isMeasured(index: number): boolean;
+  /** Drop the measurement for `index`, or for every item when omitted. */
+  remeasure(index?: number): void;
+  /** Record a measured size for `index`. */
+  setMeasuredSize(index: number, size: number): void;
+  /** How many items have been measured. */
+  getMeasuredCount(): number;
+}
+
 export function autosize<T extends VListItem = VListItem>(
   config?: AutosizePluginConfig,
-): VListPlugin<T> {
+): VListPlugin<T, AutosizeMethods> {
   let gap = config?.gap ?? 0;
 
   let observer: ResizeObserver | null = null;
+  // Lists this instance is installed on. A scroll-mode switch rebuilds the
+  // list with the same plugin instances, so for a moment the instance is on
+  // two lists; the old one's teardown must not take the new one's observer
+  // and measurements with it (as masonry, carousel and table learned in
+  // #292-#294). Measured on the social feed: after the switch every row that
+  // scrolled into view was the 160 px estimate against 590 px of content.
+  let installs = 0;
   let storedCtx: PluginContext<T> | null = null;
   let engineState: EngineState;
+  let scroll: PluginContext<T>["scroll"];
   let isX: boolean;
   let sizeProp: "width" | "height";
   let estimatedSize: number;
@@ -82,13 +102,13 @@ export function autosize<T extends VListItem = VListItem>(
       if (measuredSizes.size === 0) return;
       measuredSizes.clear();
       pendingRemeasure.clear();
-      storedCtx.rebuildSizeCache();
+      storedCtx.sizes.rebuild();
       updateContentSize();
     } else {
       if (!measuredSizes.has(index)) return;
       pendingRemeasure.add(index);
     }
-    storedCtx.forceRender();
+    storedCtx.render.force();
   }
 
   // Maximum logical scroll position, derived from the size cache rather than
@@ -99,24 +119,39 @@ export function autosize<T extends VListItem = VListItem>(
   function maxScrollPos(): number {
     return Math.max(
       0,
-      storedCtx!.sizeCache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
+      storedCtx!.sizes.cache.getTotalSize() + storedCtx!.config.mainAxisPadding - engineState.containerSize,
     );
   }
 
   function isAtEnd(): boolean {
     const maxScroll = maxScrollPos();
-    return maxScroll > 0 && engineState.scrollPosition >= maxScroll - END_THRESHOLD;
+    return maxScroll > 0 && scroll.getPixelEquivalent() >= maxScroll - END_THRESHOLD;
   }
 
   function snapToEnd(): void {
     const maxScroll = maxScrollPos();
-    if (maxScroll > engineState.scrollPosition) {
-      storedCtx!.scrollTo(maxScroll);
+    if (maxScroll > scroll.getPixelEquivalent()) {
+      storedCtx!.scroll.to(maxScroll);
     }
   }
 
   function updateContentSize(): void {
-    storedCtx!.updateContentSize(storedCtx!.sizeCache.getTotalSize());
+    storedCtx!.render.contentSize(storedCtx!.sizes.cache.getTotalSize());
+  }
+
+  /**
+   * Refresh the prefix sums over `low..high`, the indices a batch changed.
+   *
+   * A layout plugin (groups, grid) can replace the size cache with one keyed
+   * by its own layout indices, where a data index names the wrong rows. Such a
+   * plugin hooks `rebuild` to do the mapping, so that hook's presence is the
+   * signal to fall back to the full rebuild — the only call that still lands
+   * on the right entries.
+   */
+  function refreshSizes(low: number, high: number): void {
+    const ctx = storedCtx!;
+    if (ctx.hooks.get("_setSizeCacheBase")) ctx.sizes.rebuild();
+    else ctx.sizes.cache.invalidate(low, high);
   }
 
   return {
@@ -124,6 +159,8 @@ export function autosize<T extends VListItem = VListItem>(
     priority: 5,
 
     setup(ctx: PluginContext<T>): void {
+      installs++;
+      scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
       isX = ctx.config.axis.primary === "x";
@@ -132,26 +169,24 @@ export function autosize<T extends VListItem = VListItem>(
 
       // Read estimated size from the current sizeCache before replacing it.
       // The initial cache already has gap baked in — read the raw spec size.
-      estimatedSize = typeof ctx.rawSizeSpec === "function"
-        ? (ctx.rawSizeSpec as (i: number) => number)(0) + gap
-        : (ctx.rawSizeSpec as number) + gap;
+      estimatedSize = typeof ctx.sizes.rawSpec === "function"
+        ? (ctx.sizes.rawSpec as (i: number) => number)(0) + gap
+        : (ctx.sizes.rawSpec as number) + gap;
 
       // Replace the fixed sizeCache with a variable one backed by measurements
-      ctx.setSizeConfig(sizeFn);
-      if (gap > 0) {
-        const orig = ctx.sizeCache.getTotalSize;
-        ctx.sizeCache.getTotalSize = (): number => {
-          const t = orig();
-          return t > 0 ? t - gap : 0;
-        };
-      }
+      ctx.sizes.setConfig(sizeFn, gap);
 
       // ResizeObserver for measuring items
-      observer = new ResizeObserver((entries) => {
+      const own = new ResizeObserver((entries) => {
         if (engineState.destroyed || !storedCtx) return;
 
         let hasNewMeasurements = false;
-        const firstVisible = ctx.sizeCache.indexAtOffset(engineState.scrollPosition);
+        // Lowest and highest index the batch changed. The size cache only
+        // re-reads the blocks this range covers, so a handful of measured
+        // rows no longer costs one Map lookup per item in the list.
+        let changedLow = -1;
+        let changedHigh = -1;
+        const firstVisible = ctx.sizes.cache.indexAtOffset(scroll.getPixelEquivalent());
 
         for (const entry of entries) {
           const el = entry.target as HTMLElement;
@@ -160,15 +195,23 @@ export function autosize<T extends VListItem = VListItem>(
 
           // Verify element wasn't recycled to a different item
           if (el.getAttribute("data-index") !== String(index)) {
-            observer!.unobserve(el);
+            own.unobserve(el);
             continue;
           }
 
           if (isMeasured(index)) continue;
 
-          const boxSize = entry.borderBoxSize[0];
-          if (!boxSize) continue;
-          const newSize = isX ? boxSize.inlineSize : boxSize.blockSize;
+          // borderBoxSize is missing on polyfills and on older WebKit, which
+          // shipped ResizeObserver with contentRect only. contentRect is the
+          // content box, so it undershoots a row that has padding or a border.
+          const boxSize = entry.borderBoxSize?.[0];
+          let newSize: number;
+          if (boxSize) {
+            newSize = isX ? boxSize.inlineSize : boxSize.blockSize;
+          } else {
+            const rect = el.getBoundingClientRect();
+            newSize = isX ? rect.width : rect.height;
+          }
           if (newSize <= 0) continue;
 
           const sizeWithGap = newSize + gap;
@@ -179,13 +222,17 @@ export function autosize<T extends VListItem = VListItem>(
 
           measuredSizes.set(index, sizeWithGap);
           pendingRemeasure.delete(index);
-          if (!wasMeasured || sizeWithGap !== oldSize) hasNewMeasurements = true;
+          if (!wasMeasured || sizeWithGap !== oldSize) {
+            hasNewMeasurements = true;
+            if (changedLow < 0 || index < changedLow) changedLow = index;
+            if (index > changedHigh) changedHigh = index;
+          }
 
           if (index < firstVisible && sizeWithGap !== oldSize) {
             pendingScrollDelta += sizeWithGap - oldSize;
           }
 
-          observer!.unobserve(el);
+          own.unobserve(el);
 
           // Pin the element to its measured size
           el.style[sizeProp] = `${newSize}px`;
@@ -195,12 +242,12 @@ export function autosize<T extends VListItem = VListItem>(
 
         const atEnd = isAtEnd();
 
-        // Rebuild prefix sums with new measurements
-        ctx.rebuildSizeCache();
+        // Refresh the prefix sums over the measured range only
+        refreshSizes(changedLow, changedHigh);
 
         // Apply scroll correction for items above viewport
         if (pendingScrollDelta) {
-          ctx.shiftScroll(pendingScrollDelta);
+          ctx.scroll.shiftBy(pendingScrollDelta);
           pendingScrollDelta = 0;
         }
 
@@ -209,7 +256,13 @@ export function autosize<T extends VListItem = VListItem>(
           && engineState.prevRangeEnd >= engineState.totalItems - 1;
         const shouldPin = pinnedToEnd && !animatingToEnd;
 
-        if (shouldPin || atEnd || nearEnd || !isScrolling) {
+        // A smooth jump to the end re-reads its target every frame, but the
+        // browser clamps that write to the content element's current height.
+        // Deferring the height until idle leaves the jump short of the items
+        // measured along the way, which is the blank viewport on the second
+        // jump. Publish the height while the jump is in flight; still don't
+        // snap until the animation has finished, or the two fight.
+        if (shouldPin || atEnd || nearEnd || animatingToEnd || !isScrolling) {
           updateContentSize();
           pendingContentSizeUpdate = false;
 
@@ -220,15 +273,16 @@ export function autosize<T extends VListItem = VListItem>(
           pendingContentSizeUpdate = true;
         }
 
-        ctx.forceRender();
+        ctx.render.force();
       });
+      observer = own;
 
       // End-pinning with dynamic scroll target: when scrollToIndex targets
       // the last item with "end" alignment, use a dynamic target function so
       // the smooth scroll tracks the real maxScroll as measurements change it.
       // After the animation, pinnedToEnd keeps snapping on subsequent
       // measurements until the user scrolls away.
-      ctx.setScrollToIndexFn((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number): void | false => {
+      ctx.scroll.setToIndexFn((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number): void | false => {
         const isEndAligned = index >= engineState.totalItems - 1 && align === "end";
         pinnedToEnd = isEndAligned;
         animatingToEnd = false;
@@ -237,17 +291,24 @@ export function autosize<T extends VListItem = VListItem>(
 
         const mp = ctx.config.mainAxisPadding;
         const dynamicTarget = (): number => {
-          const totalSize = ctx.sizeCache.getTotalSize();
+          const totalSize = ctx.sizes.cache.getTotalSize();
           return Math.max(0, totalSize + mp - engineState.containerSize);
         };
 
         if (behavior === "smooth") {
           animatingToEnd = true;
-          ctx.smoothScrollTo(dynamicTarget, duration ?? 300, easing, () => {
+          ctx.scroll.smoothTo(dynamicTarget, duration ?? 300, easing, () => {
             animatingToEnd = false;
+            // Measurements taken on the last frames defer their height write
+            // until this moment. Publish it, then land on the end it describes.
+            if (pendingContentSizeUpdate) {
+              updateContentSize();
+              pendingContentSizeUpdate = false;
+            }
+            snapToEnd();
           });
         } else {
-          ctx.scrollTo(dynamicTarget());
+          ctx.scroll.to(dynamicTarget());
         }
       });
 
@@ -256,7 +317,7 @@ export function autosize<T extends VListItem = VListItem>(
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
 
-      ctx.registerDestroyHandler((): void => {
+      ctx.hooks.onDestroy((): void => {
         viewport.removeEventListener("wheel", unpinOnUserScroll);
         viewport.removeEventListener("touchstart", unpinOnUserScroll);
       });
@@ -277,27 +338,27 @@ export function autosize<T extends VListItem = VListItem>(
       content.addEventListener("load", onMediaEvent, true);
       content.addEventListener("error", onMediaEvent, true);
 
-      ctx.registerDestroyHandler((): void => {
+      ctx.hooks.onDestroy((): void => {
         content.removeEventListener("load", onMediaEvent, true);
         content.removeEventListener("error", onMediaEvent, true);
       });
 
       // Public methods
-      ctx.registerMethod("isMeasured", isMeasured);
-      ctx.registerMethod("remeasure", remeasure);
+      ctx.hooks.method("isMeasured", isMeasured);
+      ctx.hooks.method("remeasure", remeasure);
 
-      ctx.registerMethod("setMeasuredSize", (index: number, size: number): void => {
+      ctx.hooks.method("setMeasuredSize", (index: number, size: number): void => {
         measuredSizes.set(index, size);
+        refreshSizes(index, index);
       });
 
-      ctx.registerMethod("getMeasuredCount", (): number => measuredSizes.size);
+      ctx.hooks.method("getMeasuredCount", (): number => measuredSizes.size);
 
-      // Cleanup
-      ctx.registerDestroyHandler((): void => {
-        if (observer) {
-          observer.disconnect();
-          observer = null;
-        }
+      // Cleanup: this install's observer only. If a newer install has
+      // replaced it, the shared one is that install's and stays.
+      ctx.hooks.onDestroy((): void => {
+        own.disconnect();
+        if (observer === own) observer = null;
       });
     },
 
@@ -309,7 +370,7 @@ export function autosize<T extends VListItem = VListItem>(
           const idx = state.visibleIndices[i]!;
           if (isMeasured(idx)) continue;
 
-          const el = storedCtx.getRenderedElement(idx);
+          const el = storedCtx.dom.renderedElement(idx);
           if (!el) continue;
 
           // Clear the explicit size set by phase2Commit so
@@ -329,12 +390,15 @@ export function autosize<T extends VListItem = VListItem>(
 
         if (atEnd) {
           snapToEnd();
-          storedCtx.forceRender();
+          storedCtx.render.force();
         }
       },
     },
 
     destroy(): void {
+      installs = Math.max(0, installs - 1);
+      // The measurements and the context belong to the newest install now.
+      if (installs > 0) return;
       if (observer) {
         observer.disconnect();
         observer = null;
