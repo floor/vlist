@@ -199,6 +199,9 @@ nothing `next` does not, and staging.vlist.io deploys from `next`, not from it.
 - ✅ Feature branches branch off `next` and merge back into `next` through a PR
 - ✅ Committing on your own branch and opening a PR is ordinary work — no need to ask
 - ✅ A PR merges only after the gate in `.agents/agents.yaml` passes on a clean export
+- ✅ **A PR merges only when `next` is green at its base.** If `next` is red, the first PR is
+  the one that makes it green — nothing else merges on top. Ten PRs merged onto a red `next`
+  in 2026-09 and hid five layers of failure for three days
 
 The boundary is at publication, not at authorship: writing code and proposing it is
 the work, while anything the outside world sees as final — a merge, a tag, a release,
@@ -214,7 +217,9 @@ git branch --show-current  # a feature branch or `next`, NEVER `main`
 
 ### CI (`ci.yml`)
 Runs on push to `next`, `staging` and `main`, and on PRs targeting any of them:
-- Typecheck → Test → Coverage threshold (85%) → Build → Bundle size
+- Typecheck, Test, Test `--concurrent`, Coverage threshold (85%), Build, Bundle size, Heap growth —
+  **every gate runs even when an earlier one is red**, and the final `Gate` step fails the job
+  naming each red one. Read the `Gate` step's log, not the first red step
 
 ### Publish (`publish.yml`)
 Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
