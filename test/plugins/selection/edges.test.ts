@@ -533,12 +533,12 @@ describe("selection + tree — followFocus", () => {
     press(content, "Home");
     press(content, "ArrowDown");
     press(content, "ArrowDown");
-    const snapshot = (list as SelectableList & SnapshotsMethods<TestItem>).getScrollSnapshot();
+    const snapshot = (list as SelectableList & SnapshotsMethods).getScrollSnapshot();
     press(content, "ArrowDown");
     press(content, "ArrowDown");
     expect(focusedId(container)).toBe(5);
 
-    (list as SelectableList & SnapshotsMethods<TestItem>).restoreScroll(snapshot);
+    (list as SelectableList & SnapshotsMethods).restoreScroll(snapshot);
     await flushRAF();
 
     const ring = container.querySelector<HTMLElement>(".vlist-item--focused");
@@ -556,7 +556,7 @@ describe("selection + tree — followFocus", () => {
       [selection<TestItem>(), snapshots<TestItem>()],
     );
 
-    (list as SelectableList & SnapshotsMethods<TestItem>).restoreScroll({
+    (list as SelectableList & SnapshotsMethods).restoreScroll({
       index: 0,
       offsetInItem: 0,
       total: 20,

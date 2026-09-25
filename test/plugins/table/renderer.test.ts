@@ -4,8 +4,8 @@
  * grace-period release, column layout updates, and cell positioning.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createTableRenderer, type TableRendererInstance } from "../../../src/plugins/table/renderer";
 import { createTableLayout } from "../../../src/plugins/table/layout";
 import { createSizeCache } from "../../../src/rendering/sizes";
@@ -16,8 +16,8 @@ import type { VListItem } from "../../../src/types";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers

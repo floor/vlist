@@ -11,9 +11,9 @@
  * right. Nothing asserted a grid's public total, which is why it survived.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VListPlugin, PluginContext } from "../../src/core/types";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
@@ -24,14 +24,14 @@ import type { VListAdapter } from "../../src/types";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return 400; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 afterAll(() => geometry.assertRestored());
 

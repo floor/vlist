@@ -1,5 +1,5 @@
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createTreeLayout } from "../../../src/plugins/tree/layout";
 import type { VListItem } from "../../../src/types";
 
@@ -31,8 +31,8 @@ function makeTree(): TreeItem[] {
 
 const getChildren = (item: TreeItem): TreeItem[] => item.children;
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Rebuild

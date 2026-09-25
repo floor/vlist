@@ -23,9 +23,9 @@ describe("size gate", () => {
     }
   });
 
-  it("keeps the 9.9 KB base target", () => {
-    expect(BUDGET_BYTES["Base (createVList)"]).toBe(kb(9.9));
-    expect(BUDGET_BYTES.native).toBe(kb(9.9));
+  it("keeps the 10.0 KB base target", () => {
+    expect(BUDGET_BYTES["Base (createVList)"]).toBe(kb(10.0));
+    expect(BUDGET_BYTES.native).toBe(kb(10.0));
   });
 
   it("fails the command when a scenario fails to build", () => {

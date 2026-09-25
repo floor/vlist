@@ -4,7 +4,13 @@
  * Uses happy-dom's GlobalRegistrator for full DOM API support including
  * querySelector, scrollTo, ResizeObserver, sessionStorage, etc.
  *
- * Each test file runs in its own Bun worker, so GlobalRegistrator is safe.
+ * Registration is process-wide and happens once. bunfig.toml sets
+ * `concurrent = true`, and under it files interleave in one process: a file
+ * that registered in beforeAll and unregistered in afterAll pulled the DOM out
+ * from under every file still running, which aborted whole files with "Happy
+ * DOM has already been globally registered". So `registerDOM` is idempotent
+ * and `unregisterDOM` is deliberately a no-op; test/preload.ts registers
+ * before any file's module scope runs.
  *
  * Usage:
  *   import { setupDOM, teardownDOM } from "../helpers/dom";
@@ -13,6 +19,17 @@
  */
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
+/** Registers Happy DOM if it is not already; safe to call from every file. */
+export const registerDOM = (): void => {
+  if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+};
+
+/**
+ * Intentionally does nothing. The DOM lives for the whole process: with
+ * files interleaved, unregistering here would tear it down for the others.
+ */
+export const unregisterDOM = (): void => {};
 
 // =============================================================================
 // MockResizeObserver
@@ -160,8 +177,8 @@ export interface SetupDOMOptions {
   immediateResize?: boolean;
 }
 
-let registered = false;
 let origRAF: typeof globalThis.requestAnimationFrame | undefined;
+let origResizeObserver: typeof ResizeObserver | undefined;
 let origCAF: typeof globalThis.cancelAnimationFrame | undefined;
 
 /**
@@ -176,12 +193,12 @@ let origCAF: typeof globalThis.cancelAnimationFrame | undefined;
 export const setupDOM = (opts: SetupDOMOptions = {}): void => {
   const { width = 300, height = 500, immediateResize = true } = opts;
 
-  if (!registered) {
-    GlobalRegistrator.register();
-    registered = true;
-  }
+  registerDOM();
 
-  // Override ResizeObserver with our controllable mock
+  // Override ResizeObserver with our controllable mock. The original is kept so
+  // teardownDOM can put it back: with the DOM now living for the whole process,
+  // a mock left in place reports this file's height to every file after it.
+  if (origResizeObserver === undefined) origResizeObserver = global.ResizeObserver;
   global.ResizeObserver = createMockResizeObserver({
     width,
     height,
@@ -200,11 +217,20 @@ export const setupDOM = (opts: SetupDOMOptions = {}): void => {
  * Unregister happy-dom globals.
  */
 export const teardownDOM = (): void => {
+  // The document lives for the whole process now, so whatever a file mounted
+  // and never removed is still there for every file after it. Per-file
+  // unregistration used to wipe this for free; this does it on purpose. A
+  // leaked `.vlist-content` full of `vlist-item-*` ids is exactly what made
+  // fold.test.ts resolve a stale element in CI order -- and the resulting
+  // assertion failure surfaced as a 5s "timeout", because formatting two
+  // Happy DOM elements for the diff takes longer than that.
+  document.body.replaceChildren();
+  if (origResizeObserver !== undefined) {
+    global.ResizeObserver = origResizeObserver;
+    origResizeObserver = undefined;
+  }
   if (origRAF) global.requestAnimationFrame = origRAF;
   if (origCAF) global.cancelAnimationFrame = origCAF;
 
-  if (registered) {
-    GlobalRegistrator.unregister();
-    registered = false;
-  }
+  unregisterDOM();
 };

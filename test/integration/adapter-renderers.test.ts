@@ -1,6 +1,6 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import type { VListItem } from "../../src/types";
 import { beforeAll, afterAll, describe, expect, it } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createPluginMockContext } from "../helpers/plugin-context";
 import { grid } from "../../src/plugins/grid/plugin";
 import { table } from "../../src/plugins/table/plugin";
@@ -8,8 +8,8 @@ import { masonry } from "../../src/plugins/masonry/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { tree } from "../../src/plugins/tree/plugin";
 
-beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+beforeAll(() => registerDOM());
+afterAll(() => unregisterDOM());
 
 const factories = [
   () => grid({ columns: 2 }),

@@ -7,8 +7,8 @@
  * Adapted from v1 withMasonry feature tests to v2 PluginContext API.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { SCROLL_DURATION } from "../../../src/constants";
 import { masonry } from "../../../src/plugins/masonry/plugin";
 import type { VListItem } from "../../../src/types";
@@ -18,8 +18,8 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers
@@ -1462,7 +1462,7 @@ describe("masonry - scrollToIndex smooth", () => {
     plugin.setup!(ctx);
     ctx.render.force();
 
-    const smooth: { duration: number; easing?: (t: number) => number }[] = [];
+    const smooth: { duration: number; easing?: ((t: number) => number) | undefined }[] = [];
     const jumps: number[] = [];
     const scroll = ctx.scroll;
     const realSmooth = scroll.smoothTo.bind(scroll);

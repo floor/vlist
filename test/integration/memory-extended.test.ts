@@ -1,3 +1,4 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import {
   describe,
   it,
@@ -9,7 +10,6 @@ import {
   afterEach,
 } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import { createVList as createNative } from "../../src/native";
 import type { VList } from "../../src/core/types";
@@ -30,7 +30,7 @@ import type { VListAdapter } from "../../src/types";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() {
@@ -47,7 +47,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());

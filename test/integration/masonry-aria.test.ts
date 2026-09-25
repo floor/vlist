@@ -11,9 +11,9 @@
  * path — masonry sets up at priority 10, ahead of selection (50) and a11y (55).
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
@@ -24,14 +24,14 @@ import { selection } from "../../src/plugins/selection/plugin";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return 400; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 afterAll(() => geometry.assertRestored());
 
@@ -99,7 +99,11 @@ describe("masonry — listbox semantics", () => {
         container,
         items,
         item: {
-          height: (_item, index) => (index % 3 === 0 ? 180 : 48),
+          // Masonry's height callback is (index, context?), not (item, index).
+          // Written the other way round, `index` received the context object,
+          // `context % 3` was NaN, and every item silently got 48 -- so the
+          // varied heights this test exists to exercise never happened.
+          height: (index) => (index % 3 === 0 ? 180 : 48),
           template: simpleTemplate,
         },
       },

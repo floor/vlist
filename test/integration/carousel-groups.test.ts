@@ -17,8 +17,8 @@
  * vlist.io's carousel page had documented the pair as incompatible all along.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
@@ -28,7 +28,7 @@ import { groups } from "../../src/plugins/groups/plugin";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
@@ -36,7 +36,7 @@ beforeAll(() => {
 
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 let container: HTMLElement | null = null;

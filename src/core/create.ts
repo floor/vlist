@@ -350,6 +350,20 @@ export function createCore<T extends VListItem = VListItem>(
   const clickHandlers: Array<(e: MouseEvent) => void> = [];
   const keydownHandlers: Array<(e: KeyboardEvent) => void> = [];
   const destroyHandlers: Array<() => void> = [];
+  // Runs every onDestroy handler, then every plugin's destroy. destroy() and
+  // the one throw after the setup loop both unwind through here, so a plugin
+  // torn down on a failed construction is torn down exactly as on destroy().
+  const unwindPlugins = (into: Error[]): void => {
+    const collect = (err: unknown): void => { into.push(err instanceof Error ? err : new Error(String(err))); };
+    for (const handler of destroyHandlers) {
+      try { handler(); } catch (err) { collect(err); }
+    }
+    for (const plugin of sorted) {
+      if (plugin.destroy) {
+        try { plugin.destroy(); } catch (err) { collect(err); }
+      }
+    }
+  };
   let virtualTotalFn: (() => number) | null = null;
   let scrollSetFn: ((pos: number) => void) | null = null;
   let onContentSize: ((px: number) => void) | undefined;
@@ -748,6 +762,14 @@ export function createCore<T extends VListItem = VListItem>(
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
   if (skipDefaultScroll && boundedWrap) {
+    // This is the one throw after the setup loop, and page's setup has
+    // already bound a resize listener on window by now. A throw here used to
+    // leave it there: no list is returned, so nothing could ever destroy it,
+    // and the listener outlived its context. Unwind exactly as destroy() does
+    // before throwing; the construction error is the one to surface, so the
+    // teardown errors are dropped. Any new throw placed after setup must do
+    // the same.
+    unwindPlugins([]);
     throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
@@ -1148,22 +1170,7 @@ export function createCore<T extends VListItem = VListItem>(
       dom.root.removeEventListener("keydown", onContentKeydown);
 
       const destroyErrors: Error[] = [];
-      for (const handler of destroyHandlers) {
-        try {
-          handler();
-        } catch (err) {
-          destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
-        }
-      }
-      for (const plugin of sorted) {
-        if (plugin.destroy) {
-          try {
-            plugin.destroy();
-          } catch (err) {
-            destroyErrors.push(err instanceof Error ? err : new Error(String(err)));
-          }
-        }
-      }
+      unwindPlugins(destroyErrors);
 
       for (const [, element] of rendered) {
         element.remove();

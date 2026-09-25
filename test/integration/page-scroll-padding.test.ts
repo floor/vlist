@@ -13,8 +13,8 @@
  * configured, and it holds for focus movement and for scrollToIndex alike.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList, VListPlugin } from "../../src/core/types";
@@ -34,9 +34,12 @@ const BOTTOM_PAD = 40;
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 let originalScrollTo: typeof window.scrollTo;
+// `| undefined` on both, not optional: exactOptionalPropertyTypes is on, and
+// getOwnPropertyDescriptor returns undefined when the property is absent.
+let originalInner: { height: PropertyDescriptor | undefined; width: PropertyDescriptor | undefined } = { height: undefined, width: undefined };
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return WINDOW_HEIGHT; },
@@ -46,6 +49,12 @@ beforeAll(() => {
     get() { return 300; },
     configurable: true,
   });
+  // Captured so afterAll can put them back. The DOM now lives for the whole
+  // process, so a value left here is the value every later file reads.
+  originalInner = {
+    height: Object.getOwnPropertyDescriptor(window, "innerHeight"),
+    width: Object.getOwnPropertyDescriptor(window, "innerWidth"),
+  };
   Object.defineProperty(window, "innerHeight", { value: WINDOW_HEIGHT, configurable: true });
   Object.defineProperty(window, "innerWidth", { value: 300, configurable: true });
   // page() writes through window.scrollTo. Swallow it: happy-dom would echo a
@@ -55,9 +64,13 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  for (const [name, desc] of [["innerHeight", originalInner.height], ["innerWidth", originalInner.width]] as const) {
+    if (desc) Object.defineProperty(window, name, desc);
+    else delete (window as unknown as Record<string, unknown>)[name];
+  }
   window.scrollTo = originalScrollTo;
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 afterAll(() => geometry.assertRestored());
 

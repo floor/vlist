@@ -12,6 +12,7 @@
  * E2E integration tests.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import {
   describe,
@@ -22,7 +23,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { table } from "../../../src/plugins/table/plugin";
 import { selection } from "../../../src/plugins/selection/plugin";
 import { createVList as createNative } from "../../../src/native";
@@ -47,7 +47,7 @@ import {
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 800, configurable: true });
@@ -55,7 +55,7 @@ beforeAll(() => {
 
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());
@@ -64,7 +64,10 @@ afterAll(() => geometry.assertRestored());
 // Shared Helpers
 // =============================================================================
 
-interface TableTestItem extends VListItem {
+// Extends TestItem rather than VListItem: TestItem carries an index signature,
+// and an interface declared without one is never assignable to it -- which is
+// why TableTestItem[] could not be passed where simpleTemplate's item goes.
+interface TableTestItem extends TestItem {
   id: number;
   name: string;
   email: string;

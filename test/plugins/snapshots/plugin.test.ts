@@ -6,8 +6,8 @@
  * Adapted from v1 withSnapshots feature tests to v2 PluginContext API.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { snapshots } from "../../../src/plugins/snapshots/plugin";
 import type { VListItem, ScrollSnapshot } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -19,7 +19,7 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 let origRAF: typeof globalThis.requestAnimationFrame;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   origRAF = global.requestAnimationFrame;
   global.requestAnimationFrame = ((cb: FrameRequestCallback) => {
     cb(performance.now());
@@ -29,7 +29,7 @@ beforeAll(() => {
 
 afterAll(() => {
   global.requestAnimationFrame = origRAF;
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 
 // =============================================================================

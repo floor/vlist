@@ -15,9 +15,9 @@
  * existed to remove.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { describe, it as baseIt, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, createTestItems, type TestItem } from "../helpers/factory";
@@ -35,14 +35,14 @@ let geometry: ReturnType<typeof capturePrototypeGeometry>;
 let viewportHeight = 400;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get() { return viewportHeight; }, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get() { return 300; }, configurable: true });
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 afterAll(() => geometry.assertRestored());
 

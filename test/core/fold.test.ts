@@ -75,7 +75,11 @@ describe("rekeyRendered", () => {
       expect(a.id).toBe("vlist-item-11");
       expect(b.id).toBe("vlist-item-12");
       expect(content.getAttribute("aria-activedescendant")).toBe("vlist-item-12");
-      expect(document.getElementById("vlist-item-12")).toBe(b);
+      // Compared by identity as a boolean, not with toBe on the element: when
+      // this fails, bun formats both elements for the diff, and a Happy DOM
+      // element drags its whole window in -- long enough to trip the test
+      // timeout and report a timeout instead of the real failure.
+      expect(document.getElementById("vlist-item-12") === b).toBe(true);
     } finally {
       content.remove();
     }

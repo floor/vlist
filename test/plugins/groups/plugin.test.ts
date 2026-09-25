@@ -13,8 +13,8 @@
  * group layout, sticky headers, and size dispatch into the plugin context.
  */
 
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { SCROLL_DURATION } from "../../../src/constants";
 import { groups } from "../../../src/plugins/groups/plugin";
 import type { VListItem } from "../../../src/types";
@@ -24,8 +24,8 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // DOM Setup
 // =============================================================================
 
-beforeAll(() => { GlobalRegistrator.register(); });
-afterAll(() => { GlobalRegistrator.unregister(); });
+beforeAll(() => { registerDOM(); });
+afterAll(() => { unregisterDOM(); });
 
 // =============================================================================
 // Test Helpers
@@ -1345,7 +1345,7 @@ describe("groups — scrollToIndex", () => {
     const { ctx, cleanup } = mockContext;
     plugin.setup!(ctx);
 
-    const smooth: { duration: number; easing?: (t: number) => number }[] = [];
+    const smooth: { duration: number; easing?: ((t: number) => number) | undefined }[] = [];
     const jumps: number[] = [];
     const scroll = ctx.scroll;
     const realSmooth = scroll.smoothTo.bind(scroll);

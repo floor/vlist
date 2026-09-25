@@ -14,6 +14,7 @@
  *   - sticky header population after async data arrives
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
@@ -25,7 +26,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
 import { createContainer, type TestItem } from "../helpers/factory";
@@ -42,7 +42,7 @@ import type { VListAdapter } from "../../src/types";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", {
     get() { return 500; },
@@ -55,7 +55,7 @@ beforeAll(() => {
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());

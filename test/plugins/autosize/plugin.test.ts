@@ -1316,7 +1316,9 @@ describe("autosize remeasure on late content", () => {
         width: 300, height: 40, top: 0, left: 0, bottom: 40, right: 300,
         x: 0, y: 0, toJSON: () => ({}),
       } as DOMRectReadOnly,
-    } as ResizeObserverEntry]);
+    // Via unknown: the stub carries only the two fields the plugin reads, not
+    // the box-size arrays a real entry has, so the direct cast is rejected.
+    } as unknown as ResizeObserverEntry]);
 
     expect(el.style.height).toBe("120px");
     expect(method<(i: number) => boolean>("isMeasured")(0)).toBe(true);

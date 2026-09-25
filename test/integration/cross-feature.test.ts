@@ -6,6 +6,7 @@
  * with features, concurrent operations, and feature interaction edge cases.
  */
 
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import {
   describe,
@@ -17,7 +18,6 @@ import {
   beforeEach,
   afterEach,
 } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createVList } from "../../src/core/create";
 import { createVList as createNative } from "../../src/native";
 import type { PluginContext, VList } from "../../src/core/types";
@@ -45,14 +45,14 @@ import type { VListAdapter } from "../../src/types";
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
 beforeAll(() => {
-  GlobalRegistrator.register();
+  registerDOM();
   geometry = capturePrototypeGeometry();
   Object.defineProperty(HTMLElement.prototype, "clientHeight", { get: () => 500, configurable: true });
   Object.defineProperty(HTMLElement.prototype, "clientWidth", { get: () => 300, configurable: true });
 });
 afterAll(() => {
   geometry.restore();
-  GlobalRegistrator.unregister();
+  unregisterDOM();
 });
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());

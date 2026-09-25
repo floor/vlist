@@ -1,5 +1,5 @@
+import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { afterAll, beforeAll, expect, it } from "bun:test";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { createCore } from "../../src/core/create";
 import { createSyntheticScrollHandler } from "../../src/synthetic/handler";
 import { createVList as createNative } from "../../src/native";
@@ -9,8 +9,8 @@ import { page } from "../../src/plugins/page/plugin";
 import type { PluginContext } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
 
-beforeAll(() => GlobalRegistrator.register());
-afterAll(() => GlobalRegistrator.unregister());
+beforeAll(() => registerDOM());
+afterAll(() => unregisterDOM());
 
 for (const mode of ["native", "synthetic"] as const) {
   it(`page uses the document source and origin zero under ${mode}`, () => {
