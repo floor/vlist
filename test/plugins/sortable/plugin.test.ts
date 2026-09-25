@@ -1027,6 +1027,52 @@ describe("sortable — keyboard reordering", () => {
     return event;
   }
 
+  // #115: click into the list, press Space, arrows do nothing; press Space
+  // again and they work. With the default `focusOnClick: false` a click
+  // remembers the row but hides the ring, `_getFocusedIndex` answers -1 while
+  // the ring is off, and the first arrow -- which shows the ring -- is what
+  // made the second Space find a row.
+  it("Space grabs the clicked row while its ring is hidden (#115)", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    const focusById = mock(() => {});
+    mockCtx.methods.set("_getFocusedIndex", () => -1);
+    mockCtx.methods.set("_getFocusedId", () => mockCtx.ctx.items.all()[3]!.id);
+    mockCtx.methods.set("_focusById", focusById);
+    plugin.setup!(mockCtx.ctx);
+
+    const event = dispatchKey(mockCtx.ctx.dom.content, " ");
+    expect(event.defaultPrevented).toBe(true);
+    expect(mockCtx.ctx.dom.root.classList.contains("vlist--sorting")).toBe(true);
+    const start = mockCtx.emitSpy.mock.calls.find((c: unknown[]) => c[0] === "sort:start");
+    expect(start).toBeDefined();
+    expect((start![1] as { index: number }).index).toBe(3);
+    // The grab is a key press: the ring comes back on the grabbed row.
+    expect(focusById).toHaveBeenCalledWith(mockCtx.ctx.items.all()[3]!.id, true);
+
+    // And the arrows move it from there, as only the second Space used to:
+    // a keyboard step is a sort:end of one position.
+    dispatchKey(mockCtx.ctx.dom.content, "ArrowDown");
+    const step = mockCtx.emitSpy.mock.calls.find((c: unknown[]) => c[0] === "sort:end");
+    expect(step).toBeDefined();
+    expect(step![1]).toEqual({ fromIndex: 3, toIndex: 4 });
+
+    dispatchKey(mockCtx.ctx.dom.content, "Escape");
+    mockCtx.cleanup();
+  });
+
+  it("Space with no focused row at all still grabs nothing", () => {
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    mockCtx.methods.set("_getFocusedIndex", () => -1);
+    mockCtx.methods.set("_getFocusedId", () => undefined);
+    plugin.setup!(mockCtx.ctx);
+    const event = dispatchKey(mockCtx.ctx.dom.content, " ");
+    expect(event.defaultPrevented).toBe(false);
+    expect(mockCtx.emitSpy.mock.calls.some((c: unknown[]) => c[0] === "sort:start")).toBe(false);
+    mockCtx.cleanup();
+  });
+
   it("Space on focused item enters grab mode and emits sort:start", () => {
     const setup = setupKeyboard(3);
 

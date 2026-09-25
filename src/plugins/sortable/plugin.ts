@@ -899,11 +899,26 @@ export function sortable<T extends VListItem = VListItem>(
     }
 
     if (event.key === " " && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-      const focusedIndex = getFocusedIndex();
-      if (focusedIndex >= 0) {
+      // A click with the default `focusOnClick: false` remembers the row but
+      // hides the ring, and `_getFocusedIndex` answers -1 while the ring is
+      // off, so a table or masonry click paints none. The row is still the
+      // one the person means: `_getFocusedId` names it whatever the ring
+      // does. Without this, Space after a click did nothing and the first
+      // arrow -- which shows the ring -- made the second Space work (#115).
+      let index = getFocusedIndex();
+      const hidden = index < 0;
+      if (hidden) {
+        const id = (storedCtx?.hooks.get("_getFocusedId") as (() => string | number | undefined) | undefined)?.();
+        const el = id === undefined ? null : contentEl.querySelector<HTMLElement>(`[data-id="${id}"]`);
+        if (el) index = getIndex(el);
+      }
+      if (index >= 0) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        kbGrab(focusedIndex);
+        kbGrab(index);
+        // A key press grabbed it: the ring comes back with the grab, as it
+        // does for every other key move.
+        if (hidden) focusById(kbGrabbedItemId, true);
       }
     }
   };
