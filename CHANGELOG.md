@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.0.0-next.4] - 2026-09-25
+
 ### Changed
 
 - The carousel's index space is three laps instead of 101: the home lap and
@@ -78,6 +80,21 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   Not addressed here: the five layout plugins still share priority 10 and
   still have no defined order among themselves. The conflict declarations are
   what keeps that from mattering.
+
+- A template's root element fills the row. `.vlist-item` is a flex
+  container, so whatever `item.template` returned became a flex item, and
+  flex items do not grow: measured on a live page, a 350 px row held a
+  131.7 px template root, and every integration worked around it with
+  `width: 100%`. The stylesheet now makes the template's root fill the row;
+  the per-integration rule is no longer needed.
+
+- The base size budget is 10.0 KB (10,240 bytes), no longer 9.9. The 3.x
+  fix cycle grew the core past 9.9 KB while the size gate was dark behind a
+  failing typecheck (the idle pool trim below is 43 bytes of it), and the
+  choice was to take the bytes rather than trim merged fixes. Every plugin
+  budget was re-measured on the same rule as before: the measured size on
+  a 0.1 KB grid with at least 100 bytes of room. `bun run size` and both
+  READMEs quote today's numbers; the base is 10,200 bytes gzipped.
 
 ### Fixed
 
@@ -166,6 +183,86 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   pagination indicators stayed stale through `selectNext()` /
   `selectPrevious()`. Clamping at either end still emits nothing.
 
+- `sortable()` on Android Chrome: the long-press menu no longer opens over a
+  drag that has already started. `blockCallout` only prevented the default
+  when the event's target sat inside the dragged item, which is never true
+  once a drag is running. Found on a real device during the phone pass.
+
+- `grid()` and `table()` neutralise focusables after writing a row, through
+  the same `rowContentWritten` helper the list, tree, groups and masonry
+  renderers already call: links and buttons inside those rows get
+  `tabindex="-1"`, and the row stamp is cleared so a rewrite is visible.
+
+- `snapshots()`: a restore onto a list that is showing the keyboard focus
+  ring moves the ring onto the restored row, and the next arrow steps from
+  there. A restore onto a list that was never focused still paints no ring.
+
+- `grid()` no longer asks a height function for an index past the end of the
+  data when the size cache is built one slot per item, so a function that
+  reads its item does not throw during setup or `updateGrid` and the grid
+  stays installed.
+
+- `scrollToIndex({ behavior: "smooth" })` with no duration animates under
+  `grid()`, `groups()` and `masonry()`, with the same 300 ms default as a
+  plain list, and forwards the easing option. An omitted behavior, or
+  `"auto"`, still jumps.
+
+- `search()`: typing into the visible search bar opens search, the same as
+  `setQuery()`; Enter, the arrows and Escape work in that field, and the list
+  gets `vlist--searching`. Matches inside a `table()` are highlighted —
+  filtering already worked, the marks did not — and with `groups()` the
+  engine total includes the header rows, so the last group's rows are drawn
+  and highlighted.
+
+- `autosize()`: a smooth jump to the end finishes on the last items. The
+  jump publishes the content height while rows are still being measured and
+  snaps to that end when the animation completes; the second jump to the
+  bottom no longer stops short and leaves the viewport empty. A
+  `ResizeObserverEntry` without `borderBoxSize` is measured from the
+  element's border box instead of throwing.
+
+- `tree()`: the last child of a branch closes the guide with an elbow, and a
+  folder that is itself last does not keep that line running through its
+  children; a nested guide that does not start at the left edge no longer
+  paints the whole gutter. `updateItem` on a node inside a closed folder
+  updates the source node, and the new label is there when the folder
+  opens. ArrowDown after a click continues from the clicked node instead of
+  jumping back to the first, and a tree with `a11y()` or `selection()`
+  expands, collapses and type-aheads from the clicked row while the focus
+  ring stays hidden — a table or masonry click still paints no ring.
+
+- `a11y()` publishes the focused row and a way to move it, the hooks
+  `selection()` already provided, so a tree with `a11y()` and no
+  `selection()` can expand, collapse, expand siblings and type-ahead from
+  the keyboard again. Moving through a `masonry()` list keeps the focused
+  cell on screen — a11y asks the layout that owns the reveal before falling
+  back to a running total of item heights — and `aria-activedescendant`
+  names that cell.
+
+- `rebuild()`: the hidden new list is pinned to the previous list's width
+  and height while it is overlaid. An absolute root inside a static
+  container has no height, so a tree skipped its first render and came back
+  empty. The scroll position is restored without a `snapshots()` plugin: a
+  plain list contributes its position, and the new list applies it again
+  once the viewport has a size.
+
+- `masonry()`, `carousel()` and `table()` ignore the teardown of a list they
+  were moved from. A scroll-mode switch installs the same plugin instance on
+  the new list and then destroys the old one, and the old teardown cleared
+  what the new list had just built: the album came back empty, Next threw,
+  the data table came back empty.
+
+- `sortable()` under `vlist/synthetic`: edge-scroll moves each row by its
+  transform, and clearing the inline transition let an author
+  `transition: transform` rule animate that move, so rows lagged and left a
+  gap. An origin change now sets the transition to `none`; the reorder
+  animation still plays when the list is not scrolling.
+
+- A `createVList` that throws after plugin setup — `page()` with
+  `carousel()` is the one case — unwinds the plugins it had set up and
+  removes the root it had built. page's `resize` listener on `window` used
+  to outlive a list nobody got, and the empty root stayed in the container.
+
 ### Removed
 
 - `grid()`: the placeholder `rebuildAsRows` function the plugin was created
@@ -179,6 +276,40 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `ctx.scroll.to` directly), and the table's `_updateRenderedItem` and
   `_updateItemClasses` (orphaned since the v2 plugin migration). No behaviour
   change; scrollbar is 30 bytes and table 37 bytes smaller gzipped.
+
+### Performance
+
+- The element pool trims its spare nodes once the list is idle, or on a data
+  change outside a scroll, back to the number of rows on screen. During a
+  scroll it still keeps a whole window ready for the next jump.
+
+- A carousel lap fold reuses two scratch buffers instead of allocating an
+  index array and an element array on every fold. The buffers grow only when
+  the mounted window is larger than before.
+
+### Internal
+
+- `next` was red from 2026-09-22 to 09-25 behind five layers that each hid
+  the next: a `src` typecheck error, twelve type errors in test files, the
+  Happy DOM registration under `bunfig.toml`'s `concurrent = true` (43
+  failures and ~440 tests never running), the coverage gate, the size gate.
+  The suite now registers one Happy DOM for the process (`test/preload.ts`)
+  and clears the document between files; the leaks that had hidden behind
+  the per-file DOM are fixed at their source, including the one test that
+  built two lists and destroyed one. CI runs every gate even when an earlier
+  one is red and a final `Gate` step names the red ones, and the merge rule
+  gained the sentence the week was missing: a PR merges only when `next` is
+  green at its base.
+
+- `build.ts` recreates `dist/` after cleaning it; four `Bun.build` calls
+  write into that directory and only the first used to create it, so one
+  build in thirty failed on a later chunk.
+
+- The perf suite asserts the work of `updateItem` — one template call for a
+  rendered id, none for an off-screen one — instead of a wall-clock
+  millisecond, and takes the median of seven samples for the 5 ms budgets.
+  The runway regression tests name the engine (`runway — …`), not the
+  bounded-scroll mode that no longer exists.
 
 ## [3.0.0-next.3] - 2026-09-17
 
