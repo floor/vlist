@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- `autosize()` survives being reinstalled on a new list before the old one
+  is destroyed — the scroll-mode switch on vlist.io rebuilds with the same
+  plugin instances. The old list's teardown disconnected the observer the
+  new list had just created and cleared its measurements, so every row that
+  scrolled into view afterwards was the estimate: clipped cards on the social
+  feed. Each install owns its observer now, and only the last teardown
+  clears the measurements. Same shape as the masonry, carousel and table
+  fixes in `next.4`.
+
 ## [3.0.0-next.6] - 2026-09-25
 
 ### Fixed

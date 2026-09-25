@@ -50,6 +50,13 @@ export function autosize<T extends VListItem = VListItem>(
   let gap = config?.gap ?? 0;
 
   let observer: ResizeObserver | null = null;
+  // Lists this instance is installed on. A scroll-mode switch rebuilds the
+  // list with the same plugin instances, so for a moment the instance is on
+  // two lists; the old one's teardown must not take the new one's observer
+  // and measurements with it (as masonry, carousel and table learned in
+  // #292-#294). Measured on the social feed: after the switch every row that
+  // scrolled into view was the 160 px estimate against 590 px of content.
+  let installs = 0;
   let storedCtx: PluginContext<T> | null = null;
   let engineState: EngineState;
   let scroll: PluginContext<T>["scroll"];
@@ -152,6 +159,7 @@ export function autosize<T extends VListItem = VListItem>(
     priority: 5,
 
     setup(ctx: PluginContext<T>): void {
+      installs++;
       scroll = ctx.scroll;
       storedCtx = ctx;
       engineState = ctx.getState();
@@ -169,7 +177,7 @@ export function autosize<T extends VListItem = VListItem>(
       ctx.sizes.setConfig(sizeFn, gap);
 
       // ResizeObserver for measuring items
-      observer = new ResizeObserver((entries) => {
+      const own = new ResizeObserver((entries) => {
         if (engineState.destroyed || !storedCtx) return;
 
         let hasNewMeasurements = false;
@@ -187,7 +195,7 @@ export function autosize<T extends VListItem = VListItem>(
 
           // Verify element wasn't recycled to a different item
           if (el.getAttribute("data-index") !== String(index)) {
-            observer!.unobserve(el);
+            own.unobserve(el);
             continue;
           }
 
@@ -224,7 +232,7 @@ export function autosize<T extends VListItem = VListItem>(
             pendingScrollDelta += sizeWithGap - oldSize;
           }
 
-          observer!.unobserve(el);
+          own.unobserve(el);
 
           // Pin the element to its measured size
           el.style[sizeProp] = `${newSize}px`;
@@ -267,6 +275,7 @@ export function autosize<T extends VListItem = VListItem>(
 
         ctx.render.force();
       });
+      observer = own;
 
       // End-pinning with dynamic scroll target: when scrollToIndex targets
       // the last item with "end" alignment, use a dynamic target function so
@@ -345,12 +354,11 @@ export function autosize<T extends VListItem = VListItem>(
 
       ctx.hooks.method("getMeasuredCount", (): number => measuredSizes.size);
 
-      // Cleanup
+      // Cleanup: this install's observer only. If a newer install has
+      // replaced it, the shared one is that install's and stays.
       ctx.hooks.onDestroy((): void => {
-        if (observer) {
-          observer.disconnect();
-          observer = null;
-        }
+        own.disconnect();
+        if (observer === own) observer = null;
       });
     },
 
@@ -388,6 +396,9 @@ export function autosize<T extends VListItem = VListItem>(
     },
 
     destroy(): void {
+      installs = Math.max(0, installs - 1);
+      // The measurements and the context belong to the newest install now.
+      if (installs > 0) return;
       if (observer) {
         observer.disconnect();
         observer = null;
