@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.0.0-next.6] - 2026-09-25
+
+### Fixed
+
+- `sortable()`: after a drop, the row at the slot the drag started from no
+  longer blanks for a few frames and fades back. The drop suppresses
+  transitions with a `vlist--settling` class and removed it on the next
+  frame callback — which runs before that frame's style calculation, so the
+  class was never computed and the base 150 ms opacity transition animated
+  the former drag source from 0. A regression of the April fix for the same
+  blink; the drop now forces the calculation while the class is on.
+
 ## [3.0.0-next.5] - 2026-09-25
 
 ### Fixed
