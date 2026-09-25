@@ -374,8 +374,12 @@ describe("createVListFromConfig", () => {
         items: createTestItems(50),
         plugins: [autosize()],
       });
-    expect(create).not.toThrow();
-    create().destroy();
+    // One instance, asserted and destroyed: `expect(create).not.toThrow()`
+    // built a list of its own that nothing destroyed.
+    let list: ReturnType<typeof create> | undefined;
+    expect(() => { list = create(); }).not.toThrow();
+    list!.destroy();
+    container.remove();
   });
 
   it("rejects grid with autosize, whichever way the two arrive", () => {
