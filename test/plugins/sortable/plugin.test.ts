@@ -817,6 +817,36 @@ describe("sortable — ghost position", () => {
     }
   });
 
+  it("animates the drop to the slot through its containing block, not client space", () => {
+    // The drop animation wrote viewport coordinates straight into left/top.
+    // With the ghost absolute (#303) that is only right when its containing
+    // block sits at the viewport origin -- on a scrolled page the drop flew
+    // to the top, and pinch-zoomed on an iPhone the ghost "went up" on
+    // release after following the finger. Same feedback as placeGhost.
+    const plugin = sortable<TestItem>();
+    const mockCtx = createMockContext();
+    mockCtx.ctx.dom.viewport.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => {} }) as DOMRect;
+    plugin.setup!(mockCtx.ctx);
+    try {
+      const ghost = start(mockCtx.ctx);
+      shiftRect(ghost, 100, 300); // the containing block sits at client (100, 300)
+      document.dispatchEvent(at("pointermove", 200, 180));
+      expect(ghost.style.top).toBe("-148px");
+      // Release: the drop animates to the slot of index 3 (top 168 in client
+      // space), which is inline top 168 - 300 in the containing block.
+      document.dispatchEvent(at("pointerup", 200, 180));
+      expect(ghost.style.left).toBe("-100px");
+      expect(ghost.style.top).toBe("-132px");
+      expect(ghost.style.transition).toContain("top");
+    } finally {
+      fakeTimers.tick(300);
+      for (const h of mockCtx.destroyHandlers) h();
+      document.body.querySelector(".vlist-sort-ghost")?.remove();
+      mockCtx.cleanup();
+    }
+  });
+
   it("corrects the viewport split the phone measured: rect = inline - (86, 215)", () => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();

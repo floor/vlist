@@ -13,6 +13,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `sortable()`: the drop animation lands on the slot on a scrolled or
+  pinch-zoomed page. `next.5` made the ghost absolute so it follows the
+  finger under zoom, but the drop still wrote viewport coordinates into its
+  position, so on release the ghost flew towards the top of the page — up,
+  by the page's scroll offset. It now converts through the ghost's own rect,
+  as the drag does.
+
 - `autosize()` survives being reinstalled on a new list before the old one
   is destroyed — the scroll-mode switch on vlist.io rebuilds with the same
   plugin instances. The old list's teardown disconnected the observer the
