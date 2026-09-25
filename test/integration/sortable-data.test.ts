@@ -12,7 +12,7 @@
  */
 
 import { registerDOM, unregisterDOM } from "../helpers/dom";
-import { describe, it, expect, mock, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import type { VList } from "../../src/core/types";
@@ -37,15 +37,6 @@ afterAll(() => {
 // Registered after cleanup: catch a missing or incomplete restore.
 afterAll(() => geometry.assertRestored());
 
-let list: VList<TestItem> | null = null;
-let container: HTMLElement | null = null;
-
-afterEach(() => {
-  list?.destroy();
-  list = null;
-  container?.remove();
-  container = null;
-});
 
 function createMockAdapter(total = 100): VListAdapter<TestItem> {
   const all = createTestItems(total);
@@ -74,11 +65,19 @@ function keyboardReorder(root: HTMLElement): void {
   }
 }
 
-async function reorderAndCollect(withAdapter: boolean): Promise<string[]> {
-  container = createContainer({ width: 300, height: 400 });
+/**
+ * Builds a list, reorders by keyboard, and tears the list down before
+ * returning. The first test calls this twice; when the list lived in a
+ * module-level `let` with an `afterEach`, the second call overwrote the
+ * first and that list -- 15 rendered rows, `#vlist-item-0..14` -- was never
+ * destroyed. It outlived the file: another file's `getElementById` found
+ * its `#vlist-item-12` and failed on a stale element.
+ */
+async function reorderAndCollect(withAdapter: boolean): Promise<{ seen: string[]; loaded: number }> {
+  const container = createContainer({ width: 300, height: 400 });
   const seen: string[] = [];
 
-  list = withAdapter
+  const list = withAdapter
     ? createVList<TestItem>(
         { container, item: { height: 40, template: simpleTemplate } },
         [
@@ -92,38 +91,43 @@ async function reorderAndCollect(withAdapter: boolean): Promise<string[]> {
         [selection({ mode: "single", focusOnClick: true }), sortable()],
       );
 
-  if (withAdapter) await waitForLoad(list);
+  try {
+    if (withAdapter) await waitForLoad(list);
 
-  for (const name of ["sort:start", "sort:end", "sort:cancel"] as const) {
-    list.on(name as never, () => seen.push(name));
+    for (const name of ["sort:start", "sort:end", "sort:cancel"] as const) {
+      list.on(name as never, () => seen.push(name));
+    }
+
+    const row = container.querySelector("[data-index]") as HTMLElement | null;
+    expect(row).not.toBeNull();
+    // Keyboard reordering needs a focused row, which selection supplies on click.
+    row!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    keyboardReorder(container.querySelector(".vlist") as HTMLElement);
+    return { seen, loaded: list.items.length };
+  } finally {
+    list.destroy();
+    container.remove();
   }
-
-  const row = container.querySelector("[data-index]") as HTMLElement | null;
-  expect(row).not.toBeNull();
-  // Keyboard reordering needs a focused row, which selection supplies on click.
-  row!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-
-  keyboardReorder(container.querySelector(".vlist") as HTMLElement);
-  return seen;
 }
 
 describe("sortable + data — keyboard reordering across an adapter", () => {
   it("emits the same sort events with an adapter as without one", async () => {
-    const plain = await reorderAndCollect(false);
+    const { seen: plain } = await reorderAndCollect(false);
     // The control: this is what a working keyboard reorder looks like.
     expect(plain).toEqual(["sort:start", "sort:end"]);
 
-    const adapted = await reorderAndCollect(true);
+    const { seen: adapted } = await reorderAndCollect(true);
     // Was [] — the grab read the empty raw array and returned before emitting.
     expect(adapted).toEqual(plain);
   });
 
   it("grabs a row the adapter has loaded, though items.all() stays empty", async () => {
-    const seen = await reorderAndCollect(true);
+    const { seen, loaded } = await reorderAndCollect(true);
 
     // The array the plugin used to read is still empty: the fix routes through
     // _getLoadedItem, it does not populate items.
-    expect(list!.items.length).toBe(0);
+    expect(loaded).toBe(0);
     expect(seen).toContain("sort:start");
   });
 });

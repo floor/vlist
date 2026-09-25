@@ -27,13 +27,18 @@ describe("a throw after plugin setup unwinds the plugins", () => {
     const origRemove = window.removeEventListener.bind(window);
     (window as any).addEventListener = (t: string, fn: any, o?: any) => { added.push(t); return origAdd(t, fn, o); };
     (window as any).removeEventListener = (t: string, fn: any, o?: any) => { removed.push(t); return origRemove(t, fn, o); };
+    const container = createContainer({ width: 300, height: 400 });
     try {
       expect(() =>
         createVList<TestItem>(
-          { container: createContainer({ width: 300, height: 400 }), items: createTestItems(10), item: { height: 40, template: simpleTemplate } },
+          { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate } },
           [page(), carousel()],
         ),
       ).toThrow(/page\(\) is not compatible with the carousel plugin/);
+
+      // The root was built before setup; a construction that fails returns
+      // nothing, so the caller's container must be as it was.
+      expect(container.childElementCount).toBe(0);
 
       const addedResize = added.filter((t) => t === "resize").length;
       const removedResize = removed.filter((t) => t === "resize").length;
@@ -50,6 +55,7 @@ describe("a throw after plugin setup unwinds the plugins", () => {
     } finally {
       (window as any).addEventListener = origAdd;
       (window as any).removeEventListener = origRemove;
+      container.remove();
     }
   });
 });

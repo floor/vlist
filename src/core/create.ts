@@ -770,6 +770,10 @@ export function createCore<T extends VListItem = VListItem>(
     // teardown errors are dropped. Any new throw placed after setup must do
     // the same.
     unwindPlugins([]);
+    // The DOM was built at line ~295, before setup: destroy() removes it, and
+    // so must this. Measured before: the empty root stayed in the caller's
+    // container after the throw.
+    dom.root.remove();
     throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
   // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
