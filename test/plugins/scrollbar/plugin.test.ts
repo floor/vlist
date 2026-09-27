@@ -174,7 +174,7 @@ describe("scrollbar — Setup", () => {
 });
 
 // =============================================================================
-// scrollbar — Scroll callback routing (RFC-012 bounded mode)
+// scrollbar — Scroll callback routing (RFC-012 logical handler)
 // =============================================================================
 
 describe("scrollbar — scroll callback", () => {
@@ -202,7 +202,7 @@ describe("scrollbar — scroll callback", () => {
     // The mock adapter's setPixel records every write into scrollCalls. The
     // pre-RFC-012 callback wrote dom.viewport.scrollTop directly (untracked).
     // Routing through ctx.scroll is what makes the scrollbar correct under
-    // bounded mode, where setPixel maps the logical pixel onto the runway.
+    // a logical handler, where setPixel maps the logical pixel onto its content.
     expect(scrollCalls.length).toBeGreaterThan(0);
     expect(scrollCalls[scrollCalls.length - 1]!).toBeGreaterThan(0);
     cleanup();

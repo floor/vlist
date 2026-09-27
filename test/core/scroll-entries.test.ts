@@ -4,7 +4,7 @@ import { createContainer, createTestItems, simpleTemplate } from "../helpers/fac
 import { createVList } from "../../src/core/create";
 import { createVList as createSynthetic } from "../../src/synthetic";
 import { createVList as createNative } from "../../src/native";
-import { createBoundedScrollHandler } from "../../src/core/runway";
+import { createRunwayHandler } from "../../src/core/runway";
 import { createVListFromConfig } from "../../src/config";
 
 beforeAll(setupDOM);
@@ -125,9 +125,9 @@ it("native creates the wrap handler supplied by the requesting plugin", () => {
   let created = 0;
   const list = createNative({container, items:createTestItems(100), item:{height:40,template:simpleTemplate}}, [{
     name:"wrap-owner", setup(ctx) {
-      ctx.scroll.setBoundedWrap({lapSize:()=>4000,itemsPerLap:()=>100,home:()=>4000,thresholdLaps:2}, config => {
+      ctx.scroll.setWrap({lapSize:()=>4000,itemsPerLap:()=>100,home:()=>4000,thresholdLaps:2}, config => {
         created++;
-        return createBoundedScrollHandler(config);
+        return createRunwayHandler(config);
       });
     },
   }]);

@@ -103,10 +103,10 @@ describe("createTableRenderer", () => {
 });
 
 // =============================================================================
-// RFC-013 — bounded scroll: row transforms shifted by baseOffset
+// RFC-012 — logical scroll: row transforms shifted by baseOffset
 // =============================================================================
 
-describe("bounded baseOffset", () => {
+describe("baseOffset (logical handler)", () => {
   const ty = (el: Element): number => {
     const m = (el as HTMLElement).style.transform.match(/translateY\((-?\d+)px\)/);
     return parseInt(m![1]!, 10);

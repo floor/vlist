@@ -1,127 +1,34 @@
 /**
- * vlist — Bounded Logical Scroll Handler (RFC-012)
+ * vlist — carousel runway (RFC-011, RFC-012)
  *
- * An alternative to the native scroll handler ({@link createScrollHandler}) that
- * decouples the native scrollable size from the virtual content size.
+ * The carousel's infinite loop scrolls a native element that is only a few
+ * viewports long: the *runway*. The logical position is `baseOffset +
+ * scrollTop`; as scrollTop nears an edge of the runway, baseOffset and
+ * scrollTop shift together by the same delta, so the logical position and
+ * what is on screen stay put. The scroll event that shift triggers reads the
+ * same logical position and is dropped by the "logical unchanged" guard. In
+ * wrap mode the position also folds back by whole laps toward home.
  *
- * The content element is sized to a bounded *runway* (a multiple of the
- * viewport, capped at the real virtual size) instead of `totalItems × itemSize`.
- * This sidesteps the browser's ~16.7M px element-size limit without compressing
- * the coordinate space — no compression ratio leaks into offsets or hit-testing.
- *
- * Coordinates:
- *   logical = baseOffset + scrollTop        (absolute virtual pixel position)
- *
- *   - `state.scrollPosition` always holds the *logical* (absolute) position, so
- *     the render pipeline's `indexAtOffset(scrollPosition)` keeps working over
- *     the full size cache, and the public pixel-equivalent surface is unchanged.
- *   - `state.baseOffset` is the virtual offset that maps to native scrollTop=0.
- *     The pipeline renders each item at `getOffset(index) - baseOffset`, so items
- *     land inside the bounded runway. baseOffset is 0 for small lists (native).
- *
- * Rebasing: as native scrollTop approaches a runway edge we shift baseOffset and
- * scrollTop together by the same delta, preserving `logical`. The synthetic
- * scroll event this triggers reads the same logical position and is dropped by
- * the "logical unchanged" guard — no suppress flag needed. The repositioning of
- * items (their transforms depend on baseOffset) is committed by the explicit
- * render that the rebasing scroll frame performs.
+ * Engine code (it owns the scroll coordinates), but only `carousel()` imports
+ * it: a list without it never bundles it.
  */
 
-import type { SizeCache } from "./sizes";
-import type { EngineState } from "./state";
+import type { LogicalScrollConfig, LogicalScrollHandler } from "./logical";
 import { applyWrapFold, wrapLaps } from "./fold";
-import {
-  SCROLL_IDLE_TIMEOUT,
-  WHEEL_SENSITIVITY,
-  SCROLL_EASING,
-  BOUNDED_RUNWAY_FACTOR,
-  BOUNDED_REBASE_LOW,
-  BOUNDED_REBASE_HIGH,
-} from "../constants";
-import type { ScrollHandler } from "./scroll";
-
-export interface BoundedScrollHandler extends ScrollHandler {
-  /** Move to an absolute logical (virtual pixel) position; renders + schedules idle. */
-  setLogical(logicalPx: number): void;
-  /** Current absolute logical position (== state.scrollPosition). */
-  getLogical(): number;
-  /** Non-cancelling coordinate correction, when supported by the input provider. */
-  shiftBy?(delta: number): void;
-  /** Maximum scrollable logical position (`virtualTotal - containerSize`, >= 0). */
-  getMaxLogical(): number;
-  /** Recompute runway/derived values and resize the content element. */
-  refresh(totalSize: number): void;
-}
+import { SCROLL_IDLE_TIMEOUT, WHEEL_SENSITIVITY, SCROLL_EASING } from "../constants";
 
 /**
- * Infinite-loop (wrap) configuration for the bounded handler (carousel, RFC-011).
- *
- * In wrap mode the logical position is never clamped to a maximum: instead it is
- * periodically folded back toward {@link home} by whole laps once it drifts more
- * than {@link thresholdLaps} laps away. Because the consumer maps virtual indices
- * to real items via `index % realTotal`, shifting the logical position (and
- * baseOffset) by a whole lap leaves the rendered items and their on-screen
- * positions unchanged — the loop is seamless. The content element is sized to the
- * runway exactly as in non-wrap mode, so large item counts never blow the
- * browser's element-size limit.
+ * Runway size as a multiple of the viewport: the content element is
+ * `containerSize × this` (capped at the total size), which gives the native
+ * scrollbar room to move before a rebase shifts the logical origin.
  */
-export interface WrapConfig {
-  /** Current lap period in virtual px (`realTotal × stepSize`). */
-  readonly lapSize: () => number;
-  /**
-   * Real items in one lap (e.g. the carousel's `realTotal`). The wrap handler
-   * uses this to re-key mounted elements on a fold so the same DOM nodes
-   * survive the virtual-index shift — only the key changed; paint did not.
-   */
-  readonly itemsPerLap: () => number;
-  /** Logical position to fold back toward (the home lap). */
-  readonly home: () => number;
-  /** Fold the logical position back toward `home` once it drifts this many laps away. */
-  readonly thresholdLaps: number;
-  /** @internal Notify the wrap owner when its logical coordinates fold. */
-  readonly onFold?: (shift: number) => void;
-}
+export const RUNWAY_FACTOR = 2;
 
-export interface BoundedScrollConfig {
-  /** Logical row geometry for opt-in input providers (keyboard row steps). */
-  readonly sizeCache?: Pick<SizeCache, "getSize" | "indexAtOffset" | "getTotalSize">;
-  readonly state: EngineState;
-  readonly viewport: HTMLElement;
-  readonly content: HTMLElement;
-  readonly isX: boolean;
-  readonly wheelEnabled: boolean;
-  readonly idleTimeout: number;
-  readonly scrollTarget?: EventTarget;
-  /** Main-axis padding folded into the virtual total (matches native content sizing). */
-  readonly mainAxisPadding: number;
-  /** Runway size as a multiple of the viewport (defaults to BOUNDED_RUNWAY_FACTOR). */
-  readonly runwayFactor?: number;
-  /** Infinite-loop config (carousel). When set, the logical position wraps by
-   *  whole laps toward `home` instead of clamping to a maximum. */
-  readonly wrap?: WrapConfig;
-  /**
-   * Mounted row map. A wrap fold re-keys it in place so phase 2 finds the
-   * same nodes; omitted when the handler is constructed without a viewport.
-   */
-  readonly rendered?: Map<number, HTMLElement>;
-  /**
-   * Class prefix for rewriting `id` / `aria-activedescendant` on a wrap fold.
-   * Passed explicitly — a prefix containing `-content` cannot be recovered
-   * from the content element's class name.
-   */
-  readonly classPrefix?: string;
-  /**
-   * Stripe class (`{prefix}-item--odd`). Re-toggled on a wrap fold when
-   * `indexShift` is odd, so virtual-index parity survives the re-key.
-   */
-  readonly oddClass?: string;
-  /** @internal Coordinate fold: shift core telemetry references before rendering. */
-  readonly onFold?: (shift: number) => void;
-  /** Called synchronously per frame — triggers the 2-phase pipeline. */
-  readonly onFrame: () => void;
-  /** Called when scrolling becomes idle. */
-  readonly onIdle: () => void;
-}
+/** Rebase back when scrollTop drops below this fraction of the runway (away from the logical start). */
+export const RUNWAY_REBASE_LOW = 0.25;
+
+/** Rebase forward when scrollTop rises above this fraction of the runway (away from the logical end). */
+export const RUNWAY_REBASE_HIGH = 0.75;
 
 function clamp(v: number, min: number, max: number): number {
   if (v < min) return min;
@@ -129,10 +36,10 @@ function clamp(v: number, min: number, max: number): number {
   return v;
 }
 
-export function createBoundedScrollHandler(config: BoundedScrollConfig): BoundedScrollHandler {
+export function createRunwayHandler(config: LogicalScrollConfig): LogicalScrollHandler {
   const { state, viewport, content, isX, wheelEnabled, onFrame, onIdle, mainAxisPadding } = config;
   const idleTimeout = config.idleTimeout || SCROLL_IDLE_TIMEOUT;
-  const runwayFactor = config.runwayFactor ?? BOUNDED_RUNWAY_FACTOR;
+  const runwayFactor = config.runwayFactor ?? RUNWAY_FACTOR;
   const wrap = config.wrap ?? null;
   const isWrap = wrap !== null;
   const target: EventTarget = config.scrollTarget ?? viewport;
@@ -208,8 +115,8 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
   // Shift baseOffset + scrollTop by the same delta (logical preserved) so the
   // native scrollbar moves back toward the runway centre, leaving headroom.
   function maybeRebase(top: number): void {
-    const low = maxScrollTop * BOUNDED_REBASE_LOW;
-    const high = maxScrollTop * BOUNDED_REBASE_HIGH;
+    const low = maxScrollTop * RUNWAY_REBASE_LOW;
+    const high = maxScrollTop * RUNWAY_REBASE_HIGH;
     const centre = maxScrollTop / 2;
 
     if (isWrap) {
@@ -265,7 +172,7 @@ export function createBoundedScrollHandler(config: BoundedScrollConfig): Bounded
       if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
         // Horizontal trackpad swipe on a horizontal list. In wrap mode
         // (carousel) we must intercept — native scroll is limited by the
-        // bounded runway and can't keep up with fast swipes.
+        // runway's length and can't keep up with fast swipes.
         if (!isWrap) return;
         delta = event.deltaX;
       } else {

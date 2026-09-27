@@ -154,8 +154,8 @@ export function phase1Calculate(
   const safeCap = Math.min(count, state.capacity);
 
   // Range-unchanged fast path. Item transforms are `offset - baseOffset`, so a
-  // logical provider that moves baseOffset without changing the range (bounded
-  // wheel mid-list, synthetic input) must still commit, or rows stand still
+  // logical handler that moves baseOffset without changing the range (a runway
+  // rebase, synthetic input) must still commit, or rows stand still
   // until the range crosses a row boundary. Native mode keeps baseOffset at 0.
   if (renderStart === state.prevRangeStart && renderEnd === state.prevRangeEnd && !state.renderPending && state.baseOffset === state.prevBaseOffset) {
     return false;
@@ -321,7 +321,7 @@ export function phase2Commit<T extends VListItem>(
       if (rc.oddClass) acquired.classList.toggle(rc.oddClass, (dataIndex & 1) === 1);
 
       // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-      // bounded runway. baseOffset is 0 in native mode (byte-identical).
+      // content element. baseOffset is 0 in native mode (byte-identical).
       const transformOffset = offset - state.baseOffset + rc.startPadding;
       acquired.style.transform = rc.translateProp + transformOffset + "px)";
       acquired._lastOffset = transformOffset;

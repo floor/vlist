@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Deprecated
+
+- `ctx.scroll.setBoundedWrap` (plugin API) is now `ctx.scroll.setWrap`. The old
+  name still works through 3.x. Internally, "bounded mode" is gone from the
+  code as it is from the options: the handlers that own the logical position
+  are `LogicalScrollHandler` (`core/logical.ts`), and the carousel's engine is
+  `createRunwayHandler` (`core/runway.ts`).
+
 ### Fixed
 
 - `carousel()` with fewer slides than its viewport shows is no longer

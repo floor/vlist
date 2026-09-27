@@ -114,7 +114,7 @@ describe("phase1Calculate — range calculations", () => {
     expect(second).toBe(false);
   });
 
-  it("commits again when baseOffset moves with an unchanged range (bounded wheel, synthetic)", () => {
+  it("commits again when baseOffset moves with an unchanged range (logical handler)", () => {
     const { state, sizeCache } = makeFixedSetup({
       totalItems: 100,
       itemSize: 50,
@@ -125,7 +125,7 @@ describe("phase1Calculate — range calculations", () => {
     expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(true);
     expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(false);
 
-    // A logical provider moves the runway origin by less than a row: the visible
+    // A logical handler moves baseOffset by less than a row: the visible
     // range is identical, but every transform (offset - baseOffset) changed.
     state.baseOffset = 12;
     expect(phase1Calculate(state, sizeCache, 3, hooks)).toBe(true);

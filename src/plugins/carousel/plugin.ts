@@ -10,7 +10,7 @@
  * Implementation: the virtual index space is three laps — the home lap
  * plus one lap of margin on each side. Overscan before index 0 and the
  * shortest-path snap both reach into the neighbouring lap, and the engine
- * has no negative indices. The bounded handler folds the logical position
+ * has no negative indices. The runway handler folds the logical position
  * back toward the home lap as soon as it leaves it. Items are mapped via
  * modulo so virtual index 17 with 16 real items → item 1. The scroll
  * starts in the home lap.
@@ -27,15 +27,14 @@
  *   size cache speak virtual indices. Permanent.
  * - Cannot yet be combined with `search()` or `sortable()` — see the comments
  *   on their own `conflicts`. Both are fixable and meant to be fixed.
- * - `page()` is rejected by core, since bounded page-mode scrolling does not
- *   exist: document scrolling cannot wrap.
+ * - `page()` is rejected by core: document scrolling cannot wrap.
  */
 
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
-import { createBoundedScrollHandler } from "../../core/runway";
+import { createRunwayHandler } from "../../core/runway";
 import { createLayoutEngine } from "./engine";
 import type { SlotConfig, SlotConfigResolver, TextFade } from "./presets";
 import { resolvePreset, hasSlots } from "./presets";
@@ -316,7 +315,7 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   // Rebasing (folding the logical position back toward the home lap) and the
-  // smooth-scroll animation both live in the bounded scroll handler now — the
+  // smooth-scroll animation both live in the runway handler (core/runway) — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
     // Every programmatic snap passes here, so this is where its deadline is set.
@@ -377,12 +376,12 @@ export function carousel<T extends VListItem = VListItem>(
       // there" must not use. data() publishes the same answer the same way.
       ctx.hooks.method("_getTotal", ownGetTotal);
 
-      // Route scroll through the bounded handler in wrap mode: the logical
+      // Route scroll through the runway handler in wrap mode: the logical
       // position never clamps, and the handler folds it back toward the
       // home lap as soon as it leaves it. The carousel's modulo getItemFn
       // maps the shifted virtual indices to identical real items at identical
       // paint positions, so the fold is seamless.
-      ctx.scroll.setBoundedWrap({
+      ctx.scroll.setWrap({
         lapSize: () => lapSize,
         itemsPerLap: () => realTotal,
         home: () => margin * lapSize,
@@ -390,7 +389,7 @@ export function carousel<T extends VListItem = VListItem>(
         onFold(shift: number) {
           if (intendedVi !== null) intendedVi -= Math.round(shift / lapSize) * realTotal;
         },
-      }, createBoundedScrollHandler);
+      }, createRunwayHandler);
 
       initialScrollPending = true;
   }

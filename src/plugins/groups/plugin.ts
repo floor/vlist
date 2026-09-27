@@ -73,9 +73,8 @@ export function groups<T extends VListItem = VListItem>(
   let scroll: PluginContext<T>["scroll"];
   let pool: ElementPool;
   let contentElement: HTMLElement;
-  // Bounded-mode (RFC-012): route content sizing through ctx.render.contentSize so
-  // the bounded scroll handler keeps vlist-content at the runway size instead of
-  // the full virtual height (which would blow the browser's element cap on huge
+  // RFC-012: route content sizing through ctx.render.contentSize so a logical
+  // handler sizes vlist-content itself instead of to the full virtual height (which would blow the browser's element cap on huge
   // lists). Null until setup; in native mode it just sets the style height.
   let updateContentSize: ((size: number) => void) | null = null;
   let rootElement: HTMLElement;
@@ -110,8 +109,8 @@ export function groups<T extends VListItem = VListItem>(
   const detached = new Map<string, HTMLElement>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
-  // Bounded mode (RFC-012): item transforms are `offset - baseOffset`. baseOffset
-  // shifts when the runway rebases, so on a change every already-rendered item
+  // RFC-012: item transforms are `offset - baseOffset`. baseOffset shifts with
+  // a logical handler (synthetic input, a runway rebase), so on a change every already-rendered item
   // must be repositioned — not just newly added ones. Tracks the last rendered
   // baseOffset to detect that. Stays 0 in native mode (no extra work).
   let lastRenderBaseOffset = 0;
@@ -292,7 +291,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function buildTransform(layoutIndex: number, base: number): string {
     // RFC-012: subtract baseOffset so absolute virtual offsets map into the
-    // bounded runway. baseOffset is 0 in native mode (byte-identical).
+    // content element. baseOffset is 0 in native mode (byte-identical).
     if (gridItemPositions) {
       const pos = gridItemPositions.get(layoutIndex);
       if (pos) {
@@ -624,7 +623,7 @@ export function groups<T extends VListItem = VListItem>(
           applySizeStyles(element, i);
           element.style.transform = buildTransform(i, baseOffset);
         } else if (baseChanged) {
-          // Bounded mode (RFC-012): the runway rebased, so reposition the item
+          // RFC-012: baseOffset moved, so reposition the item
           // at its new offset - baseOffset (native mode never reaches here).
           element.style.transform = buildTransform(i, baseOffset);
         }

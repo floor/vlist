@@ -310,8 +310,8 @@ export function tree<T extends VListItem = VListItem>(
 
   /**
    * Publish the virtual total, skipping the write when unchanged. Routed through
-   * the core so bounded mode sizes the content element to its runway instead of
-   * the full virtual size (RFC-012); native mode writes the full size as before.
+   * the core so a logical handler sizes the content element itself instead of
+   * to the full virtual size (RFC-012); native mode writes the full size.
    */
   function applyContentSize(totalSize: number): void {
     if (totalSize === lastTotalSize) return;
