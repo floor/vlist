@@ -85,6 +85,7 @@ function resolveAxis<T extends VListItem>(
 function resolveConfig<T extends VListItem>(
   raw: CreateVListConfig<T>,
   plugins: readonly VListPlugin<T>[],
+  scrollMode: ResolvedConfig["scrollMode"],
 ): ResolvedConfig {
   const axis = resolveAxis(raw.orientation, plugins);
   const isX = axis.primary === "x";
@@ -103,7 +104,7 @@ function resolveConfig<T extends VListItem>(
     crossPadEnd: isX ? pad.bottom : pad.right,
     striped: raw.item.striped || false,
     gap: raw.item.gap ?? 0,
-    scrollMode: raw.scroll?.mode ?? "auto",
+    scrollMode,
   };
 }
 
@@ -246,7 +247,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   // ── Resolve config ──────────────────────────────────────────────
 
-  const config = resolveConfig(rawConfig, plugins);
+  const config = resolveConfig(rawConfig, plugins, inputMode);
   const isX = config.axis.primary === "x";
   const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;

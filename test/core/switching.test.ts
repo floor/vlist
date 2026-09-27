@@ -28,16 +28,21 @@ afterAll(() => {
 
 const LAP = 4000; // 100 rows of 40 px
 
+const IDLE = 30;
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
 function make() {
   const container = createContainer({ width: 300, height: 400 });
   let resolve!: (factory: LogicalHandlerFactory) => void;
-  const load = new Promise<LogicalHandlerFactory>((r) => { resolve = r; });
+  let reject!: (error: Error) => void;
+  const load = new Promise<LogicalHandlerFactory>((res, rej) => { resolve = res; reject = rej; });
   let switched = 0;
-  const list = createVList({ container, items: createTestItems(100), item: { height: 40, template: simpleTemplate } }, [{
+  const errors: Error[] = [];
+  const list = createVList({ container, items: createTestItems(100), item: { height: 40, template: simpleTemplate }, scroll: { idleTimeout: IDLE } }, [{
     name: "wrap-owner",
     setup(ctx) {
       ctx.scroll.setWrap({ lapSize: () => LAP, itemsPerLap: () => 100, home: () => LAP, thresholdLaps: 1 },
-        (config) => createSwitchingHandler(config, createRunwayHandler, load, () => { switched++; }));
+        (config) => createSwitchingHandler(config, createRunwayHandler, load, () => { switched++; }, (error) => { errors.push(error); }));
     },
   }]);
   const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
@@ -45,7 +50,7 @@ function make() {
   const destroy = (): void => { list.destroy(); container.remove(); };
   const loadDriver = async (): Promise<void> =>
     resolve((await import("../../src/synthetic/driver")).createSyntheticScrollHandler as LogicalHandlerFactory);
-  return { list, viewport, content, load: loadDriver, switched: () => switched, destroy };
+  return { list, viewport, content, load: loadDriver, fail: (error: Error) => reject(error), errors, switched: () => switched, destroy };
 }
 
 describe("createSwitchingHandler: the runway, then the synthetic handler", () => {
@@ -57,6 +62,7 @@ describe("createSwitchingHandler: the runway, then the synthetic handler", () =>
       expect(f.viewport.style.touchAction).toBe("");
       f.list.scrollToIndex(130); // the next lap: the loop, not a clamp
       const before = f.list.getScrollPosition();
+      await wait(IDLE * 3); // idle: the switch runs as soon as the driver arrives
 
       await f.load();
       await Promise.resolve();
@@ -68,6 +74,40 @@ describe("createSwitchingHandler: the runway, then the synthetic handler", () =>
       // Writes reach the synthetic handler now, and it still wraps.
       f.list.scrollToIndex(5);
       expect(f.list.getScrollPosition() % LAP).toBe(200);
+    } finally {
+      f.destroy();
+    }
+  });
+
+  it("waits for idle: a scroll in flight is never cut off", async () => {
+    const f = make();
+    try {
+      await wait(IDLE * 3);
+      f.list.scrollToIndex(30); // a scroll frame: the runway is moving until idle
+      await f.load();
+      await Promise.resolve();
+      expect(f.switched()).toBe(0);
+      expect(f.viewport.style.touchAction).toBe("");
+
+      await wait(IDLE * 3);
+      expect(f.switched()).toBe(1);
+      expect(f.viewport.style.touchAction).toBe("pan-x pinch-zoom");
+      expect(f.list.getScrollPosition() % LAP).toBe(30 * 40);
+    } finally {
+      f.destroy();
+    }
+  });
+
+  it("a failed load is reported, and the runway keeps running", async () => {
+    const f = make();
+    try {
+      f.fail(new Error("offline"));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(f.errors.map((e) => e.message)).toEqual(["offline"]);
+      expect(f.switched()).toBe(0);
+      f.list.scrollToIndex(20);
+      expect(f.list.getScrollPosition() % LAP).toBe(20 * 40);
     } finally {
       f.destroy();
     }

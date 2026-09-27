@@ -392,7 +392,9 @@ export function carousel<T extends VListItem = VListItem>(
         },
       }, ctx.config.scrollMode === "synthetic"
         // The runway until the synthetic driver loads, then the driver (./input).
-        ? (config) => startSyntheticCarousel(config, () => ctx.emitter.emit("scroll:mode", { mode: "synthetic" }))
+        ? (config) => startSyntheticCarousel(config,
+          () => ctx.emitter.emit("scroll:mode", { mode: "synthetic" }),
+          (error) => ctx.emitter.emit("error", { error, context: "scroll:mode" }))
         : createRunwayHandler);
 
       initialScrollPending = true;

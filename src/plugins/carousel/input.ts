@@ -22,8 +22,12 @@ export const loadDriver = (): Promise<LogicalHandlerFactory> =>
     (synthetic = driver.createSyntheticScrollHandler as LogicalHandlerFactory));
 
 /** The engine a `scroll.mode: "synthetic"` carousel hands the core. */
-export function startSyntheticCarousel(config: LogicalScrollConfig, onSynthetic: () => void): LogicalScrollHandler {
-  if (!synthetic) return createSwitchingHandler(config, createRunwayHandler, loadDriver(), onSynthetic);
+export function startSyntheticCarousel(
+  config: LogicalScrollConfig,
+  onSynthetic: () => void,
+  onError: (error: Error) => void,
+): LogicalScrollHandler {
+  if (!synthetic) return createSwitchingHandler(config, createRunwayHandler, loadDriver(), onSynthetic, onError);
   // Loaded already: synthetic from the first frame, as an "auto" list would be.
   onSynthetic();
   return synthetic(config);

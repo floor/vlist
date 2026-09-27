@@ -1,9 +1,11 @@
 /**
  * A logical handler that becomes another, in place (RFC-015).
  *
- * It runs `first` until `load` delivers the factory of the next handler, then
+ * It runs `first` until `load` delivers the factory of the next handler, then,
+ * once `first` is idle (a gesture or fling in flight is never cut off),
  * detaches it, builds the next from the same config and moves the position
- * across. The core sees one handler throughout. carousel() uses it under
+ * across. The core sees one handler throughout. A failed load leaves `first`
+ * running and reports through `onError`. carousel() uses it under
  * `scroll.mode: "synthetic"`: its runway until the synthetic driver loads.
  * Only a plugin that asks imports it; the core does not.
  */
@@ -16,12 +18,25 @@ export function createSwitchingHandler(
   first: LogicalHandlerFactory,
   load: Promise<LogicalHandlerFactory>,
   onSwitch: () => void,
+  onError: (error: Error) => void,
 ): LogicalScrollHandler {
-  let current = first(config);
   let attached = false;
   let totalSize: number | null = null;
+  let moving = false;
+  let waiting: LogicalHandlerFactory | null = null;
+  // `first` reports its frames and idle through these: the switch waits for idle.
+  let current = first({
+    ...config,
+    onFrame(): void { moving = true; config.onFrame(); },
+    onIdle(): void {
+      moving = false;
+      config.onIdle();
+      if (waiting) switchTo(waiting);
+    },
+  });
 
-  load.then((next) => {
+  const switchTo = (next: LogicalHandlerFactory): void => {
+    waiting = null;
     // Destroyed before the next handler arrived.
     if (!attached) return;
     const position = config.state.scrollPosition;
@@ -32,7 +47,12 @@ export function createSwitchingHandler(
     current.attach();
     current.setLogical(position);
     onSwitch();
-  });
+  };
+
+  load.then((next) => {
+    if (moving) waiting = next;
+    else switchTo(next);
+  }, onError);
 
   return {
     attach(): void { attached = true; current.attach(); },
