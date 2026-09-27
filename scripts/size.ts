@@ -152,7 +152,7 @@ export const kb = (n: number): number => Math.floor(n * 1024);
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "Base (createVList)": kb(10.3),
   synthetic: kb(13.0),
-  "synthetic + carousel": kb(17.8),
+  "synthetic + carousel": kb(18.2),
   "synthetic + sortable": kb(16.6),
   createStats: kb(10.6),
   "synthetic + createStats": kb(13.2),
@@ -172,7 +172,7 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   masonry: kb(14.8),
   tree: kb(15.8),
   search: kb(13.7),
-  carousel: kb(15.6),
+  carousel: kb(15.8),
 };
 
 export interface SizeGateInput {

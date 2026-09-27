@@ -11,6 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- `carousel()` honours `scroll.mode: "synthetic"`: it runs on the synthetic
+  handler, the one the deprecated `vlist/synthetic` entry runs a carousel on,
+  so that entry is no longer the only way to a synthetic carousel. The first
+  carousel on a page starts on its runway and switches in place once the
+  driver loads and the carousel is idle, so a swipe in flight is never cut off
+  (`core/switching.ts`); later ones start synthetic. A failed load keeps the
+  runway and emits `error` (`scroll:mode`). The switch is the carousel's: the
+  core only exposes the input mode to plugins, as `config.scrollMode`
+  (`"synthetic"` under `vlist/synthetic`). `"auto"` and `"native"` keep the
+  runway.
+
 ## [3.0.1-next.1] - 2026-09-27
 
 The first 3.0.1 prerelease: `scroll.mode` on the one `vlist` entry (a list past

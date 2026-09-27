@@ -183,24 +183,24 @@ Removed mode/runway options throw a migration error before creating DOM. `vlist/
 | `vlist/native` (alias) | 27.3 KB | 10.3 KB |
 | `a11y()` | 31.2 KB | 11.7 KB |
 | `selection()` | 36.9 KB | 13.2 KB |
-| `data()` | 40.9 KB | 15.1 KB |
+| `data()` | 41.0 KB | 15.1 KB |
 | `scrollbar()` | 35.5 KB | 13.2 KB |
 | `sortable()` | 39.2 KB | 13.9 KB |
 | `groups()` | 43.4 KB | 15.7 KB |
-| `page()` | 29.8 KB | 11.2 KB |
+| `page()` | 29.9 KB | 11.2 KB |
 | `snapshots()` | 30.6 KB | 11.4 KB |
-| `transition()` | 34.0 KB | 12.3 KB |
-| `autosize()` | 30.6 KB | 11.4 KB |
-| `grid()` | 34.7 KB | 12.9 KB |
+| `transition()` | 34.1 KB | 12.3 KB |
+| `autosize()` | 30.6 KB | 11.5 KB |
+| `grid()` | 34.8 KB | 12.9 KB |
 | `table()` | 45.8 KB | 16.2 KB |
 | `masonry()` | 39.4 KB | 14.7 KB |
-| `tree()` | 43.5 KB | 15.7 KB |
-| `search()` | 36.8 KB | 13.6 KB |
-| `carousel()` | 42.2 KB | 15.4 KB |
-| `vlist/synthetic` + `carousel()` | 48.3 KB | 17.7 KB |
+| `tree()` | 43.6 KB | 15.7 KB |
+| `search()` | 36.9 KB | 13.6 KB |
+| `carousel()` | 43.1 KB | 15.7 KB |
+| `vlist/synthetic` + `carousel()` | 49.2 KB | 18.0 KB |
 | `vlist/synthetic` + `sortable()` | 46.1 KB | 16.5 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **10,531 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,172 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **10,541 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,183 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 ## Examples
 

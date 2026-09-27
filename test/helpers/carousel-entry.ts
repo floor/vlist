@@ -5,7 +5,16 @@ import type { CarouselMethods, CarouselPluginConfig, CarouselState } from '../..
 import type { PluginContext } from '../../src/core/types';
 import { capturePrototypeGeometry } from './geometry';
 
-export const carouselEntries = [['native', native], ['synthetic', synthetic]] as const;
+import { loadDriver } from '../../src/plugins/carousel/input';
+
+// scroll.mode "synthetic" on the vlist entry: the carousel's own switch from its
+// runway to the synthetic handler. With the driver loaded first, every list the
+// fixture makes is synthetic from its first frame, so the suites test that path.
+await loadDriver();
+const modeSynthetic = ((config, plugins) =>
+  native({ ...config, scroll: { ...config.scroll, mode: 'synthetic' } }, plugins)) as typeof native;
+
+export const carouselEntries = [['native', native], ['synthetic', synthetic], ['scroll.mode synthetic', modeSynthetic]] as const;
 /** Real entry fixture; restore every descriptor and frame callback on disposal. */
 export function carouselEntry(create: typeof native, options: CarouselPluginConfig = {}, isX = false, count = 10) {
  const geometry = capturePrototypeGeometry();
