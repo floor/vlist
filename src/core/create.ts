@@ -668,7 +668,10 @@ export function createCore<T extends VListItem = VListItem>(
     }
     state.totalSize = size;
     onContentSize?.(pixels);
-    if (write) dom.content.style[isX ? "width" : "height"] = pixels + "px";
+    // Never past the limit: Chrome clamps a larger element to 33,554,428 px, but
+    // Firefox lays out nothing above 17,895,697 px, and the list could not
+    // scroll at all. Capped, native input reaches the same rows everywhere.
+    if (write) dom.content.style[isX ? "width" : "height"] = Math.min(pixels, MAX_VIRTUAL_SIZE) + "px";
   }
 
   function syncContentSize(): void {

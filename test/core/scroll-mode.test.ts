@@ -187,7 +187,8 @@ describe("scroll.mode auto (default): native → synthetic past the limit", () =
 
       g.list.setItems(createTestItems(OVER));
       expect(g.modes).toEqual([]);
-      expect(g.content.style.height).toBe(`${OVER * ROW}px`);
+      // Capped at the limit while it waits (Firefox lays out nothing larger).
+      expect(g.content.style.height).toBe("16000000px");
 
       await wait(IDLE * 3);
       expect(g.modes).toEqual(["synthetic"]);
@@ -308,7 +309,8 @@ describe("scroll.mode synthetic and native", () => {
       f.list.setItems(createTestItems(OVER));
       await wait(50);
       expect(f.modes).toEqual([]);
-      expect(f.content.style.height).toBe(`${OVER * ROW}px`);
+      // 20,000,000 px of rows, capped: Firefox lays out nothing above 17,895,697 px.
+      expect(f.content.style.height).toBe("16000000px");
       expect(f.errors).toEqual(["content:size:overflow"]);
     } finally {
       f.destroy();
