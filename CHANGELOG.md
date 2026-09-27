@@ -11,6 +11,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Native lists: a smooth `scrollToIndex` past the browser's element-size cap
+  no longer leaves the list blank. The browser clamps `scrollTop` at its cap
+  (Chrome: 33,554,428 px) and the animation committed the position it wrote,
+  not the one applied, so vlist rendered rows below the last reachable one.
+  It now commits what the browser applied; a million 40 px rows jump to row
+  838,861 in Chrome, the last one the browser can show (FLO-247).
+
 ## [3.0.0] - 2026-09-25
 
 The 3.0 line, on the npm `latest` tag. Everything in `3.0.0-next.1` through `3.0.0-next.6`
