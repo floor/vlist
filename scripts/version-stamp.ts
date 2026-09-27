@@ -15,6 +15,13 @@ export interface VersionStamp {
   readonly commit: string | null;
   /** ISO time of the build. */
   readonly builtAt: string;
+  /**
+   * Whether this build is the release `version` names: built from the tag
+   * `v<version>`. False for a build of `next` between releases, which still
+   * carries the last released version: staging's badge said v3.0.0 on 3.0.1
+   * work. A site shows the commit for those.
+   */
+  readonly released: boolean;
 }
 
 /** Runs `git rev-parse --short HEAD` in `root`; null when git or the checkout is missing. */
@@ -28,7 +35,24 @@ export const shortCommit = (root: string): string | null => {
   }
 };
 
-export const versionStamp = (root: string, now: Date = new Date()): VersionStamp => {
+/** Tags on HEAD in `root`; none when git or the checkout is missing. */
+export const tagsAtHead = (root: string): string[] => {
+  try {
+    const out = Bun.spawnSync(["git", "tag", "--points-at", "HEAD"], { cwd: root });
+    return out.exitCode === 0 ? out.stdout.toString().split("\n").filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const versionStamp = (
+  root: string,
+  now: Date = new Date(),
+  env: Record<string, string | undefined> = process.env,
+): VersionStamp => {
   const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8")) as { version?: string };
-  return { version: pkg.version ?? "0.0.0", commit: shortCommit(root), builtAt: now.toISOString() };
+  const version = pkg.version ?? "0.0.0";
+  // publish.yml builds on the tag push, and checks the tag names this version.
+  const released = env.GITHUB_REF_NAME === `v${version}` || tagsAtHead(root).includes(`v${version}`);
+  return { version, commit: shortCommit(root), builtAt: now.toISOString(), released };
 };
