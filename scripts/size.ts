@@ -74,6 +74,7 @@ export const SCENARIO_DEFS = [
   { name: "createStats", imports: ["createVList", "createStats"] },
   { name: "synthetic + createStats", imports: ["createVList", "createStats"] },
   { name: "native", imports: ["createVList"] },
+  { name: "overflow", imports: ["createVList", "overflow"] },
   { name: "a11y",              imports: ["createVList", "a11y"] },
   { name: "selection",         imports: ["createVList", "selection"] },
   { name: "data",              imports: ["createVList", "data"] },
@@ -150,6 +151,7 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   createStats: kb(10.3),
   "synthetic + createStats": kb(13.0),
   native: kb(10.0),
+  overflow: kb(13.7),
   a11y: kb(11.5),
   selection: kb(13.0),
   data: kb(14.9),
@@ -213,7 +215,9 @@ const main = async (): Promise<void> => {
 
   for (const scenario of scenarios) {
     const imports = scenario.imports.join(", ");
-    const code = scenario.name.startsWith("synthetic +")
+    const code = scenario.name === "overflow"
+      ? `import { createVList } from "${entry}"; import { overflow } from "${root}/src/overflow.ts"; globalThis._v = [${imports}];`
+      : scenario.name.startsWith("synthetic +")
       ? `import { createVList } from "${root}/src/synthetic.ts"; import { ${scenario.imports.slice(1).join(", ")} } from "${entry}"; globalThis._v = [${imports}];`
       : `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
     const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
@@ -251,7 +255,7 @@ const main = async (): Promise<void> => {
     });
 
     const syntheticMarker = "pan-x pinch-zoom";
-    if (new TextDecoder().decode(output).includes(syntheticMarker) !== (scenario.name.startsWith("synthetic"))) {
+    if (new TextDecoder().decode(output).includes(syntheticMarker) !== (scenario.name.startsWith("synthetic") || scenario.name === "overflow")) {
       treeShakeFailures.push({ scenario: scenario.name, leaked: "synthetic", marker: syntheticMarker });
     }
 

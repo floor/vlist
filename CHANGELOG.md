@@ -11,6 +11,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- `overflow()`, from the new `vlist/overflow` entry: a native list that grows
+  past the browser's element-size limit hands its input to the synthetic
+  handler in place, and takes it back when it shrinks. The list, its plugins,
+  selection and scroll position stay; a million 40 px rows scroll to the last
+  one. It waits for a scroll in flight to end, emits `scroll:mode`, and
+  conflicts with `page()` and `carousel()` ([RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff), FLO-247).
+
 ### Fixed
 
 - `carousel()` with fewer slides than its viewport shows is no longer

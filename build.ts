@@ -83,7 +83,7 @@ async function build() {
   );
 
   // Opt-in synthetic entry and the native compatibility alias.
-  for (const name of ["synthetic"]) {
+  for (const name of ["synthetic", "overflow"]) {
     const result = await Bun.build({
       entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
       format: "esm", target: "browser", minify: !isDev,
@@ -98,10 +98,10 @@ async function build() {
 
   await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
 
-  for (const name of ["index", "native", "synthetic"]) {
+  for (const name of ["index", "native", "synthetic", "overflow"]) {
     const text = await Bun.file(`./dist/${name}.js`).text();
     const hasDriver = text.includes("pan-x pinch-zoom");
-    if (hasDriver !== (name === "synthetic")) {
+    if (hasDriver !== (name === "synthetic" || name === "overflow")) {
       throw new Error(`Unexpected synthetic driver presence in dist/${name}.js`);
     }
     if (name !== "native" && text.includes("setup failed")) {
@@ -241,6 +241,7 @@ async function build() {
     { name: "createStats", imports: ["createVList", "createStats"] },
     { name: "synthetic + createStats", imports: ["createVList", "createStats"] },
     { name: "native", imports: ["createVList"] },
+    { name: "overflow", imports: ["createVList", "overflow"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
@@ -248,7 +249,9 @@ async function build() {
 
   for (const { name, imports } of scenarios) {
     const scenarioEntry = ["synthetic", "native"].includes(name) ? resolve(`./src/${name}.ts`) : entryAbs;
-    const code = name.startsWith("synthetic +")
+    const code = name === "overflow"
+      ? `import { createVList } from "${entryAbs}"; import { overflow } from "${resolve("./src/overflow.ts")}"; globalThis._v = [createVList, overflow];`
+      : name.startsWith("synthetic +")
       ? `import { createVList } from "${resolve("./src/synthetic.ts")}"; import { ${imports.slice(1).join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`
       : `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `${scratch}/size_${name}.ts`;
@@ -265,7 +268,7 @@ async function build() {
     if (result.success) {
       const output = await result.outputs[0]!.arrayBuffer();
       const bytes = new Uint8Array(output);
-      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") !== (name.startsWith("synthetic"))) {
+      if (new TextDecoder().decode(bytes).includes("pan-x pinch-zoom") !== (name.startsWith("synthetic") || name === "overflow")) {
         throw new Error(`Unexpected synthetic driver presence in ${name}`);
       }
       if (new TextDecoder().decode(bytes).includes(".runwayFactor") !== imports.includes("carousel")) {

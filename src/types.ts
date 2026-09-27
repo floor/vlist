@@ -619,6 +619,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Scroll idle — fired after scrolling stops and idle timeout elapses */
   "scroll:idle": { scrollPosition: number };
 
+  /** overflow() handed input over: `synthetic` past the size threshold, `native` back below it (RFC-015). */
+  "scroll:mode": { mode: "native" | "synthetic" };
+
   /** Data changed — fired after item removal or other data mutations */
   "data:change": { type: "insert"; id: string | number } | { type: "add"; id: string | number } | { type: "remove"; id: string | number } | { type: "update"; id: string | number };
 

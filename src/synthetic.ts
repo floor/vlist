@@ -12,5 +12,8 @@ export function createVList<
 >(
   config: CreateVListConfig<T>, plugins: P = [] as unknown as P,
 ): VList<T> & PluginMethods<P> {
-  return createCore(config, plugins as unknown as VListPlugin<T>[], createSyntheticScrollHandler) as VList<T> & PluginMethods<P>;
+  // overflow() hands a native list over past the size limit; this list has
+  // no limit, so it is dropped rather than refused (RFC-015).
+  const kept = (plugins as unknown as VListPlugin<T>[]).filter((p) => p.name !== "overflow");
+  return createCore(config, kept, createSyntheticScrollHandler) as VList<T> & PluginMethods<P>;
 }

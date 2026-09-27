@@ -249,6 +249,8 @@ export function createPluginMockContext<T extends VListItem>(
       setSource: () => {},
       setTarget: () => {},
       setBoundedWrap: () => {},
+      watchSize: () => {},
+      setInput: () => null,
       setToPosFn: (fn: any) => { _scrollToPosFn = fn; },
       setToIndexFn: (fn: any) => { _scrollToIndexFn = fn; },
       onFrame: () => {},

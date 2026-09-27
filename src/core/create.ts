@@ -385,7 +385,6 @@ export function createCore<T extends VListItem = VListItem>(
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
   let navTotalFn: (() => number) | null = null;
   let navRevealFn: ((index: number) => void) | null = null;
-  let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
   /**
@@ -397,6 +396,12 @@ export function createCore<T extends VListItem = VListItem>(
    * held here instead and honoured on the first render that has a total.
    */
   let pendingScrollToIndex: { index: number; alignOrOptions: Parameters<VList<T>["scrollToIndex"]>[1] } | null = null;
+  let scrollHandler: ScrollHandler | null = null;
+  let nativeHandler: (ScrollHandler & { commitScroll(pos?: number): void }) | null = null;
+  // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
+  // through the logical setter so the runway split stays consistent. The
+  // pixel-equivalent (read) is the logical position, matching native mode (G4).
+  const writeBounded = (px: number): void => boundedHandler!.setLogical(px);
   let boundedHandler: BoundedScrollHandler | null = null;
   // A plugin (carousel) can request the bounded handler in wrap mode during
   // setup, before the handler is built below. Wrap implies bounded.
@@ -467,7 +472,7 @@ export function createCore<T extends VListItem = VListItem>(
           else ctx.scroll.to(state.scrollPosition + delta);
         },
         smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
-          if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
+          if (scrollHandler) scrollHandler.smoothScrollTo(target, duration, scrollSetFn ?? undefined, easing, onComplete);
           else ctx.scroll.to(typeof target === "function" ? target() : target);
         },
         cancel(): void { scrollHandler?.cancelScroll(); },
@@ -479,6 +484,16 @@ export function createCore<T extends VListItem = VListItem>(
         },
         setTarget(target: EventTarget): void { scrollTarget = target; },
         setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
+        watchSize(fn: (px: number) => void): void { onContentSize = fn; },
+        setInput(factory): BoundedScrollHandler | null {
+          scrollHandler!.detach();
+          // Native input comes back as the handler the list was built with.
+          scrollHandler = boundedHandler = factory ? createBoundedHandler(factory) : null;
+          scrollSetFn = factory ? writeBounded : null;
+          scrollHandler ??= nativeHandler;
+          if (state.initialized) scrollHandler!.attach();
+          return boundedHandler;
+        },
         setToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
         setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
         onFrame: doScrollFrame,
@@ -660,13 +675,15 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function updateContentSize(size: number, write = true): void {
+    const pixels = size + config.mainAxisPadding;
+    // A bounded refresh detects the change against the previous total itself.
+    if (!boundedHandler) state.totalSize = size;
+    // Before the branch: overflow() may swap the input handler from here.
+    onContentSize?.(pixels);
     if (boundedHandler) {
       if (write) boundedHandler.refresh(size);
       return;
     }
-    state.totalSize = size;
-    const pixels = size + config.mainAxisPadding;
-    onContentSize?.(pixels);
     if (write) dom.content.style[isX ? "width" : "height"] = pixels + "px";
   }
 
@@ -760,7 +777,6 @@ export function createCore<T extends VListItem = VListItem>(
   // ── Scroll handler ──────────────────────────────────────────────
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
-  let scrollHandler: ScrollHandler;
   if (skipDefaultScroll && boundedWrap) {
     // This is the one throw after the setup loop, and page's setup has
     // already bound a resize listener on window by now. A throw here used to
@@ -776,9 +792,10 @@ export function createCore<T extends VListItem = VListItem>(
     dom.root.remove();
     throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
   }
-  // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
-  if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
-    boundedHandler = (logicalHandlerFactory ?? wrapHandlerFactory!)({
+  function createBoundedHandler(
+    factory: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
+  ): BoundedScrollHandler {
+    return factory({
       state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,
@@ -795,13 +812,14 @@ export function createCore<T extends VListItem = VListItem>(
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });
-    scrollHandler = boundedHandler;
-    // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
-    // through the logical setter so the runway split stays consistent. The
-    // pixel-equivalent (read) is the logical position, matching native mode (G4).
-    scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
+  }
+
+  // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
+  if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
+    scrollHandler = boundedHandler = createBoundedHandler((logicalHandlerFactory ?? wrapHandlerFactory)!);
+    scrollSetFn = writeBounded;
   } else {
-    const nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
+    nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
       state,
       viewport: dom.viewport,
       isX,
@@ -815,7 +833,6 @@ export function createCore<T extends VListItem = VListItem>(
     commitScroll = nativeHandler.commitScroll;
   }
 
-  smoothScrollFn = scrollHandler.smoothScrollTo;
 
   // ── Event listeners ─────────────────────────────────────────────
 
@@ -940,7 +957,7 @@ export function createCore<T extends VListItem = VListItem>(
     doRender();
   }
 
-  if (!skipDefaultScroll) scrollHandler.attach();
+  if (!skipDefaultScroll) scrollHandler!.attach();
 
   // ── Public API ──────────────────────────────────────────────────
 
@@ -1143,7 +1160,7 @@ export function createCore<T extends VListItem = VListItem>(
       }
 
       if (behavior === "smooth") {
-        scrollHandler.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
+        scrollHandler!.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
       } else {
         writeScroll(pos);
       }
@@ -1166,7 +1183,7 @@ export function createCore<T extends VListItem = VListItem>(
       }
       if (initialRafId !== null) { cancelAnimationFrame(initialRafId); initialRafId = null; }
       if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
-      scrollHandler.detach();
+      scrollHandler!.detach();
       resizeObserver?.disconnect();
       dom.content.removeEventListener("click", onContentClick);
       dom.content.removeEventListener("dblclick", onContentDblClick);

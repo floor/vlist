@@ -134,6 +134,15 @@ export interface ScrollCapability extends ScrollAdapter {
     config: import("./runway").WrapConfig,
     createHandler: (config: import("./runway").BoundedScrollConfig) => import("./runway").BoundedScrollHandler,
   ): void;
+  /** Called with the content size (px, padding included) each time it is set, before it is applied. */
+  watchSize(fn: (px: number) => void): void;
+  /**
+   * Swap the input handler in place: `factory` builds a bounded one, `null`
+   * restores native input. Returns the bounded handler, if any (overflow(), RFC-015).
+   */
+  setInput(
+    factory: ((config: import("./runway").BoundedScrollConfig & { sizeCache: import("./sizes").SizeCache }) => import("./runway").BoundedScrollHandler) | null,
+  ): import("./runway").BoundedScrollHandler | null;
   setToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
   setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;
   onFrame(): void;
