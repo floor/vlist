@@ -69,6 +69,7 @@
     "dist/**/*.d.ts",
     "dist/**/*.css",
     "dist/size.json",
+    "dist/version.json",
     "!dist/**/*.d.ts.map"
   ],
   "sideEffects": [

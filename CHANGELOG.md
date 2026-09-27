@@ -20,6 +20,11 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   It now commits what the browser applied; a million 40 px rows jump to row
   838,861 in Chrome, the last one the browser can show (FLO-247).
 
+- The npm package ships `dist/version.json`, the build stamp (version, commit,
+  build time) a site can read to say which vlist it serves. It was built
+  since #305 but left out of the `files` list (FLO-246).
+
+
 ## [3.0.0] - 2026-09-25
 
 The 3.0 line, on the npm `latest` tag. Everything in `3.0.0-next.1` through `3.0.0-next.6`
