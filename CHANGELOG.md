@@ -24,6 +24,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   where it was asked. `scroll:mode` reports each swap
   ([RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff), FLO-247).
 
+- A synthetic list draws a scrollbar by default: synthetic content is the size
+  of its viewport, so the browser draws none. It comes with the lazy driver,
+  appears when a list goes synthetic and leaves when it goes back to native.
+  `scroll.scrollbar` options configure it, `"none"` skips it, and a list with
+  `scrollbar()` keeps that one. `scroll.scrollbar: "none"` no longer throws
+  with synthetic input; `"native"` still does.
+
 ### Changed
 
 - `content:size:overflow` fires only with `scroll.mode: "native"`; `"auto"`

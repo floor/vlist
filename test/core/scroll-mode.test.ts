@@ -19,6 +19,7 @@ import { createVList as createSynthetic } from "../../src/synthetic";
 import { page } from "../../src/plugins/page";
 import { carousel } from "../../src/plugins/carousel";
 import { selection } from "../../src/plugins/selection";
+import { scrollbar } from "../../src/plugins/scrollbar";
 import type { ScrollConfig } from "../../src/types";
 
 const ROW = 20_000;
@@ -291,6 +292,10 @@ describe("scroll.mode synthetic and native", () => {
       await f.until(true);
       expect(f.synthetic()).toBe(true);
       expect(f.list.getScrollPosition()).toBe(0);
+      // A handoff after creation commits the position, a scroll frame like any
+      // other; with the driver cached it happens during creation and does not.
+      // Either way the list settles.
+      await wait(IDLE * 3);
       expect(f.list.element.classList.contains("vlist--scrolling")).toBe(false);
     } finally {
       f.destroy();
@@ -318,7 +323,7 @@ describe("scroll.mode synthetic and native", () => {
           scroll: scroll as unknown as ScrollConfig })).toThrow(/scroll\.mode is "auto", "native" or "synthetic"/);
       }
       expect(() => createVList({ container, items: createTestItems(10), item: { height: 40, template: simpleTemplate },
-        scroll: { mode: "synthetic", scrollbar: "none" } })).toThrow(/scrollbar\(\) plugin/);
+        scroll: { mode: "synthetic", scrollbar: "native" } })).toThrow(/scroll.scrollbar "native" needs native scrolling/);
     } finally {
       container.remove();
     }
@@ -360,6 +365,82 @@ describe("scroll.mode where input is fixed", () => {
     } finally {
       list.destroy();
       container.remove();
+    }
+  });
+});
+
+describe("scroll.mode: the scrollbar a synthetic list gets", () => {
+  const bars = (container: ParentNode): number => container.querySelectorAll(".vlist-scrollbar").length;
+
+  it("auto draws one past the limit, and removes it with native input back", async () => {
+    const f = make(100);
+    const root = f.list.element.parentElement!;
+    try {
+      expect(bars(root)).toBe(0);
+      f.list.setItems(createTestItems(OVER));
+      await f.until(true);
+      expect(bars(root)).toBe(1);
+      expect(f.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
+
+      await wait(IDLE * 3);
+      f.list.setItems(createTestItems(UNDER));
+      expect(f.synthetic()).toBe(false);
+      expect(bars(root)).toBe(0);
+      expect(f.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(false);
+    } finally {
+      f.destroy();
+    }
+  });
+
+  it("its thumb follows the position", async () => {
+    const f = make(OVER);
+    const root = f.list.element.parentElement!;
+    try {
+      await f.until(true);
+      const thumb = root.querySelector<HTMLElement>(".vlist-scrollbar__thumb")!;
+      const before = thumb.style.transform;
+      f.list.scrollToIndex(OVER / 2);
+      expect(thumb.style.transform).not.toBe(before);
+    } finally {
+      f.destroy();
+    }
+  });
+
+  it('"synthetic" draws one from the start, and destroy removes it', async () => {
+    const f = make(100, "synthetic");
+    const root = f.list.element.parentElement!;
+    await f.until(true);
+    expect(bars(root)).toBe(1);
+    f.destroy();
+    expect(bars(root)).toBe(0);
+  });
+
+  it("a list with scrollbar() keeps that one: never two", async () => {
+    const f = make(OVER, undefined, [scrollbar()]);
+    const root = f.list.element.parentElement!;
+    try {
+      await f.until(true);
+      expect(bars(root)).toBe(1);
+    } finally {
+      f.destroy();
+    }
+  });
+
+  it('scroll.scrollbar "none" skips it; options configure it', async () => {
+    for (const [option, expected] of [["none", 0], [{ minThumbSize: 40 }, 1]] as const) {
+      const container = createContainer({ width: 300, height: VIEWPORT });
+      const list = createVList({ container, items: createTestItems(100), item: { height: ROW, template: simpleTemplate },
+        scroll: { mode: "synthetic", scrollbar: option } });
+      try {
+        for (let i = 0; i < 100 && container.querySelector(".vlist-content")!.getAttribute("style")?.includes("100%") !== true; i++) await wait(5);
+        expect(bars(container)).toBe(expected);
+        if (expected) {
+          expect(container.querySelector<HTMLElement>(".vlist-scrollbar")!.style.getPropertyValue("--vlist-custom-scrollbar-min-thumb-size")).toBe("40px");
+        }
+      } finally {
+        list.destroy();
+        container.remove();
+      }
     }
   });
 });
