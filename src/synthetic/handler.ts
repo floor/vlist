@@ -1,6 +1,6 @@
 /** RFC-014 input provider. No native main-axis scroll position writes. */
-import type { BoundedScrollConfig, BoundedScrollHandler } from "../core/runway";
-// Wrap folds go through this commit, not runway.wrapRebase. Importing fold
+import type { LogicalScrollConfig, LogicalScrollHandler } from "../core/logical";
+// Wrap folds go through this commit, not the carousel runway's wrapRebase. Importing fold
 // from create.ts would charge every native list that never wraps.
 import { applyWrapFold, wrapLaps } from "../core/fold";
 import { SCROLL_IDLE_TIMEOUT, SCROLL_EASING } from "../constants";
@@ -14,11 +14,11 @@ function editing(target: Element): boolean {
   return !!input && !/^(button|submit|reset|checkbox|radio|image)$/.test(input.type);
 }
 
-type SyntheticScrollConfig = BoundedScrollConfig & {
-  readonly sizeCache: NonNullable<BoundedScrollConfig["sizeCache"]>;
+type SyntheticScrollConfig = LogicalScrollConfig & {
+  readonly sizeCache: NonNullable<LogicalScrollConfig["sizeCache"]>;
 };
 
-export function createSyntheticScrollHandler(config: SyntheticScrollConfig): BoundedScrollHandler {
+export function createSyntheticScrollHandler(config: SyntheticScrollConfig): LogicalScrollHandler {
   const { state, viewport, content, isX, onFrame, onIdle, mainAxisPadding, wrap } = config;
   const root = viewport.parentElement ?? viewport;
   const win = viewport.ownerDocument.defaultView!;
@@ -156,7 +156,7 @@ export function createSyntheticScrollHandler(config: SyntheticScrollConfig): Bou
     const along = isX ? e.deltaX : e.deltaY;
     const across = isX ? e.deltaY : e.deltaX;
     const overflow = isX ? viewport.scrollHeight > viewport.clientHeight : viewport.scrollWidth > viewport.clientWidth;
-    // Preserve the bounded provider's native cross-axis branch, including the
+    // Preserve the runway handler's native cross-axis branch, including the
     // cross component of diagonal wheel input when main-axis movement consumes it.
     if (overflow && Math.abs(across) > Math.abs(along)) return;
     if (overflow && across !== 0) {

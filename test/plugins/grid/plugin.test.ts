@@ -631,12 +631,12 @@ describe("grid - render correctness (optimized hot path)", () => {
     cleanup();
   });
 
-  // ── RFC-013: bounded scroll routing ──────────────────────────────
-  // Under bounded mode the engine renders items at `getOffset - baseOffset`
+  // ── RFC-012: logical scroll routing ──────────────────────────────
+  // With a logical handler the engine renders items at `getOffset - baseOffset`
   // so absolute virtual offsets land inside the runway. baseOffset is 0 in
   // native mode, so the subtraction is a no-op there.
 
-  it("subtracts baseOffset from item transforms (bounded mode)", () => {
+  it("subtracts baseOffset from item transforms (logical handler)", () => {
     const plugin = grid<TestItem>({ columns: 4 });
     const items = createTestItems(200);
     const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {

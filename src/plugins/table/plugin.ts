@@ -205,10 +205,10 @@ export function table<T extends VListItem = VListItem>(
       engineState.visibleCount = renderEnd - renderStart + 1;
     }
 
-    // Route content sizing through the engine so bounded mode (RFC-013) caps the
-    // content element to the runway instead of the full virtual height. Only
-    // resize when the total changes — the bounded handler's refresh() re-derives
-    // the split, so calling it per frame would be wasteful. Core re-refreshes
+    // Route content sizing through the engine so a logical handler (RFC-012)
+    // sizes the content element itself instead of to the full virtual height.
+    // Only resize when the total changes — the handler's refresh() re-derives
+    // its geometry, so calling it per frame would be wasteful. Core re-refreshes
     // centrally on resize.
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {

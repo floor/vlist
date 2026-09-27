@@ -27,7 +27,7 @@ import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
 import { createScrollSource } from "./scroll-source";
-import type { BoundedScrollHandler, BoundedScrollConfig, WrapConfig } from "./runway";
+import type { LogicalScrollHandler, LogicalScrollConfig, WrapConfig } from "./logical";
 import type { ScrollHandler, ScrollHandlerConfig } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./adapter";
 import { compileHooks, runAfterScrollHooks, runCommitHooks, runIdleHooks, runResizeHooks } from "./hooks";
@@ -239,7 +239,7 @@ export function createCore<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
   /** @internal Omitted by the native entry. */
-  logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
+  logicalHandlerFactory?: (config: LogicalScrollConfig & { sizeCache: SizeCache }) => LogicalScrollHandler,
   nativeOptions?: {
     native: (config: ScrollHandlerConfig) => ScrollHandler & { commitScroll(pos?: number): void };
     onContentSize: (size: number, emitter: Emitter<VListEvents<T>>) => void;
@@ -397,11 +397,11 @@ export function createCore<T extends VListItem = VListItem>(
    * held here instead and honoured on the first render that has a total.
    */
   let pendingScrollToIndex: { index: number; alignOrOptions: Parameters<VList<T>["scrollToIndex"]>[1] } | null = null;
-  let boundedHandler: BoundedScrollHandler | null = null;
-  // A plugin (carousel) can request the bounded handler in wrap mode during
-  // setup, before the handler is built below. Wrap implies bounded.
-  let boundedWrap: WrapConfig | null = null;
-  let wrapHandlerFactory: ((config: BoundedScrollConfig) => BoundedScrollHandler) | null = null;
+  let logicalHandler: LogicalScrollHandler | null = null;
+  // A plugin (carousel) can request a logical handler in wrap mode during
+  // setup, before the handler is built below.
+  let wrapConfig: WrapConfig | null = null;
+  let wrapHandlerFactory: ((config: LogicalScrollConfig) => LogicalScrollHandler) | null = null;
 
   // ── Pre-initialize container size so plugins can read it ────────
 
@@ -463,7 +463,7 @@ export function createCore<T extends VListItem = VListItem>(
         ...scrollAdapter,
         to: writeScroll,
         shiftBy(delta: number): void {
-          if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
+          if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
           else ctx.scroll.to(state.scrollPosition + delta);
         },
         smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
@@ -478,7 +478,8 @@ export function createCore<T extends VListItem = VListItem>(
           skipDefaultScroll = true;
         },
         setTarget(target: EventTarget): void { scrollTarget = target; },
-        setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
+        setWrap(cfg, createHandler): void { wrapConfig = cfg; wrapHandlerFactory = createHandler; },
+        setBoundedWrap(cfg, createHandler): void { ctx.scroll.setWrap(cfg, createHandler); },
         setToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
         setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
         onFrame: doScrollFrame,
@@ -660,8 +661,8 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function updateContentSize(size: number, write = true): void {
-    if (boundedHandler) {
-      if (write) boundedHandler.refresh(size);
+    if (logicalHandler) {
+      if (write) logicalHandler.refresh(size);
       return;
     }
     state.totalSize = size;
@@ -673,7 +674,7 @@ export function createCore<T extends VListItem = VListItem>(
   function syncContentSize(): void {
     const totalSize = customRenderIfNeeded ? state.totalSize : sizeCache.getTotalSize();
     updateContentSize(totalSize, !customRenderIfNeeded);
-    if (boundedHandler || customRenderIfNeeded) return;
+    if (logicalHandler || customRenderIfNeeded) return;
 
     nativeOptions?.onContentSize(totalSize, emitter);
   }
@@ -761,7 +762,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
   let scrollHandler: ScrollHandler;
-  if (skipDefaultScroll && boundedWrap) {
+  if (skipDefaultScroll && wrapConfig) {
     // This is the one throw after the setup loop, and page's setup has
     // already bound a resize listener on window by now. A throw here used to
     // leave it there: no list is returned, so nothing could ever destroy it,
@@ -774,11 +775,11 @@ export function createCore<T extends VListItem = VListItem>(
     // so must this. Measured before: the empty root stayed in the caller's
     // container after the throw.
     dom.root.remove();
-    throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
+    throw new Error("vlist: page() is not compatible with the carousel plugin — document scrolling cannot wrap.");
   }
-  // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
-  if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
-    boundedHandler = (logicalHandlerFactory ?? wrapHandlerFactory!)({
+  // Wrap mode (carousel) implies a logical handler — a plugin requested it during setup.
+  if (!skipDefaultScroll && (logicalHandlerFactory || wrapConfig)) {
+    logicalHandler = (logicalHandlerFactory ?? wrapHandlerFactory!)({
       state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,
@@ -787,7 +788,7 @@ export function createCore<T extends VListItem = VListItem>(
       idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       mainAxisPadding: config.mainAxisPadding,
-      ...(boundedWrap ? { wrap: boundedWrap, rendered, classPrefix: config.classPrefix, oddClass, onFold(shift: number) {
+      ...(wrapConfig ? { wrap: wrapConfig, rendered, classPrefix: config.classPrefix, oddClass, onFold(shift: number) {
         const tracker = velocityTracker as { _lp?: number };
         if (tracker._lp !== undefined) tracker._lp -= shift;
         lastEventScrollPos -= shift;
@@ -795,11 +796,11 @@ export function createCore<T extends VListItem = VListItem>(
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });
-    scrollHandler = boundedHandler;
+    scrollHandler = logicalHandler;
     // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
-    // through the logical setter so the runway split stays consistent. The
+    // through the logical setter so baseOffset and the handler stay consistent. The
     // pixel-equivalent (read) is the logical position, matching native mode (G4).
-    scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
+    scrollSetFn = (px: number) => logicalHandler!.setLogical(px);
   } else {
     const nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
       state,
@@ -910,10 +911,10 @@ export function createCore<T extends VListItem = VListItem>(
           state.containerSize = size;
           state.crossSize = cross;
           state.resizeCapacity(size, minItemSize, config.overscan);
-          // Bounded runway geometry (maxScrollTop/maxLogical/content size) is
-          // derived from containerSize — recompute it before rendering, or the
-          // runway stays sized to the old viewport.
-          if (boundedHandler) boundedHandler.refresh(sizeCache.getTotalSize());
+          // A logical handler's geometry (max position, content size) is
+          // derived from containerSize — recompute it before rendering, or it
+          // stays sized to the old viewport.
+          if (logicalHandler) logicalHandler.refresh(sizeCache.getTotalSize());
           doForceRender();
           runResizeHooks(hooks.resize, width, height);
           emitter.emit("resize", { width, height });

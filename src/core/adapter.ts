@@ -153,9 +153,9 @@ export function normalizeLogical(sizeCache: SizeCache, pos: LogicalScrollPositio
 /**
  * Create a {@link ScrollAdapter} over an existing pixel-based scroll source.
  *
- * During migration the underlying source is still the native viewport scroll;
- * later phases can swap `getPixel` / `setPixel` for a bounded-proxy or
- * interception input strategy without changing any plugin that uses the adapter.
+ * The source behind `getPixel` / `setPixel` is the native viewport scroll or a
+ * logical handler (synthetic input, carousel runway); plugins that use the
+ * adapter do not change with it.
  */
 export function createScrollAdapter(config: ScrollAdapterConfig): ScrollAdapter {
   const { sizeCache, getPixel, setPixel, getContainerSize } = config;

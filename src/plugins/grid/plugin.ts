@@ -291,9 +291,9 @@ export function grid<T extends VListItem = VListItem>(
         : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
     }
 
-    // Route content sizing through the engine so bounded mode caps the content
-    // element to the runway (RFC-013). Only resize when the total changes — the
-    // bounded handler's refresh() re-derives the split, so calling it per frame
+    // Route content sizing through the engine so a logical handler (RFC-012)
+    // sizes the content element itself. Only resize when the total changes —
+    // the handler's refresh() re-derives its geometry, so calling it per frame
     // would be wasteful. Core re-refreshes centrally on resize.
     const totalSize = sizeCache.getTotalSize();
     if (totalSize !== lastContentTotalSize) {

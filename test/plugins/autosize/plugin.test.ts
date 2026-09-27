@@ -917,7 +917,7 @@ describe("autosize end-pinning", () => {
     simulateScrollToIndex(19, "end");
 
     // End detection reads the size cache (the virtual source of truth), not the
-    // native scrollHeight — so under bounded mode the runway edge is never
+    // native scrollHeight — so with a logical handler the content edge is never
     // mistaken for the list end. Grow the cache total when content size updates.
     let total = 1000;
     mockCtx.ctx.sizes.cache.getTotalSize = () => total;

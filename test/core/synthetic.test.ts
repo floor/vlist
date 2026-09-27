@@ -337,7 +337,7 @@ describe("synthetic correction integration", () => {
     } finally { list?.destroy(); list = undefined; globalThis.ResizeObserver = original; }
   });
 
-  it("native and bounded correction fallback matches their absolute scroll path", () => {
+  it("native and runway correction fallback matches their absolute scroll path", () => {
     for (const mode of ["native"] as const) {
       let ctx!: PluginContext<TestItem>;
       list = factoryFor(mode)({ container, items: createTestItems(1000), item: { height: 50, template: simpleTemplate } },

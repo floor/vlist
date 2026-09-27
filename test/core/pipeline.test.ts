@@ -114,7 +114,7 @@ describe("phase1Calculate — range calculations", () => {
     expect(second).toBe(false);
   });
 
-  it("commits again when baseOffset moves with an unchanged range (bounded wheel, synthetic)", () => {
+  it("commits again when baseOffset moves with an unchanged range (runway rebase, synthetic)", () => {
     const { state, sizeCache } = makeFixedSetup({
       totalItems: 100,
       itemSize: 50,

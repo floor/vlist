@@ -174,10 +174,10 @@ describe("createMasonryRenderer", () => {
 });
 
 // =============================================================================
-// RFC-013 — bounded scroll: main-axis transform shifted by baseOffset
+// RFC-012 — logical scroll: main-axis transform shifted by baseOffset
 // =============================================================================
 
-describe("bounded baseOffset", () => {
+describe("baseOffset (logical handler)", () => {
   let container: HTMLElement;
   beforeEach(() => { container = createItemsContainer(); });
   afterEach(() => { container.remove(); });

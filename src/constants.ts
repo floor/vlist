@@ -82,29 +82,6 @@ export const SCROLL_EASING = (t: number): number => t < 0.5 ? 2 * t * t : 1 - (-
 export const SCROLL_DURATION = 300;
 
 // =============================================================================
-// Bounded Logical Scroll (RFC-012)
-// =============================================================================
-
-/**
- * Runway size as a multiple of the viewport. The bounded content element is
- * sized to `containerSize × this` (capped at total size), giving the native
- * scrollbar room to move before a rebase shifts the logical origin.
- */
-export const BOUNDED_RUNWAY_FACTOR = 2;
-
-/**
- * Lower rebase trigger: when native scrollTop drops below this fraction of the
- * runway (and we are not already at the logical start), shift the origin back.
- */
-export const BOUNDED_REBASE_LOW = 0.25;
-
-/**
- * Upper rebase trigger: when native scrollTop rises above this fraction of the
- * runway (and we are not already at the logical end), shift the origin forward.
- */
-export const BOUNDED_REBASE_HIGH = 0.75;
-
-// =============================================================================
 // Scrollbar
 // =============================================================================
 

@@ -1,4 +1,4 @@
-/** Large grouped-list regressions formerly covered by bounded mode.
+/** Large grouped-list regressions, run under synthetic input.
  * Default synthetic input keeps the full logical range and viewport-sized content.
  */
 
@@ -164,7 +164,7 @@ describe("groups + data + synthetic scroll", () => {
       const rows = 5000 / COLS;
       const fullVirtual = rows * ITEM_H; // grid: ~125,000px
 
-      // Content bounded to the runway, not the full grid height.
+      // Content sized to the viewport, not the full grid height.
       expect(contentHeight).toBe(500);
       expect(contentHeight).toBeLessThan(fullVirtual / 10);
 
