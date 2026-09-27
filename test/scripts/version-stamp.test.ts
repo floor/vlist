@@ -32,3 +32,14 @@ describe("scripts/version-stamp", () => {
     }
   });
 });
+
+// FLO-246: the stamp only helps a site if the package ships it. The `files`
+// whitelist listed size.json and not version.json, so vlist.io production
+// (installed from npm) read package.json instead.
+describe("package.json files", () => {
+  it("ships dist/version.json beside dist/size.json", () => {
+    const pkg = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8")) as { files: string[] };
+    expect(pkg.files).toContain("dist/size.json");
+    expect(pkg.files).toContain("dist/version.json");
+  });
+});
