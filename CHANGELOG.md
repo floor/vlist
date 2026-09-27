@@ -13,6 +13,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `carousel()` with fewer slides than its viewport shows is no longer
+  partly blank. Two or three slides in a wide carousel make a lap shorter
+  than the viewport; each slide was placed by its data index, so every copy
+  landed on the same spot. Slides are now placed by their virtual index —
+  painted once per lap on screen — and the index space grows with the
+  geometry instead of being fixed at three laps (FLO-204).
+
 - Native lists: a smooth `scrollToIndex` past the browser's element-size cap
   no longer leaves the list blank. The browser clamps `scrollTop` at its cap
   (Chrome: 33,554,428 px) and the animation committed the position it wrote,

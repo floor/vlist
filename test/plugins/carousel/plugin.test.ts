@@ -902,7 +902,7 @@ describe("carousel — Variant: hero-center — layout", () => {
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [9, 0, 1]);
+    const els = addRenderedItems(dom.content, [9, 0, 1], ctx);
 
     // stepSize = focalSlotWidth = containerSize - 2*peek = 600
     const es = ctx.getState();
@@ -1031,14 +1031,30 @@ describe("carousel — Variant: hero — infinite loop", () => {
 // CSS Variables — per-element visual state updated on scroll
 // =============================================================================
 
-function addRenderedItems(content: HTMLElement, indices: number[]): HTMLElement[] {
+/**
+ * Mount elements the way the engine does: each at a virtual index, listed in
+ * the visible window and resolvable through `dom.renderedElement`. The data
+ * index shown on the element is the logical one. Logical indices past half a
+ * lap stand for the lap before the home lap (`[9, 0, 1]` around item 0).
+ */
+function addRenderedItems(content: HTMLElement, indices: number[], ctx?: { getState(): EngineState; dom: { renderedElement(index: number): HTMLElement | null } }, total = 10, home = 10): HTMLElement[] {
   const els: HTMLElement[] = [];
+  const byVi = new Map<number, HTMLElement>();
   for (const idx of indices) {
     const el = document.createElement("div");
     el.dataset.index = String(idx);
     el.className = "vlist-item";
     content.appendChild(el);
     els.push(el);
+    byVi.set(home + idx - (idx > total / 2 ? total : 0), el);
+  }
+  if (ctx) {
+    const state = ctx.getState();
+    const vis = [...byVi.keys()];
+    if (state.visibleIndices.length < vis.length) state.visibleIndices = new Int32Array(vis.length);
+    vis.forEach((vi, k) => { state.visibleIndices[k] = vi; });
+    state.visibleCount = vis.length;
+    ctx.dom.renderedElement = (index: number): HTMLElement | null => byVi.get(index) ?? null;
   }
   return els;
 }
@@ -1064,7 +1080,7 @@ describe("carousel — CSS Variables", () => {
 
     // Simulate rendered elements near the focal index in the home lap
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const els = addRenderedItems(dom.content, [0, 1, 2], ctx);
 
     // Trigger onAfterScroll at the initial position (home lap, item 0)
     const scrollPos = homeStart * 400;
@@ -1094,7 +1110,7 @@ describe("carousel — CSS Variables", () => {
     initPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [9, 0, 1, 2]);
+    const els = addRenderedItems(dom.content, [9, 0, 1, 2], ctx);
 
     const scrollPos = homeStart * 400;
     plugin.hooks!.onAfterScroll!(scrollPos, 0);
@@ -1121,7 +1137,7 @@ describe("carousel — CSS Variables", () => {
     initPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     const stepSz = 800 - 56;
     const scrollPos = homeStart * stepSz;
@@ -1147,7 +1163,7 @@ describe("carousel — CSS Variables", () => {
     initPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const els = addRenderedItems(dom.content, [0, 1, 2], ctx);
 
     const es = ctx.getState();
 
@@ -1181,7 +1197,7 @@ describe("carousel — CSS Variables", () => {
     initPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     const stepSz = 800 - 56;
     ctx.getState().scrollPosition = homeStart * stepSz;
@@ -1209,7 +1225,7 @@ describe("carousel — CSS Variables", () => {
     initPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     ctx.getState().scrollPosition = homeStart * 600;
     plugin.hooks!.onAfterScroll!(ctx.getState().scrollPosition, 0);
@@ -1237,7 +1253,7 @@ describe("carousel — CSS Variables", () => {
     initPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     // Scroll 50% between items
     const es = ctx.getState();
@@ -1278,7 +1294,7 @@ describe("carousel — Gap", () => {
     commitPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     const es = ctx.getState();
     // availableSize = 800 - 8 = 792 (1 gap for 2 slots)
@@ -1313,7 +1329,7 @@ describe("carousel — Gap", () => {
     commitPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     const es = ctx.getState();
     // full: 1 slot, 0 gaps at rest → availableSize = 600
@@ -1341,7 +1357,7 @@ describe("carousel — Gap", () => {
     commitPlugin(plugin, ctx.getState());
 
     const homeStart = 10; // HOME_LAP * realTotal
-    const els = addRenderedItems(dom.content, [0, 1]);
+    const els = addRenderedItems(dom.content, [0, 1], ctx);
 
     const es = ctx.getState();
     // containerSize=600, availableSize=600-12=588
@@ -2489,7 +2505,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
-    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const els = addRenderedItems(dom.content, [0, 1, 2], ctx);
     const es = ctx.getState();
 
     const totalLap = WIDTHS.reduce((a, b) => a + b, 0) + gap * 5;
@@ -2519,7 +2535,7 @@ describe("carousel — Variable-width (multi-aspect)", () => {
     plugin.setup!(ctx);
     if (plugin.hooks?.onCommit) plugin.hooks.onCommit(ctx.getState());
 
-    const els = addRenderedItems(dom.content, [0, 1, 2]);
+    const els = addRenderedItems(dom.content, [0, 1, 2], ctx);
     const es = ctx.getState();
 
     const homeStart = 10; // HOME_LAP * realTotal

@@ -7,7 +7,7 @@ import { capturePrototypeGeometry } from './geometry';
 
 export const carouselEntries = [['native', native], ['synthetic', synthetic]] as const;
 /** Real entry fixture; restore every descriptor and frame callback on disposal. */
-export function carouselEntry(create: typeof native, options: CarouselPluginConfig = {}, isX = false) {
+export function carouselEntry(create: typeof native, options: CarouselPluginConfig = {}, isX = false, count = 10) {
  const geometry = capturePrototypeGeometry();
  Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable:true, get:()=>400 });
  Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable:true, get:()=>400 });
@@ -20,7 +20,7 @@ export function carouselEntry(create: typeof native, options: CarouselPluginConf
  const host=document.createElement('div');document.body.append(host);let ctx!:PluginContext<{id:number}>;
  // The entry factories are passed in as values, so the plugin methods are not
  // inferred here: name them explicitly for the fixture's callers.
- const list=create({container:host,orientation:isX?'horizontal':'vertical',items:Array.from({length:10},(_,id)=>({id})),item:{height:100,width:100,template:item=>String(item.id)}},[
+ const list=create({container:host,orientation:isX?'horizontal':'vertical',items:Array.from({length:count},(_,id)=>({id})),item:{height:100,width:100,template:item=>String(item.id)}},[
   carousel({variant:'free',snap:false,snapDuration:64,...options}),{name:'inspect-carousel',setup(value){ctx=value;}},
  ]) as ReturnType<typeof create> & CarouselMethods;
  return {host,list,ctx,state:():CarouselState=>list.getCarouselState(),
