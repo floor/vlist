@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.0.1-next.1] - 2026-09-27
+
+The first 3.0.1 prerelease: `scroll.mode` on the one `vlist` entry (a list past
+the browser's size limit hands itself to synthetic input, and draws its
+scrollbar), and the fixes since 3.0.0.
+
 ### Added
 
 - `scroll.mode`: `"auto"` (default), `"native"` or `"synthetic"`, on the one
@@ -30,6 +36,11 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `scroll.scrollbar` options configure it, `"none"` skips it, and a list with
   `scrollbar()` keeps that one. `scroll.scrollbar: "none"` no longer throws
   with synthetic input; `"native"` still does.
+
+- `dist/version.json` says whether a build is the release: `released` is true
+  only for the tagged `v<version>` build. A site serving a build of `next`
+  between releases can name it by its commit instead of the last released
+  version (vlist.io shows `3.0.0+<commit>`).
 
 ### Changed
 
