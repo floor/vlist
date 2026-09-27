@@ -56,7 +56,7 @@ export type VListFactory<T extends VListItem = VListItem> = typeof createVList<T
  */
 export interface VListConfig<T extends VListItem = VListItem>
   extends Omit<CreateVListConfig<T>, "container" | "scroll"> {
-  /** Scroll options; select synthetic input with a factory from vlist/synthetic. */
+  /** Scroll options; `scroll.mode` chooses native, synthetic or auto input. */
   scroll?: ScrollConfig;
   /** List factory; defaults to core createVList. Fixed for this instance. */
   factory?: VListFactory<T>;
