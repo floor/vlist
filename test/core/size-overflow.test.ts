@@ -127,6 +127,20 @@ describe("content size overflow warning", () => {
     expect(errors.length).toBe(0);
   });
 
+  it("never writes a content size past the limit, and still scrolls to it", () => {
+    // Chrome clamps an element at 33,554,428 px; Firefox lays out nothing above
+    // 17,895,697 px, so a larger native list could not scroll there at all.
+    list = createVList<TestItem>(
+      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } },
+      [],
+    );
+    const content = container.querySelector<HTMLElement>(".vlist-content")!;
+    list.setItems(createTestItems(1_200_000)); // 48,000,000 px
+    expect(content.style.height).toBe(`${MAX_VIRTUAL_SIZE}px`);
+    list.setItems(createTestItems(100)); // back under: the full size again
+    expect(content.style.height).toBe("4000px");
+  });
+
   it("MAX_VIRTUAL_SIZE constant is 16 million", () => {
     expect(MAX_VIRTUAL_SIZE).toBe(16_000_000);
   });

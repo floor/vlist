@@ -48,6 +48,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- A native list past the browser's element size limit could not scroll at all
+  in Firefox: its content element was written at full size (48,000,000 px for
+  a million 48 px rows), and Firefox lays out nothing above 17,895,697 px, so
+  it collapsed to 0 with no scrollbar. Chrome clamps such an element at
+  33,554,428 px, which hid the problem. The native content size is now capped
+  at 16,000,000 px, and native input reaches the same rows in every browser.
+
 - `carousel()` with fewer slides than its viewport shows is no longer
   partly blank. Two or three slides in a wide carousel make a lap shorter
   than the viewport; each slide was placed by its data index, so every copy
