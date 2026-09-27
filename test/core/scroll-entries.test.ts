@@ -38,7 +38,7 @@ for (const [entry, create] of [["core", createVList], ["native", createNative], 
       try {
         expect(() => create({ container, items: createTestItems(1),
           item: { height: 40, template: simpleTemplate }, scroll: scroll as any,
-        })).toThrow(/scroll\.mode is "auto", "native" or "synthetic".*runway and bounded mode were removed in 3\.0/);
+        })).toThrow(/scroll\.mode is "auto", "native" or "synthetic".*bounded mode and scroll\.runway were removed in 3\.0/);
         expect(container.children).toHaveLength(0);
       } finally { container.remove(); }
     });
@@ -50,9 +50,9 @@ for (const scrollbar of ["none", "native"] as const) {
     const container = createContainer();
     const config = {container, item: {height:40, template:simpleTemplate}, scroll:{scrollbar}};
     try {
-      expect(() => createSynthetic(config as any)).toThrow(/scroll.scrollbar strings apply to native scrolling/);
+      expect(() => createSynthetic(config as any)).toThrow(/scroll.scrollbar strings style the native scrollbar/);
       expect(container.children).toHaveLength(0);
-      expect(() => createVListFromConfig({...config, factory:createSynthetic})).toThrow(/scroll.scrollbar strings apply to native scrolling/);
+      expect(() => createVListFromConfig({...config, factory:createSynthetic})).toThrow(/scroll.scrollbar strings style the native scrollbar/);
       const list = createVList(config);
       expect(container.querySelector(".vlist-viewport")!.classList.contains("vlist-viewport--no-scrollbar")).toBe(scrollbar === "none");
       list.destroy();

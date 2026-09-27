@@ -40,56 +40,29 @@ import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } fr
 // Config Validation
 // =============================================================================
 
+/** Throws unless `value` is absent or a finite number above 0 (from 0 with `zero`). */
+function assertSize(name: string, value: unknown, zero = false): void {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || (value === 0 && !zero)) {
+    throw new Error(`vlist: ${name} must be a ${zero ? "non-negative" : "positive"} number, got ${value}`);
+  }
+}
+
 function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
   const { item } = raw;
 
-  // Validate item.height (only if explicitly provided and is a number)
-  if (item.height !== undefined && typeof item.height === "number") {
-    if (!Number.isFinite(item.height) || item.height <= 0) {
-      throw new Error(`vlist: item.height must be a positive number, got ${item.height}`);
-    }
-  }
+  // item.height and item.width may also be functions of the index.
+  if (typeof item.height === "number") assertSize("item.height", item.height);
+  if (typeof item.width === "number") assertSize("item.width", item.width);
+  assertSize("item.estimatedHeight", item.estimatedHeight);
+  assertSize("item.estimatedWidth", item.estimatedWidth);
+  assertSize("item.gap", item.gap, true);
+  assertSize("overscan", raw.overscan, true);
 
-  // Validate item.width (only if explicitly provided and is a number)
-  if (item.width !== undefined && typeof item.width === "number") {
-    if (!Number.isFinite(item.width) || item.width <= 0) {
-      throw new Error(`vlist: item.width must be a positive number, got ${item.width}`);
-    }
+  const scroll = raw.scroll as { mode?: string; runway?: unknown } | undefined;
+  if (scroll?.runway !== undefined || !/^(auto|native|synthetic)?$/.test(scroll?.mode ?? "")) {
+    throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed in 3.0)');
   }
-
-  // Validate item.estimatedHeight (only if explicitly provided)
-  if (item.estimatedHeight !== undefined) {
-    if (!Number.isFinite(item.estimatedHeight) || item.estimatedHeight <= 0) {
-      throw new Error(`vlist: item.estimatedHeight must be a positive number, got ${item.estimatedHeight}`);
-    }
-  }
-
-  // Validate item.estimatedWidth (only if explicitly provided)
-  if (item.estimatedWidth !== undefined) {
-    if (!Number.isFinite(item.estimatedWidth) || item.estimatedWidth <= 0) {
-      throw new Error(`vlist: item.estimatedWidth must be a positive number, got ${item.estimatedWidth}`);
-    }
-  }
-
-  // Validate item.gap (only if explicitly provided)
-  if (item.gap !== undefined) {
-    if (typeof item.gap !== "number" || !Number.isFinite(item.gap) || item.gap < 0) {
-      throw new Error(`vlist: item.gap must be a non-negative number, got ${item.gap}`);
-    }
-  }
-
-  // Validate overscan (only if explicitly provided)
-  if (raw.overscan !== undefined) {
-    if (typeof raw.overscan !== "number" || !Number.isFinite(raw.overscan) || raw.overscan < 0) {
-      throw new Error(`vlist: overscan must be a non-negative number, got ${raw.overscan}`);
-    }
-  }
-
-  const mode = raw.scroll?.mode;
-  if ((raw.scroll as { runway?: unknown } | undefined)?.runway !== undefined || (mode !== undefined && mode !== "auto" && mode !== "native" && mode !== "synthetic")) {
-    throw new Error(`vlist: scroll.mode is "auto", "native" or "synthetic" (got ${mode}); scroll.runway and bounded mode were removed in 3.0.`);
-  }
-
 }
 
 // =============================================================================
@@ -233,7 +206,7 @@ export function createVList<
       if (!warned && size > MAX_VIRTUAL_SIZE) {
         warned = true;
         emitter.emit("error", {
-          error: new Error(`Content size (${size}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use scroll.mode "auto" or "synthetic" for large datasets.`),
+          error: new Error(`Content size (${size}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use scroll.mode "auto".`),
           context: "content:size:overflow",
         });
       }
@@ -258,7 +231,7 @@ export function createCore<T extends VListItem = VListItem>(
   validateRawConfig(rawConfig);
   const inputMode = logicalHandlerFactory ? "synthetic" : rawConfig.scroll?.mode ?? "auto";
   if (inputMode === "synthetic" && typeof rawConfig.scroll?.scrollbar === "string") {
-    throw new Error('vlist 3.0: scroll.scrollbar strings apply to native scrolling; use the scrollbar() plugin with synthetic scrolling.');
+    throw new Error("vlist: scroll.scrollbar strings style the native scrollbar; use the scrollbar() plugin with synthetic scrolling.");
   }
   // Both entries reject it. Native used to accept the combination and then sit
   // on the first page: RTL makes scrollLeft negative, the wheel clamp pins it
@@ -413,10 +386,10 @@ export function createCore<T extends VListItem = VListItem>(
   // The pixel-equivalent (read) is the logical position, matching native mode (G4).
   const writeLogical = (px: number): void => logicalHandler!.setLogical(px);
   // scroll.mode (RFC-015): a native list swaps to synthetic input in place.
-  // Set once the handler exists; false for lists whose input is fixed.
+  // `canSwap` is set once the handler exists (false where input is fixed);
+  // `pending` while a swap waits for the driver or for idle.
   let canSwap = false;
-  let swapPending = false;
-  let loading = false;
+  let pending = false;
   let clampedWrite: number | null = null;
   // A plugin (carousel) can request a logical handler in wrap mode during
   // setup, before the handler is built below.
@@ -439,9 +412,9 @@ export function createCore<T extends VListItem = VListItem>(
       else dom.viewport.scrollTop = position;
       // Reuse native read-back, rendering, event dedupe and the idle timer.
       commitScroll?.();
-      // Clamped by the browser's size limit: a handoff to synthetic input
-      // lands it where it was asked (the next scroll frame forgets it).
-      if (canSwap && Math.abs(state.scrollPosition - position) > 1) clampedWrite = position;
+      // Clamped by the browser while a swap is pending: the swap lands it
+      // where it was asked (the next scroll frame forgets it).
+      if (pending && Math.abs(state.scrollPosition - position) > 1) clampedWrite = position;
     }
   }
 
@@ -743,54 +716,44 @@ export function createCore<T extends VListItem = VListItem>(
     pool.trim(rendered.size);
   }
 
-  function doScrollIdle(): void {
-    doScrollIdleEvents();
-    if (swapPending) syncContentSize();
-  }
-
   /**
    * Hand input over when the mode asks for it (RFC-015): `synthetic` always,
    * `auto` past the browser's element size limit, and back below 3/4 of it.
    *
-   * A scroll in flight is never cut off: the swap waits for idle. Until then a
-   * native list keeps its full size and the browser clamps it, which the
-   * smooth-scroll commit already renders correctly (FLO-247).
+   * The swap waits for the driver, loaded on first need, and for idle: a scroll
+   * in flight is never cut off. Until then the browser clamps a native list,
+   * which the smooth-scroll commit already renders correctly (FLO-247).
    */
   function checkInput(pixels: number): void {
-    const want = inputMode === "synthetic" || pixels > MAX_VIRTUAL_SIZE * (logicalHandler ? 0.75 : 1);
-    swapPending = false;
-    if (want === !!logicalHandler) return;
-    if (want && !syntheticFactory) {
-      if (!loading) {
-        loading = true;
-        nativeOptions!.load().then((factory) => {
-          syntheticFactory = factory;
-          if (!state.destroyed) syncContentSize();
-        }, (error: Error) => emitter.emit("error", { error, context: "scroll:mode" }));
-      }
-      return;
-    }
-    swapPending = isScrolling;
-    if (!swapPending) swapInput(pixels);
+    const synthetic = !!logicalHandler;
+    const wanted = inputMode === "synthetic" || pixels > MAX_VIRTUAL_SIZE * (synthetic ? 0.75 : 1);
+    pending = wanted !== synthetic;
+    if (!pending) return;
+    // No guard needed: an import is cached, so asking again is free; after a
+    // failure the next check asks again.
+    if (!syntheticFactory) {
+      nativeOptions!.load().then((factory) => {
+        syntheticFactory = factory;
+        if (!state.destroyed) syncContentSize();
+      }, (error: Error) => emitter.emit("error", { error, context: "scroll:mode" }));
+    } else if (!isScrolling) swapInput(pixels);
   }
 
   /** Swap the input handler in place; the list, plugins and position stay. */
   function swapInput(pixels: number): void {
     const position = clampedWrite ?? state.scrollPosition;
-    const axis = isX ? "scrollLeft" : "scrollTop";
+    pending = false;
     scrollHandler!.detach();
     if (logicalHandler) {
-      logicalHandler = scrollSetFn = null;
       scrollHandler = nativeHandler;
+      logicalHandler = scrollSetFn = null;
       state.baseOffset = 0;
-      state.totalSize = pixels - config.mainAxisPadding;
       dom.content.style[isX ? "width" : "height"] = pixels + "px";
       scrollHandler!.attach();
-      dom.viewport[axis] = Math.min(position, Math.max(0, pixels - state.containerSize));
-      // What the browser applied, as the smooth-scroll commit does.
-      commitScroll!();
+      // The browser clamps to the new end, and writeScroll commits what it applied.
+      writeScroll(position);
     } else {
-      dom.viewport[axis] = 0;
+      dom.viewport[isX ? "scrollLeft" : "scrollTop"] = 0;
       scrollHandler = logicalHandler = createLogicalHandler(syntheticFactory!);
       scrollSetFn = writeLogical;
       logicalHandler.refresh(pixels - config.mainAxisPadding);
@@ -803,7 +766,7 @@ export function createCore<T extends VListItem = VListItem>(
     emitter.emit("scroll:mode", { mode: logicalHandler ? "synthetic" : "native" });
   }
 
-  function doScrollIdleEvents(): void {
+  function doScrollIdle(): void {
     if (isScrolling) {
       isScrolling = false;
       dom.root.classList.remove(scrollingClass);
@@ -818,6 +781,7 @@ export function createCore<T extends VListItem = VListItem>(
     emitter.emit("velocity:change", _velEvt);
     _idleEvt.scrollPosition = state.scrollPosition;
     emitter.emit("scroll:idle", _idleEvt);
+    if (pending) syncContentSize();
   }
 
   function doForceRender(): void {
@@ -1228,7 +1192,8 @@ export function createCore<T extends VListItem = VListItem>(
         pos = Math.max(0, Math.min(pos, maxScroll));
       }
 
-      if (behavior === "smooth") {
+      // While a swap is pending, a smooth scroll would stop at the browser's cap.
+      if (behavior === "smooth" && !pending) {
         scrollHandler!.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
       } else {
         writeScroll(pos);

@@ -224,6 +224,43 @@ describe("scroll.mode auto: a jump the browser clamped", () => {
     }
   });
 
+  it("a smooth jump while the swap is pending lands on its target too", async () => {
+    const g = make(100);
+    const CAP = 5_000_000;
+    let top = 0;
+    Object.defineProperty(g.viewport, "scrollTop", { configurable: true, get: () => top, set: (v: number) => { top = Math.min(v, CAP); } });
+    try {
+      top = 400;
+      g.viewport.dispatchEvent(new Event("scroll"));
+      g.list.setItems(createTestItems(OVER));
+      g.list.scrollToIndex(OVER - 1, { align: "end", behavior: "smooth" });
+
+      await wait(IDLE * 3);
+      expect(g.synthetic()).toBe(true);
+      expect(g.list.getScrollPosition()).toBe(OVER * ROW - VIEWPORT);
+    } finally {
+      g.destroy();
+    }
+  });
+
+  it("a write clamped before any swap was pending is not replayed later", async () => {
+    const g = make(100);
+    const CAP = 1_000_000;
+    let top = 0;
+    Object.defineProperty(g.viewport, "scrollTop", { configurable: true, get: () => top, set: (v: number) => { top = Math.min(v, CAP); } });
+    try {
+      g.list.scrollToIndex(90); // 1,800,000 px, clamped at the cap; nothing pending
+      expect(g.list.getScrollPosition()).toBe(CAP);
+      await wait(IDLE * 3);
+      g.list.setItems(createTestItems(OVER));
+      await g.until(true);
+      // Where the list was, not the write the browser refused long before.
+      expect(g.list.getScrollPosition()).toBe(CAP);
+    } finally {
+      g.destroy();
+    }
+  });
+
   it("a scroll after the clamped jump wins over it", async () => {
     const g = make(100);
     const CAP = 5_000_000;

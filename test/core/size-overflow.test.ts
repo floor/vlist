@@ -73,7 +73,7 @@ describe("content size overflow warning", () => {
     expect(errors.length).toBe(1);
     expect(errors[0]!.context).toBe("content:size:overflow");
     expect(errors[0]!.error.message).toContain("16000000");
-    expect(errors[0]!.error.message).toContain('scroll.mode "auto" or "synthetic"');
+    expect(errors[0]!.error.message).toContain('scroll.mode "auto"');
   });
 
   it("should not emit error when content is under MAX_VIRTUAL_SIZE", () => {
