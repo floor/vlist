@@ -111,9 +111,8 @@ async function build() {
       for (const log of result.logs) console.error(log);
       process.exit(1);
     }
-    const index = await Bun.file("./dist/index.js").text();
-    if (!index.includes(`import("./${DRIVER_FILE}")`) || !(await Bun.file(`./dist/${DRIVER_FILE}`).text()).includes("pan-x pinch-zoom")) {
-      throw new Error(`dist/index.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
+    if (!(await Bun.file(`./dist/${DRIVER_FILE}`).text()).includes("pan-x pinch-zoom")) {
+      throw new Error(`dist/${DRIVER_FILE} must contain the synthetic driver`);
     }
   }
 
@@ -143,6 +142,8 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "config.js",
+    // The adapters build on this bundle: its synthetic driver stays lazy too.
+    plugins: [lazyDriver],
     define,
   });
 
@@ -160,6 +161,14 @@ async function build() {
   console.log(
     `  Config      ${configTime.toFixed(0).padStart(6)}ms  dist/config.js (${configSize} KB)`,
   );
+
+  // Every bundle with a native createVList loads the synthetic driver, never carries it.
+  for (const name of ["index", "config"]) {
+    const text = await Bun.file(`./dist/${name}.js`).text();
+    if (!text.includes(`import("./${DRIVER_FILE}")`) || text.includes("pan-x pinch-zoom")) {
+      throw new Error(`dist/${name}.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
+    }
+  }
 
   // Build internals bundle (low-level exports for advanced users)
   const internalsStart = performance.now();
