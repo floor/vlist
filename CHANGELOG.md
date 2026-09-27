@@ -11,6 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.0-next.2] - 2026-09-28
+
+The 3.1 line. `scroll.mode` is a feature, so what 3.0.1-next.1 started ships
+as 3.1.0, not 3.0.1; this prerelease carries it on, with carousels honouring
+`"synthetic"`. Framework adapters need 3.1.0-next.2 or later for their peer
+range to admit it.
+
 ### Added
 
 - `carousel()` honours `scroll.mode: "synthetic"`: it runs on the synthetic
@@ -26,7 +33,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [3.0.1-next.1] - 2026-09-27
 
-The first 3.0.1 prerelease: `scroll.mode` on the one `vlist` entry (a list past
+The first prerelease of what ships as 3.1.0: `scroll.mode` on the one `vlist` entry (a list past
 the browser's size limit hands itself to synthetic input, and draws its
 scrollbar), and the fixes since 3.0.0.
 

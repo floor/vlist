@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.0.0** — Native scrolling by default, opt-in `vlist/synthetic`, and removal of deprecated scroll configuration and plugin hooks. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
+**v3.1.0-next.2** (prerelease on the npm `next` tag) — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar; carousels honour `"synthetic"`; `vlist/synthetic` is deprecated. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -46,20 +46,19 @@ npm install vlist@2            # the 2.x line, still maintained
 npm install vlist vlist-vue    # or vlist-svelte / vlist-solidjs / vlist-react
 ```
 
-Adapters use native scrolling by default. With an adapter that forwards `factory`, select synthetic input explicitly:
+Adapters forward `scroll` unchanged, so `scroll.mode` works through them too (adapters `3.1.0-next.2` and later):
 
 ```ts
 import { useVList } from "vlist-react";
-import { createVList } from "vlist/synthetic";
 
 useVList({
-  factory: createVList,
   items,
   item: { height: 48, template: item => String(item.id) },
+  scroll: { mode: "synthetic" }, // "auto" by default
 });
 ```
 
-The same factory option is available to the other adapters. `vlist/config` defaults to native scrolling. The factory is structural configuration: changing it requires recreating the list.
+The mode is structural configuration: changing it requires recreating the list.
 
 ## Quick Start
 
@@ -108,47 +107,54 @@ const list = createVList({
 
 ## Scroll input
 
-Native scrolling is the default: import `createVList` and plugins from `vlist`. This preserves browser scrollbars, native touch momentum, boundary handoff and native assistive-technology scrolling. Carousel and sortable work with this factory; horizontal RTL lists are rejected by both entries. Carousel supplies its private wrap runway only when the plugin is imported; bounded scrolling is no longer a public mode.
+`scroll.mode` chooses who owns scroll input, on the one `vlist` entry. Plugins come from `vlist` in every mode.
 
-| Entry | Input model | Use |
+| `scroll.mode` | Input | Use |
 |---|---|---|
-| `vlist` | Native (default) | Browser scrolling and all supported plugins |
-| `vlist/synthetic` | Synthetic (opt-in) | Huge lists and application-owned touch motion |
-| `vlist/native` | Alias of `vlist` (deprecated) | Compatibility with `3.0.0-next.1`; use `vlist` for new code |
+| `"auto"` (default) | Native; past the browser's element size limit (16,000,000 px of content) the list hands itself to synthetic input in place, and takes native input back below 12,000,000 px | Every list: nothing to choose, however large it grows |
+| `"native"` | Always native | Browser scrolling only; past the limit the last rows are out of reach, and `content:size:overflow` says so |
+| `"synthetic"` | vlist owns wheel, touch and keys from the start | Application-owned touch motion |
 
-### Synthetic input
-
-Select synthetic input by importing its factory; there is no `scroll.mode` option. Plugins still come from `vlist`.
+Native input keeps browser scrollbars, native touch momentum, boundary handoff and native assistive-technology scrolling. The synthetic driver is a separate file, `synthetic-driver.js`, downloaded the first time a list needs it; until it arrives the list scrolls natively. Each handoff emits `scroll:mode`.
 
 ```typescript
-import { createVList } from 'vlist/synthetic'
-import { scrollbar } from 'vlist'
+import { createVList } from 'vlist'
 import 'vlist/styles'
 
 const list = createVList({
   container: '#my-list',
   items: Array.from({ length: 1000 }, (_, id) => ({ id, name: `Row ${id}` })),
   item: { height: 48, template: item => `<div>${item.name}</div>` },
-}, [scrollbar()])
+  scroll: { mode: 'synthetic' },
+})
 ```
 
-`page()` uses native document scrolling through an external source with either entry. Its content must fit the 16,777,216 px document element limit; creation throws above that limit when the size is known, and later growth warns once. A deferred custom renderer whose size is first committed during rendering also warns once. Use `vlist/synthetic` viewport scrolling for larger lists. Default native viewport lists warn once when content exceeds their browser-size safety limit, pointing to that entry.
+| Entry | Use |
+|---|---|
+| `vlist` | Every list; input chosen by `scroll.mode` |
+| `vlist/synthetic` | Deprecated: `scroll: { mode: "synthetic" }`. Kept through 3.x; it bundles the driver instead of loading it |
+| `vlist/native` | Deprecated alias of `vlist` |
 
-`carousel()` works with either entry. Synthetic carousel folds preserve touch motion and smooth snapping across whole laps. `page()` and carousel remain incompatible. The shared carousel plugin includes its native wrap handler even when used with synthetic input; the combined size is reported below.
+### Synthetic input
+
+A synthetic list draws its own scrollbar, since the browser draws none for content the size of its viewport: the `scrollbar()` plugin's, loaded with the driver. `scroll.scrollbar` options configure it, `"none"` skips it, and a list with `scrollbar()` keeps that one. `scroll.scrollbar: "native"` asks for the browser's scrollbar, so `mode: "synthetic"` rejects it.
+
+`page()` scrolls the document natively in every mode. Its content must fit the 16,777,216 px document element limit; creation throws above that limit when the size is known, and later growth warns once. A deferred custom renderer whose size is first committed during rendering also warns once. Use viewport scrolling (`"auto"` or `"synthetic"`) for larger lists.
+
+`carousel()` runs on its own wrap runway with `"auto"` and `"native"`, and on the synthetic handler with `"synthetic"`: folds preserve touch motion and smooth snapping across whole laps. The first carousel on a page starts on its runway and switches in place once the driver loads and the carousel is idle. `page()` and carousel remain incompatible.
 
 Synthetic input limitations:
 
-- Horizontal RTL lists throw at creation — in this entry and in `vlist`. Vertical lists and tables support `dir="rtl"` in both, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
-- Same-axis touch stops at either boundary with no parent handoff, including gestures starting inside an edge-pinned list. Use the native default when boundary gestures must scroll the parent page.
-- There is no native main-axis scrollbar. Add `scrollbar()` for an accessible custom scrollbar. The synthetic entry rejects the `"native"` and `"none"` scrollbar strings.
+- Horizontal RTL lists throw at creation, in every mode. Vertical lists and tables support `dir="rtl"`, including cross-axis wheel movement, aligned table headers and keyboard column navigation.
+- Same-axis touch stops at either boundary with no parent handoff, including gestures starting inside an edge-pinned list. Use `"native"` when boundary gestures must scroll the parent page.
 - Inertia initializes its frame clock on the first frame after release, adding up to one frame of release latency.
 - Wheel input at an edge is left to the page when it cannot move the list. Native cross-axis scrolling remains available.
 
-Measurement corrections from autosize preserve ongoing synthetic motion. Existing plugin conflicts still apply. See the [scroll input contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model).
+Measurement corrections from autosize preserve ongoing synthetic motion. Existing plugin conflicts still apply. See the [scroll input contract](https://vlist.io/docs/rfcs/RFC-014-Scroll-Input-Model) and [RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff).
 
 ### Sortable gestures
 
-`sortable()` works with either input entry. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
+`sortable()` works in every scroll mode. Mouse and trackpad dragging still starts after `dragThreshold` (5 px by default). Touch and pen without a handle use `touchDelay`, a 350 ms long press; moving at least `dragThreshold` pixels in any direction before it completes yields to scrolling. This delay separates a deliberate hold from a quick flick. With `handle`, dragging starts at the threshold without waiting; touches elsewhere scroll.
 
 ```typescript
 sortable({ touchDelay: 350, dragThreshold: 5 })
@@ -161,25 +167,25 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 
 ## Migrating to 3.0
 
-`3.0.0-next.1` used synthetic input by default. `3.0.0-next.2` restores the 2.x default. Import `vlist/synthetic` explicitly to retain synthetic behavior across these prereleases. `vlist/native` remains a deprecated compatibility alias; its `NativeScrollConfig` and `NativeCreateVListConfig` types alias the standard `ScrollConfig` and `CreateVListConfig`.
+3.0 scrolls natively by default, as 2.x did. Since 3.1, `scroll.mode` chooses the input on the one `vlist` entry, and its default, `"auto"`, hands huge lists to synthetic input by itself. `vlist/synthetic` and `vlist/native` are deprecated aliases; `vlist/native` its `NativeScrollConfig` and `NativeCreateVListConfig` types alias the standard `ScrollConfig` and `CreateVListConfig`.
 
 | 2.x option or API | 3.0 replacement |
 |---|---|
-| `scroll.mode` (all values, both entries) | Omit it. `vlist` provides native scrolling; import `vlist/synthetic` for synthetic input. |
-| `scroll.runway` (both entries) | Remove it. For huge lists use `vlist/synthetic`, which needs no native runway. |
-| `scroll.scrollbar: "native"` or `"none"` | Retained in default `ScrollConfig`. With synthetic input, omit the string and optionally install `scrollbar()`. |
+| `scroll.mode` | Since 3.1: `"auto"` (default), `"native"` or `"synthetic"`. The 2.x `"bounded"` is refused. |
+| `scroll.runway` | Remove it. Huge lists need nothing: the default `scroll.mode`, `"auto"`, hands them to synthetic input. |
+| `scroll.scrollbar: "native"` or `"none"` | Retained. `"native"` needs native input; a synthetic list draws its own scrollbar, which `"none"` skips. |
 | `PluginContext.setScrollFns`, `disableDefaultScroll` | Use `ctx.scroll.setSource` to supply an external position source and commit callback. |
 | Flat `PluginContext` members (`registerMethod`, `forceRender`, `sizeCache`, `scrollTo`, …) | Grouped by capability: `ctx.hooks.method`, `ctx.render.force`, `ctx.sizes.cache`, `ctx.scroll.to`, `ctx.items.all`. `pool`, `config`, `emitter`, `template` and `getState()` stay at the top level. |
-| `scale()` and `ScalePluginConfig` | Remove them; use `vlist/synthetic` for the full logical range. Config no longer installs a scale stub. |
+| `scale()` and `ScalePluginConfig` | Remove them; the default `scroll.mode` covers the full logical range. Config no longer installs a scale stub. |
 
-Removed mode/runway options throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers supply their handler factory as the second argument of `ctx.scroll.setWrap` (named `setBoundedWrap` in 3.0.0, still accepted).
+`scroll.runway` and the bounded mode throw a migration error before creating DOM. `vlist/config` wires only what the config asks for: `selection`, the custom scrollbar, `snapshots` and `a11y` are each opt-in, so an adapter list matches a core list built from the same options. It keeps the scrollbar options convenience and its top-level `scrollbar: "none"`; pass `scrollbar: true` for the overlay scrollbar earlier versions added to every list. `baseOffset` stays private engine state; plugins use `ctx.scroll.getRenderOrigin()`. Custom wrap providers supply their handler factory as the second argument of `ctx.scroll.setWrap` (named `setBoundedWrap` in 3.0.0, still accepted).
 
 ## Plugins
 
 | Entry / export | Minified | Gzipped |
 |---|---:|---:|
 | **Base (`vlist`)** | 27.3 KB | 10.3 KB |
-| `vlist/synthetic` | 34.2 KB | 12.9 KB |
+| `vlist/synthetic` (deprecated) | 34.2 KB | 12.9 KB |
 | `vlist/native` (alias) | 27.3 KB | 10.3 KB |
 | `a11y()` | 31.2 KB | 11.7 KB |
 | `selection()` | 36.9 KB | 13.2 KB |
