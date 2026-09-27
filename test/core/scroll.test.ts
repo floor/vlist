@@ -942,3 +942,59 @@ describe("ScrollHandler.onIdle callback", () => {
     }, 200);
   });
 });
+
+// =============================================================================
+// FLO-247 — a smooth scroll past the browser's element-size cap
+// =============================================================================
+
+// Past its cap (Chrome: 33,554,428 px) the browser clamps scrollTop. The
+// smooth-scroll tick committed the position it wrote, not the one applied, so
+// vlist rendered rows the viewport could not reach: a blank list. Happy DOM
+// does not clamp, so the viewport here does, at 1,000 px.
+describe("ScrollHandler.smoothScrollTo() past a clamped scroll range (FLO-247)", () => {
+  const clampedViewport = (cap: number): HTMLElement => {
+    const viewport = document.createElement("div");
+    let top = 0;
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (v: number) => { top = Math.max(0, Math.min(v, cap)); },
+    });
+    return viewport;
+  };
+
+  it("commits the position the browser applied, never one beyond it", (done) => {
+    const viewport = clampedViewport(1000);
+    const state = createEngineState(10);
+    const committed: number[] = [];
+    const handler = createScrollHandler({
+      state, viewport, isX: false, wheelEnabled: false, idleTimeout: 1500,
+      onFrame: () => committed.push(state.scrollPosition), onIdle: () => {},
+    });
+    handler.attach();
+    handler.smoothScrollTo(5000, 60, undefined, (t) => t);
+    setTimeout(() => {
+      expect(committed.length).toBeGreaterThan(0);
+      expect(Math.max(...committed)).toBeLessThanOrEqual(1000);
+      expect(state.scrollPosition).toBe(1000);
+      handler.detach();
+      done();
+    }, 200);
+  });
+
+  it("still commits the exact sub-pixel position when the browser applies it", (done) => {
+    const viewport = clampedViewport(1_000_000);
+    const state = createEngineState(10);
+    const handler = createScrollHandler({
+      state, viewport, isX: false, wheelEnabled: false, idleTimeout: 1500,
+      onFrame: () => {}, onIdle: () => {},
+    });
+    handler.attach();
+    handler.smoothScrollTo(100.5, 30, undefined, (t) => t);
+    setTimeout(() => {
+      expect(state.scrollPosition).toBe(100.5);
+      handler.detach();
+      done();
+    }, 150);
+  });
+});
