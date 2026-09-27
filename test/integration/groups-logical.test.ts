@@ -88,7 +88,7 @@ describe("groups + data + synthetic scroll", () => {
       const items = Array.from(container.querySelectorAll(".vlist-item")) as HTMLElement[];
       expect(items.length).toBeGreaterThan(0); // not blank
 
-      // Every rendered item sits within the runway (offset - baseOffset), not at
+      // Every rendered item sits within the viewport-sized content (offset - baseOffset), not at
       // its multi-million-pixel absolute offset.
       const maxAbsY = Math.max(...items.map((el) => Math.abs(translateMain(el))).filter((n) => !isNaN(n)));
       expect(maxAbsY).toBeLessThan(contentHeight + 5 * ITEM_H);
@@ -154,7 +154,7 @@ describe("groups + data + synthetic scroll", () => {
       ],
     );
     try {
-      // Scroll deep — row offset is far past the runway, so baseOffset is large.
+      // Scroll deep — row offset is far past the content element, so baseOffset is large.
       (list as any).scrollToIndex(2000);
 
       const content = container.querySelector(".vlist-content") as HTMLElement;
@@ -171,7 +171,7 @@ describe("groups + data + synthetic scroll", () => {
       const els = Array.from(container.querySelectorAll(".vlist-item")) as HTMLElement[];
       expect(els.length).toBeGreaterThan(0);
 
-      // Main-axis (Y) transforms land in the runway, not at the absolute rowY.
+      // Main-axis (Y) transforms land in the content element, not at the absolute rowY.
       const maxAbsY = Math.max(...els.map((el) => Math.abs(translateMain(el))).filter((n) => !isNaN(n)));
       expect(maxAbsY).toBeLessThan(contentHeight + 5 * ITEM_H);
 
