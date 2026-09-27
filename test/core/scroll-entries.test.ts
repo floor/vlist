@@ -46,13 +46,21 @@ for (const [entry, create] of [["core", createVList], ["native", createNative], 
 }
 
 for (const scrollbar of ["none", "native"] as const) {
-  it(`scrollbar ${scrollbar} is accepted by default and rejected by synthetic`, () => {
+  // "native" asks for the browser's bar, which synthetic input does not have;
+  // "none" asks for no bar, which it can honour.
+  it(`scrollbar ${scrollbar} is accepted by default, and ${scrollbar === "native" ? "rejected" : "accepted"} by synthetic`, () => {
     const container = createContainer();
     const config = {container, item: {height:40, template:simpleTemplate}, scroll:{scrollbar}};
     try {
-      expect(() => createSynthetic(config as any)).toThrow(/scroll.scrollbar strings style the native scrollbar/);
-      expect(container.children).toHaveLength(0);
-      expect(() => createVListFromConfig({...config, factory:createSynthetic})).toThrow(/scroll.scrollbar strings style the native scrollbar/);
+      if (scrollbar === "native") {
+        expect(() => createSynthetic(config as any)).toThrow(/scroll.scrollbar "native" needs native scrolling/);
+        expect(container.children).toHaveLength(0);
+        expect(() => createVListFromConfig({...config, factory:createSynthetic})).toThrow(/scroll.scrollbar "native" needs native scrolling/);
+      } else {
+        const synthetic = createSynthetic(config as any);
+        expect(container.querySelector(".vlist-scrollbar")).toBeNull();
+        synthetic.destroy();
+      }
       const list = createVList(config);
       expect(container.querySelector(".vlist-viewport")!.classList.contains("vlist-viewport--no-scrollbar")).toBe(scrollbar === "none");
       list.destroy();

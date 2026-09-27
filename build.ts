@@ -103,7 +103,7 @@ async function build() {
   // scroll.mode: the driver index.js imports lazily, built on its own.
   {
     const result = await Bun.build({
-      entrypoints: [resolve("./src/synthetic/handler.ts")], outdir: "./dist",
+      entrypoints: [resolve("./src/synthetic/driver.ts")], outdir: "./dist",
       format: "esm", target: "browser", minify: !isDev,
       sourcemap: isDev ? "inline" : "none", naming: DRIVER_FILE, define,
     });

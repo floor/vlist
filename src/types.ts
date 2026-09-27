@@ -358,9 +358,10 @@ export interface ScrollConfig {
    */
   wrap?: boolean;
 
-  /** Native visibility: "none" hides the browser scrollbar, "native" keeps it.
-   * Options are consumed by vlist/config; with the low-level factory install
-   * scrollbar() explicitly. The synthetic entry rejects both string values.
+  /** "none": no scrollbar, the browser's or the one a synthetic list draws.
+   * "native" keeps the browser's, so it needs native input. Options configure
+   * the scrollbar a synthetic list draws, and vlist/config installs
+   * scrollbar() from them.
    */
   scrollbar?: "native" | "none" | ScrollbarOptions;
 
@@ -379,7 +380,9 @@ export interface ScrollConfig {
    * - `"synthetic"` — vlist owns wheel, touch and keys from the start.
    *
    * The synthetic driver is a separate chunk, downloaded the first time a
-   * list needs it; until then the list scrolls natively.
+   * list needs it; until then the list scrolls natively. A synthetic list
+   * draws a scrollbar, since the browser draws none: `scroll.scrollbar`
+   * configures it, "none" skips it, and a list with scrollbar() keeps that one.
    */
   mode?: "auto" | "native" | "synthetic";
 

@@ -164,8 +164,9 @@ function checkConfigCompatibility<T extends VListItem>(
 }
 
 type SyntheticFactory = (config: LogicalScrollConfig & { sizeCache: SizeCache }) => LogicalScrollHandler;
+type SyntheticDriver = typeof import("../synthetic/driver");
 /** Loaded once per page, by the first list that goes synthetic (RFC-015). */
-let syntheticFactory: SyntheticFactory | null = null;
+let syntheticDriver: SyntheticDriver | null = null;
 
 // =============================================================================
 // createVList()
@@ -201,7 +202,7 @@ export function createVList<
   return createCore(config, plugins as unknown as VListPlugin<T>[], undefined, {
     native: createScrollHandler,
     // A separate chunk: only lists that go synthetic download the driver.
-    load: () => import("../synthetic/handler").then((m) => m.createSyntheticScrollHandler),
+    load: () => import("../synthetic/driver"),
     onContentSize(size, emitter) {
       if (!warned && size > MAX_VIRTUAL_SIZE) {
         warned = true;
@@ -222,7 +223,7 @@ export function createCore<T extends VListItem = VListItem>(
   logicalHandlerFactory?: SyntheticFactory,
   nativeOptions?: {
     native: (config: ScrollHandlerConfig) => ScrollHandler & { commitScroll(pos?: number): void };
-    load: () => Promise<SyntheticFactory>;
+    load: () => Promise<SyntheticDriver>;
     onContentSize: (size: number, emitter: Emitter<VListEvents<T>>) => void;
   },
 ): VList<T> {
@@ -230,8 +231,8 @@ export function createCore<T extends VListItem = VListItem>(
 
   validateRawConfig(rawConfig);
   const inputMode = logicalHandlerFactory ? "synthetic" : rawConfig.scroll?.mode ?? "auto";
-  if (inputMode === "synthetic" && typeof rawConfig.scroll?.scrollbar === "string") {
-    throw new Error("vlist: scroll.scrollbar strings style the native scrollbar; use the scrollbar() plugin with synthetic scrolling.");
+  if (inputMode === "synthetic" && rawConfig.scroll?.scrollbar === "native") {
+    throw new Error('vlist: scroll.scrollbar "native" needs native scrolling');
   }
   // Both entries reject it. Native used to accept the combination and then sit
   // on the first page: RTL makes scrollLeft negative, the wheel clamp pins it
@@ -391,6 +392,8 @@ export function createCore<T extends VListItem = VListItem>(
   let canSwap = false;
   let pending = false;
   let clampedWrite: number | null = null;
+  // The scrollbar a synthetic list gets by default (scroll.mode).
+  let bar: import("../synthetic/driver").AttachedScrollbar | null = null;
   // A plugin (carousel) can request a logical handler in wrap mode during
   // setup, before the handler is built below.
   let wrapConfig: WrapConfig | null = null;
@@ -706,6 +709,7 @@ export function createCore<T extends VListItem = VListItem>(
     }
     doRender();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+    bar?.sync();
     if (state.scrollPosition !== lastEventScrollPos) {
       lastEventScrollPos = state.scrollPosition;
       emitScrollEvents();
@@ -731,9 +735,9 @@ export function createCore<T extends VListItem = VListItem>(
     if (!pending) return;
     // No guard needed: an import is cached, so asking again is free; after a
     // failure the next check asks again.
-    if (!syntheticFactory) {
-      nativeOptions!.load().then((factory) => {
-        syntheticFactory = factory;
+    if (!syntheticDriver) {
+      nativeOptions!.load().then((driver) => {
+        syntheticDriver = driver;
         if (!state.destroyed) syncContentSize();
       }, (error: Error) => emitter.emit("error", { error, context: "scroll:mode" }));
     } else if (!isScrolling) swapInput(pixels);
@@ -744,6 +748,8 @@ export function createCore<T extends VListItem = VListItem>(
     const position = clampedWrite ?? state.scrollPosition;
     pending = false;
     scrollHandler!.detach();
+    bar?.destroy();
+    bar = null;
     if (logicalHandler) {
       scrollHandler = nativeHandler;
       logicalHandler = scrollSetFn = null;
@@ -754,9 +760,11 @@ export function createCore<T extends VListItem = VListItem>(
       writeScroll(position);
     } else {
       dom.viewport[isX ? "scrollLeft" : "scrollTop"] = 0;
-      scrollHandler = logicalHandler = createLogicalHandler(syntheticFactory!);
+      scrollHandler = logicalHandler = createLogicalHandler(syntheticDriver!.createSyntheticScrollHandler);
       scrollSetFn = writeLogical;
       logicalHandler.refresh(pixels - config.mainAxisPadding);
+      // Synthetic content has no browser scrollbar: the driver draws one.
+      (bar = syntheticDriver!.attachScrollbar(state, dom, config, sizeCache, writeScroll, rawConfig.scroll?.scrollbar))?.sync();
       // During creation the core renders and attaches next.
       if (state.initialized) {
         scrollHandler.attach();
@@ -795,6 +803,7 @@ export function createCore<T extends VListItem = VListItem>(
     // plugins just rebuilt for the new items, not on the previous one.
     flushPendingScroll();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+    bar?.sync();
 
     if (state.scrollPosition !== lastEventScrollPos) {
       lastEventScrollPos = state.scrollPosition;
@@ -1218,6 +1227,7 @@ export function createCore<T extends VListItem = VListItem>(
       if (initialRafId !== null) { cancelAnimationFrame(initialRafId); initialRafId = null; }
       if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
       scrollHandler!.detach();
+      bar?.destroy();
       resizeObserver?.disconnect();
       dom.content.removeEventListener("click", onContentClick);
       dom.content.removeEventListener("dblclick", onContentDblClick);

@@ -75,6 +75,7 @@ const probe = (page, name) => page.evaluate((name) => {
     modes, position: list.getScrollPosition(), scrollTop: viewport.scrollTop, viewport: viewport.clientHeight,
     contentHeight: content.getBoundingClientRect().height,
     first: Math.min(...inside), last: Math.max(...inside),
+    bars: host.querySelectorAll(".vlist-scrollbar").length,
   };
 }, name);
 
@@ -116,6 +117,8 @@ if (!process.argv.includes("--serve")) {
       assert.equal(handoff.last, ROWS - 1, JSON.stringify(handoff));
       assert.equal(handoff.position, ROWS * ROW - handoff.viewport);
       assert.ok(handoff.contentHeight <= handoff.viewport, "synthetic content is the viewport's size");
+      assert.equal(handoff.bars, 1, "a synthetic list draws its scrollbar");
+      assert.equal(plain.bars, 0, "a native list keeps the browser's");
     });
 
     const before = (await probe(page, "handoff")).position;
@@ -131,6 +134,24 @@ if (!process.argv.includes("--serve")) {
       assert.ok(wheeled.first >= 500_000 && wheeled.first < 500_020, JSON.stringify(wheeled));
     });
 
+    // The drawn scrollbar is a real control: dragging its thumb to the top of
+    // the track brings the list back near its start.
+    const thumb = await page.evaluate(() => {
+      const host = window.fixtures.handoff.host;
+      const box = host.querySelector(".vlist-scrollbar__thumb").getBoundingClientRect();
+      const track = host.querySelector(".vlist-scrollbar").getBoundingClientRect();
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2, top: track.top };
+    });
+    await page.mouse.move(thumb.x, thumb.y);
+    await page.mouse.down();
+    for (let y = thumb.y; y > thumb.top - 20; y -= 25) await page.mouse.move(thumb.x, y);
+    await page.mouse.up();
+    await wait(300);
+    const dragged = await probe(page, "handoff");
+    check("dragging the drawn scrollbar's thumb scrolls the synthetic list", () => {
+      assert.ok(dragged.position < wheeled.position / 10, JSON.stringify({ before: wheeled.position, after: dragged.position }));
+    });
+
     await page.evaluate(() => {
       const { list } = window.fixtures.handoff;
       list.scrollToIndex(80);
@@ -144,6 +165,7 @@ if (!process.argv.includes("--serve")) {
       assert.equal(back.scrollTop, 80 * ROW, JSON.stringify(back));
       assert.equal(back.first, 80);
       assert.equal(back.contentHeight, 200 * ROW);
+      assert.equal(back.bars, 0, "the drawn scrollbar leaves with synthetic input");
     });
   } finally {
     await browser?.close();
