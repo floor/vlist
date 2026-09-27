@@ -35,6 +35,7 @@ import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import { createRunwayHandler } from "../../core/runway";
+import { startSyntheticCarousel } from "./input";
 import { createLayoutEngine } from "./engine";
 import type { SlotConfig, SlotConfigResolver, TextFade } from "./presets";
 import { resolvePreset, hasSlots } from "./presets";
@@ -389,7 +390,10 @@ export function carousel<T extends VListItem = VListItem>(
         onFold(shift: number) {
           if (intendedVi !== null) intendedVi -= Math.round(shift / lapSize) * realTotal;
         },
-      }, createRunwayHandler);
+      }, ctx.config.scrollMode === "synthetic"
+        // The runway until the synthetic driver loads, then the driver (./input).
+        ? (config) => startSyntheticCarousel(config, () => ctx.emitter.emit("scroll:mode", { mode: "synthetic" }))
+        : createRunwayHandler);
 
       initialScrollPending = true;
   }

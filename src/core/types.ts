@@ -71,6 +71,8 @@ export interface ResolvedConfig {
   readonly crossPadEnd: number;
   readonly striped: boolean | "data" | "even" | "odd";
   readonly gap: number;
+  /** `scroll.mode` as configured, `"auto"` by default (RFC-015). */
+  readonly scrollMode: "auto" | "native" | "synthetic";
 }
 
 // =============================================================================

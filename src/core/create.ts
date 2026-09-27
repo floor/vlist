@@ -103,6 +103,7 @@ function resolveConfig<T extends VListItem>(
     crossPadEnd: isX ? pad.bottom : pad.right,
     striped: raw.item.striped || false,
     gap: raw.item.gap ?? 0,
+    scrollMode: raw.scroll?.mode ?? "auto",
   };
 }
 

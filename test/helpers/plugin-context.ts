@@ -155,6 +155,7 @@ export function createPluginMockContext<T extends VListItem>(
     crossPadEnd: isX ? padBottom : padRight,
     striped: false,
     gap: 0,
+    scrollMode: "auto",
   };
 
   // ── Emitter ─────────────────────────────────────────────────────

@@ -10,21 +10,27 @@ const html=`<!doctype html><meta name="viewport" content="width=device-width,ini
 import {createVList as synthetic} from '/synthetic.js';import {createVList as native,carousel} from '/index.js';
 const q=new URLSearchParams(location.search);window.isX=q.get('axis')==='horizontal';window.variant=q.get('variant');
 window.step=variant==='full'?400:variant==='hero'?320:160;window.lap=step*10;
-function make(id){let ctx;const list=(q.get('entry')==='native'?native:synthetic)({container:id,orientation:isX?'horizontal':'vertical',items:Array.from({length:10},(_,id)=>({id})),item:{height:200,width:200,template:item=>String(item.id)}},[carousel({variant,peek:'20%',snap:q.get('input')==='snap',snapDuration:180}),{name:'inspect',setup(c){ctx=c;}}]);return {list,ctx};}
+// entry=mode: the vlist entry with scroll.mode "synthetic"; the carousel switches
+// its runway to the synthetic handler once the driver loads (ready waits for it).
+const mode=(config,plugins)=>native({...config,scroll:{...config.scroll,mode:'synthetic'}},plugins);
+function make(id){let ctx;const list=(q.get('entry')==='native'?native:q.get('entry')==='mode'?mode:synthetic)({container:id,orientation:isX?'horizontal':'vertical',items:Array.from({length:10},(_,id)=>({id})),item:{height:200,width:200,template:item=>String(item.id)}},[carousel({variant,peek:'20%',snap:q.get('input')==='snap',snapDuration:180}),{name:'inspect',setup(c){ctx=c;}}]);return {list,ctx};}
 window.main=make('#list');window.reference=make('#reference');
 window.untilPosition=target=>new Promise((resolve,reject)=>{const start=performance.now();const check=()=>{if(Math.abs(main.list.getScrollPosition()-target)<0.001){requestAnimationFrame(resolve);return;}if(performance.now()-start>5000){reject(Error('animation did not reach '+target));return;}requestAnimationFrame(check);};check();});
 function read(host){const vp=host.querySelector('.vlist-viewport'),vr=vp.getBoundingClientRect();return [...host.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none').map(el=>{const r=el.getBoundingClientRect();return {id:el.textContent,offset:isX?r.left-vr.left:r.top-vr.top,size:isX?r.width:r.height};}).sort((a,b)=>Number(a.id)-Number(b.id));}
 window.begin=(gap)=>{main.ctx.scroll.to(2*lap-gap);window.startSampling();};
 window.startSampling=()=>{window.trace=[];const content=document.querySelector('#list .vlist-content');let added=[],removed=[];const observer=new MutationObserver(records=>{for(const r of records)if(r.type==='childList'){added.push(...r.addedNodes);removed.push(...r.removedNodes);}});observer.observe(content,{childList:true});window.observer=observer;let prevEls=null,prevPos=null;window.sample=()=>{const els=[...content.querySelectorAll('[data-index]')].filter(el=>getComputedStyle(el).display!=='none');const pos=main.list.getScrollPosition();const recycled=removed.filter(n=>added.includes(n)).length;let persisted=0,persistedSame=true;if(prevEls&&pos<prevPos-1000){const byId=new Map(prevEls.map(el=>[el.textContent,el]));for(const el of els){const old=byId.get(el.textContent);if(old){persisted++;if(old!==el)persistedSame=false;}}}reference.ctx.scroll.to(lap+((pos%lap)+lap)%lap);trace.push({pos,rows:read(document.querySelector('#list')),expected:read(document.querySelector('#reference')),native:main.ctx.dom.viewport[isX?'scrollLeft':'scrollTop'],childAdded:added.length,childRemoved:removed.length,recycled,persisted,persistedSame});added=[];removed=[];prevEls=els;prevPos=pos;window.frame=requestAnimationFrame(sample);};sample();};
-window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);window.observer.disconnect();return trace;};window.ready=true;
+window.finish=()=>{cancelAnimationFrame(frame);sample();cancelAnimationFrame(frame);window.observer.disconnect();return trace;};
+const switched=()=>[...document.querySelectorAll('.vlist-viewport')].every(vp=>vp.style.touchAction.includes('pinch-zoom'));
+while(q.get('entry')==='mode'&&!switched())await new Promise(r=>setTimeout(r,10));
+window.ready=true;
 </script>`;
 const server=Bun.serve({port:0,fetch(req){const path=new URL(req.url).pathname;if(path==='/favicon.ico')return new Response(null,{status:404});return path==='/'?new Response(html,{headers:{'Content-Type':'text/html'}}):new Response(Bun.file(root+path));}});
 const browser=await launchBrowser();const wait=ms=>new Promise(r=>setTimeout(r,ms));let largest=0,folds=0;
 try {
  console.log(await browser.version());
- for(const axis of ['horizontal','vertical']) for(const variant of ['full','hero','multi']) for(const input of ['drag','fling','wheel','snap']) {
+ for(const entry of ['synthetic','mode']) for(const axis of ['horizontal','vertical']) for(const variant of ['full','hero','multi']) for(const input of ['drag','fling','wheel','snap']) {
   const page=await browser.newPage();await page.setViewport({width:600,height:600,hasTouch:true});
-  await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=${variant}&input=${input}`);await page.waitForFunction(()=>window.ready);
+  await page.goto(`http://localhost:${server.port}/?axis=${axis}&variant=${variant}&input=${input}&entry=${entry}`);await page.waitForFunction(()=>window.ready);
   const x=axis==='horizontal';await page.evaluate(gap=>window.begin(gap),input==='fling'?100:20);
   if(input==='wheel'){await page.mouse.move(200,200);await page.mouse.wheel({deltaX:x?40:0,deltaY:x?0:40});await wait(120);}
   else if(input==='snap'){await wait(450);} // Idle snap crosses the boundary from the seeded partial item.
@@ -47,7 +53,7 @@ try {
    if(current.pos<prev.pos-1000){count++;foldChildAdded=current.childAdded;foldChildRemoved=current.childRemoved;assert.equal(current.recycled,0,`${axis}/${variant}/${input} fold recycled a mounted row`);assert.equal(current.persistedSame,true,`${axis}/${variant}/${input} fold recreated a persisting row`);assert(current.persisted>0,`${axis}/${variant}/${input} fold had no overlapping rows`);for(const row of current.rows){const old=prev.rows.find(r=>r.id===row.id);if(old)jump=Math.max(jump,Math.abs(row.offset-old.offset));}}
   }
   assert(moving>0,`${axis}/${variant}/${input} moves`);assert.equal(count,1,`${axis}/${variant}/${input} crosses one fold`);assert(error<=1,`rendered seam deviation ${error}px`);
-  largest=Math.max(largest,jump);folds+=count;console.log('PASS',axis,variant,input,JSON.stringify({frames:trace.length,moving,folds:count,foldFrameDisplacement:jump,referenceDeviation:error,foldChildAdded,foldChildRemoved}));await page.close();
+  largest=Math.max(largest,jump);folds+=count;console.log('PASS',entry,axis,variant,input,JSON.stringify({frames:trace.length,moving,folds:count,foldFrameDisplacement:jump,referenceDeviation:error,foldChildAdded,foldChildRemoved}));await page.close();
  }
 
  for(const entry of ['native','synthetic']) for(const axis of ['horizontal','vertical']) for(const direction of [1,-1]) {

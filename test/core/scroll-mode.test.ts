@@ -354,6 +354,20 @@ describe("scroll.mode where input is fixed", () => {
     }
   });
 
+  it('carousel() with "synthetic" runs on the synthetic handler, with no scrollbar', async () => {
+    // The switch from the runway is the carousel's (test/plugins/carousel/input.test.ts);
+    // here the list ends synthetic whichever way it got there.
+    const f = make(10, "synthetic", [carousel()]);
+    try {
+      await f.until(true);
+      expect(f.viewport.style.touchAction).toBe("pan-x pinch-zoom");
+      // An endless loop has no position for a scrollbar to show.
+      expect(f.list.element.parentElement!.querySelectorAll(".vlist-scrollbar")).toHaveLength(0);
+    } finally {
+      f.destroy();
+    }
+  });
+
   it("the vlist/synthetic entry is synthetic whatever the mode", async () => {
     const container = createContainer({ width: 300, height: VIEWPORT });
     const list = createSynthetic({ container, items: createTestItems(100), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } });
