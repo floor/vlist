@@ -14,6 +14,7 @@
 import { gzipSync } from "bun";
 import { mkdtempSync, rmSync } from "fs";
 import { resolve } from "path";
+import { lazyDriver } from "./lazy-driver";
 
 const root = resolve(import.meta.dir, "..");
 const entry = `${root}/src/index.ts`;
@@ -124,7 +125,7 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // double and CI would still pass. Ceilings are a measured run's 0.1 KB
 // column plus 0.4 KB of slack — the same margin the 9.9 KB target had over
 // the advertised 9.5 KB base. Base and native keep a fixed target; it moved
-// from 9.9 kB to 10.0 kB on 2026-09-25 (see below).
+// from 9.9 kB to 10.0 kB on 2026-09-25 and to 10.3 kB on 2026-09-27 (see below).
 
 /** Tenth-of-a-KB ceiling, matching how the README quotes sizes. */
 // Headroom rule (2026-09-18): each budget is the measured size rounded up on a
@@ -134,38 +135,44 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // quoted in the README still come from `bun run size`, never from this table.
 //
 // Two budgets are not headroom but a promise: the base and native entries stay
-// at 10.0 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
+// at 10.3 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
 // apply to them — raising either is a product decision, not a chore. It was
 // 9.9 kB until 2026-09-25: the 3.x fix cycle grew the core past it while the
 // gate was dark behind a failing typecheck (#287 alone cost 43 bytes), and
 // Dr Jones chose 10.0 kB over trimming merged fixes. 10.0 kB leaves the base
 // 40 bytes of room, so the next core growth is a decision again, on purpose.
+// 10.3 kB since 2026-09-27: `scroll.mode` (RFC-015, FLO-247) hands a list past
+// the browser's size limit to synthetic input by itself, loading the driver
+// only then. It costs the core 301 bytes, after a trim pass from 405; Dr Jones
+// chose it over keeping the handoff opt-in. The base has 33 bytes of room, so
+// the next growth is a decision again. Every other budget moved by the
+// headroom rule.
 export const kb = (n: number): number => Math.floor(n * 1024);
 
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
-  "Base (createVList)": kb(10.0),
-  synthetic: kb(12.7),
-  "synthetic + carousel": kb(17.6),
-  "synthetic + sortable": kb(16.3),
-  createStats: kb(10.3),
-  "synthetic + createStats": kb(13.0),
-  native: kb(10.0),
-  a11y: kb(11.5),
-  selection: kb(13.0),
-  data: kb(14.9),
-  scrollbar: kb(13.0),
-  sortable: kb(13.6),
-  groups: kb(15.5),
-  page: kb(11.0),
-  snapshots: kb(11.3),
-  transition: kb(12.1),
-  autosize: kb(11.2),
-  grid: kb(12.7),
-  table: kb(16.0),
-  masonry: kb(14.5),
-  tree: kb(15.5),
-  search: kb(13.4),
-  carousel: kb(15.3),
+  "Base (createVList)": kb(10.3),
+  synthetic: kb(13.0),
+  "synthetic + carousel": kb(17.8),
+  "synthetic + sortable": kb(16.6),
+  createStats: kb(10.6),
+  "synthetic + createStats": kb(13.2),
+  native: kb(10.3),
+  a11y: kb(11.8),
+  selection: kb(13.4),
+  data: kb(15.2),
+  scrollbar: kb(13.3),
+  sortable: kb(14.0),
+  groups: kb(15.8),
+  page: kb(11.3),
+  snapshots: kb(11.5),
+  transition: kb(12.4),
+  autosize: kb(11.6),
+  grid: kb(13.0),
+  table: kb(16.3),
+  masonry: kb(14.8),
+  tree: kb(15.8),
+  search: kb(13.7),
+  carousel: kb(15.6),
 };
 
 export interface SizeGateInput {
@@ -225,6 +232,7 @@ const main = async (): Promise<void> => {
       minify: true,
       target: "browser",
       format: "esm",
+      plugins: [lazyDriver],
       define: {
         "process.env.NODE_ENV": '"production"',
       },

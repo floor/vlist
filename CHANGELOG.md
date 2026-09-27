@@ -11,6 +11,24 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- `scroll.mode`: `"auto"` (default), `"native"` or `"synthetic"`, on the one
+  `vlist` entry. With `"auto"` a list that grows past the browser's
+  element-size limit (16,000,000 px of content) hands its input to the
+  synthetic handler in place, and back below 12,000,000 px: the list, its
+  plugins, selection and scroll position stay, and a million 40 px rows scroll
+  to the last one. The synthetic driver is a separate file,
+  `dist/synthetic-driver.js`, downloaded the first time a list needs it. A
+  swap waits for a scroll in flight to end; a jump the browser clamped lands
+  where it was asked. `scroll:mode` reports each swap
+  ([RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff), FLO-247).
+
+### Changed
+
+- `content:size:overflow` fires only with `scroll.mode: "native"`; `"auto"`
+  handles the size instead.
+
 ### Deprecated
 
 - `ctx.scroll.setBoundedWrap` (plugin API) is now `ctx.scroll.setWrap`. The old
@@ -18,6 +36,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   code as it is from the options: the handlers that own the logical position
   are `LogicalScrollHandler` (`core/logical.ts`), and the carousel's engine is
   `createRunwayHandler` (`core/runway.ts`).
+
+- `vlist/synthetic`: use `scroll: { mode: "synthetic" }`. It keeps working.
 
 ### Fixed
 

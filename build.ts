@@ -3,6 +3,7 @@ import { $ } from "bun";
 import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs";
 import { resolve } from "path";
 import { versionStamp } from "./scripts/version-stamp";
+import { lazyDriver, DRIVER_FILE } from "./scripts/lazy-driver";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -64,6 +65,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "index.js",
+    plugins: [lazyDriver],
     define,
   });
 
@@ -97,6 +99,23 @@ async function build() {
   }
 
   await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
+
+  // scroll.mode: the driver index.js imports lazily, built on its own.
+  {
+    const result = await Bun.build({
+      entrypoints: [resolve("./src/synthetic/handler.ts")], outdir: "./dist",
+      format: "esm", target: "browser", minify: !isDev,
+      sourcemap: isDev ? "inline" : "none", naming: DRIVER_FILE, define,
+    });
+    if (!result.success) {
+      for (const log of result.logs) console.error(log);
+      process.exit(1);
+    }
+    const index = await Bun.file("./dist/index.js").text();
+    if (!index.includes(`import("./${DRIVER_FILE}")`) || !(await Bun.file(`./dist/${DRIVER_FILE}`).text()).includes("pan-x pinch-zoom")) {
+      throw new Error(`dist/index.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
+    }
+  }
 
   for (const name of ["index", "native", "synthetic"]) {
     const text = await Bun.file(`./dist/${name}.js`).text();
@@ -259,6 +278,7 @@ async function build() {
       minify: true,
       target: "browser",
       format: "esm",
+      plugins: [lazyDriver],
       define: { "process.env.NODE_ENV": '"production"' },
     });
 
