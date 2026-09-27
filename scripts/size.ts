@@ -14,6 +14,7 @@
 import { gzipSync } from "bun";
 import { mkdtempSync, rmSync } from "fs";
 import { resolve } from "path";
+import { lazyDriver } from "./lazy-driver";
 
 const root = resolve(import.meta.dir, "..");
 const entry = `${root}/src/index.ts`;
@@ -225,6 +226,7 @@ const main = async (): Promise<void> => {
       minify: true,
       target: "browser",
       format: "esm",
+      plugins: [lazyDriver],
       define: {
         "process.env.NODE_ENV": '"production"',
       },

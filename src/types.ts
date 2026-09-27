@@ -370,6 +370,19 @@ export interface ScrollConfig {
   /** Scroll idle detection timeout in ms (default: 150) */
   idleTimeout?: number;
 
+  /**
+   * Who owns scroll input (RFC-015, default: `"auto"`).
+   * - `"auto"` — native scrolling; past the browser's element size limit
+   *   (16,000,000 px of content) the list swaps to synthetic input in place,
+   *   and back below 12,000,000 px.
+   * - `"native"` — always native; past the limit the last rows are out of reach.
+   * - `"synthetic"` — vlist owns wheel, touch and keys from the start.
+   *
+   * The synthetic driver is a separate chunk, downloaded the first time a
+   * list needs it; until then the list scrolls natively.
+   */
+  mode?: "auto" | "native" | "synthetic";
+
 
 }
 
@@ -618,6 +631,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
 
   /** Scroll idle — fired after scrolling stops and idle timeout elapses */
   "scroll:idle": { scrollPosition: number };
+
+  /** Scroll input swapped in place (`scroll.mode`, RFC-015). */
+  "scroll:mode": { mode: "native" | "synthetic" };
 
   /** Data changed — fired after item removal or other data mutations */
   "data:change": { type: "insert"; id: string | number } | { type: "add"; id: string | number } | { type: "remove"; id: string | number } | { type: "update"; id: string | number };

@@ -54,13 +54,15 @@ afterEach(() => {
 // Overflow warning
 // =============================================================================
 
+// scroll.mode "native" only: "auto" hands the list to synthetic input instead
+// of warning (test/core/scroll-mode.test.ts).
 describe("content size overflow warning", () => {
   it("should emit error when content exceeds MAX_VIRTUAL_SIZE", () => {
     const errors: Array<{ error: Error; context: string }> = [];
 
     // Start small, subscribe, then grow past the limit
     list = createVList<TestItem>(
-      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate } },
+      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } },
       [],
     );
     list.on("error", (e) => errors.push(e));
@@ -71,7 +73,7 @@ describe("content size overflow warning", () => {
     expect(errors.length).toBe(1);
     expect(errors[0]!.context).toBe("content:size:overflow");
     expect(errors[0]!.error.message).toContain("16000000");
-    expect(errors[0]!.error.message).toContain('"vlist/synthetic"');
+    expect(errors[0]!.error.message).toContain('scroll.mode "auto" or "synthetic"');
   });
 
   it("should not emit error when content is under MAX_VIRTUAL_SIZE", () => {
@@ -95,7 +97,7 @@ describe("content size overflow warning", () => {
 
     // Start small so we can subscribe before the warning fires
     list = createVList<TestItem>(
-      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate } },
+      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } },
       [],
     );
     list.on("error", (e) => errors.push(e));
