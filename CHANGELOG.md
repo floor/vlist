@@ -24,7 +24,6 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   build time) a site can read to say which vlist it serves. It was built
   since #305 but left out of the `files` list (FLO-246).
 
-
 ## [3.0.0] - 2026-09-25
 
 The 3.0 line, on the npm `latest` tag. Everything in `3.0.0-next.1` through `3.0.0-next.6`
