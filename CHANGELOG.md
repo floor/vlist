@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- `tree()` with `connectorLines` is 130 B smaller (16,050 → 15,920 B gzip; budget
+  15.8 → 15.7 kB), the second look at #283's +315 B (FLO-244). One loop walks a row's
+  ancestors and writes its guide gradient, two double-position stops per line, each
+  clamped to the stop before it, so the gradient never interpolates. The last child's
+  elbow is drawn by the stylesheet from the existing `vlist-tree-node--last` class, so
+  rows no longer carry `--vlist-tree-elbow`; a theme that overrode it styles
+  `.vlist-tree-node--last::before` instead. Rendering is pixel-identical to 3.1.0.
+  #283's other half, `findItem` for nodes inside closed folders, keeps its bytes: it is
+  the fix, and dropping its fast path saves nothing after gzip.
+
 ## [3.1.0] - 2026-10-01
 
 The 3.1 line, on the npm `latest` tag. Everything in `3.0.1-next.1` through `3.1.0-next.3`

@@ -208,11 +208,18 @@ describe("tree — connector lines", () => {
     { id: "q", name: "q", children: [] },
   ];
 
-  const guides = (container: HTMLElement, id: string): { guides: string; elbow: string } => {
+  // The x of each 1px guide line the row draws, and whether CSS draws its elbow
+  // (the --last class): what the row looks like, not how the gradient is spelled.
+  const guides = (container: HTMLElement, id: string): { lines: number[]; elbow: boolean } => {
     const row = container.querySelector<HTMLElement>(`[data-id="${id}"]`)!;
+    const gradient = row.style.getPropertyValue("--vlist-tree-guides");
     return {
-      guides: row.style.getPropertyValue("--vlist-tree-guides"),
-      elbow: row.style.getPropertyValue("--vlist-tree-elbow"),
+      // A line is a transparent run to x, then the line color to x + 1.
+      lines: [...gradient.matchAll(/transparent 0 (\d+)px,var\(--vlist-tree-line, currentColor\) 0 (\d+)px/g)].map((m) => {
+        expect(Number(m[2]) - Number(m[1])).toBe(1);
+        return Number(m[1]);
+      }),
+      elbow: row.classList.contains("vlist-tree-node--last"),
     };
   };
 
@@ -221,19 +228,42 @@ describe("tree — connector lines", () => {
 
     expect(list.isExpanded("p")).toBe(true);
 
-    const p1b = guides(container, "p1b");
-    expect(p1b.guides).toContain("0px");
-    expect(p1b.guides).not.toContain("24px");
-    expect(p1b.elbow).not.toBe("none");
+    // p1 continues (p2 follows it), so its column runs through p1's children.
+    expect(guides(container, "p1a")).toEqual({ lines: [0, 24], elbow: false });
+    expect(guides(container, "p1b")).toEqual({ lines: [0], elbow: true });
 
-    const p2a = guides(container, "p2a");
-    expect(p2a.guides).toContain("transparent 24px");
-    expect(p2a.guides).not.toContain("0px");
-    expect(p2a.elbow).toBe("none");
+    // p2 is last: its column ends at p2, so p2's children draw only their own.
+    expect(guides(container, "p2a")).toEqual({ lines: [24], elbow: false });
+    expect(guides(container, "p2b")).toEqual({ lines: [], elbow: true });
 
-    const p2b = guides(container, "p2b");
-    expect(p2b.guides).toBe("none");
-    expect(p2b.elbow).not.toBe("none");
+    expect(guides(container, "p1")).toEqual({ lines: [0], elbow: false });
+    expect(guides(container, "p2")).toEqual({ lines: [], elbow: true });
+  }));
+
+  it("never lets the gradient fade: every stop is a clamped run", scoped(async (scope) => {
+    const { container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true }, (item) => item.name);
+
+    // A stop with its own start position (e.g. "color 24px 25px" after
+    // "transparent 0") makes the browser interpolate from the previous stop:
+    // a fade from the left edge into the first line. Each stop starts at 0,
+    // which clamps it to the end of the stop before it.
+    for (const row of container.querySelectorAll<HTMLElement>("[data-id]")) {
+      const gradient = row.style.getPropertyValue("--vlist-tree-guides");
+      const stops = gradient.replace(/^linear-gradient\(to right,|\)$/g, "").split(/,(?![^(]*\))/);
+      for (const stop of stops) {
+        expect(stop).toMatch(/^(transparent|var\(--vlist-tree-line, currentColor\)) 0( \d+px)?$/);
+      }
+    }
+  }));
+
+  it("updates the guides when a branch's last child changes", scoped(async (scope) => {
+    const { list, container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true }, (item) => item.name);
+
+    // Removing p2 makes p1 the last child: its column no longer runs through p1a.
+    list.removeItem("p2");
+    await advanceTimers(5);
+    expect(guides(container, "p1")).toEqual({ lines: [], elbow: true });
+    expect(guides(container, "p1a")).toEqual({ lines: [24], elbow: false });
   }));
 });
 
