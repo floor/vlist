@@ -226,6 +226,9 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 1. Checks out main, installs, builds
 2. Publishes to npm (`npm publish`)
 3. Creates a GitHub Release automatically (`gh release create`) with auto-generated notes
+4. On a stable release, fails its last step while npm `next` is below `latest`
+   (`scripts/check-dist-tags.ts`, FLO-245): trusted publishing cannot move `next`,
+   so a maintainer runs `npm dist-tag add vlist@X.Y.Z next --auth-type=web`
 
 **Do not manually create GitHub Releases** — the workflow handles it.
 
@@ -245,6 +248,8 @@ cannot send 3.x through `staging`.
 6. Polls every 10s until the PR is merged (max 10 min)
 7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
 8. Returns to the source branch
+9. Prints the `npm dist-tag add vlist@X.Y.Z next --auth-type=web` a maintainer
+   runs once the version is on npm (see RELEASING.md)
 
 ### Pre-Release Checklist
 Before tagging a new version, complete ALL of these steps:

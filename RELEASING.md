@@ -58,6 +58,14 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
    branch, opens a PR onto `main`, waits for it to merge, then tags `vX.Y.Z` on
    `main`. The tag triggers `publish.yml` → `npm publish` + GitHub Release.
    `--from` confirms the derived branch; it cannot send 3.x through `staging`.
+3. **Point `next` at the release (manual)** — a stable publish moves `latest`
+   only, and trusted publishing cannot move `next` (OIDC authorizes
+   `npm publish` alone), so `next` is left on the last prerelease, below
+   `latest` (FLO-245). Once the version is on npm, a maintainer runs
+   `npm dist-tag add vlist@X.Y.Z next --auth-type=web` (browser 2FA; no token).
+   `bun run release` prints the exact command as its last line, and
+   `publish.yml` fails its last step, after the package and the GitHub Release
+   are out, while `next` is below `latest`.
 
 ### Pre-releases
 
