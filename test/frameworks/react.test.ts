@@ -7,7 +7,12 @@
  * Ported from vlist-react, with features passed explicitly instead of as
  * config fields. No JSX, so the suite's tsconfig compiles it as is.
  */
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it as baseIt, expect, beforeAll, afterAll } from "bun:test";
+
+// Serial under `bun test --concurrent`: every test here mounts into the one
+// document, swaps the same globals (geometry, ResizeObserver, rAF) and, for
+// React, drives one act() queue that does not allow overlapping calls.
+const it = baseIt.serial;
 import { act, createElement, useState, type ReactElement, type RefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { useVList, useVListEvent } from "../../src/react";

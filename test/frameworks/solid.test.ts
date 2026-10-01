@@ -10,7 +10,12 @@
  * Solid's browser build is required (its server build never runs onMount);
  * test/preload.ts serves it to `bun test`.
  */
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it as baseIt, expect, beforeAll, afterAll } from "bun:test";
+
+// Serial under `bun test --concurrent`: every test here mounts into the one
+// document, swaps the same globals (geometry, ResizeObserver, rAF) and, for
+// React, drives one act() queue that does not allow overlapping calls.
+const it = baseIt.serial;
 import { createSignal, type Accessor } from "solid-js";
 import { isServer, render } from "solid-js/web";
 import { createVList, createVListEvent, type CreateVListConfigInput } from "../../src/solid";

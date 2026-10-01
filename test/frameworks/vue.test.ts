@@ -7,7 +7,12 @@
  * Ported from vlist-vue, with features passed explicitly instead of as config
  * fields.
  */
-import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { describe, it as baseIt, expect, beforeAll, afterAll } from "bun:test";
+
+// Serial under `bun test --concurrent`: every test here mounts into the one
+// document, swaps the same globals (geometry, ResizeObserver, rAF) and, for
+// React, drives one act() queue that does not allow overlapping calls.
+const it = baseIt.serial;
 import { createApp, h, nextTick, ref, type ShallowRef } from "vue";
 import { useVList, useVListEvent, type UseVListConfig } from "../../src/vue";
 import {
