@@ -62,9 +62,10 @@
     pointer-events: none;
 }
 
-/* A last child's own column stops at its middle: the elbow, a half-height line. */
+/* A last child's own column stops at its middle: the elbow, a half-height line.
+   --vlist-tree-elbow still overrides it (e.g. none), as it did when rows set it. */
 .vlist--tree-lines .vlist-tree-node--last::before {
-    background-image: var(--vlist-tree-guides, none), linear-gradient(var(--vlist-tree-line, currentColor), var(--vlist-tree-line, currentColor));
+    background-image: var(--vlist-tree-guides, none), var(--vlist-tree-elbow, linear-gradient(var(--vlist-tree-line, currentColor), var(--vlist-tree-line, currentColor)));
 }
 
 /* ── Horizontal branch ──────────────────────────────────────────────────────── */

@@ -13,15 +13,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
-- `tree()` with `connectorLines` is 130 B smaller (16,050 → 15,920 B gzip; budget
-  15.8 → 15.7 kB), the second look at #283's +315 B (FLO-244). One loop walks a row's
-  ancestors and writes its guide gradient, two double-position stops per line, each
-  clamped to the stop before it, so the gradient never interpolates. The last child's
-  elbow is drawn by the stylesheet from the existing `vlist-tree-node--last` class, so
-  rows no longer carry `--vlist-tree-elbow`; a theme that overrode it styles
-  `.vlist-tree-node--last::before` instead. Rendering is pixel-identical to 3.1.0.
-  #283's other half, `findItem` for nodes inside closed folders, keeps its bytes: it is
-  the fix, and dropping its fast path saves nothing after gzip.
+- `tree()` with `connectorLines` is smaller: the JavaScript 117 B (16,050 → 15,933 B gzip;
+  budget 15.8 → 15.7 kB), the stylesheet 27 B larger (`vlist-tree.css` 497 → 524 B gzip),
+  about 90 B net. The second look at #283's +315 B (FLO-244). One loop walks a row's
+  ancestors and writes its guide gradient, two double-position stops per line, each clamped
+  to the stop before it, so the gradient never interpolates; a line at column 0 opens the
+  gradient, as in 3.1.0, which keeps its half-covered device pixel in Chromium at 150% and
+  175% (`scripts/tree-guides-browser.mjs` compares the rendering with 3.1.0's at five
+  scales). The last child's elbow is drawn by the stylesheet from the existing
+  `vlist-tree-node--last` class, so rows no longer set `--vlist-tree-elbow`; it still
+  overrides the elbow (`none` hides it). #283's other half, `findItem` for nodes inside
+  closed folders, keeps its bytes: it is the fix, and dropping its fast path saves nothing
+  after gzip.
 
 ## [3.1.0] - 2026-10-01
 

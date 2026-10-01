@@ -485,19 +485,22 @@ export function tree<T extends VListItem = VListItem>(
   // it is a last child (CSS draws its elbow from the --last class), then each
   // ancestor's column while that ancestor has a sibling below it. Every run has
   // both ends: a position of 0 clamps to the previous stop, so the gradient never
-  // interpolates, which would fade from the left edge into the first line.
+  // interpolates, which would fade from the left edge into the first line. A
+  // line at column 0 opens the gradient itself: a transparent stop at 0 in front
+  // of it costs it its half-covered device pixel at 150% and 175% in Chromium.
   function guides({ depth, isLastChild, parentId }: FlatNode<T>): string {
     let stops = "";
     let through = !isLastChild;
     for (let column = depth - 1; column >= 0; column--) {
       const x = column * indent;
-      if (through) stops = `,transparent 0 ${x}px,var(--vlist-tree-line, currentColor) 0 ${x + 1}px${stops}`;
+      if (through) stops = `${x ? `,transparent 0 ${x}px` : ""},var(--vlist-tree-line, currentColor) 0 ${x + 1}px${stops}`;
+      // A root's parentId is null: the lookup misses on purpose and ends the walk.
       const parent = layout.flatNodes[layout.idToIndex.get(parentId!) ?? -1];
       if (!parent) break;
       through = !parent.isLastChild;
       parentId = parent.parentId;
     }
-    return `linear-gradient(to right,transparent 0${stops},transparent 0)`;
+    return stops ? `linear-gradient(to right${stops},transparent 0)` : "none";
   }
 
   function renderNodeElement(

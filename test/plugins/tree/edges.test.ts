@@ -11,6 +11,8 @@
  * dispatches its own FocusEvents and never reads `document.activeElement`.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
@@ -208,16 +210,48 @@ describe("tree — connector lines", () => {
     { id: "q", name: "q", children: [] },
   ];
 
+  const LINE = "var(--vlist-tree-line, currentColor)";
+
+  // Reads a guide gradient the way a browser paints it, whatever its spelling:
+  // each stop's positions are clamped to the one before, a span between two
+  // stops of the line colour is a painted run, and a span between two different
+  // colours is a fade. 3.1.0's spelling ("<line> 0px, <line> 1px, transparent
+  // 1px") and this one read alike.
+  const paint = (gradient: string): { runs: Array<[number, number]>; fades: number } => {
+    if (gradient === "" || gradient === "none") return { runs: [], fades: 0 };
+    const body = gradient.replace(/^linear-gradient\(to right,\s*/, "").replace(/\)$/, "");
+    const points: Array<{ line: boolean; at: number }> = [];
+    let last = 0;
+    for (const stop of body.split(/,(?![^(]*\))/).map((s) => s.trim())) {
+      const line = stop.startsWith(LINE);
+      const positions = (line ? stop.slice(LINE.length) : stop.replace(/^\S+/, "")).trim().split(/\s+/).filter(Boolean);
+      for (const position of positions) {
+        last = Math.max(last, parseFloat(position));
+        points.push({ line, at: last });
+      }
+    }
+    const runs: Array<[number, number]> = [];
+    let fades = 0;
+    if (points[0]?.line && points[0].at > 0) runs.push([0, points[0].at]);
+    for (let i = 1; i < points.length; i++) {
+      const [from, to] = [points[i - 1]!, points[i]!];
+      if (to.at === from.at) continue;
+      if (from.line !== to.line) fades++;
+      else if (from.line) runs.push([from.at, to.at]);
+    }
+    return { runs, fades };
+  };
+
   // The x of each 1px guide line the row draws, and whether CSS draws its elbow
   // (the --last class): what the row looks like, not how the gradient is spelled.
   const guides = (container: HTMLElement, id: string): { lines: number[]; elbow: boolean } => {
     const row = container.querySelector<HTMLElement>(`[data-id="${id}"]`)!;
-    const gradient = row.style.getPropertyValue("--vlist-tree-guides");
+    const { runs, fades } = paint(row.style.getPropertyValue("--vlist-tree-guides"));
+    expect(fades).toBe(0);
     return {
-      // A line is a transparent run to x, then the line color to x + 1.
-      lines: [...gradient.matchAll(/transparent 0 (\d+)px,var\(--vlist-tree-line, currentColor\) 0 (\d+)px/g)].map((m) => {
-        expect(Number(m[2]) - Number(m[1])).toBe(1);
-        return Number(m[1]);
+      lines: runs.map(([from, to]) => {
+        expect(to - from).toBe(1);
+        return from;
       }),
       elbow: row.classList.contains("vlist-tree-node--last"),
     };
@@ -240,21 +274,41 @@ describe("tree — connector lines", () => {
     expect(guides(container, "p2")).toEqual({ lines: [], elbow: true });
   }));
 
-  it("never lets the gradient fade: every stop is a clamped run", scoped(async (scope) => {
+  it("never lets the gradient fade, and a row without lines carries none", scoped(async (scope) => {
     const { container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true }, (item) => item.name);
 
-    // A stop with its own start position (e.g. "color 24px 25px" after
-    // "transparent 0") makes the browser interpolate from the previous stop:
-    // a fade from the left edge into the first line. Each stop starts at 0,
-    // which clamps it to the end of the stop before it.
     for (const row of container.querySelectorAll<HTMLElement>("[data-id]")) {
-      const gradient = row.style.getPropertyValue("--vlist-tree-guides");
-      const stops = gradient.replace(/^linear-gradient\(to right,|\)$/g, "").split(/,(?![^(]*\))/);
-      for (const stop of stops) {
-        expect(stop).toMatch(/^(transparent|var\(--vlist-tree-line, currentColor\)) 0( \d+px)?$/);
-      }
+      expect(paint(row.style.getPropertyValue("--vlist-tree-guides")).fades).toBe(0);
+    }
+    for (const id of ["p", "q", "p2b"]) {
+      expect(container.querySelector<HTMLElement>(`[data-id="${id}"]`)!.style.getPropertyValue("--vlist-tree-guides")).toBe("none");
     }
   }));
+
+  it("opens the gradient with a line at column 0 (Chromium keeps its half pixel at 150%)", scoped(async (scope) => {
+    const { container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true }, (item) => item.name);
+
+    // A transparent stop at 0 in front of the column-0 line drops the line's
+    // half-covered device pixel in Chromium at 150% and 175%; 3.1.0 opened with
+    // the line, and so does this. scripts/tree-guides-browser.mjs measures it.
+    const gradient = container.querySelector<HTMLElement>('[data-id="p1a"]')!.style.getPropertyValue("--vlist-tree-guides");
+    expect(gradient.startsWith(`linear-gradient(to right,${LINE} 0 1px,`)).toBe(true);
+  }));
+
+  it("reads fractional indents as lines at fractional columns", scoped(async (scope) => {
+    const { container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true, indent: 13.5 }, (item) => item.name);
+
+    expect(guides(container, "p1a")).toEqual({ lines: [0, 13.5], elbow: false });
+  }));
+
+  it("keeps the stylesheet's elbow, and --vlist-tree-elbow as its override", () => {
+    // The elbow moved from an inline property to this rule; unit tests cannot
+    // paint it, so they check the rule is there (scripts/tree-guides-browser.mjs paints it).
+    const css = readFileSync(resolve(import.meta.dir, "../../../src/styles/vlist-tree.css"), "utf8");
+    const rule = css.match(/\.vlist--tree-lines \.vlist-tree-node--last::before\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toContain("var(--vlist-tree-elbow, linear-gradient(");
+  });
 
   it("updates the guides when a branch's last child changes", scoped(async (scope) => {
     const { list, container } = await makeTree(scope, nodes(), { connectorLines: true, expanded: true }, (item) => item.name);
