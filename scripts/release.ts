@@ -18,6 +18,7 @@
  */
 
 import { execSync } from "node:child_process";
+import { nextTagCommand } from "./check-dist-tags";
 
 // =============================================================================
 // Types
@@ -390,6 +391,8 @@ const main = async (): Promise<void> => {
 
   log(`Done! v${newVersion} is publishing to npm.`);
   log(`Monitor: https://github.com/floor/vlist/actions`);
+  // Trusted publishing moves `latest` only (FLO-245): `next` needs a maintainer.
+  log(`Last step, once it is on npm: ${nextTagCommand(newVersion)}`);
 };
 
 if (import.meta.main) {

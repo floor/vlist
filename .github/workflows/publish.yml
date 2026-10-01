@@ -73,3 +73,11 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # A stable publish moves `latest` only, and trusted publishing cannot move
+      # `next` (OIDC authorizes `npm publish` alone), so `next` can fall below
+      # `latest` (FLO-245). Last, so the package and the release are already out:
+      # it reads the public dist-tags and fails with the command a maintainer runs.
+      - name: Check next dist-tag is not below latest
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: bun scripts/check-dist-tags.ts "${GITHUB_REF_NAME#v}"
