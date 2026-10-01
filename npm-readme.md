@@ -10,7 +10,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 [![license](https://img.shields.io/npm/l/vlist.svg)](https://github.com/floor/vlist/blob/main/LICENSE)
 
 - **Accessible** — `a11y()` or a selection mode adds WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
-- **Zero dependencies** — framework-agnostic core, tiny adapters for Vue, Svelte, Solid, React
+- **Zero dependencies** — framework-agnostic core, with Vue, Svelte, Solid and React entries in the same package
 - **10.3 KB gzipped** — composable plugins with perfect tree-shaking
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
@@ -152,31 +152,103 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `carousel()` | 43.1 KB | 15.7 KB |
 | `vlist/synthetic` + `carousel()` | 49.2 KB | 18.0 KB |
 | `vlist/synthetic` + `sortable()` | 46.1 KB | 16.5 KB |
+| `vlist/vue` `useVList` | 27.7 KB | 10.5 KB |
+| `vlist/svelte` `vlist` | 27.5 KB | 10.4 KB |
+| `vlist/solid` `createVList` | 27.6 KB | 10.4 KB |
+| `vlist/react` `useVList` | 27.8 KB | 10.5 KB |
+| `vlist/react` + `grid()` | 35.2 KB | 13.1 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin. The base is **10,541 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,183 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,541 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,183 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
-## Framework Adapters
+## Frameworks
 
-| Framework | Package | Size |
-|-----------|---------|------|
-| Vue | [`vlist-vue`](https://github.com/floor/vlist-vue) | 0.6 KB |
-| Svelte | [`vlist-svelte`](https://github.com/floor/vlist-svelte) | 0.5 KB |
-| SolidJS | [`vlist-solidjs`](https://github.com/floor/vlist-solidjs) | 0.5 KB |
-| React | [`vlist-react`](https://github.com/floor/vlist-react) | 0.6 KB |
+Vue, Svelte, Solid and React each have an entry in the `vlist` package itself. Like the vanilla builder, they are feature-first: you pass plugins from `vlist`, so an app only bundles the features it uses. Every entry imports the core from `vlist`, and none carries a copy of its own.
 
-Adapters forward `scroll` unchanged, so `scroll.mode` works through them too (adapters `3.1.0-next.2` and later):
+| Framework | Import | Entry size |
+|-----------|--------|------------|
+| Vue 3 | `vlist/vue` | 0.4 KB gzip |
+| Svelte 4 and 5 | `vlist/svelte` | 0.3 KB gzip |
+| SolidJS | `vlist/solid` | 0.3 KB gzip |
+| Vanilla JS | `vlist` | — |
+| React 17+ | `vlist/react` | 0.4 KB gzip |
 
-```ts
-import { useVList } from "vlist-react";
-
-useVList({
-  items,
-  item: { height: 48, template: item => String(item.id) },
-  scroll: { mode: "synthetic" }, // "auto" by default
-});
+```bash
+npm install vlist
 ```
 
-The mode is structural configuration: changing it requires recreating the list.
+Frameworks are optional peer dependencies, so install only the one you use.
+
+**Vue**
+
+```vue
+<script setup lang="ts">
+import { useVList } from "vlist/vue";
+import { grid } from "vlist";
+
+const { containerRef, instance } = useVList(
+  { items, item: { height: 200, template: renderPhoto } },
+  [grid({ columns: 4, gap: 16 })],
+);
+</script>
+
+<template><div ref="containerRef" style="height: 600px" /></template>
+```
+
+If you pass a `ref` as the config, the list updates when its `items` change. `useVListEvent(instance, "item:click", handler)` subscribes to an event for the component's lifetime.
+
+**Svelte**
+
+```svelte
+<script>
+  import { vlist } from "vlist/svelte";
+  import { grid } from "vlist";
+</script>
+
+<div
+  style="height: 600px"
+  use:vlist={{
+    config: { items, item: { height: 200, template: renderPhoto } },
+    plugins: [grid({ columns: 4, gap: 16 })],
+    onInstance: (list) => (instance = list),
+  }}
+/>
+```
+
+**Solid**
+
+```tsx
+import { createVList } from "vlist/solid";
+import { grid } from "vlist";
+
+const { setRef, instance } = createVList(
+  () => ({ items: items(), item: { height: 200, template: renderPhoto } }),
+  [grid({ columns: 4, gap: 16 })],
+);
+
+return <div ref={setRef} style={{ height: "600px" }} />;
+```
+
+`createVList` keeps the Solid primitive idiom. In a file that also uses the core builder, alias one of the two: `import { createVList as createSolidVList } from "vlist/solid"`.
+
+**React**
+
+```tsx
+import { useVList, useVListEvent } from "vlist/react";
+import { grid } from "vlist";
+
+function Photos({ items }) {
+  const { containerRef, instanceRef } = useVList(
+    { items, item: { height: 200, template: renderPhoto } },
+    [grid({ columns: 4, gap: 16 })],
+  );
+  useVListEvent(instanceRef, "item:click", ({ item }) => open(item));
+  return <div ref={containerRef} style={{ height: 600 }} />;
+}
+```
+
+Plugins are read once, at mount; changing them means remounting the list (in React, with a `key`). An `items` change updates the list in place. `scroll.mode` and other structural options also take effect only at mount.
+
+The `vlist-vue`, `vlist-svelte`, `vlist-solidjs` and `vlist-react` packages are deprecated in favour of these entries. Their last release forwards to them, so existing config-based code keeps working while you migrate.
 
 ## Docs & Examples
 

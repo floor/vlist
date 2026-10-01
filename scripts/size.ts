@@ -12,6 +12,7 @@
  */
 
 import { gzipSync } from "bun";
+import { brotliCompressSync } from "zlib";
 import { mkdtempSync, rmSync } from "fs";
 import { resolve } from "path";
 import { lazyDriver } from "./lazy-driver";
@@ -91,7 +92,18 @@ export const SCENARIO_DEFS = [
   { name: "tree",              imports: ["createVList", "tree"] },
   { name: "search",            imports: ["createVList", "search"] },
   { name: "carousel",          imports: ["createVList", "carousel"] },
+  // Framework entries (#328): the hook alone, the framework external.
+  { name: "vue",               imports: ["useVList"] },
+  { name: "svelte",            imports: ["vlist"] },
+  { name: "solid",             imports: ["createVList"] },
+  { name: "react",             imports: ["useVList"] },
+  { name: "react + grid",      imports: ["useVList", "grid"] },
 ] as const;
+
+/** Framework scenarios import their first name from the entry, the rest from vlist. */
+const FRAMEWORK_SCENARIO = /^(vue|svelte|solid|react)\b/;
+/** Optional peer dependencies: an app has them, the bundle does not. */
+const FRAMEWORKS = ["react", "react-dom", "vue", "svelte", "solid-js"];
 
 export type ScenarioName = (typeof SCENARIO_DEFS)[number]["name"];
 
@@ -173,6 +185,11 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   tree: kb(15.8),
   search: kb(13.7),
   carousel: kb(15.8),
+  vue: kb(10.6),
+  svelte: kb(10.5),
+  solid: kb(10.6),
+  react: kb(10.6),
+  "react + grid": kb(13.2),
 };
 
 export interface SizeGateInput {
@@ -201,6 +218,8 @@ interface Result {
   /** Exact bytes, kept because the README quotes them and the budget gates on them. */
   minBytes: number;
   gzBytes: number;
+  /** Reported beside gzip; budgets gate on gzip. */
+  brBytes: number;
   minKB: number;
   gzKB: number;
   deltaKB: number;
@@ -220,7 +239,10 @@ const main = async (): Promise<void> => {
 
   for (const scenario of scenarios) {
     const imports = scenario.imports.join(", ");
-    const code = scenario.name.startsWith("synthetic +")
+    const framework = FRAMEWORK_SCENARIO.exec(scenario.name)?.[1];
+    const code = framework
+      ? `import { ${scenario.imports[0]} } from "${root}/src/${framework}.ts";${scenario.imports.length > 1 ? ` import { ${scenario.imports.slice(1).join(", ")} } from "${entry}";` : ""} globalThis._v = [${imports}];`
+      : scenario.name.startsWith("synthetic +")
       ? `import { createVList } from "${root}/src/synthetic.ts"; import { ${scenario.imports.slice(1).join(", ")} } from "${entry}"; globalThis._v = [${imports}];`
       : `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
     const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
@@ -233,6 +255,7 @@ const main = async (): Promise<void> => {
       target: "browser",
       format: "esm",
       plugins: [lazyDriver],
+      external: FRAMEWORKS,
       define: {
         "process.env.NODE_ENV": '"production"',
       },
@@ -248,11 +271,13 @@ const main = async (): Promise<void> => {
     const output = await build.outputs[0]!.arrayBuffer();
     const minBytes = output.byteLength;
     const gzBytes = gzipSync(new Uint8Array(output)).byteLength;
+    const brBytes = brotliCompressSync(new Uint8Array(output)).byteLength;
 
     results.push({
       name: scenario.name,
       minBytes,
       gzBytes,
+      brBytes,
       minKB: minBytes / 1024,
       gzKB: gzBytes / 1024,
       deltaKB: 0,
@@ -305,8 +330,9 @@ const main = async (): Promise<void> => {
   const COL_NAME = 22;
   const COL_MIN = 10;
   const COL_GZ = 9;
+  const COL_BR = 9;
   const COL_DELTA = 12;
-  const LINE_W = COL_NAME + COL_MIN + COL_GZ + COL_DELTA + 4;
+  const LINE_W = COL_NAME + COL_MIN + COL_GZ + COL_DELTA + 4 + COL_BR + 2;
 
   const pad = (s: string, n: number) => s.padStart(n);
   const sep = "─".repeat(LINE_W);
@@ -314,16 +340,17 @@ const main = async (): Promise<void> => {
   console.log("");
   console.log("  vlist — Plugin Sizes");
   console.log("");
-  console.log(`  ${"Plugin".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Delta".padStart(COL_DELTA)}`);
+  console.log(`  ${"Plugin".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Brotli".padStart(COL_BR)}  ${"Delta".padStart(COL_DELTA)}`);
   console.log(`  ${sep}`);
 
   for (const r of results) {
     const min = `${r.minKB.toFixed(1)} KB`;
     const gz = `${r.gzKB.toFixed(1)} KB`;
+    const br = `${(r.brBytes / 1024).toFixed(1)} KB`;
     const delta = r.name.startsWith("Base") ? "" : `${r.deltaKB >= 0 ? "+" : ""}${r.deltaKB.toFixed(1)} KB`;
 
     console.log(
-      `  ${r.name.padEnd(COL_NAME)}  ${pad(min, COL_MIN)}  ${pad(gz, COL_GZ)}  ${pad(delta, COL_DELTA)}`,
+      `  ${r.name.padEnd(COL_NAME)}  ${pad(min, COL_MIN)}  ${pad(gz, COL_GZ)}  ${pad(br, COL_BR)}  ${pad(delta, COL_DELTA)}`,
     );
   }
 

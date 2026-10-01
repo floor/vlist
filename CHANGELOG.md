@@ -11,6 +11,25 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- Framework entries in the `vlist` package (#328): `vlist/vue` (`useVList`,
+  `useVListEvent`), `vlist/svelte` (the `vlist` action, `onVListEvent`),
+  `vlist/solid` (`createVList`, `createVListEvent`) and `vlist/react`
+  (`useVList`, `useVListEvent`). They are feature-first like the vanilla
+  builder: plugins come from `vlist` and are passed explicitly, so a list
+  bundles only the features it uses. Each entry imports the core from
+  `vlist` and weighs 0.2–0.4 KB gzip on its own; React, Vue, Svelte and
+  solid-js are optional peer dependencies. `bun run size` measures each one
+  (React with and without `grid()`) and fails on a leaked plugin. In a file
+  that also uses the core builder, alias Solid's `createVList`.
+
+### Deprecated
+
+- The `vlist-vue`, `vlist-svelte`, `vlist-solidjs` and `vlist-react`
+  packages, in favour of the entries above. Their final releases forward to
+  them.
+
 ### Changed
 
 - `dist/config.js` imports the core from `dist/index.js` instead of carrying a
