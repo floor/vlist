@@ -35,7 +35,6 @@ below is part of it; nothing landed after `next.3`. For a reader coming from 3.0
 - **Size as a promise.** The base is 10.3 KB gzipped against its budget; the size tables in both
   READMEs are what `bun run size` prints.
 
-
 ## [3.1.0-next.3] - 2026-10-01
 
 The frameworks move into the package. `vlist/vue`, `vlist/svelte`,
