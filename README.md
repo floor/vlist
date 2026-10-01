@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.1.0-next.3** (prerelease on the npm `next` tag) — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
+**v3.1.0** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
