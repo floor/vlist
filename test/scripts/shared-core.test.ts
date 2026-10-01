@@ -3,7 +3,7 @@
 // vlist/config shipped two cores.
 import { describe, expect, it } from "bun:test";
 import { resolve } from "path";
-import { sharedCore } from "../../scripts/shared-core";
+import { importsPackageRoot, sharedCore } from "../../scripts/shared-core";
 
 const CORE_MARKER = "horizontal RTL lists are not supported";
 const build = async (plugins: import("bun").BunPlugin[]): Promise<string> => {
@@ -20,6 +20,14 @@ describe("shared core", () => {
     const text = await build([sharedCore]);
     expect(text).toMatch(/from\s*"\.\/index\.js"/);
     expect(text).not.toContain(CORE_MARKER);
+  });
+
+  it("only an entry directly in src/ means the package root by \"./index\"", () => {
+    const src = resolve(import.meta.dir, "../../src");
+    expect(importsPackageRoot(`${src}/config.ts`)).toBe(true);
+    // A nested module importing its own folder's index keeps resolving there.
+    expect(importsPackageRoot(`${src}/plugins/grid/plugin.ts`)).toBe(false);
+    expect(importsPackageRoot(`${src}/core/create.ts`)).toBe(false);
   });
 
   it("without the plugin the same entry carries a whole core", async () => {

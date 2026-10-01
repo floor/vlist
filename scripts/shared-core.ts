@@ -10,12 +10,22 @@
  * cores.
  */
 import type { BunPlugin } from "bun";
+import { dirname, resolve } from "path";
+
+const SRC = resolve(import.meta.dir, "../src");
+
+/**
+ * Only an entry sitting directly in src/ means the package root by "./index".
+ * A module deeper down (src/plugins/grid/…) importing its own folder's index
+ * must keep resolving there.
+ */
+export const importsPackageRoot = (importer: string): boolean => dirname(importer) === SRC;
 
 export const sharedCore: BunPlugin = {
   name: "shared-core",
   setup(build) {
     build.onResolve({ filter: /^\.\/index$/ }, (args) =>
-      args.importer.includes("/src/") ? { path: "./index.js", external: true } : undefined,
+      importsPackageRoot(args.importer) ? { path: "./index.js", external: true } : undefined,
     );
   },
 };
