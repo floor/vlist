@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.1.0-next.3** (prerelease on the npm `next` tag) — Vue, Svelte, Solid and React entries in the package itself: `vlist/vue`, `vlist/svelte`, `vlist/solid` and `vlist/react`, feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. With `scroll.mode` from 3.1.0-next.2: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
+**v3.1.0-next.3** (prerelease on the npm `next` tag) — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -423,9 +423,9 @@ adapter instead. It cannot be combined with `tree()` either: filtering a tree
 means keeping the ancestors of each match, which belongs to the plugin that
 owns the layout, and `tree()` offers no such hook.
 
-## Custom scrollbar (3.0 preview)
+## Custom scrollbar
 
-On `next`, `scrollbar()` remains a plugin. macOS and Android default to thin,
+`scrollbar()` is a plugin. macOS and Android default to thin,
 rounded, auto-hiding overlays; Windows defaults to a wider, square, always-visible
 bar. Set `gutter: true` to reserve space. The same behavior works horizontally.
 

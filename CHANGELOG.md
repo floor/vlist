@@ -11,6 +11,30 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-01
+
+The 3.1 line, on the npm `latest` tag. Everything in `3.0.1-next.1` through `3.1.0-next.3`
+below is part of it; nothing landed after `next.3`. For a reader coming from 3.0:
+
+- **One entry, three scroll modes.** `scroll.mode` is `"auto"` (default), `"native"` or
+  `"synthetic"` on the one `vlist` entry. With `"auto"` a list scrolls natively and hands itself
+  to synthetic input past the browser's element size limit (16,000,000 px of content), and back
+  below 12,000,000 px, keeping its plugins, selection and position. The synthetic driver is a
+  separate file, downloaded the first time a list needs it. `vlist/synthetic` is deprecated.
+- **A drawn scrollbar for synthetic lists.** Synthetic content is not the browser's to scroll,
+  so a synthetic list draws its scrollbar by default.
+- **Carousels honour `"synthetic"`.** The carousel switches to the synthetic handler itself; the
+  core knows nothing about the carousel.
+- **Frameworks in the package.** `vlist/vue`, `vlist/svelte`, `vlist/solid` and `vlist/react`
+  are feature-first entries that share the root bundle's core: a plain framework list costs
+  about 11 KB gzip, where the config-based adapters cost about 37 KB. The `vlist-vue`,
+  `vlist-svelte`, `vlist-solidjs` and `vlist-react` packages are deprecated; the migration is
+  under `3.1.0-next.3`.
+- **Native lists that scroll everywhere.** Native content is capped at the browser limit, so
+  Firefox no longer collapses a list past 17.9M px to nothing.
+- **Size as a promise.** The base is 10.3 KB gzipped against its budget; the size tables in both
+  READMEs are what `bun run size` prints.
+
 ## [3.1.0-next.3] - 2026-10-01
 
 The frameworks move into the package. `vlist/vue`, `vlist/svelte`,
