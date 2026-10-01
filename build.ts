@@ -4,6 +4,13 @@ import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs"
 import { resolve } from "path";
 import { versionStamp } from "./scripts/version-stamp";
 import { lazyDriver, DRIVER_FILE } from "./scripts/lazy-driver";
+import { sharedCore } from "./scripts/shared-core";
+
+// Entries that import the core from dist/index.js (scripts/shared-core.ts).
+// vlist/synthetic stays standalone: deprecated, it bundles its own core and driver.
+const SHARED_CORE_ENTRIES = ["config"];
+// A string only createCore carries: its presence means a bundled copy of the core.
+const CORE_MARKER = "horizontal RTL lists are not supported";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -142,8 +149,8 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "config.js",
-    // The adapters build on this bundle: its synthetic driver stays lazy too.
-    plugins: [lazyDriver],
+    // The core comes from ./index.js, not a copy of its own.
+    plugins: [sharedCore],
     define,
   });
 
@@ -162,11 +169,16 @@ async function build() {
     `  Config      ${configTime.toFixed(0).padStart(6)}ms  dist/config.js (${configSize} KB)`,
   );
 
-  // Every bundle with a native createVList loads the synthetic driver, never carries it.
-  for (const name of ["index", "config"]) {
+  // The root bundle loads the synthetic driver lazily, never carries it.
+  const indexText = await Bun.file("./dist/index.js").text();
+  if (!indexText.includes(`import("./${DRIVER_FILE}")`) || indexText.includes("pan-x pinch-zoom")) {
+    throw new Error(`dist/index.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
+  }
+  // Secondary entries import the core from it: no copy of their own, no driver.
+  for (const name of SHARED_CORE_ENTRIES) {
     const text = await Bun.file(`./dist/${name}.js`).text();
-    if (!text.includes(`import("./${DRIVER_FILE}")`) || text.includes("pan-x pinch-zoom")) {
-      throw new Error(`dist/${name}.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
+    if (!/from\s*"\.\/index\.js"/.test(text) || text.includes(CORE_MARKER) || text.includes("pan-x pinch-zoom")) {
+      throw new Error(`dist/${name}.js must import the core from ./index.js, not carry its own`);
     }
   }
 

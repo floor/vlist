@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- `dist/config.js` imports the core from `dist/index.js` instead of carrying a
+  copy of its own (`scripts/shared-core.ts`): an app using both `vlist` and
+  `vlist/config` (as the framework adapters do with plugins from `vlist`)
+  ships one core, one set of plugins and one synthetic-driver cache. Measured
+  against the built package, minified, gzip: both entries 40,214 → 38,915 B;
+  `vlist` alone unchanged; `vlist/config` alone 38,605 → 38,915 B (+310 B, the
+  cost of tree-shaking it out of the shared bundle). `vlist/synthetic` stays
+  standalone. The framework entries (#328) build the same way.
+
 ## [3.1.0-next.2] - 2026-09-28
 
 The 3.1 line. `scroll.mode` is a feature, so what 3.0.1-next.1 started ships
