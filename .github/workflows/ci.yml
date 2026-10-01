@@ -122,10 +122,13 @@ jobs:
       # shell (Chromium 153) and not in every Chrome. Pin that build for this
       # one script (#336). No project dependency: playwright-core is fetched
       # at a fixed version only to download the browser.
+      # Runs even when the suites above failed, so this check reports on its own.
       - name: Install pinned Chromium (Playwright headless shell)
+        if: ${{ !cancelled() }}
         run: bunx playwright-core@1.63.0 install --with-deps --only-shell chromium
 
       - name: Tree guides on the pinned Chromium
+        if: ${{ !cancelled() }}
         run: |
           CHROME_PATH="$(find ~/.cache/ms-playwright -type f -name chrome-headless-shell -path '*chromium_headless_shell-*' | head -1)"
           test -x "$CHROME_PATH"
