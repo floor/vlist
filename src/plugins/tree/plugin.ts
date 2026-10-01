@@ -493,14 +493,14 @@ export function tree<T extends VListItem = VListItem>(
     let through = !isLastChild;
     for (let column = depth - 1; column >= 0; column--) {
       const x = column * indent;
-      if (through) stops = `${x ? `,transparent 0 ${x}px` : ""},var(--vlist-tree-line, currentColor) 0 ${x + 1}px${stops}`;
+      if (through) stops = `,transparent 0 ${x}px,var(--vlist-tree-line, currentColor) 0 ${x + 1}px${stops}`;
       // A root's parentId is null: the lookup misses on purpose and ends the walk.
       const parent = layout.flatNodes[layout.idToIndex.get(parentId!) ?? -1];
       if (!parent) break;
       through = !parent.isLastChild;
       parentId = parent.parentId;
     }
-    return stops ? `linear-gradient(to right${stops},transparent 0)` : "none";
+    return `linear-gradient(to right,transparent 0${stops},transparent 0)`;
   }
 
   function renderNodeElement(
