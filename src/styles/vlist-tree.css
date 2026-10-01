@@ -54,12 +54,18 @@
     bottom: 0;
     left: var(--vlist-tree-guide-start, calc(var(--vlist-tree-indent) / 2));
     width: calc(var(--vlist-tree-depth) * var(--vlist-tree-indent));
-    background-image: var(--vlist-tree-guides, none), var(--vlist-tree-elbow, none);
+    background-image: var(--vlist-tree-guides, none);
     background-repeat: no-repeat;
     background-size: 100% 100%, 1px 50%;
     background-position: left top, calc((var(--vlist-tree-depth) - 1) * var(--vlist-tree-indent)) top;
     opacity: 0.12;
     pointer-events: none;
+}
+
+/* A last child's own column stops at its middle: the elbow, a half-height line.
+   --vlist-tree-elbow still overrides it (e.g. none), as it did when rows set it. */
+.vlist--tree-lines .vlist-tree-node--last::before {
+    background-image: var(--vlist-tree-guides, none), var(--vlist-tree-elbow, linear-gradient(var(--vlist-tree-line, currentColor), var(--vlist-tree-line, currentColor)));
 }
 
 /* ── Horizontal branch ──────────────────────────────────────────────────────── */
