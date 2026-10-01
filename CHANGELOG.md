@@ -11,35 +11,79 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.0-next.3] - 2026-10-01
+
+The frameworks move into the package. `vlist/vue`, `vlist/svelte`,
+`vlist/solid` and `vlist/react` replace the separate adapter packages, which
+are deprecated. Secondary entries now share the root bundle's core. This
+supersedes the note under 3.1.0-next.2 that framework adapters need
+3.1.0-next.2: new code imports the entries, and the old packages' 3.1
+releases will be built on them.
+
 ### Added
 
-- Framework entries in the `vlist` package (#328): `vlist/vue` (`useVList`,
-  `useVListEvent`), `vlist/svelte` (the `vlist` action, `onVListEvent`),
-  `vlist/solid` (`createVList`, `createVListEvent`) and `vlist/react`
-  (`useVList`, `useVListEvent`). They are feature-first like the vanilla
-  builder: plugins come from `vlist` and are passed explicitly, so a list
-  bundles only the features it uses. Each entry imports the core from
-  `vlist` and weighs 0.2–0.4 KB gzip on its own; React, Vue, Svelte and
-  solid-js are optional peer dependencies. `bun run size` measures each one
-  (React with and without `grid()`) and fails on a leaked plugin. In a file
-  that also uses the core builder, alias Solid's `createVList`.
+- Framework entries in the `vlist` package (#328, #330): `vlist/vue`
+  (`useVList`, `useVListEvent`), `vlist/svelte` (the `vlist` action,
+  `onVListEvent`), `vlist/solid` (`createVList`, `createVListEvent`) and
+  `vlist/react` (`useVList`, `useVListEvent`). They are feature-first like
+  the vanilla builder: plugins come from `vlist` and are passed explicitly,
+  so a list bundles only the features it uses, and the methods a plugin adds
+  are typed from the `plugins` argument (`select()` exists only with
+  `selection()`). Each entry imports the core from `vlist`; React, Vue,
+  Svelte and solid-js are optional peer dependencies. In a file that also
+  uses the core builder, alias Solid's `createVList`
+  (`import { createVList as createSolidVList } from "vlist/solid"`).
+
+  Measured by `bun run size` (minified, gzip; the framework itself external):
+
+  | Entry | Entry alone | With the core | Budget |
+  |---|---|---|---|
+  | `vlist/vue` `useVList` | 350 B | 10.5 KB (10,722 B) | 10.6 kB |
+  | `vlist/svelte` `vlist` | 230 B | 10.4 KB (10,626 B) | 10.5 kB |
+  | `vlist/solid` `createVList` | 302 B | 10.4 KB (10,688 B) | 10.6 kB |
+  | `vlist/react` `useVList` | 361 B | 10.5 KB (10,717 B) | 10.6 kB |
+  | `vlist/react` + `grid()` | | 13.1 KB (13,373 B) | 13.2 kB |
+
+  `bun run size` fails if a framework scenario leaks an unused plugin or
+  exceeds its budget, and gained a brotli column.
+
+- `useVListEvent` in `vlist/react` keeps vlist-react's `instanceRef.current`
+  dependency. In the same component it subscribes at mount, because
+  `useVList`'s effect runs first. In a child component, whose effects run
+  before the parent's, it subscribes on the child's first render once the
+  list exists. Depending on the ref object instead would mean such a child
+  never subscribes; a test covers it.
+
+### Fixed
+
+- `useVListEvent` in `vlist/vue` unsubscribes when the component unmounts.
+  vlist-vue's version subscribed from a `watch` callback that ran after
+  setup, so its `onBeforeUnmount` was dropped with a Vue warning and the
+  handler stayed on the list until the list was destroyed. vlist-vue 3.0.1
+  will carry the fix for vlist 3.0.x.
 
 ### Deprecated
 
 - The `vlist-vue`, `vlist-svelte`, `vlist-solidjs` and `vlist-react`
-  packages, in favour of the entries above. Their final releases forward to
-  them.
+  packages. To migrate, change the import path (`vlist-vue` → `vlist/vue`,
+  `vlist-svelte` → `vlist/svelte`, `vlist-solidjs` → `vlist/solid`,
+  `vlist-react` → `vlist/react`) and pass features as plugins instead of
+  config fields: `useVList({ items, item, selection: { mode: "single" } })`
+  becomes `useVList({ items, item }, [selection({ mode: "single" })])`, with
+  `selection` imported from `vlist`. Their 3.1 releases will be built on these
+  entries and keep the config-based API, so existing code keeps working while
+  you migrate.
 
 ### Changed
 
 - `dist/config.js` imports the core from `dist/index.js` instead of carrying a
-  copy of its own (`scripts/shared-core.ts`): an app using both `vlist` and
-  `vlist/config` (as the framework adapters do with plugins from `vlist`)
-  ships one core, one set of plugins and one synthetic-driver cache. Measured
-  against the built package, minified, gzip: both entries 40,214 → 38,915 B;
-  `vlist` alone unchanged; `vlist/config` alone 38,605 → 38,915 B (+310 B, the
-  cost of tree-shaking it out of the shared bundle). `vlist/synthetic` stays
-  standalone. The framework entries (#328) build the same way.
+  copy of its own (`scripts/shared-core.ts`, #329). An app using both `vlist`
+  and `vlist/config` ships one core, one set of plugins and one
+  synthetic-driver cache. Measured against the built package, minified, gzip:
+  both entries 40,214 → 38,915 B; `vlist` alone unchanged; `vlist/config`
+  alone 38,605 → 38,915 B (+310 B, the cost of tree-shaking it out of the
+  shared bundle). `vlist/synthetic` stays standalone. The framework entries
+  build the same way.
 
 ## [3.1.0-next.2] - 2026-09-28
 
