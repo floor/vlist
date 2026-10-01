@@ -189,7 +189,7 @@ describe("masonry - Render Functions", () => {
     mock.cleanup();
   });
 
-  it("keeps grace-period items runway-relative when baseOffset jumps (issue 025)", () => {
+  it("keeps grace-period items relative to baseOffset when it jumps (issue 025)", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     const items = createTestItems(2000);
     const { ctx, dom, engineState, cleanup } = createPluginMockContext<TestItem>(items, {
@@ -203,13 +203,13 @@ describe("masonry - Render Functions", () => {
     const firstRendered = dom.content.querySelectorAll("[data-index]").length;
     expect(firstRendered).toBeGreaterThan(0);
 
-    // Programmatic jump far down: logical position and runway origin move together.
+    // Programmatic jump far down: logical position and baseOffset move together.
     engineState.scrollPosition = 20_000;
     engineState.baseOffset = 20_000;
     ctx.render.ifNeeded();
 
     // Items from the old range are kept for the release grace period, but must
-    // sit where their absolute placement says relative to the new runway
+    // sit where their absolute placement says relative to the new baseOffset
     // (far above the viewport), never inside it.
     const inside: number[] = [];
     dom.content.querySelectorAll("[data-index]").forEach((el) => {

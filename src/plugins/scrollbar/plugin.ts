@@ -55,7 +55,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       mainAxisPadding = resolvedConfig.mainAxisPadding;
 
-      // Route through ctx.scroll.to so the position reaches the bounded handler's
+      // Route through ctx.scroll.to so the position reaches a logical handler's
       // setLogical (which clamps using maxLogical that includes padding) rather
       // than the adapter's clampPixel (which only knows sizeCache, no padding).
       sb = createScrollbar(

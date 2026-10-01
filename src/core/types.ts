@@ -71,6 +71,8 @@ export interface ResolvedConfig {
   readonly crossPadEnd: number;
   readonly striped: boolean | "data" | "even" | "odd";
   readonly gap: number;
+  /** Input mode (RFC-015): `scroll.mode`, `"auto"` by default; always `"synthetic"` under vlist/synthetic. */
+  readonly scrollMode: "auto" | "native" | "synthetic";
 }
 
 // =============================================================================
@@ -129,10 +131,15 @@ export interface ScrollCapability extends ScrollAdapter {
   /** Install an external writer and disable default scroll/wheel listeners. */
   setSource(source: { write(px: number): void; onContentSize?(px: number): void }): void;
   setTarget(target: EventTarget): void;
-  /** Request the bounded scroll handler in infinite-loop (wrap) mode (carousel). */
+  /** Request a logical handler in infinite-loop (wrap) mode, built by `createHandler` (carousel). */
+  setWrap(
+    config: import("./logical").WrapConfig,
+    createHandler: (config: import("./logical").LogicalScrollConfig) => import("./logical").LogicalScrollHandler,
+  ): void;
+  /** @deprecated Renamed `setWrap` in 3.0.x; kept for 3.0 plugins. */
   setBoundedWrap(
-    config: import("./runway").WrapConfig,
-    createHandler: (config: import("./runway").BoundedScrollConfig) => import("./runway").BoundedScrollHandler,
+    config: import("./logical").WrapConfig,
+    createHandler: (config: import("./logical").LogicalScrollConfig) => import("./logical").LogicalScrollHandler,
   ): void;
   setToPosFn(fn: (index: number, sizeCache: import("./sizes").SizeCache, containerSize: number, totalItems: number, align: string) => number): void;
   setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void;

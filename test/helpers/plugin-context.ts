@@ -155,6 +155,7 @@ export function createPluginMockContext<T extends VListItem>(
     crossPadEnd: isX ? padBottom : padRight,
     striped: false,
     gap: 0,
+    scrollMode: "auto",
   };
 
   // ── Emitter ─────────────────────────────────────────────────────
@@ -248,6 +249,7 @@ export function createPluginMockContext<T extends VListItem>(
       },
       setSource: () => {},
       setTarget: () => {},
+      setWrap: () => {},
       setBoundedWrap: () => {},
       setToPosFn: (fn: any) => { _scrollToPosFn = fn; },
       setToIndexFn: (fn: any) => { _scrollToIndexFn = fn; },

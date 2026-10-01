@@ -5,8 +5,8 @@
  * positions are unchanged. Re-keying the map (and the `id` that encodes the
  * virtual index) lets the next commit find them instead of releasing,
  * re-templating and re-inserting the viewport. Lives here — not in pipeline
- * or create — so a native list that never wraps does not import it (runway
- * is pulled by carousel). The synthetic handler imports it because wrap
+ * or create — so a native list that never wraps does not import it (the
+ * carousel runway pulls it). The synthetic handler imports it because wrap
  * folds for that entry go through commit(), not wrapRebase; putting the
  * import in create.ts would charge every native list.
  *
@@ -19,7 +19,7 @@
  */
 
 import type { EngineState } from "./state";
-import type { WrapConfig } from "./runway";
+import type { WrapConfig } from "./logical";
 
 // One fold used to allocate both of these. They grow to the largest window
 // seen and are reused. Element slots are cleared after each fold so a shrink

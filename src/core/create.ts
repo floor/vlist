@@ -27,7 +27,7 @@ import type { SizeCache } from "./sizes";
 import { createPool } from "./pool";
 import { createDOMStructure, resolveContainer } from "./dom";
 import { createScrollSource } from "./scroll-source";
-import type { BoundedScrollHandler, BoundedScrollConfig, WrapConfig } from "./runway";
+import type { LogicalScrollHandler, LogicalScrollConfig, WrapConfig } from "./logical";
 import type { ScrollHandler, ScrollHandlerConfig } from "./scroll";
 import { createScrollAdapter, type ScrollAdapter } from "./adapter";
 import { compileHooks, runAfterScrollHooks, runCommitHooks, runIdleHooks, runResizeHooks } from "./hooks";
@@ -40,56 +40,29 @@ import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } fr
 // Config Validation
 // =============================================================================
 
+/** Throws unless `value` is absent or a finite number above 0 (from 0 with `zero`). */
+function assertSize(name: string, value: unknown, zero = false): void {
+  if (value === undefined) return;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || (value === 0 && !zero)) {
+    throw new Error(`vlist: ${name} must be a ${zero ? "non-negative" : "positive"} number, got ${value}`);
+  }
+}
+
 function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void {
   const { item } = raw;
 
-  // Validate item.height (only if explicitly provided and is a number)
-  if (item.height !== undefined && typeof item.height === "number") {
-    if (!Number.isFinite(item.height) || item.height <= 0) {
-      throw new Error(`vlist: item.height must be a positive number, got ${item.height}`);
-    }
-  }
+  // item.height and item.width may also be functions of the index.
+  if (typeof item.height === "number") assertSize("item.height", item.height);
+  if (typeof item.width === "number") assertSize("item.width", item.width);
+  assertSize("item.estimatedHeight", item.estimatedHeight);
+  assertSize("item.estimatedWidth", item.estimatedWidth);
+  assertSize("item.gap", item.gap, true);
+  assertSize("overscan", raw.overscan, true);
 
-  // Validate item.width (only if explicitly provided and is a number)
-  if (item.width !== undefined && typeof item.width === "number") {
-    if (!Number.isFinite(item.width) || item.width <= 0) {
-      throw new Error(`vlist: item.width must be a positive number, got ${item.width}`);
-    }
+  const scroll = raw.scroll as { mode?: string; runway?: unknown } | undefined;
+  if (scroll?.runway !== undefined || !/^(auto|native|synthetic)?$/.test(scroll?.mode ?? "")) {
+    throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed in 3.0)');
   }
-
-  // Validate item.estimatedHeight (only if explicitly provided)
-  if (item.estimatedHeight !== undefined) {
-    if (!Number.isFinite(item.estimatedHeight) || item.estimatedHeight <= 0) {
-      throw new Error(`vlist: item.estimatedHeight must be a positive number, got ${item.estimatedHeight}`);
-    }
-  }
-
-  // Validate item.estimatedWidth (only if explicitly provided)
-  if (item.estimatedWidth !== undefined) {
-    if (!Number.isFinite(item.estimatedWidth) || item.estimatedWidth <= 0) {
-      throw new Error(`vlist: item.estimatedWidth must be a positive number, got ${item.estimatedWidth}`);
-    }
-  }
-
-  // Validate item.gap (only if explicitly provided)
-  if (item.gap !== undefined) {
-    if (typeof item.gap !== "number" || !Number.isFinite(item.gap) || item.gap < 0) {
-      throw new Error(`vlist: item.gap must be a non-negative number, got ${item.gap}`);
-    }
-  }
-
-  // Validate overscan (only if explicitly provided)
-  if (raw.overscan !== undefined) {
-    if (typeof raw.overscan !== "number" || !Number.isFinite(raw.overscan) || raw.overscan < 0) {
-      throw new Error(`vlist: overscan must be a non-negative number, got ${raw.overscan}`);
-    }
-  }
-
-  const legacyScroll = raw.scroll as { mode?: unknown; runway?: unknown } | undefined;
-  if (legacyScroll?.mode !== undefined || legacyScroll?.runway !== undefined) {
-    throw new Error('vlist 3.0: scroll.mode and scroll.runway were removed; bounded mode is gone. Use "vlist/synthetic" for huge lists or "vlist" for native scrolling.');
-  }
-
 }
 
 // =============================================================================
@@ -112,6 +85,7 @@ function resolveAxis<T extends VListItem>(
 function resolveConfig<T extends VListItem>(
   raw: CreateVListConfig<T>,
   plugins: readonly VListPlugin<T>[],
+  scrollMode: ResolvedConfig["scrollMode"],
 ): ResolvedConfig {
   const axis = resolveAxis(raw.orientation, plugins);
   const isX = axis.primary === "x";
@@ -130,6 +104,7 @@ function resolveConfig<T extends VListItem>(
     crossPadEnd: isX ? pad.bottom : pad.right,
     striped: raw.item.striped || false,
     gap: raw.item.gap ?? 0,
+    scrollMode,
   };
 }
 
@@ -190,12 +165,18 @@ function checkConfigCompatibility<T extends VListItem>(
   for (const p of plugins) p.validateConfig?.(config);
 }
 
+type SyntheticFactory = (config: LogicalScrollConfig & { sizeCache: SizeCache }) => LogicalScrollHandler;
+type SyntheticDriver = typeof import("../synthetic/driver");
+/** Loaded once per page, by the first list that goes synthetic (RFC-015). */
+let syntheticDriver: SyntheticDriver | null = null;
+
 // =============================================================================
 // createVList()
 // =============================================================================
 
 /**
- * Create a list with native scrolling. Opt into synthetic input via vlist/synthetic.
+ * Create a list. `scroll.mode` chooses who owns input: `"auto"` (default)
+ * scrolls natively and goes synthetic past the browser's size limit.
  *
  * Let the item type be inferred from the config — its `items`, or the
  * `template` parameter — rather than passing it as a type argument. The list's
@@ -222,11 +203,13 @@ export function createVList<
   let warned = false;
   return createCore(config, plugins as unknown as VListPlugin<T>[], undefined, {
     native: createScrollHandler,
+    // A separate chunk: only lists that go synthetic download the driver.
+    load: () => import("../synthetic/driver"),
     onContentSize(size, emitter) {
       if (!warned && size > MAX_VIRTUAL_SIZE) {
         warned = true;
         emitter.emit("error", {
-          error: new Error(`Content size (${size}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use "vlist/synthetic" for large datasets.`),
+          error: new Error(`Content size (${size}px) exceeds browser limit (${MAX_VIRTUAL_SIZE}px). Use scroll.mode "auto".`),
           context: "content:size:overflow",
         });
       }
@@ -239,17 +222,19 @@ export function createCore<T extends VListItem = VListItem>(
   rawConfig: CreateVListConfig<T>,
   plugins: VListPlugin<T>[] = [],
   /** @internal Omitted by the native entry. */
-  logicalHandlerFactory?: (config: BoundedScrollConfig & { sizeCache: SizeCache }) => BoundedScrollHandler,
+  logicalHandlerFactory?: SyntheticFactory,
   nativeOptions?: {
     native: (config: ScrollHandlerConfig) => ScrollHandler & { commitScroll(pos?: number): void };
+    load: () => Promise<SyntheticDriver>;
     onContentSize: (size: number, emitter: Emitter<VListEvents<T>>) => void;
   },
 ): VList<T> {
   // ── Validate config ─────────────────────────────────────────────
 
   validateRawConfig(rawConfig);
-  if (logicalHandlerFactory && typeof rawConfig.scroll?.scrollbar === "string") {
-    throw new Error('vlist 3.0: scroll.scrollbar strings require "vlist"; use the scrollbar() plugin with "vlist/synthetic".');
+  const inputMode = logicalHandlerFactory ? "synthetic" : rawConfig.scroll?.mode ?? "auto";
+  if (inputMode === "synthetic" && rawConfig.scroll?.scrollbar === "native") {
+    throw new Error('vlist: scroll.scrollbar "native" needs native scrolling');
   }
   // Both entries reject it. Native used to accept the combination and then sit
   // on the first page: RTL makes scrollLeft negative, the wheel clamp pins it
@@ -262,7 +247,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   // ── Resolve config ──────────────────────────────────────────────
 
-  const config = resolveConfig(rawConfig, plugins);
+  const config = resolveConfig(rawConfig, plugins, inputMode);
   const isX = config.axis.primary === "x";
   const sizeSpec = resolveSizeConfig(rawConfig, isX);
   const gap = config.gap;
@@ -385,7 +370,6 @@ export function createCore<T extends VListItem = VListItem>(
   let navNavigateFn: ((currentIndex: number, key: string, total: number) => number) | null = null;
   let navTotalFn: (() => number) | null = null;
   let navRevealFn: ((index: number) => void) | null = null;
-  let smoothScrollFn: ((target: number | (() => number), duration: number, setFn?: (pos: number) => void, easing?: (t: number) => number, onComplete?: () => void) => void) | null = null;
   let scrollToPosFn: ((index: number, sizeCache: SizeCache, containerSize: number, totalItems: number, align: string) => number) | null = null;
   let scrollToIndexFn: ((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false) | null = null;
   /**
@@ -397,11 +381,25 @@ export function createCore<T extends VListItem = VListItem>(
    * held here instead and honoured on the first render that has a total.
    */
   let pendingScrollToIndex: { index: number; alignOrOptions: Parameters<VList<T>["scrollToIndex"]>[1] } | null = null;
-  let boundedHandler: BoundedScrollHandler | null = null;
-  // A plugin (carousel) can request the bounded handler in wrap mode during
-  // setup, before the handler is built below. Wrap implies bounded.
-  let boundedWrap: WrapConfig | null = null;
-  let wrapHandlerFactory: ((config: BoundedScrollConfig) => BoundedScrollHandler) | null = null;
+  let scrollHandler: ScrollHandler | null = null;
+  let nativeHandler: (ScrollHandler & { commitScroll(pos?: number): void }) | null = null;
+  let logicalHandler: LogicalScrollHandler | null = null;
+  // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
+  // through the logical setter so baseOffset and the handler stay consistent.
+  // The pixel-equivalent (read) is the logical position, matching native mode (G4).
+  const writeLogical = (px: number): void => logicalHandler!.setLogical(px);
+  // scroll.mode (RFC-015): a native list swaps to synthetic input in place.
+  // `canSwap` is set once the handler exists (false where input is fixed);
+  // `pending` while a swap waits for the driver or for idle.
+  let canSwap = false;
+  let pending = false;
+  let clampedWrite: number | null = null;
+  // The scrollbar a synthetic list gets by default (scroll.mode).
+  let bar: import("../synthetic/driver").AttachedScrollbar | null = null;
+  // A plugin (carousel) can request a logical handler in wrap mode during
+  // setup, before the handler is built below.
+  let wrapConfig: WrapConfig | null = null;
+  let wrapHandlerFactory: ((config: LogicalScrollConfig) => LogicalScrollHandler) | null = null;
 
   // ── Pre-initialize container size so plugins can read it ────────
 
@@ -419,6 +417,9 @@ export function createCore<T extends VListItem = VListItem>(
       else dom.viewport.scrollTop = position;
       // Reuse native read-back, rendering, event dedupe and the idle timer.
       commitScroll?.();
+      // Clamped by the browser while a swap is pending: the swap lands it
+      // where it was asked (the next scroll frame forgets it).
+      if (pending && Math.abs(state.scrollPosition - position) > 1) clampedWrite = position;
     }
   }
 
@@ -463,11 +464,11 @@ export function createCore<T extends VListItem = VListItem>(
         ...scrollAdapter,
         to: writeScroll,
         shiftBy(delta: number): void {
-          if (boundedHandler?.shiftBy) boundedHandler.shiftBy(delta);
+          if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
           else ctx.scroll.to(state.scrollPosition + delta);
         },
         smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
-          if (smoothScrollFn) smoothScrollFn(target, duration, scrollSetFn ?? undefined, easing, onComplete);
+          if (scrollHandler) scrollHandler.smoothScrollTo(target, duration, scrollSetFn ?? undefined, easing, onComplete);
           else ctx.scroll.to(typeof target === "function" ? target() : target);
         },
         cancel(): void { scrollHandler?.cancelScroll(); },
@@ -478,7 +479,8 @@ export function createCore<T extends VListItem = VListItem>(
           skipDefaultScroll = true;
         },
         setTarget(target: EventTarget): void { scrollTarget = target; },
-        setBoundedWrap(cfg, createHandler): void { boundedWrap = cfg; wrapHandlerFactory = createHandler; },
+        setWrap(cfg, createHandler): void { wrapConfig = cfg; wrapHandlerFactory = createHandler; },
+        setBoundedWrap(cfg, createHandler): void { ctx.scroll.setWrap(cfg, createHandler); },
         setToPosFn(fn: (index: number, sc: SizeCache, containerSize: number, totalItems: number, align: string) => number): void { scrollToPosFn = fn; },
         setToIndexFn(fn: (index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number) => void | false): void { scrollToIndexFn = fn; },
         onFrame: doScrollFrame,
@@ -660,20 +662,24 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function updateContentSize(size: number, write = true): void {
-    if (boundedHandler) {
-      if (write) boundedHandler.refresh(size);
+    const pixels = size + config.mainAxisPadding;
+    if (canSwap) checkInput(pixels);
+    if (logicalHandler) {
+      if (write) logicalHandler.refresh(size);
       return;
     }
     state.totalSize = size;
-    const pixels = size + config.mainAxisPadding;
     onContentSize?.(pixels);
-    if (write) dom.content.style[isX ? "width" : "height"] = pixels + "px";
+    // Never past the limit: Chrome clamps a larger element to 33,554,428 px, but
+    // Firefox lays out nothing above 17,895,697 px, and the list could not
+    // scroll at all. Capped, native input reaches the same rows everywhere.
+    if (write) dom.content.style[isX ? "width" : "height"] = Math.min(pixels, MAX_VIRTUAL_SIZE) + "px";
   }
 
   function syncContentSize(): void {
     const totalSize = customRenderIfNeeded ? state.totalSize : sizeCache.getTotalSize();
     updateContentSize(totalSize, !customRenderIfNeeded);
-    if (boundedHandler || customRenderIfNeeded) return;
+    if (logicalHandler || customRenderIfNeeded || canSwap) return;
 
     nativeOptions?.onContentSize(totalSize, emitter);
   }
@@ -701,12 +707,14 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function doScrollFrame(): void {
+    clampedWrite = null;
     if (!isScrolling) {
       isScrolling = true;
       dom.root.classList.add(scrollingClass);
     }
     doRender();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+    bar?.sync();
     if (state.scrollPosition !== lastEventScrollPos) {
       lastEventScrollPos = state.scrollPosition;
       emitScrollEvents();
@@ -715,6 +723,60 @@ export function createCore<T extends VListItem = VListItem>(
 
   function trimPool(): void {
     pool.trim(rendered.size);
+  }
+
+  /**
+   * Hand input over when the mode asks for it (RFC-015): `synthetic` always,
+   * `auto` past the browser's element size limit, and back below 3/4 of it.
+   *
+   * The swap waits for the driver, loaded on first need, and for idle: a scroll
+   * in flight is never cut off. Until then the browser clamps a native list,
+   * which the smooth-scroll commit already renders correctly (FLO-247).
+   */
+  function checkInput(pixels: number): void {
+    const synthetic = !!logicalHandler;
+    const wanted = inputMode === "synthetic" || pixels > MAX_VIRTUAL_SIZE * (synthetic ? 0.75 : 1);
+    pending = wanted !== synthetic;
+    if (!pending) return;
+    // No guard needed: an import is cached, so asking again is free; after a
+    // failure the next check asks again.
+    if (!syntheticDriver) {
+      nativeOptions!.load().then((driver) => {
+        syntheticDriver = driver;
+        if (!state.destroyed) syncContentSize();
+      }, (error: Error) => emitter.emit("error", { error, context: "scroll:mode" }));
+    } else if (!isScrolling) swapInput(pixels);
+  }
+
+  /** Swap the input handler in place; the list, plugins and position stay. */
+  function swapInput(pixels: number): void {
+    const position = clampedWrite ?? state.scrollPosition;
+    pending = false;
+    scrollHandler!.detach();
+    bar?.destroy();
+    bar = null;
+    if (logicalHandler) {
+      scrollHandler = nativeHandler;
+      logicalHandler = scrollSetFn = null;
+      state.baseOffset = 0;
+      dom.content.style[isX ? "width" : "height"] = pixels + "px";
+      scrollHandler!.attach();
+      // The browser clamps to the new end, and writeScroll commits what it applied.
+      writeScroll(position);
+    } else {
+      dom.viewport[isX ? "scrollLeft" : "scrollTop"] = 0;
+      scrollHandler = logicalHandler = createLogicalHandler(syntheticDriver!.createSyntheticScrollHandler);
+      scrollSetFn = writeLogical;
+      logicalHandler.refresh(pixels - config.mainAxisPadding);
+      // Synthetic content has no browser scrollbar: the driver draws one.
+      (bar = syntheticDriver!.attachScrollbar(state, dom, config, sizeCache, writeScroll, rawConfig.scroll?.scrollbar))?.sync();
+      // During creation the core renders and attaches next.
+      if (state.initialized) {
+        scrollHandler.attach();
+        logicalHandler.setLogical(position);
+      }
+    }
+    emitter.emit("scroll:mode", { mode: logicalHandler ? "synthetic" : "native" });
   }
 
   function doScrollIdle(): void {
@@ -732,6 +794,7 @@ export function createCore<T extends VListItem = VListItem>(
     emitter.emit("velocity:change", _velEvt);
     _idleEvt.scrollPosition = state.scrollPosition;
     emitter.emit("scroll:idle", _idleEvt);
+    if (pending) syncContentSize();
   }
 
   function doForceRender(): void {
@@ -745,6 +808,7 @@ export function createCore<T extends VListItem = VListItem>(
     // plugins just rebuilt for the new items, not on the previous one.
     flushPendingScroll();
     runAfterScrollHooks(hooks.afterScroll, state.scrollPosition, state.scrollDirection);
+    bar?.sync();
 
     if (state.scrollPosition !== lastEventScrollPos) {
       lastEventScrollPos = state.scrollPosition;
@@ -760,8 +824,7 @@ export function createCore<T extends VListItem = VListItem>(
   // ── Scroll handler ──────────────────────────────────────────────
 
   const wheelEnabled = skipDefaultScroll ? false : rawConfig.scroll?.wheel !== false;
-  let scrollHandler: ScrollHandler;
-  if (skipDefaultScroll && boundedWrap) {
+  if (skipDefaultScroll && wrapConfig) {
     // This is the one throw after the setup loop, and page's setup has
     // already bound a resize listener on window by now. A throw here used to
     // leave it there: no list is returned, so nothing could ever destroy it,
@@ -774,11 +837,10 @@ export function createCore<T extends VListItem = VListItem>(
     // so must this. Measured before: the empty root stayed in the caller's
     // container after the throw.
     dom.root.remove();
-    throw new Error("vlist: page() is not compatible with the carousel plugin — bounded page-mode scrolling is not implemented yet.");
+    throw new Error("vlist: page() is not compatible with the carousel plugin — document scrolling cannot wrap.");
   }
-  // Wrap mode (carousel) implies bounded — a plugin requested it during setup.
-  if (!skipDefaultScroll && (logicalHandlerFactory || boundedWrap)) {
-    boundedHandler = (logicalHandlerFactory ?? wrapHandlerFactory!)({
+  function createLogicalHandler(factory: SyntheticFactory): LogicalScrollHandler {
+    return factory({
       state, sizeCache,
       viewport: dom.viewport,
       content: dom.content,
@@ -787,7 +849,7 @@ export function createCore<T extends VListItem = VListItem>(
       idleTimeout,
       ...(scrollTarget ? { scrollTarget } : {}),
       mainAxisPadding: config.mainAxisPadding,
-      ...(boundedWrap ? { wrap: boundedWrap, rendered, classPrefix: config.classPrefix, oddClass, onFold(shift: number) {
+      ...(wrapConfig ? { wrap: wrapConfig, rendered, classPrefix: config.classPrefix, oddClass, onFold(shift: number) {
         const tracker = velocityTracker as { _lp?: number };
         if (tracker._lp !== undefined) tracker._lp -= shift;
         lastEventScrollPos -= shift;
@@ -795,13 +857,14 @@ export function createCore<T extends VListItem = VListItem>(
       onFrame: doScrollFrame,
       onIdle: doScrollIdle,
     });
-    scrollHandler = boundedHandler;
-    // Route every scroll write (ctx.scroll.to, scrollToIndex, adapter.setPixel)
-    // through the logical setter so the runway split stays consistent. The
-    // pixel-equivalent (read) is the logical position, matching native mode (G4).
-    scrollSetFn = (px: number) => boundedHandler!.setLogical(px);
+  }
+
+  // Wrap mode (carousel) implies a logical handler — a plugin requested it during setup.
+  if (!skipDefaultScroll && (logicalHandlerFactory || wrapConfig)) {
+    scrollHandler = logicalHandler = createLogicalHandler((logicalHandlerFactory ?? wrapHandlerFactory)!);
+    scrollSetFn = writeLogical;
   } else {
-    const nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
+    nativeHandler = (skipDefaultScroll ? createScrollSource : nativeOptions!.native)({
       state,
       viewport: dom.viewport,
       isX,
@@ -813,9 +876,10 @@ export function createCore<T extends VListItem = VListItem>(
     });
     scrollHandler = nativeHandler;
     commitScroll = nativeHandler.commitScroll;
+    // page() owns a window-scrolled source; there is no content to hand over.
+    canSwap = !skipDefaultScroll && inputMode !== "native";
   }
 
-  smoothScrollFn = scrollHandler.smoothScrollTo;
 
   // ── Event listeners ─────────────────────────────────────────────
 
@@ -910,10 +974,10 @@ export function createCore<T extends VListItem = VListItem>(
           state.containerSize = size;
           state.crossSize = cross;
           state.resizeCapacity(size, minItemSize, config.overscan);
-          // Bounded runway geometry (maxScrollTop/maxLogical/content size) is
-          // derived from containerSize — recompute it before rendering, or the
-          // runway stays sized to the old viewport.
-          if (boundedHandler) boundedHandler.refresh(sizeCache.getTotalSize());
+          // A logical handler's geometry (max position, content size) is
+          // derived from containerSize — recompute it before rendering, or it
+          // stays sized to the old viewport.
+          if (logicalHandler) logicalHandler.refresh(sizeCache.getTotalSize());
           doForceRender();
           runResizeHooks(hooks.resize, width, height);
           emitter.emit("resize", { width, height });
@@ -940,7 +1004,7 @@ export function createCore<T extends VListItem = VListItem>(
     doRender();
   }
 
-  if (!skipDefaultScroll) scrollHandler.attach();
+  if (!skipDefaultScroll) scrollHandler!.attach();
 
   // ── Public API ──────────────────────────────────────────────────
 
@@ -1142,8 +1206,9 @@ export function createCore<T extends VListItem = VListItem>(
         pos = Math.max(0, Math.min(pos, maxScroll));
       }
 
-      if (behavior === "smooth") {
-        scrollHandler.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
+      // While a swap is pending, a smooth scroll would stop at the browser's cap.
+      if (behavior === "smooth" && !pending) {
+        scrollHandler!.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
       } else {
         writeScroll(pos);
       }
@@ -1166,7 +1231,8 @@ export function createCore<T extends VListItem = VListItem>(
       }
       if (initialRafId !== null) { cancelAnimationFrame(initialRafId); initialRafId = null; }
       if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
-      scrollHandler.detach();
+      scrollHandler!.detach();
+      bar?.destroy();
       resizeObserver?.disconnect();
       dom.content.removeEventListener("click", onContentClick);
       dom.content.removeEventListener("dblclick", onContentDblClick);

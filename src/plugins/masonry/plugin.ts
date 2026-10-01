@@ -348,8 +348,8 @@ export function masonry<T extends VListItem = VListItem>(
     syncContentSize();
   }
 
-  // RFC-013: route content sizing through the engine so bounded mode caps it to
-  // the runway. At setup the core's bounded handler does not exist yet, so this
+  // RFC-012: route content sizing through the engine so a logical handler sizes
+  // the content itself. At setup the core's handler does not exist yet, so this
   // writes the full physical size; the first render re-syncs once the handler is
   // installed (masonryRenderIfNeeded clears the guard while forceNextRender holds).
   function syncContentSize(): void {
@@ -368,7 +368,7 @@ export function masonry<T extends VListItem = VListItem>(
       calculateLayout();
     }
 
-    // The initial render is the first point at which the bounded handler exists,
+    // The initial render is the first point at which the core's handler exists,
     // so re-size content through it (setup sized against the native path).
     if (forceNextRender) {
       lastContentTotalSize = -1;

@@ -39,8 +39,8 @@ export interface EngineState {
   scrollDirection: number;
 
   /**
-   * Bounded logical-scroll origin (RFC-012). The virtual offset that maps to
-   * native scrollTop=0. Items render at `getOffset(index) - baseOffset`.
+   * Logical-scroll origin (RFC-012): the virtual offset at the content
+   * element's start, moved by a logical handler (synthetic input, carousel runway). Items render at `getOffset(index) - baseOffset`.
    * Defaults to 0, which makes native mode byte-identical (`offset - 0`).
    */
   baseOffset: number;

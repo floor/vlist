@@ -4,8 +4,9 @@ import { createContainer, createTestItems, simpleTemplate } from "../helpers/fac
 import { createVList } from "../../src/core/create";
 import { createVList as createSynthetic } from "../../src/synthetic";
 import { createVList as createNative } from "../../src/native";
-import { createBoundedScrollHandler } from "../../src/core/runway";
+import { createRunwayHandler } from "../../src/core/runway";
 import { createVListFromConfig } from "../../src/config";
+import { lazyDriver } from "../../scripts/lazy-driver";
 
 beforeAll(setupDOM);
 afterAll(teardownDOM);
@@ -29,13 +30,15 @@ it("synthetic owns logical position without a mode option", () => {
 });
 
 for (const [entry, create] of [["core", createVList], ["native", createNative], ["synthetic", createSynthetic]] as const) {
-  for (const scroll of [{mode:"native"}, {mode:"bounded"}, {mode:"synthetic"}, {runway:2}]) {
+  // scroll.mode came back in 3.0.x as the input choice (RFC-015); bounded
+  // mode and the runway did not.
+  for (const scroll of [{mode:"bounded"}, {runway:2}]) {
     it(`${entry} rejects removed ${JSON.stringify(scroll)} before DOM creation`, () => {
       const container = createContainer();
       try {
         expect(() => create({ container, items: createTestItems(1),
           item: { height: 40, template: simpleTemplate }, scroll: scroll as any,
-        })).toThrow(/3.0.*scroll.mode.*scroll.runway.*bounded mode is gone.*vlist/);
+        })).toThrow(/scroll\.mode is "auto", "native" or "synthetic".*bounded mode and scroll\.runway were removed in 3\.0/);
         expect(container.children).toHaveLength(0);
       } finally { container.remove(); }
     });
@@ -43,13 +46,21 @@ for (const [entry, create] of [["core", createVList], ["native", createNative], 
 }
 
 for (const scrollbar of ["none", "native"] as const) {
-  it(`scrollbar ${scrollbar} is accepted by default and rejected by synthetic`, () => {
+  // "native" asks for the browser's bar, which synthetic input does not have;
+  // "none" asks for no bar, which it can honour.
+  it(`scrollbar ${scrollbar} is accepted by default, and ${scrollbar === "native" ? "rejected" : "accepted"} by synthetic`, () => {
     const container = createContainer();
     const config = {container, item: {height:40, template:simpleTemplate}, scroll:{scrollbar}};
     try {
-      expect(() => createSynthetic(config as any)).toThrow(/scroll.scrollbar.*vlist/);
-      expect(container.children).toHaveLength(0);
-      expect(() => createVListFromConfig({...config, factory:createSynthetic})).toThrow(/scroll.scrollbar.*vlist/);
+      if (scrollbar === "native") {
+        expect(() => createSynthetic(config as any)).toThrow(/scroll.scrollbar "native" needs native scrolling/);
+        expect(container.children).toHaveLength(0);
+        expect(() => createVListFromConfig({...config, factory:createSynthetic})).toThrow(/scroll.scrollbar "native" needs native scrolling/);
+      } else {
+        const synthetic = createSynthetic(config as any);
+        expect(container.querySelector(".vlist-scrollbar")).toBeNull();
+        synthetic.destroy();
+      }
       const list = createVList(config);
       expect(container.querySelector(".vlist-viewport")!.classList.contains("vlist-viewport--no-scrollbar")).toBe(scrollbar === "none");
       list.destroy();
@@ -98,7 +109,7 @@ it("both entries reject horizontal RTL before creating DOM", () => {
 // Compile-time migration boundary: this function is deliberately never called.
 function removedTypes() {
   const item = {height:40, template:simpleTemplate};
-  // @ts-expect-error mode no longer exists in either entry
+  // scroll.mode is the input choice again (RFC-015).
   createVList({container:"#list", item, scroll:{mode:"synthetic"}});
   // @ts-expect-error bounded no longer exists in the native entry
   createNative({container:"#list", item, scroll:{mode:"bounded"}});
@@ -106,7 +117,6 @@ function removedTypes() {
   createNative({container:"#list", item, scroll:{runway:2}});
   // Native scrollbar strings are accepted by the default factory.
   createVList({container:"#list", item, scroll:{scrollbar:"none"}});
-  // @ts-expect-error config convenience also removes mode
   createVListFromConfig({container:"#list", item, scroll:{mode:"native"}});
   // @ts-expect-error config convenience also removes runway
   createVListFromConfig({container:"#list", item, scroll:{runway:2}});
@@ -125,9 +135,9 @@ it("native creates the wrap handler supplied by the requesting plugin", () => {
   let created = 0;
   const list = createNative({container, items:createTestItems(100), item:{height:40,template:simpleTemplate}}, [{
     name:"wrap-owner", setup(ctx) {
-      ctx.scroll.setBoundedWrap({lapSize:()=>4000,itemsPerLap:()=>100,home:()=>4000,thresholdLaps:2}, config => {
+      ctx.scroll.setWrap({lapSize:()=>4000,itemsPerLap:()=>100,home:()=>4000,thresholdLaps:2}, config => {
         created++;
-        return createBoundedScrollHandler(config);
+        return createRunwayHandler(config);
       });
     },
   }]);
@@ -136,8 +146,9 @@ it("native creates the wrap handler supplied by the requesting plugin", () => {
 });
 
 it("native without carousel excludes the runway implementation", async () => {
+  // lazyDriver: as shipped, the synthetic driver stays behind its lazy import.
   const result = await Bun.build({entrypoints:["native-gate"], target:"browser", format:"esm", minify:true,
-    plugins:[{name:"entry",setup(build) {
+    plugins:[lazyDriver, {name:"entry",setup(build) {
       build.onResolve({filter:/^native-gate$/},()=>({path:"entry",namespace:"gate"}));
       build.onLoad({filter:/.*/,namespace:"gate"},()=>({loader:"ts",contents:
         `import {createVList} from "${import.meta.dir}/../../src/native.ts";globalThis.factory=createVList;`}));

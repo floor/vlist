@@ -35,7 +35,8 @@ const RENAMES: readonly Rename[] = [
   { old: "forceRender", now: "render.force" },
   { old: "sizeCache", now: "sizes.cache" },
   { old: "getItems", now: "items.all" },
-  { old: "ctx.setBoundedWrap", now: "ctx.scroll.setBoundedWrap" },
+  { old: "ctx.setBoundedWrap", now: "ctx.scroll.setWrap" },
+  { old: "ctx.scroll.setBoundedWrap", now: "ctx.scroll.setWrap" },
 ];
 
 interface Problem {

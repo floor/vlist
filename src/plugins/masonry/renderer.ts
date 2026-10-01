@@ -144,7 +144,7 @@ interface TrackedItem {
   lastSelected: boolean;
   /** Focused state at last render */
   lastFocused: boolean;
-  /** Placement Y at last render, runway-relative (to detect position changes) */
+  /** Placement Y at last render, relative to baseOffset (to detect position changes) */
   lastY: number;
   /** Absolute placement Y at last render, so a grace-period item can follow baseOffset */
   absY: number;
@@ -185,8 +185,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   ariaIdPrefix?: string,
   ariaPosInSetGetter?: (layoutIndex: number) => number,
   interactive?: boolean | (() => boolean),
-  // RFC-013: the main-axis placement offset is shifted into the bounded runway
-  // by subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
+  // RFC-012: the main-axis placement offset is shifted into the content
+  // element by subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
   getBaseOffset: () => number = () => 0,
 ): MasonryRenderer<T> => {
   const pool = createElementPool();
@@ -250,7 +250,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     element: HTMLElement,
     placement: ItemPlacement,
   ): void => {
-    // placement.y is the absolute main-axis offset; shift it into the runway.
+    // placement.y is the absolute main-axis offset; shift it by baseOffset.
     const main = Math.round(placement.y - renderOrigin);
     if (isHorizontal) {
       element.style.transform = `translate(${main}px, ${Math.round(placement.x)}px)`;
@@ -499,8 +499,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
         rendered.delete(index);
       } else {
         // Grace-period item: keep it where its placement says relative to the
-        // current runway. In native mode baseOffset is 0 and nothing changes;
-        // in bounded/synthetic mode a stale transform would land it inside the
+        // current baseOffset. In native mode baseOffset is 0 and nothing
+        // changes; with a logical handler a stale transform would land it inside the
         // viewport after a jump, or lag by the baseOffset delta on wheel.
         const main = Math.round(tracked.absY - renderOrigin);
         if (main !== tracked.lastY) {

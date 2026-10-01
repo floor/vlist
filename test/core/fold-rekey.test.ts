@@ -14,7 +14,7 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createVList } from "../../src/core/create";
 import { createVList as createSynthetic } from "../../src/synthetic";
-import { createBoundedScrollHandler } from "../../src/core/runway";
+import { createRunwayHandler } from "../../src/core/runway";
 import { carousel } from "../../src/plugins/carousel/plugin";
 import type { PluginContext, VListPlugin } from "../../src/core/types";
 import type { VListItem } from "../../src/types";
@@ -70,12 +70,12 @@ function wrapPlugin(realTotal: number): VListPlugin<{ id: number }> {
       es.totalItems = virtualTotal;
       ctx.items.setTotalFn(() => realTotal);
       ctx.items.setIndexMapFn(mod);
-      ctx.scroll.setBoundedWrap({
+      ctx.scroll.setWrap({
         lapSize: () => lapSize,
         itemsPerLap: () => realTotal,
         home: () => 5 * lapSize,
         thresholdLaps: 3,
-      }, createBoundedScrollHandler);
+      }, createRunwayHandler);
       ctx.hooks.method("jump", (px: number) => ctx.scroll.to(px));
     },
   };

@@ -10,7 +10,7 @@
  * Implementation: the virtual index space is three laps — the home lap
  * plus one lap of margin on each side. Overscan before index 0 and the
  * shortest-path snap both reach into the neighbouring lap, and the engine
- * has no negative indices. The bounded handler folds the logical position
+ * has no negative indices. The runway handler folds the logical position
  * back toward the home lap as soon as it leaves it. Items are mapped via
  * modulo so virtual index 17 with 16 real items → item 1. The scroll
  * starts in the home lap.
@@ -27,15 +27,15 @@
  *   size cache speak virtual indices. Permanent.
  * - Cannot yet be combined with `search()` or `sortable()` — see the comments
  *   on their own `conflicts`. Both are fixable and meant to be fixed.
- * - `page()` is rejected by core, since bounded page-mode scrolling does not
- *   exist: document scrolling cannot wrap.
+ * - `page()` is rejected by core: document scrolling cannot wrap.
  */
 
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
-import { createBoundedScrollHandler } from "../../core/runway";
+import { createRunwayHandler } from "../../core/runway";
+import { startSyntheticCarousel } from "./input";
 import { createLayoutEngine } from "./engine";
 import type { SlotConfig, SlotConfigResolver, TextFade } from "./presets";
 import { resolvePreset, hasSlots } from "./presets";
@@ -78,19 +78,22 @@ export interface CarouselState {
 // =============================================================================
 
 /**
- * Three laps is the smallest index space the engine can render from: the home
- * lap plus one lap of margin on each side. Overscan before index 0 and the
- * shortest-path snap (`navigateTo`, always `|delta| < realTotal`) both reach
- * into the neighbouring lap, and the engine has no negative indices.
+ * The index space is the home lap plus `margin` laps on each side. One lap of
+ * margin is the smallest the engine can render from: overscan before index 0
+ * and the shortest-path snap (`navigateTo`, always `|delta| < realTotal`) both
+ * reach into the neighbouring lap, and the engine has no negative indices. The
+ * position never rests outside the home lap (the fold is symmetric,
+ * `wrapLaps`), so one lap is also enough whenever a lap is at least a
+ * viewport long.
  *
- * One lap of margin is enough because the position never rests outside the home
- * lap (the fold is symmetric, `wrapLaps`) and because a lap shorter than the
- * viewport is not drawn twice anyway: the layout places an element by its data
- * index, so a slide appears once on screen however many laps exist. (That
- * limitation — fewer slides than the viewport shows — predates this window.)
+ * A shorter lap — two or three slides in a wide carousel — shows more than one
+ * lap at once, so the margin grows to cover the viewport and a slide of
+ * overscan (FLO-204); and elements are placed by their virtual index, so a
+ * slide is painted once per lap on screen. They used to be placed by their
+ * data index, which put every copy of a slide on the same spot and left the
+ * rest of the viewport blank.
  */
-const LAPS = 3;
-const HOME_LAP = 1;
+const MIN_MARGIN = 1;
 
 // =============================================================================
 // Variant normalisation
@@ -172,6 +175,9 @@ export function carousel<T extends VListItem = VListItem>(
   let layoutContainerSize = 0;
   let lapSize = 0;
   let virtualTotal = 0;
+  /** Laps each side of the home lap; the home lap is lap `margin`. */
+  let margin = MIN_MARGIN;
+  const laps = (): number => 2 * margin + 1;
 
   let initialScrollPending = false;
   let prefix = "vlist";
@@ -211,12 +217,38 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   function virtualIndexOf(logicalIndex: number): number {
-    return HOME_LAP * realTotal + logicalIndex;
+    return margin * realTotal + logicalIndex;
   }
 
   function logicalIndexOf(virtualIndex: number): number {
     if (realTotal <= 0) return 0;
     return ((virtualIndex % realTotal) + realTotal) % realTotal;
+  }
+
+  /**
+   * Margin laps enough for the viewport plus one slide of overscan. Returns
+   * whether it changed; the caller then owns the new virtual total.
+   */
+  function fitMargin(): boolean {
+    const step = stepSizes[0] ?? stepSize;
+    const need = lapSize > 0 ? Math.max(MIN_MARGIN, Math.ceil((engineState.containerSize + step) / lapSize)) : MIN_MARGIN;
+    if (need === margin) return false;
+    margin = need;
+    virtualTotal = realTotal * laps();
+    return true;
+  }
+
+  /** After the index space changed size: the same slide, re-anchored in the new home lap. */
+  function reanchor(): void {
+    if (!storedCtx) return;
+    engineState.totalItems = virtualTotal;
+    intendedVi = virtualIndexOf(currentIndex);
+    lastDirection = 0;
+    storedCtx.render.contentSize(sizeCache.getTotalSize());
+    storedCtx.scroll.to(scrollPositionForVirtual(intendedVi));
+    storedCtx.render.force();
+    updateItemLayout();
+    intendedVi = null;
   }
 
   function buildStepCache(sizes: number[]): void {
@@ -284,7 +316,7 @@ export function carousel<T extends VListItem = VListItem>(
   }
 
   // Rebasing (folding the logical position back toward the home lap) and the
-  // smooth-scroll animation both live in the bounded scroll handler now — the
+  // smooth-scroll animation both live in the runway handler (core/runway) — the
   // carousel only computes targets and lets the handler do the scrolling.
   function smoothScrollTo(target: number, duration: number): void {
     // Every programmatic snap passes here, so this is where its deadline is set.
@@ -304,7 +336,7 @@ export function carousel<T extends VListItem = VListItem>(
       const inner = upstreamGet ?? ((index: number): T | undefined => ctx.items.all()[index]);
       ctx.items.setGetFn((i: number): T | undefined => inner(logicalIndexOf(i)));
 
-      sizeCache.getTotalSize = (): number => lapSize * LAPS;
+      sizeCache.getTotalSize = (): number => lapSize * laps();
       sizeCache.getOffset = (index: number): number => scrollPositionForVirtual(index);
       sizeCache.getSize = (index: number): number => {
         const logical = logicalIndexOf(index);
@@ -345,20 +377,25 @@ export function carousel<T extends VListItem = VListItem>(
       // there" must not use. data() publishes the same answer the same way.
       ctx.hooks.method("_getTotal", ownGetTotal);
 
-      // Route scroll through the bounded handler in wrap mode: the logical
+      // Route scroll through the runway handler in wrap mode: the logical
       // position never clamps, and the handler folds it back toward the
       // home lap as soon as it leaves it. The carousel's modulo getItemFn
       // maps the shifted virtual indices to identical real items at identical
       // paint positions, so the fold is seamless.
-      ctx.scroll.setBoundedWrap({
+      ctx.scroll.setWrap({
         lapSize: () => lapSize,
         itemsPerLap: () => realTotal,
-        home: () => HOME_LAP * lapSize,
+        home: () => margin * lapSize,
         thresholdLaps: 1,
         onFold(shift: number) {
           if (intendedVi !== null) intendedVi -= Math.round(shift / lapSize) * realTotal;
         },
-      }, createBoundedScrollHandler);
+      }, ctx.config.scrollMode === "synthetic"
+        // The runway until the synthetic driver loads, then the driver (./input).
+        ? (config) => startSyntheticCarousel(config,
+          () => ctx.emitter.emit("scroll:mode", { mode: "synthetic" }),
+          (error) => ctx.emitter.emit("error", { error, context: "scroll:mode" }))
+        : createRunwayHandler);
 
       initialScrollPending = true;
   }
@@ -406,7 +443,8 @@ export function carousel<T extends VListItem = VListItem>(
     } else {
       buildStepCache(Array.from({ length: realTotal }, () => stepSizes[0] ?? stepSize));
     }
-    virtualTotal = realTotal * LAPS;
+    fitMargin();
+    virtualTotal = realTotal * laps();
     if (!windowInstalled) {
       // The window brings the inflated total and the seeding of the start
       // position (initialScrollPending) with it; the commit that follows does
@@ -418,7 +456,7 @@ export function carousel<T extends VListItem = VListItem>(
     if (realTotal > 1) {
       const safeIndex = savedIndex < realTotal ? savedIndex : 0;
       currentIndex = safeIndex;
-      storedCtx.scroll.to(scrollPositionForVirtual(HOME_LAP * realTotal + safeIndex));
+      storedCtx.scroll.to(scrollPositionForVirtual(margin * realTotal + safeIndex));
     }
   }
 
@@ -426,28 +464,23 @@ export function carousel<T extends VListItem = VListItem>(
     if (!storedCtx || realTotal <= 0) return;
     if (!layoutEngine && !isVariableWidth && realTotal <= 1) return;
 
-    const content = storedCtx.dom.content;
-    const children = content.children;
     const pos = scroll.getPixelEquivalent();
     const baseOffset = scroll.getRenderOrigin();
     const scrollTop = Math.round(pos - baseOffset);
     const prop = isX ? "width" : "height";
     const { vi: focalVi, frac } = decomposeScroll(pos);
-    const baseCycle = focalVi - ((focalVi % realTotal + realTotal) % realTotal);
 
     const focalWidth = layoutEngine ? (layoutEngine.slotWidths[layoutEngine.focalSlot] ?? 0) : 0;
 
     if (layoutEngine) {
       const anchor = pos + layoutEngine.getAnchorOffset(focalVi, frac);
 
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        const idx = el.dataset.index;
-        if (idx === undefined) continue;
-        const logical = parseInt(idx, 10);
-        let vi = baseCycle + logical;
-        if (vi - focalVi > realTotal / 2) vi -= realTotal;
-        if (focalVi - vi > realTotal / 2) vi += realTotal;
+      for (let k = 0; k < engineState.visibleCount; k++) {
+        // The element's own virtual index: a slide on screen twice (a lap
+        // shorter than the viewport) is two elements at two places.
+        const vi = engineState.visibleIndices[k]!;
+        const el = storedCtx.dom.renderedElement(vi);
+        if (!el) continue;
 
         const layout = layoutEngine.getItemLayout(vi, focalVi, frac, anchor);
         const roundedSize = Math.max(0, Math.round(layout.size));
@@ -486,14 +519,12 @@ export function carousel<T extends VListItem = VListItem>(
         el.style.setProperty("--vlist-carousel-focal-width", focalWidth + "px");
       }
     } else {
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        const idx = el.dataset.index;
-        if (idx === undefined) continue;
-        const logical = parseInt(idx, 10);
-        let vi = baseCycle + logical;
-        if (vi - focalVi > realTotal / 2) vi -= realTotal;
-        if (focalVi - vi > realTotal / 2) vi += realTotal;
+      for (let k = 0; k < engineState.visibleCount; k++) {
+        // The element's own virtual index: a slide on screen twice (a lap
+        // shorter than the viewport) is two elements at two places.
+        const vi = engineState.visibleIndices[k]!;
+        const el = storedCtx.dom.renderedElement(vi);
+        if (!el) continue;
 
         const logIdx = logicalIndexOf(vi);
         const itemSize = Math.max(0, Math.round((stepSizes[logIdx] ?? 0) - gapPx));
@@ -651,7 +682,8 @@ export function carousel<T extends VListItem = VListItem>(
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;
       }
-      virtualTotal = realTotal * LAPS;
+      fitMargin();
+      virtualTotal = realTotal * laps();
       currentIndex = resolveIndex(initialIndex);
 
       // ── Virtual scroll window ─────────────────────────────────────
@@ -871,7 +903,10 @@ export function carousel<T extends VListItem = VListItem>(
         if (Math.abs(containerSize - layoutContainerSize) < 1) return;
         layoutContainerSize = containerSize;
         const preset = resolveSlots(containerSize, resolvePeekSize(containerSize));
-        if (!hasSlots(preset)) return;
+        if (!hasSlots(preset)) {
+          if (windowInstalled && fitMargin()) reanchor();
+          return;
+        }
 
         layoutEngine = createLayoutEngine({
           slots: preset.slots, focalSlot: preset.focalSlot, containerSize, gap: gapPx,
@@ -880,6 +915,7 @@ export function carousel<T extends VListItem = VListItem>(
         stepSize = layoutEngine.stepSize;
         buildStepCache(Array.from({ length: Math.max(1, realTotal) }, () => stepSize));
         isVariableWidth = false;
+        if (fitMargin()) engineState.totalItems = virtualTotal;
 
         // Re-anchor in the home lap using the new step widths. Mark the
         // target before refreshing the runway so intermediate commits cannot

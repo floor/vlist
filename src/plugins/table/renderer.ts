@@ -182,7 +182,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   getTotalItems: () => number,
   striped?: boolean | "data" | "even" | "odd",
   stripeIndexFn?: () => (index: number) => number,
-  // RFC-013: absolute row offsets are shifted into the bounded runway by
+  // RFC-012: absolute row offsets are shifted into the content element by
   // subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
   getBaseOffset: () => number = () => 0,
 ): TableRendererInstance<T> => {

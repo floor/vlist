@@ -11,6 +11,197 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-01
+
+The 3.1 line, on the npm `latest` tag. Everything in `3.0.1-next.1` through `3.1.0-next.3`
+below is part of it; nothing landed after `next.3`. For a reader coming from 3.0:
+
+- **One entry, three scroll modes.** `scroll.mode` is `"auto"` (default), `"native"` or
+  `"synthetic"` on the one `vlist` entry. With `"auto"` a list scrolls natively and hands itself
+  to synthetic input past the browser's element size limit (16,000,000 px of content), and back
+  below 12,000,000 px, keeping its plugins, selection and position. The synthetic driver is a
+  separate file, downloaded the first time a list needs it. `vlist/synthetic` is deprecated.
+- **A drawn scrollbar for synthetic lists.** Synthetic content is not the browser's to scroll,
+  so a synthetic list draws its scrollbar by default.
+- **Carousels honour `"synthetic"`.** The carousel switches to the synthetic handler itself; the
+  core knows nothing about the carousel.
+- **Frameworks in the package.** `vlist/vue`, `vlist/svelte`, `vlist/solid` and `vlist/react`
+  are feature-first entries that share the root bundle's core: a plain framework list costs
+  about 11 KB gzip, where the config-based adapters cost about 37 KB. The `vlist-vue`,
+  `vlist-svelte`, `vlist-solidjs` and `vlist-react` packages are deprecated; the migration is
+  under `3.1.0-next.3`.
+- **Native lists that scroll everywhere.** Native content is capped at the browser limit, so
+  Firefox no longer collapses a list past 17.9M px to nothing.
+- **Size as a promise.** The base is 10.3 KB gzipped against its budget; the size tables in both
+  READMEs are what `bun run size` prints.
+
+## [3.1.0-next.3] - 2026-10-01
+
+The frameworks move into the package. `vlist/vue`, `vlist/svelte`,
+`vlist/solid` and `vlist/react` replace the separate adapter packages, which
+are deprecated. Secondary entries now share the root bundle's core. This
+supersedes the note under 3.1.0-next.2 that framework adapters need
+3.1.0-next.2: new code imports the entries, and the old packages' 3.1
+releases will be built on them.
+
+### Added
+
+- Framework entries in the `vlist` package (#328, #330): `vlist/vue`
+  (`useVList`, `useVListEvent`), `vlist/svelte` (the `vlist` action,
+  `onVListEvent`), `vlist/solid` (`createVList`, `createVListEvent`) and
+  `vlist/react` (`useVList`, `useVListEvent`). They are feature-first like
+  the vanilla builder: plugins come from `vlist` and are passed explicitly,
+  so a list bundles only the features it uses, and the methods a plugin adds
+  are typed from the `plugins` argument (`select()` exists only with
+  `selection()`). Each entry imports the core from `vlist`; React, Vue,
+  Svelte and solid-js are optional peer dependencies. In a file that also
+  uses the core builder, alias Solid's `createVList`
+  (`import { createVList as createSolidVList } from "vlist/solid"`).
+
+  Measured by `bun run size` (minified, gzip; the framework itself external):
+
+  | Entry | Entry alone | With the core | Budget |
+  |---|---|---|---|
+  | `vlist/vue` `useVList` | 350 B | 10.5 KB (10,722 B) | 10.6 kB |
+  | `vlist/svelte` `vlist` | 230 B | 10.4 KB (10,626 B) | 10.5 kB |
+  | `vlist/solid` `createVList` | 302 B | 10.4 KB (10,688 B) | 10.6 kB |
+  | `vlist/react` `useVList` | 361 B | 10.5 KB (10,717 B) | 10.6 kB |
+  | `vlist/react` + `grid()` | | 13.1 KB (13,373 B) | 13.2 kB |
+
+  `bun run size` fails if a framework scenario leaks an unused plugin or
+  exceeds its budget, and gained a brotli column.
+
+- `useVListEvent` in `vlist/react` keeps vlist-react's `instanceRef.current`
+  dependency. In the same component it subscribes at mount, because
+  `useVList`'s effect runs first. In a child component, whose effects run
+  before the parent's, it subscribes on the child's first render once the
+  list exists. Depending on the ref object instead would mean such a child
+  never subscribes; a test covers it.
+
+### Fixed
+
+- `useVListEvent` in `vlist/vue` unsubscribes when the component unmounts.
+  vlist-vue's version subscribed from a `watch` callback that ran after
+  setup, so its `onBeforeUnmount` was dropped with a Vue warning and the
+  handler stayed on the list until the list was destroyed. vlist-vue 3.0.1
+  will carry the fix for vlist 3.0.x.
+
+### Deprecated
+
+- The `vlist-vue`, `vlist-svelte`, `vlist-solidjs` and `vlist-react`
+  packages. To migrate, change the import path (`vlist-vue` → `vlist/vue`,
+  `vlist-svelte` → `vlist/svelte`, `vlist-solidjs` → `vlist/solid`,
+  `vlist-react` → `vlist/react`) and pass features as plugins instead of
+  config fields: `useVList({ items, item, selection: { mode: "single" } })`
+  becomes `useVList({ items, item }, [selection({ mode: "single" })])`, with
+  `selection` imported from `vlist`. Their 3.1 releases will be built on these
+  entries and keep the config-based API, so existing code keeps working while
+  you migrate.
+
+### Changed
+
+- `dist/config.js` imports the core from `dist/index.js` instead of carrying a
+  copy of its own (`scripts/shared-core.ts`, #329). An app using both `vlist`
+  and `vlist/config` ships one core, one set of plugins and one
+  synthetic-driver cache. Measured against the built package, minified, gzip:
+  both entries 40,214 → 38,915 B; `vlist` alone unchanged; `vlist/config`
+  alone 38,605 → 38,915 B (+310 B, the cost of tree-shaking it out of the
+  shared bundle). `vlist/synthetic` stays standalone. The framework entries
+  build the same way.
+
+## [3.1.0-next.2] - 2026-09-28
+
+The 3.1 line. `scroll.mode` is a feature, so what 3.0.1-next.1 started ships
+as 3.1.0, not 3.0.1; this prerelease carries it on, with carousels honouring
+`"synthetic"`. Framework adapters need 3.1.0-next.2 or later for their peer
+range to admit it.
+
+### Added
+
+- `carousel()` honours `scroll.mode: "synthetic"`: it runs on the synthetic
+  handler, the one the deprecated `vlist/synthetic` entry runs a carousel on,
+  so that entry is no longer the only way to a synthetic carousel. The first
+  carousel on a page starts on its runway and switches in place once the
+  driver loads and the carousel is idle, so a swipe in flight is never cut off
+  (`core/switching.ts`); later ones start synthetic. A failed load keeps the
+  runway and emits `error` (`scroll:mode`). The switch is the carousel's: the
+  core only exposes the input mode to plugins, as `config.scrollMode`
+  (`"synthetic"` under `vlist/synthetic`). `"auto"` and `"native"` keep the
+  runway.
+
+## [3.0.1-next.1] - 2026-09-27
+
+The first prerelease of what ships as 3.1.0: `scroll.mode` on the one `vlist` entry (a list past
+the browser's size limit hands itself to synthetic input, and draws its
+scrollbar), and the fixes since 3.0.0.
+
+### Added
+
+- `scroll.mode`: `"auto"` (default), `"native"` or `"synthetic"`, on the one
+  `vlist` entry. With `"auto"` a list that grows past the browser's
+  element-size limit (16,000,000 px of content) hands its input to the
+  synthetic handler in place, and back below 12,000,000 px: the list, its
+  plugins, selection and scroll position stay, and a million 40 px rows scroll
+  to the last one. The synthetic driver is a separate file,
+  `dist/synthetic-driver.js`, downloaded the first time a list needs it. A
+  swap waits for a scroll in flight to end; a jump the browser clamped lands
+  where it was asked. `scroll:mode` reports each swap
+  ([RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff), FLO-247).
+
+- A synthetic list draws a scrollbar by default: synthetic content is the size
+  of its viewport, so the browser draws none. It comes with the lazy driver,
+  appears when a list goes synthetic and leaves when it goes back to native.
+  `scroll.scrollbar` options configure it, `"none"` skips it, and a list with
+  `scrollbar()` keeps that one. `scroll.scrollbar: "none"` no longer throws
+  with synthetic input; `"native"` still does.
+
+- `dist/version.json` says whether a build is the release: `released` is true
+  only for the tagged `v<version>` build. A site serving a build of `next`
+  between releases can name it by its commit instead of the last released
+  version (vlist.io shows `3.0.0+<commit>`).
+
+### Changed
+
+- `content:size:overflow` fires only with `scroll.mode: "native"`; `"auto"`
+  handles the size instead.
+
+### Deprecated
+
+- `ctx.scroll.setBoundedWrap` (plugin API) is now `ctx.scroll.setWrap`. The old
+  name still works through 3.x. Internally, "bounded mode" is gone from the
+  code as it is from the options: the handlers that own the logical position
+  are `LogicalScrollHandler` (`core/logical.ts`), and the carousel's engine is
+  `createRunwayHandler` (`core/runway.ts`).
+
+- `vlist/synthetic`: use `scroll: { mode: "synthetic" }`. It keeps working.
+
+### Fixed
+
+- A native list past the browser's element size limit could not scroll at all
+  in Firefox: its content element was written at full size (48,000,000 px for
+  a million 48 px rows), and Firefox lays out nothing above 17,895,697 px, so
+  it collapsed to 0 with no scrollbar. Chrome clamps such an element at
+  33,554,428 px, which hid the problem. The native content size is now capped
+  at 16,000,000 px, and native input reaches the same rows in every browser.
+
+- `carousel()` with fewer slides than its viewport shows is no longer
+  partly blank. Two or three slides in a wide carousel make a lap shorter
+  than the viewport; each slide was placed by its data index, so every copy
+  landed on the same spot. Slides are now placed by their virtual index —
+  painted once per lap on screen — and the index space grows with the
+  geometry instead of being fixed at three laps (FLO-204).
+
+- Native lists: a smooth `scrollToIndex` past the browser's element-size cap
+  no longer leaves the list blank. The browser clamps `scrollTop` at its cap
+  (Chrome: 33,554,428 px) and the animation committed the position it wrote,
+  not the one applied, so vlist rendered rows below the last reachable one.
+  It now commits what the browser applied; a million 40 px rows jump to row
+  838,861 in Chrome, the last one the browser can show (FLO-247).
+
+- The npm package ships `dist/version.json`, the build stamp (version, commit,
+  build time) a site can read to say which vlist it serves. It was built
+  since #305 but left out of the `files` list (FLO-246).
+
 ## [3.0.0] - 2026-09-25
 
 The 3.0 line, on the npm `latest` tag. Everything in `3.0.0-next.1` through `3.0.0-next.6`

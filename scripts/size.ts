@@ -12,8 +12,10 @@
  */
 
 import { gzipSync } from "bun";
+import { brotliCompressSync } from "zlib";
 import { mkdtempSync, rmSync } from "fs";
 import { resolve } from "path";
+import { lazyDriver } from "./lazy-driver";
 
 const root = resolve(import.meta.dir, "..");
 const entry = `${root}/src/index.ts`;
@@ -90,7 +92,18 @@ export const SCENARIO_DEFS = [
   { name: "tree",              imports: ["createVList", "tree"] },
   { name: "search",            imports: ["createVList", "search"] },
   { name: "carousel",          imports: ["createVList", "carousel"] },
+  // Framework entries (#328): the hook alone, the framework external.
+  { name: "vue",               imports: ["useVList"] },
+  { name: "svelte",            imports: ["vlist"] },
+  { name: "solid",             imports: ["createVList"] },
+  { name: "react",             imports: ["useVList"] },
+  { name: "react + grid",      imports: ["useVList", "grid"] },
 ] as const;
+
+/** Framework scenarios import their first name from the entry, the rest from vlist. */
+const FRAMEWORK_SCENARIO = /^(vue|svelte|solid|react)\b/;
+/** Optional peer dependencies: an app has them, the bundle does not. */
+const FRAMEWORKS = ["react", "react-dom", "vue", "svelte", "solid-js"];
 
 export type ScenarioName = (typeof SCENARIO_DEFS)[number]["name"];
 
@@ -124,7 +137,7 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // double and CI would still pass. Ceilings are a measured run's 0.1 KB
 // column plus 0.4 KB of slack — the same margin the 9.9 KB target had over
 // the advertised 9.5 KB base. Base and native keep a fixed target; it moved
-// from 9.9 kB to 10.0 kB on 2026-09-25 (see below).
+// from 9.9 kB to 10.0 kB on 2026-09-25 and to 10.3 kB on 2026-09-27 (see below).
 
 /** Tenth-of-a-KB ceiling, matching how the README quotes sizes. */
 // Headroom rule (2026-09-18): each budget is the measured size rounded up on a
@@ -134,38 +147,49 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // quoted in the README still come from `bun run size`, never from this table.
 //
 // Two budgets are not headroom but a promise: the base and native entries stay
-// at 10.0 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
+// at 10.3 kB, pinned by test/scripts/size.test.ts. The headroom rule does not
 // apply to them — raising either is a product decision, not a chore. It was
 // 9.9 kB until 2026-09-25: the 3.x fix cycle grew the core past it while the
 // gate was dark behind a failing typecheck (#287 alone cost 43 bytes), and
 // Dr Jones chose 10.0 kB over trimming merged fixes. 10.0 kB leaves the base
 // 40 bytes of room, so the next core growth is a decision again, on purpose.
+// 10.3 kB since 2026-09-27: `scroll.mode` (RFC-015, FLO-247) hands a list past
+// the browser's size limit to synthetic input by itself, loading the driver
+// only then. It costs the core 301 bytes, after a trim pass from 405; Dr Jones
+// chose it over keeping the handoff opt-in. The base has 33 bytes of room, so
+// the next growth is a decision again. Every other budget moved by the
+// headroom rule.
 export const kb = (n: number): number => Math.floor(n * 1024);
 
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
-  "Base (createVList)": kb(10.0),
-  synthetic: kb(12.7),
-  "synthetic + carousel": kb(17.6),
-  "synthetic + sortable": kb(16.3),
-  createStats: kb(10.3),
-  "synthetic + createStats": kb(13.0),
-  native: kb(10.0),
-  a11y: kb(11.5),
-  selection: kb(13.0),
-  data: kb(14.9),
-  scrollbar: kb(13.0),
-  sortable: kb(13.6),
-  groups: kb(15.5),
-  page: kb(11.0),
-  snapshots: kb(11.3),
-  transition: kb(12.1),
-  autosize: kb(11.2),
-  grid: kb(12.7),
-  table: kb(16.0),
-  masonry: kb(14.5),
-  tree: kb(15.5),
-  search: kb(13.4),
-  carousel: kb(15.3),
+  "Base (createVList)": kb(10.3),
+  synthetic: kb(13.0),
+  "synthetic + carousel": kb(18.2),
+  "synthetic + sortable": kb(16.6),
+  createStats: kb(10.6),
+  "synthetic + createStats": kb(13.2),
+  native: kb(10.3),
+  a11y: kb(11.8),
+  selection: kb(13.4),
+  data: kb(15.2),
+  scrollbar: kb(13.3),
+  sortable: kb(14.0),
+  groups: kb(15.8),
+  page: kb(11.3),
+  snapshots: kb(11.5),
+  transition: kb(12.4),
+  autosize: kb(11.6),
+  grid: kb(13.0),
+  table: kb(16.3),
+  masonry: kb(14.8),
+  tree: kb(15.8),
+  search: kb(13.7),
+  carousel: kb(15.8),
+  vue: kb(10.6),
+  svelte: kb(10.5),
+  solid: kb(10.6),
+  react: kb(10.6),
+  "react + grid": kb(13.2),
 };
 
 export interface SizeGateInput {
@@ -194,6 +218,8 @@ interface Result {
   /** Exact bytes, kept because the README quotes them and the budget gates on them. */
   minBytes: number;
   gzBytes: number;
+  /** Reported beside gzip; budgets gate on gzip. */
+  brBytes: number;
   minKB: number;
   gzKB: number;
   deltaKB: number;
@@ -213,7 +239,10 @@ const main = async (): Promise<void> => {
 
   for (const scenario of scenarios) {
     const imports = scenario.imports.join(", ");
-    const code = scenario.name.startsWith("synthetic +")
+    const framework = FRAMEWORK_SCENARIO.exec(scenario.name)?.[1];
+    const code = framework
+      ? `import { ${scenario.imports[0]} } from "${root}/src/${framework}.ts";${scenario.imports.length > 1 ? ` import { ${scenario.imports.slice(1).join(", ")} } from "${entry}";` : ""} globalThis._v = [${imports}];`
+      : scenario.name.startsWith("synthetic +")
       ? `import { createVList } from "${root}/src/synthetic.ts"; import { ${scenario.imports.slice(1).join(", ")} } from "${entry}"; globalThis._v = [${imports}];`
       : `import { ${imports} } from "${["native", "synthetic"].includes(scenario.name) ? `${root}/src/${scenario.name}.ts` : entry}"; globalThis._v = [${imports}];`;
     const tmpFile = `${scratch}/${scenario.name.replace(/[^a-zA-Z0-9]/g, "_")}.ts`;
@@ -225,6 +254,8 @@ const main = async (): Promise<void> => {
       minify: true,
       target: "browser",
       format: "esm",
+      plugins: [lazyDriver],
+      external: FRAMEWORKS,
       define: {
         "process.env.NODE_ENV": '"production"',
       },
@@ -240,11 +271,13 @@ const main = async (): Promise<void> => {
     const output = await build.outputs[0]!.arrayBuffer();
     const minBytes = output.byteLength;
     const gzBytes = gzipSync(new Uint8Array(output)).byteLength;
+    const brBytes = brotliCompressSync(new Uint8Array(output)).byteLength;
 
     results.push({
       name: scenario.name,
       minBytes,
       gzBytes,
+      brBytes,
       minKB: minBytes / 1024,
       gzKB: gzBytes / 1024,
       deltaKB: 0,
@@ -297,8 +330,9 @@ const main = async (): Promise<void> => {
   const COL_NAME = 22;
   const COL_MIN = 10;
   const COL_GZ = 9;
+  const COL_BR = 9;
   const COL_DELTA = 12;
-  const LINE_W = COL_NAME + COL_MIN + COL_GZ + COL_DELTA + 4;
+  const LINE_W = COL_NAME + COL_MIN + COL_GZ + COL_DELTA + 4 + COL_BR + 2;
 
   const pad = (s: string, n: number) => s.padStart(n);
   const sep = "─".repeat(LINE_W);
@@ -306,16 +340,17 @@ const main = async (): Promise<void> => {
   console.log("");
   console.log("  vlist — Plugin Sizes");
   console.log("");
-  console.log(`  ${"Plugin".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Delta".padStart(COL_DELTA)}`);
+  console.log(`  ${"Plugin".padEnd(COL_NAME)}  ${"Minified".padStart(COL_MIN)}  ${"Gzipped".padStart(COL_GZ)}  ${"Brotli".padStart(COL_BR)}  ${"Delta".padStart(COL_DELTA)}`);
   console.log(`  ${sep}`);
 
   for (const r of results) {
     const min = `${r.minKB.toFixed(1)} KB`;
     const gz = `${r.gzKB.toFixed(1)} KB`;
+    const br = `${(r.brBytes / 1024).toFixed(1)} KB`;
     const delta = r.name.startsWith("Base") ? "" : `${r.deltaKB >= 0 ? "+" : ""}${r.deltaKB.toFixed(1)} KB`;
 
     console.log(
-      `  ${r.name.padEnd(COL_NAME)}  ${pad(min, COL_MIN)}  ${pad(gz, COL_GZ)}  ${pad(delta, COL_DELTA)}`,
+      `  ${r.name.padEnd(COL_NAME)}  ${pad(min, COL_MIN)}  ${pad(gz, COL_GZ)}  ${pad(br, COL_BR)}  ${pad(delta, COL_DELTA)}`,
     );
   }
 

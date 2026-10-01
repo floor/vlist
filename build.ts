@@ -3,6 +3,19 @@ import { $ } from "bun";
 import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs";
 import { resolve } from "path";
 import { versionStamp } from "./scripts/version-stamp";
+import { lazyDriver, DRIVER_FILE } from "./scripts/lazy-driver";
+import { sharedCore } from "./scripts/shared-core";
+
+// Framework entries (#328): vlist/vue, vlist/svelte, vlist/solid, vlist/react.
+// The framework stays external: it is an optional peer dependency.
+const FRAMEWORK_ENTRIES = ["vue", "svelte", "solid", "react"];
+const FRAMEWORKS = ["react", "react-dom", "vue", "svelte", "solid-js"];
+
+// Entries that import the core from dist/index.js (scripts/shared-core.ts).
+// vlist/synthetic stays standalone: deprecated, it bundles its own core and driver.
+const SHARED_CORE_ENTRIES = ["config", ...FRAMEWORK_ENTRIES];
+// A string only createCore carries: its presence means a bundled copy of the core.
+const CORE_MARKER = "horizontal RTL lists are not supported";
 
 const isDev = process.argv.includes("--watch");
 const withTypes = process.argv.includes("--types");
@@ -64,6 +77,7 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "index.js",
+    plugins: [lazyDriver],
     define,
   });
 
@@ -98,6 +112,22 @@ async function build() {
 
   await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
 
+  // scroll.mode: the driver index.js imports lazily, built on its own.
+  {
+    const result = await Bun.build({
+      entrypoints: [resolve("./src/synthetic/driver.ts")], outdir: "./dist",
+      format: "esm", target: "browser", minify: !isDev,
+      sourcemap: isDev ? "inline" : "none", naming: DRIVER_FILE, define,
+    });
+    if (!result.success) {
+      for (const log of result.logs) console.error(log);
+      process.exit(1);
+    }
+    if (!(await Bun.file(`./dist/${DRIVER_FILE}`).text()).includes("pan-x pinch-zoom")) {
+      throw new Error(`dist/${DRIVER_FILE} must contain the synthetic driver`);
+    }
+  }
+
   for (const name of ["index", "native", "synthetic"]) {
     const text = await Bun.file(`./dist/${name}.js`).text();
     const hasDriver = text.includes("pan-x pinch-zoom");
@@ -124,6 +154,8 @@ async function build() {
     minify: !isDev,
     sourcemap: isDev ? "inline" : "none",
     naming: "config.js",
+    // The core comes from ./index.js, not a copy of its own.
+    plugins: [sharedCore],
     define,
   });
 
@@ -141,6 +173,32 @@ async function build() {
   console.log(
     `  Config      ${configTime.toFixed(0).padStart(6)}ms  dist/config.js (${configSize} KB)`,
   );
+
+  // The root bundle loads the synthetic driver lazily, never carries it.
+  const indexText = await Bun.file("./dist/index.js").text();
+  if (!indexText.includes(`import("./${DRIVER_FILE}")`) || indexText.includes("pan-x pinch-zoom")) {
+    throw new Error(`dist/index.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
+  }
+  for (const name of FRAMEWORK_ENTRIES) {
+    const result = await Bun.build({
+      entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
+      format: "esm", target: "browser", minify: !isDev,
+      sourcemap: isDev ? "inline" : "none", naming: `${name}.js`,
+      external: FRAMEWORKS, plugins: [sharedCore], define,
+    });
+    if (!result.success) {
+      for (const log of result.logs) console.error(log);
+      process.exit(1);
+    }
+  }
+
+  // Secondary entries import the core from it: no copy of their own, no driver.
+  for (const name of SHARED_CORE_ENTRIES) {
+    const text = await Bun.file(`./dist/${name}.js`).text();
+    if (!/from\s*"\.\/index\.js"/.test(text) || text.includes(CORE_MARKER) || text.includes("pan-x pinch-zoom")) {
+      throw new Error(`dist/${name}.js must import the core from ./index.js, not carry its own`);
+    }
+  }
 
   // Build internals bundle (low-level exports for advanced users)
   const internalsStart = performance.now();
@@ -241,6 +299,12 @@ async function build() {
     { name: "createStats", imports: ["createVList", "createStats"] },
     { name: "synthetic + createStats", imports: ["createVList", "createStats"] },
     { name: "native", imports: ["createVList"] },
+    // Framework entries (#328), framework external.
+    { name: "vue", imports: ["useVList"] },
+    { name: "svelte", imports: ["vlist"] },
+    { name: "solid", imports: ["createVList"] },
+    { name: "react", imports: ["useVList"] },
+    { name: "react + grid", imports: ["useVList", "grid"] },
     ...ALL_PLUGINS.map((f) => ({ name: f, imports: ["createVList", f] })),
   ];
 
@@ -248,7 +312,10 @@ async function build() {
 
   for (const { name, imports } of scenarios) {
     const scenarioEntry = ["synthetic", "native"].includes(name) ? resolve(`./src/${name}.ts`) : entryAbs;
-    const code = name.startsWith("synthetic +")
+    const framework = /^(vue|svelte|solid|react)\b/.exec(name)?.[1];
+    const code = framework
+      ? `import { ${imports[0]} } from "${resolve(`./src/${framework}.ts`)}";${imports.length > 1 ? ` import { ${imports.slice(1).join(", ")} } from "${entryAbs}";` : ""} globalThis._v = [${imports.join(", ")}];`
+      : name.startsWith("synthetic +")
       ? `import { createVList } from "${resolve("./src/synthetic.ts")}"; import { ${imports.slice(1).join(", ")} } from "${entryAbs}"; globalThis._v = [${imports.join(", ")}];`
       : `import { ${imports.join(", ")} } from "${scenarioEntry}"; globalThis._v = [${imports.join(", ")}];`;
     const tmp = `${scratch}/size_${name}.ts`;
@@ -259,6 +326,8 @@ async function build() {
       minify: true,
       target: "browser",
       format: "esm",
+      plugins: [lazyDriver],
+      external: FRAMEWORKS,
       define: { "process.env.NODE_ENV": '"production"' },
     });
 

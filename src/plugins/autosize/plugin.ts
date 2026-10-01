@@ -112,9 +112,9 @@ export function autosize<T extends VListItem = VListItem>(
   }
 
   // Maximum logical scroll position, derived from the size cache rather than
-  // native scroll geometry. Under bounded mode (RFC-012) `viewport.scrollHeight`
-  // reflects the runway, not the full virtual size, so reading it would treat
-  // the runway edge as the list end. This matches the end-aligned scroll target
+  // native scroll geometry. With a logical handler (RFC-012)
+  // `viewport.scrollHeight` is the content element's own size, not the full
+  // virtual size, so reading it would treat that edge as the list end. This matches the end-aligned scroll target
   // computed in `setScrollToIndexFn` below, and is mode-independent.
   function maxScrollPos(): number {
     return Math.max(

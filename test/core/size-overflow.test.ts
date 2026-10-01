@@ -54,13 +54,15 @@ afterEach(() => {
 // Overflow warning
 // =============================================================================
 
+// scroll.mode "native" only: "auto" hands the list to synthetic input instead
+// of warning (test/core/scroll-mode.test.ts).
 describe("content size overflow warning", () => {
   it("should emit error when content exceeds MAX_VIRTUAL_SIZE", () => {
     const errors: Array<{ error: Error; context: string }> = [];
 
     // Start small, subscribe, then grow past the limit
     list = createVList<TestItem>(
-      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate } },
+      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } },
       [],
     );
     list.on("error", (e) => errors.push(e));
@@ -71,7 +73,7 @@ describe("content size overflow warning", () => {
     expect(errors.length).toBe(1);
     expect(errors[0]!.context).toBe("content:size:overflow");
     expect(errors[0]!.error.message).toContain("16000000");
-    expect(errors[0]!.error.message).toContain('"vlist/synthetic"');
+    expect(errors[0]!.error.message).toContain('scroll.mode "auto"');
   });
 
   it("should not emit error when content is under MAX_VIRTUAL_SIZE", () => {
@@ -95,7 +97,7 @@ describe("content size overflow warning", () => {
 
     // Start small so we can subscribe before the warning fires
     list = createVList<TestItem>(
-      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate } },
+      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } },
       [],
     );
     list.on("error", (e) => errors.push(e));
@@ -123,6 +125,20 @@ describe("content size overflow warning", () => {
     list.setItems(items);
 
     expect(errors.length).toBe(0);
+  });
+
+  it("never writes a content size past the limit, and still scrolls to it", () => {
+    // Chrome clamps an element at 33,554,428 px; Firefox lays out nothing above
+    // 17,895,697 px, so a larger native list could not scroll there at all.
+    list = createVList<TestItem>(
+      { container, items: createTestItems(10), item: { height: 40, template: simpleTemplate }, scroll: { mode: "native" } },
+      [],
+    );
+    const content = container.querySelector<HTMLElement>(".vlist-content")!;
+    list.setItems(createTestItems(1_200_000)); // 48,000,000 px
+    expect(content.style.height).toBe(`${MAX_VIRTUAL_SIZE}px`);
+    list.setItems(createTestItems(100)); // back under: the full size again
+    expect(content.style.height).toBe("4000px");
   });
 
   it("MAX_VIRTUAL_SIZE constant is 16 million", () => {

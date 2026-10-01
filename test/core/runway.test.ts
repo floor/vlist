@@ -1,6 +1,6 @@
 /** Private runway regression tests. The native carousel still uses this engine.
  * Non-wrap cases inject the private handler into createCore to exercise its
- * clamping/rebase branches; they are not a public bounded-mode configuration.
+ * clamping/rebase branches; they are not a public configuration.
  */
 
 import { capturePrototypeGeometry } from "../helpers/geometry";
@@ -10,7 +10,7 @@ import { createTestItems, createContainer, simpleTemplate } from "../helpers/fac
 import type { TestItem } from "../helpers/factory";
 import { createVList as createNative } from "../../src/native";
 import { createCore } from "../../src/core/create";
-import { createBoundedScrollHandler } from "../../src/core/runway";
+import { createRunwayHandler } from "../../src/core/runway";
 import type { CreateVListConfig } from "../../src/core/types";
 import type { VListItem } from "../../src/types";
 
@@ -19,7 +19,7 @@ function createVList<T extends VListItem>(
 ): VList<T> {
   const { runwayFactor, ...config } = options;
   if (runwayFactor === undefined) return createNative(config, plugins);
-  return createCore(config, plugins, cfg => createBoundedScrollHandler({ ...cfg, runwayFactor }));
+  return createCore(config, plugins, cfg => createRunwayHandler({ ...cfg, runwayFactor }));
 }
 import type { VList, VListPlugin } from "../../src/core/types";
 import { page } from "../../src/plugins/page";
@@ -35,7 +35,7 @@ import { masonry } from "../../src/plugins/masonry";
 
 const VIEWPORT = 500;
 const ITEM = 50;
-const FACTOR = 2; // BOUNDED_RUNWAY_FACTOR
+const FACTOR = 2; // RUNWAY_FACTOR
 const RUNWAY = VIEWPORT * FACTOR; // 1000
 
 
@@ -82,7 +82,7 @@ function simulateScroll(viewport: HTMLElement, scrollTop: number): void {
   viewport.dispatchEvent(new Event("scroll", { bubbles: false }));
 }
 
-function makeBounded(itemCount: number): VList<TestItem> {
+function makeRunway(itemCount: number): VList<TestItem> {
   return createVList<TestItem>(
     {
       container,
@@ -94,7 +94,7 @@ function makeBounded(itemCount: number): VList<TestItem> {
   );
 }
 
-function makeBoundedIn(c: HTMLElement, itemCount: number): VList<TestItem> {
+function makeRunwayIn(c: HTMLElement, itemCount: number): VList<TestItem> {
   return createVList<TestItem>(
     {
       container: c,
@@ -118,14 +118,14 @@ function transformPx(el: HTMLElement): number {
 describe("runway — runway sizing", () => {
   it("sizes content to the viewport-multiple runway, not the full virtual size", () => {
     // 1M items × 50px = 50,000,000px virtual — far past the ~16.7M browser limit.
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const content = getContent(container);
     expect(parseInt(content.style.height, 10)).toBe(RUNWAY);
   });
 
   it("degenerates to native sizing when the list fits within the runway", () => {
     // 15 items × 50px = 750px < 1000px runway → content == full virtual size.
-    list = makeBounded(15);
+    list = makeRunway(15);
     const content = getContent(container);
     expect(parseInt(content.style.height, 10)).toBe(15 * ITEM);
   });
@@ -159,7 +159,7 @@ describe("runway — runway sizing", () => {
 
   it("keeps content at the runway when a plugin grows the virtual total", () => {
     // Plugins (autosize, masonry, data, snapshots, search) grow the virtual size
-    // via ctx.render.contentSize. Under bounded mode that must resize to the runway,
+    // via ctx.render.contentSize. Under the runway handler that must resize to the runway,
     // not the full virtual total, or the browser element-size limit is reached.
     let grow: ((size: number) => void) | null = null;
     const grower: VListPlugin<TestItem> = {
@@ -184,7 +184,7 @@ describe("runway — runway sizing", () => {
     grow!(50_000_000);
 
     const content = getContent(container);
-    // Content stays bounded to the runway; only the logical total grew.
+    // Content stays the runway's size; only the logical total grew.
     expect(parseInt(content.style.height, 10)).toBe(RUNWAY);
   });
 
@@ -197,7 +197,7 @@ describe("runway — runway sizing", () => {
 
 describe("runway — logical position", () => {
   it("getScrollPosition is the absolute logical pixel and reaches the exact end", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const virtualTotal = 1_000_000 * ITEM;
     const maxLogical = virtualTotal - VIEWPORT;
 
@@ -207,7 +207,7 @@ describe("runway — logical position", () => {
   });
 
   it("scrollToIndex lands the target item at the top of the viewport", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     list.scrollToIndex(500_000, "start");
 
     const viewport = getViewport(container);
@@ -220,7 +220,7 @@ describe("runway — logical position", () => {
   });
 
   it("public scroll position equals the absolute offset after a mid-range native scroll", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
     // 300 is within the runway (max scrollTop = 500) and below the upper rebase
     // threshold (high = 375), so no rebase: logical == scrollTop.
@@ -235,7 +235,7 @@ describe("runway — logical position", () => {
 
 describe("runway — rebasing", () => {
   it("rebases near the upper runway edge, preserving the logical position", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
 
     // 450 > high threshold (375). Rebase recenters scrollTop to the runway
@@ -247,7 +247,7 @@ describe("runway — rebasing", () => {
   });
 
   it("a synthetic scroll event from the rebase does not shift the logical position", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
 
     simulateScroll(viewport, 450); // triggers rebase → scrollTop reset to 250
@@ -260,7 +260,7 @@ describe("runway — rebasing", () => {
   });
 
   it("does not rebase for small lists (baseOffset stays 0)", () => {
-    list = makeBounded(15); // 750px fits the runway → no rebasing possible
+    list = makeRunway(15); // 750px fits the runway → no rebasing possible
     const viewport = getViewport(container);
     simulateScroll(viewport, 200);
     expect(list.getScrollPosition()).toBe(200);
@@ -269,11 +269,11 @@ describe("runway — rebasing", () => {
 });
 
 // =============================================================================
-// Wrap mode (infinite loop — carousel uses this via ctx.scroll.setBoundedWrap)
+// Wrap mode (infinite loop — carousel uses this via ctx.scroll.setWrap)
 // =============================================================================
 
 /**
- * Minimal infinite-loop plugin mirroring how the carousel wires the bounded
+ * Minimal infinite-loop plugin mirroring how the carousel wires the runway
  * handler: it inflates the virtual window to `realTotal × cycles`, maps virtual
  * indices to real items via modulo, and requests wrap mode. Configurable cycle
  * geometry keeps the fold threshold small enough to exercise in a test.
@@ -301,12 +301,12 @@ function wrapPlugin(
       es.totalItems = virtualTotal;
       ctx.items.setTotalFn(() => realTotal);
       ctx.items.setIndexMapFn(mod);
-      ctx.scroll.setBoundedWrap({
+      ctx.scroll.setWrap({
         lapSize: () => lapSize,
         itemsPerLap: () => realTotal,
         home: () => opts.middle * lapSize,
         thresholdLaps: opts.middle - opts.threshold,
-      }, createBoundedScrollHandler);
+      }, createRunwayHandler);
       ctx.hooks.method("jump", (px: number) => ctx.scroll.to(px));
       ctx.hooks.method("smoothJump", (px: number, duration: number) => ctx.scroll.smoothTo(px, duration, (t) => t));
     },
@@ -448,7 +448,7 @@ describe("runway — wrap mode", () => {
 });
 
 // =============================================================================
-// Resize — bounded runway geometry must track the container size
+// Resize — runway geometry must track the container size
 // =============================================================================
 
 describe("runway — resize", () => {
@@ -470,7 +470,7 @@ describe("runway — resize", () => {
     let pendingInit: (() => void) | null = null;
     globalThis.setTimeout = ((fn: () => void) => { pendingInit = fn; return 0; }) as typeof setTimeout;
 
-    const l = makeBoundedIn(c, 1_000_000);
+    const l = makeRunwayIn(c, 1_000_000);
 
     globalThis.setTimeout = origSetTimeout;
     if (pendingInit) (pendingInit as () => void)();
@@ -498,7 +498,7 @@ describe("runway — resize", () => {
 // =============================================================================
 // Renderer plugins — grid / table / masonry install setRenderFn and own content
 // sizing, so they must route through ctx.render.contentSize to respect the
-// bounded runway instead of writing the full physical size (RFC-013 Phase A).
+// runway instead of writing the full physical size.
 // =============================================================================
 
 describe("runway — renderer plugins", () => {
@@ -582,7 +582,7 @@ function fireWheel(target: HTMLElement, deltaY: number, deltaX: number = 0): Whe
 
 describe("runway — wheel", () => {
   it("advances logical position on wheel deltaY", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
     const before = list.getScrollPosition();
 
@@ -592,7 +592,7 @@ describe("runway — wheel", () => {
   });
 
   it("clamps logical position at 0 (no negative scroll)", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
     // Already at 0
     fireWheel(viewport, -1000);
@@ -600,7 +600,7 @@ describe("runway — wheel", () => {
   });
 
   it("clamps logical position at max (end of list)", () => {
-    list = makeBounded(100); // 100 × 50 = 5000px total, containerSize 500 → maxLogical 4500
+    list = makeRunway(100); // 100 × 50 = 5000px total, containerSize 500 → maxLogical 4500
     const viewport = getViewport(container);
 
     // Scroll way past the end
@@ -612,7 +612,7 @@ describe("runway — wheel", () => {
   it("moves rendered items on every wheel step, not only when the range changes (#judder)", () => {
     // 1M rows, wheel steps smaller than a row: the runway origin (baseOffset)
     // carries the motion mid-list. Every step must reach the DOM.
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
     list.scrollToIndex(500_000);
     const item = () => getContent(container).querySelector(".vlist-item") as HTMLElement;
@@ -629,7 +629,7 @@ describe("runway — wheel", () => {
   });
 
   it("prevents default on consumed wheel events", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
 
     const event = fireWheel(viewport, 100);
@@ -637,7 +637,7 @@ describe("runway — wheel", () => {
   });
 
   it("ignores wheel when delta is too small to move", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
     const before = list.getScrollPosition();
 
@@ -648,7 +648,7 @@ describe("runway — wheel", () => {
   });
 
   it("ignores cross-axis dominant wheel in horizontal mode", () => {
-    // Horizontal bounded list
+    // Horizontal runway list
     list = createVList<TestItem>(
       {
         container,
@@ -668,7 +668,7 @@ describe("runway — wheel", () => {
   });
 
   it("forwards cross-axis deltaX to viewport.scrollLeft when content overflows horizontally", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
 
     // Simulate horizontal overflow: scrollWidth > clientWidth
@@ -683,7 +683,7 @@ describe("runway — wheel", () => {
   });
 
   it("ignores cross-axis dominant wheel when content overflows horizontally", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const viewport = getViewport(container);
     const before = list.getScrollPosition();
 
@@ -724,7 +724,7 @@ describe("runway — idle detection", () => {
   it("resets scrollDirection to 0 after idle timeout", async () => {
     const c = createContainer({ width: 300, height: VIEWPORT });
     try {
-      const l = makeBoundedIn(c, 1_000_000);
+      const l = makeRunwayIn(c, 1_000_000);
       const viewport = getViewport(c);
 
       fireWheel(viewport, 100);
@@ -754,7 +754,7 @@ describe("runway — smooth scroll", () => {
   it("scrollToIndex with smooth behavior animates to the target", async () => {
     const c = createContainer({ width: 300, height: VIEWPORT });
     try {
-      const l = makeBoundedIn(c, 1_000_000);
+      const l = makeRunwayIn(c, 1_000_000);
       const target = 500;
       const targetOffset = target * ITEM; // 25000
 
@@ -773,7 +773,7 @@ describe("runway — smooth scroll", () => {
   });
 
   it("scrollToIndex with auto behavior jumps instantly", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     const target = 500;
 
     list.scrollToIndex(target, { behavior: "auto" });
@@ -785,7 +785,7 @@ describe("runway — smooth scroll", () => {
   it("cancels an in-flight smooth scroll when a new one starts", async () => {
     const c = createContainer({ width: 300, height: VIEWPORT });
     try {
-      const l = makeBoundedIn(c, 1_000_000);
+      const l = makeRunwayIn(c, 1_000_000);
 
       l.scrollToIndex(100, { behavior: "smooth" });
       // Immediately start a second animation — the first should be cancelled
@@ -805,7 +805,7 @@ describe("runway — smooth scroll", () => {
   });
 
   it("handles smooth scroll to a position within 1px (instant jump, no animation)", () => {
-    list = makeBounded(1_000_000);
+    list = makeRunway(1_000_000);
     // Jump to a known position
     list.scrollToIndex(100, { behavior: "auto" });
     const current = list.getScrollPosition();
@@ -825,7 +825,7 @@ describe("runway — smooth scroll", () => {
 
 describe("runway — page mode guard", () => {
 
-  it("throws when page() is combined with the carousel plugin (bounded wrap)", () => {
+  it("throws when page() is combined with the carousel plugin (wrap)", () => {
     expect(() =>
       createVList<TestItem>(
         {
