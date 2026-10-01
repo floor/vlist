@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.1.0-next.2** (prerelease on the npm `next` tag) — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar; carousels honour `"synthetic"`; `vlist/synthetic` is deprecated. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
+**v3.1.0-next.3** (prerelease on the npm `next` tag) — Vue, Svelte, Solid and React entries in the package itself: `vlist/vue`, `vlist/svelte`, `vlist/solid` and `vlist/react`, feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. With `scroll.mode` from 3.1.0-next.2: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input. See the [changelog](https://github.com/floor/vlist/blob/next/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -135,7 +135,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `vlist/synthetic` (deprecated) | 34.2 KB | 12.9 KB |
 | `vlist/native` (alias) | 27.3 KB | 10.3 KB |
 | `a11y()` | 31.2 KB | 11.7 KB |
-| `selection()` | 36.9 KB | 13.2 KB |
+| `selection()` | 36.9 KB | 13.3 KB |
 | `data()` | 41.0 KB | 15.1 KB |
 | `scrollbar()` | 35.5 KB | 13.2 KB |
 | `sortable()` | 39.2 KB | 13.9 KB |
@@ -144,13 +144,13 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `snapshots()` | 30.6 KB | 11.4 KB |
 | `transition()` | 34.1 KB | 12.3 KB |
 | `autosize()` | 30.6 KB | 11.5 KB |
-| `grid()` | 34.8 KB | 12.9 KB |
+| `grid()` | 34.7 KB | 12.9 KB |
 | `table()` | 45.8 KB | 16.2 KB |
 | `masonry()` | 39.4 KB | 14.7 KB |
-| `tree()` | 43.6 KB | 15.7 KB |
+| `tree()` | 43.5 KB | 15.7 KB |
 | `search()` | 36.9 KB | 13.6 KB |
-| `carousel()` | 43.1 KB | 15.7 KB |
-| `vlist/synthetic` + `carousel()` | 49.2 KB | 18.0 KB |
+| `carousel()` | 43.2 KB | 15.8 KB |
+| `vlist/synthetic` + `carousel()` | 49.3 KB | 18.1 KB |
 | `vlist/synthetic` + `sortable()` | 46.1 KB | 16.5 KB |
 | `vlist/vue` `useVList` | 27.7 KB | 10.5 KB |
 | `vlist/svelte` `vlist` | 27.5 KB | 10.4 KB |
@@ -158,7 +158,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `vlist/react` `useVList` | 27.8 KB | 10.5 KB |
 | `vlist/react` + `grid()` | 35.2 KB | 13.1 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,541 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,183 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,539 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,192 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 ## Frameworks
 
@@ -248,7 +248,27 @@ function Photos({ items }) {
 
 Plugins are read once, at mount; changing them means remounting the list (in React, with a `key`). An `items` change updates the list in place. `scroll.mode` and other structural options also take effect only at mount.
 
-The `vlist-vue`, `vlist-svelte`, `vlist-solidjs` and `vlist-react` packages are deprecated in favour of these entries. Their last release forwards to them, so existing config-based code keeps working while you migrate.
+**Migrating from `vlist-vue`, `vlist-svelte`, `vlist-solidjs` or `vlist-react`.** Those packages are deprecated. Change the import path, and pass features as plugins instead of config fields:
+
+| Deprecated package | Use |
+|---|---|
+| `vlist-vue` | `vlist/vue` |
+| `vlist-svelte` | `vlist/svelte` |
+| `vlist-solidjs` | `vlist/solid` |
+| `vlist-react` | `vlist/react` |
+
+```ts
+// before
+import { useVList } from "vlist-react";
+useVList({ items, item, selection: { mode: "single" } });
+
+// after
+import { useVList } from "vlist/react";
+import { selection } from "vlist";
+useVList({ items, item }, [selection({ mode: "single" })]);
+```
+
+Their 3.1 releases will be built on these entries and keep the config-based API, so existing code keeps working while you migrate.
 
 ## Docs & Examples
 
