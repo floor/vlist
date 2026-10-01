@@ -18,7 +18,10 @@
  */
 
 import type { VListItem, ItemConfig, GroupsConfig, VListAdapter, ScrollConfig } from "./types";
-import { createVList } from "./core/create";
+// Values from the package entry, not from their modules: dist/config.js then
+// imports dist/index.js instead of carrying a second copy of the core, so an
+// app using both entries ships one core (scripts/shared-core.ts).
+import { createVList, page, autosize, data, grid, masonry, groups, selection, a11y, scrollbar, snapshots } from "./index";
 import type { CreateVListConfig, VList, VListPlugin, PluginMethods } from "./core/types";
 import type { AutosizeMethods } from "./plugins/autosize/plugin";
 import type { DataMethods } from "./plugins/data/plugin";
@@ -28,22 +31,12 @@ import type { GroupsMethods } from "./plugins/groups/plugin";
 import type { SelectionMethods } from "./plugins/selection/plugin";
 import type { ScrollbarMethods } from "./plugins/scrollbar/plugin";
 import type { SnapshotsMethods } from "./plugins/snapshots/plugin";
-import { page } from "./plugins/page";
-import { autosize } from "./plugins/autosize";
-import { data } from "./plugins/data";
 import type { DataPluginConfig } from "./plugins/data";
-import { grid } from "./plugins/grid";
 import type { GridPluginConfig } from "./plugins/grid";
-import { masonry } from "./plugins/masonry";
 import type { MasonryPluginConfig } from "./plugins/masonry";
-import { groups } from "./plugins/groups";
-import { selection } from "./plugins/selection";
 import type { SelectionPluginConfig } from "./plugins/selection";
-import { a11y } from "./plugins/a11y";
 import type { A11yPluginConfig } from "./plugins/a11y";
-import { scrollbar } from "./plugins/scrollbar";
 import type { ScrollbarPluginConfig } from "./plugins/scrollbar";
-import { snapshots } from "./plugins/snapshots";
 
 /** List creation function injected by an adapter consumer. */
 export type VListFactory<T extends VListItem = VListItem> = typeof createVList<T>;
