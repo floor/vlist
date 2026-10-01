@@ -75,9 +75,9 @@ export function useVList<
 }
 
 /**
- * Subscribe to a list event for the component's lifetime. Call it after
- * `useVList` in the same component: effects run in order, so the list exists
- * when this one subscribes.
+ * Subscribe to a list event for the component's lifetime. After `useVList` in
+ * the same component it subscribes at mount; in a child, whose effects run
+ * before the parent's, on its first render once the list exists.
  */
 export function useVListEvent<T extends VListItem, K extends keyof VListEvents<T>>(
   instanceRef: RefObject<VList<T> | null>,
@@ -91,5 +91,7 @@ export function useVListEvent<T extends VListItem, K extends keyof VListEvents<T
     const instance = instanceRef.current;
     if (!instance) return;
     return instance.on(event, (payload) => handlerRef.current(payload));
-  }, [instanceRef, event]);
+    // `instanceRef.current` as a dependency is deliberate: a render that finds
+    // a different list re-subscribes.
+  }, [instanceRef.current, event]);
 }

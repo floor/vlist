@@ -8,10 +8,10 @@
  * config fields. No JSX, so the suite's tsconfig compiles it as is.
  */
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { act, createElement, useState, type ReactElement } from "react";
+import { act, createElement, useState, type ReactElement, type RefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { useVList, useVListEvent } from "../../src/react";
-import { autosize, createVList, grid, selection, type VListItem } from "../../src/index";
+import { autosize, createVList, grid, selection, type VList, type VListItem } from "../../src/index";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 
 interface Row extends VListItem {
@@ -238,6 +238,32 @@ describe("vlist/react useVListEvent", () => {
     try {
       // The subscription runs on the effect after the instance exists: re-render once.
       await act(async () => { await new Promise((r) => setTimeout(r, 5)); });
+      const row = m.host.querySelector<HTMLElement>('[data-index="2"]')!;
+      row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(clicked).toEqual(["row-2"]);
+    } finally { await m.unmount(); }
+  });
+
+  it("subscribes from a child once it renders after the list exists", async () => {
+    // A child's effects run before its parent's, so at mount the child sees no
+    // list yet; its next render must pick the list up.
+    const clicked: string[] = [];
+    let rerender: () => void = () => {};
+    function Events({ instanceRef }: { instanceRef: RefObject<VList<Row> | null> }) {
+      useVListEvent(instanceRef, "item:click", ({ item }) => { clicked.push(item.id); });
+      return null;
+    }
+    function List() {
+      const [, setTick] = useState(0);
+      rerender = () => setTick((t) => t + 1);
+      const { containerRef, instanceRef } = useVList<Row>({ item: { height: 40, template }, items: rows(10) });
+      return createElement("div", null,
+        createElement(Events, { instanceRef }),
+        createElement("div", { ref: containerRef, style: { height: VIEWPORT_H } }));
+    }
+    const m = await mount(createElement(List));
+    try {
+      await act(async () => { rerender(); });
       const row = m.host.querySelector<HTMLElement>('[data-index="2"]')!;
       row.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       expect(clicked).toEqual(["row-2"]);
