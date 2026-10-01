@@ -60,7 +60,7 @@ releases will be built on them.
   vlist-vue's version subscribed from a `watch` callback that ran after
   setup, so its `onBeforeUnmount` was dropped with a Vue warning and the
   handler stayed on the list until the list was destroyed. vlist-vue 3.0.1
-  carries the fix for vlist 3.0.x.
+  will carry the fix for vlist 3.0.x.
 
 ### Deprecated
 
