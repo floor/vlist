@@ -321,6 +321,7 @@ const myTable = createVList({
   selection({ mode: 'single' }),
 ])
 
+myTable.on('column:click', ({ key, index, event }) => { /* a header cell was clicked */ })
 myTable.on('column:sort', ({ key, direction }) => { /* re-sort data */ })
 myTable.on('column:resize', ({ key, width }) => { /* persist widths */ })
 ```

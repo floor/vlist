@@ -26,6 +26,21 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   closed folders, keeps its bytes: it is the fix, and dropping its fast path saves nothing
   after gzip.
 
+### Fixed
+
+- `table()` emits `column:click` when a header cell is clicked, with the payload its type
+  declares (`{ key, index, event }`), before `column:sort` for a sortable column. The type,
+  its exports and the header's `onClick` parameter have existed since the 3.0 rewrite, but
+  the plugin never handed the header the handler, so the event was declared and never
+  emitted (#341).
+- A header label can be an element that takes pointer events. `.vlist-table-header-content`
+  no longer sets `pointer-events: none`, which made a button supplied as a label unreachable
+  for a pointer click or tap; events aimed at interactive content inside a cell
+  (`a[href],button,input,select,textarea,[tabindex]` — the core's focusable set) are left to
+  that content, so a header button's own click or Enter runs and the column neither sorts
+  nor reports a click (#340). `table` 16,634 → 16,668 B gzip of its 16,691 B budget;
+  `vlist-table.css` 15,266 → 15,240 B raw.
+
 ## [3.1.0] - 2026-10-01
 
 The 3.1 line, on the npm `latest` tag. Everything in `3.0.1-next.1` through `3.1.0-next.3`
