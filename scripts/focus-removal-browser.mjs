@@ -24,7 +24,7 @@ if(layout==='masonry') plugins.push(masonry({columns:3,gap:8}));
 plugins.push((params.get('owner')==='selection'?selection:a11y)({keyboard:params.get('keyboard')!=='false'}));
 window.passes=0;
 plugins.push({name:'pass-counter',hooks:{onCommit(){window.passes++;}}});
-window.list=createVList({container:'#list',items:Array.from({length:50000},(_,id)=>({id,value:'Row '+id})),item:{height:48,template:cell}},plugins);
+window.list=createVList({container:'#list',items:Array.from({length:50000},(_,id)=>({id,value:'Row '+id})),item:{height:48,template:cell},ariaLabel:'Focus removal rows'},plugins);
 window.scrollAway=()=>{window.list.scrollToIndex(layout==='masonry'?49900:49999,'center'); if(layout==='masonry') window.list.scrollToIndex(49999,'center');};
 window.ready=true;
 </script>`;
@@ -46,11 +46,18 @@ try {
       await page.goto(`http://localhost:${server.port}/?layout=${layout}&owner=${owner}`);
       await page.waitForFunction(() => window.ready);
       const result = await page.evaluate(async () => {
+        const params = new URLSearchParams(location.search);
         const content = document.querySelector('.vlist-content');
-        const target = content.hasAttribute('tabindex') ? content : document.querySelector('.vlist-viewport');
+        // Recovery target (#339): table + selection's grid root takes focus —
+        // the element selection()'s own click path focuses; every other
+        // owner/layout keeps the content, or the viewport where the content
+        // has no tabindex (table + a11y).
+        const target = params.get('layout')==='table' && params.get('owner')==='selection'
+          ? document.querySelector('.vlist')
+          : content.hasAttribute('tabindex') ? content : document.querySelector('.vlist-viewport');
         target.focus();
         target.dispatchEvent(new KeyboardEvent('keydown', {key:'Home',bubbles:true}));
-        if (new URLSearchParams(location.search).get('layout')==='groups') target.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowDown',bubbles:true}));
+        if (params.get('layout')==='groups') target.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowDown',bubbles:true}));
         const id = content.getAttribute('aria-activedescendant');
         const row = document.getElementById(id);
         const from = Number(row.dataset.index);
@@ -62,13 +69,21 @@ try {
         const synchronous = window.passes;
         await new Promise(requestAnimationFrame);
         return { thrown, from, focusedWasCell, recovered:document.activeElement===target,
-          target:target.className, farRowRendered:content.textContent.includes('Row 49999'),
+          target:target.className, role:document.activeElement.getAttribute('role'),
+          label:document.activeElement.getAttribute('aria-label'),
+          farRowRendered:content.textContent.includes('Row 49999'),
           removed:!span.isConnected, extraPasses:window.passes-synchronous };
       });
       if (result.thrown) console.error(result.thrown);
       assert.equal(result.thrown, null, `${owner}/${layout}: removal threw`);
       assert(result.focusedWasCell && result.recovered && result.removed && result.farRowRendered, JSON.stringify(result));
       assert(result.extraPasses <= 1, JSON.stringify(result));
+      if (owner === "selection" && layout === "table") {
+        // The grid root, the element selection()'s own click path focuses,
+        // carries the role and the name given at creation (#339).
+        assert.equal(result.role, "grid", JSON.stringify(result));
+        assert.equal(result.label, "Focus removal rows", JSON.stringify(result));
+      }
       await page.keyboard.press("ArrowDown");
       const next = await page.evaluate(() => {
         const content=document.querySelector('.vlist-content');

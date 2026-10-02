@@ -23,7 +23,17 @@ export function retainFocus<T extends VListItem>(ctx: PluginContext<T>, blur: ()
     if (ctx.getState().destroyed || !dom.root.isConnected || doc.activeElement !== doc.body) return;
     if (removed) {
       restoring = true;
-      (dom.content.hasAttribute("tabindex") ? dom.content : dom.viewport).focus({ preventScroll: true });
+      // The first of content, root, viewport that carries a tabindex. In a
+      // table with selection() the content is a rowgroup without one and the
+      // root is the grid the plugin's own click path focuses; table() without
+      // selection() leaves the root untabbable, so the viewport stays the
+      // fallback there (#339).
+      const target = dom.content.hasAttribute("tabindex")
+        ? dom.content
+        : dom.root.hasAttribute("tabindex")
+          ? dom.root
+          : dom.viewport;
+      target.focus({ preventScroll: true });
       restoring = false;
     }
     blur();

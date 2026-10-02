@@ -29,6 +29,7 @@ const cell = (row: Row): HTMLElement => {
   return span;
 };
 const settle = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 10));
+const tableLabel = "Focus removal rows";
 function fixture(layout: Layout, owner: "a11y" | "selection") {
   const container = createContainer({ width: 300, height: 320 });
   const outside = document.createElement("button");
@@ -41,11 +42,17 @@ function fixture(layout: Layout, owner: "a11y" | "selection") {
   if (layout === "tree") plugins.push(tree({ label: "value" }));
   if (layout === "masonry") plugins.push(masonry({ columns: 3, gap: 8 }));
   plugins.push(owner === "a11y" ? a11y() : selection(), { name: "pass-counter", hooks: { onCommit() { passes++; } } });
-  const list = createVList<Row>({ container, items: Array.from({ length: 50000 }, (_, id) => ({ id, value: `Row ${id}` })), item: { height: 48, template: cell } }, plugins);
+  const list = createVList<Row>({ container, ariaLabel: tableLabel, items: Array.from({ length: 50000 }, (_, id) => ({ id, value: `Row ${id}` })), item: { height: 48, template: cell } }, plugins);
+  const root = container.querySelector<HTMLElement>(".vlist")!;
   const content = container.querySelector<HTMLElement>(".vlist-content")!;
-  const target = content.hasAttribute("tabindex") ? content : container.querySelector<HTMLElement>(".vlist-viewport")!;
+  // In a table with selection() the content is a rowgroup without a tabindex
+  // and the grid root carries it, so recovery lands there, as the plugin's
+  // own click path does. Every other owner/layout keeps its target. #339
+  const target = layout === "table" && owner === "selection"
+    ? root
+    : content.hasAttribute("tabindex") ? content : container.querySelector<HTMLElement>(".vlist-viewport")!;
   const span = content.querySelector<HTMLElement>("span[tabindex]")!;
-  return { list, content, target, span, outside, get passes() { return passes; }, scrollAway() {
+  return { list, root, content, target, span, outside, get passes() { return passes; }, scrollAway() {
     list.scrollToIndex(layout === "masonry" ? 49900 : 49999, "center");
     // Masonry retains offscreen rows for one render cycle before releasing.
     if (layout === "masonry") list.scrollToIndex(49999, "center");
@@ -171,3 +178,19 @@ for (const owner of ["a11y", "selection"] as const) {
     } finally { f.destroy(); }
   });
 }
+
+// #339: in a table with selection() the recovery returns focus to the grid
+// root — the element selection()'s own click path focuses — and the role and
+// the name given at creation sit on that same element.
+it.serial("selection: table removal returns focus to the named grid root", async () => {
+  const f = fixture("table", "selection");
+  try {
+    f.span.focus();
+    f.scrollAway();
+    await settle();
+    const active = document.activeElement as HTMLElement;
+    expect(active === f.root).toBe(true);
+    expect(active.getAttribute("role")).toBe("grid");
+    expect(active.getAttribute("aria-label")).toBe(tableLabel);
+  } finally { f.destroy(); }
+});
