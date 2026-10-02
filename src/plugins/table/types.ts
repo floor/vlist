@@ -355,7 +355,13 @@ export interface ColumnSortEvent {
   direction: "asc" | "desc" | null;
 }
 
-/** Payload for column:click event */
+/**
+ * Payload for column:click event.
+ *
+ * Emitted when a header cell is clicked — before `column:sort` for a sortable
+ * column. A click on interactive content the caller supplied inside the cell (a
+ * button in the label) is left to that content and emits neither.
+ */
 export interface ColumnClickEvent {
   /** Column key */
   key: string;
