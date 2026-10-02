@@ -17,6 +17,7 @@ import {
   type SelectionState,
 } from "./state";
 import { PLACEHOLDER_ID_PREFIX } from "../../constants";
+import { retainFocus } from "../a11y/focus";
 import { clampPageTarget } from "../../utils/grid-nav";
 
 // =============================================================================
@@ -379,8 +380,14 @@ export function selection<T extends VListItem = VListItem>(
         dom.content.setAttribute("aria-activedescendant", el?.id ?? `${classPrefix}-item-${index}`);
       };
 
-      const onFocusIn = (): void => {
+      const restoringFocus = retainFocus(ctx, (): void => {
         if (engineState.destroyed) return;
+        state.focusVisible = false;
+        forceRender();
+        dom.content.removeAttribute("aria-activedescendant");
+      });
+      const onFocusIn = (): void => {
+        if (engineState.destroyed || restoringFocus()) return;
         resolveOnce(ctx);
         if (!dom.content.matches(":focus-visible") && !dom.root.matches(":focus-visible")) return;
         const t = getTotalFn();
@@ -395,19 +402,8 @@ export function selection<T extends VListItem = VListItem>(
       };
       dom.root.addEventListener("focusin", onFocusIn);
 
-      const onFocusOut = (e: FocusEvent): void => {
-        if (engineState.destroyed) return;
-        const rel = e.relatedTarget as Node | null;
-        if (rel && dom.root.contains(rel)) return;
-        state.focusVisible = false;
-        forceRender();
-        dom.content.removeAttribute("aria-activedescendant");
-      };
-      dom.root.addEventListener("focusout", onFocusOut);
-
       ctx.hooks.onDestroy(() => {
         dom.root.removeEventListener("focusin", onFocusIn);
-        dom.root.removeEventListener("focusout", onFocusOut);
       });
 
       // ── Click handler ─────────────────────────────────────────

@@ -28,6 +28,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `a11y()` and `selection()` restore focus to the list after a focused row is
+  removed, without reentering the renderer or stealing focus from another control.
+  Keyboard navigation resumes from the prior row. Recovery runs before the next
+  frame and also covers browsers that omit removal `focusout` events (#339).
 - With `table()`, `ariaLabel` names the element that carries `role="grid"` — the root,
   which is also what takes focus — instead of the rowgroup inside it. Core writes the
   label onto the content element, which in a table is a rowgroup, so the grid announced

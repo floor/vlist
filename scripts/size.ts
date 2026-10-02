@@ -169,8 +169,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   createStats: kb(10.6),
   "synthetic + createStats": kb(13.2),
   native: kb(10.3),
-  a11y: kb(11.8),
-  selection: kb(13.4),
+  // #339: owner-only focus recovery, including engines without removal focusout.
+  a11y: kb(12.1),
+  selection: kb(13.7),
   data: kb(15.2),
   scrollbar: kb(13.3),
   sortable: kb(14.0),
