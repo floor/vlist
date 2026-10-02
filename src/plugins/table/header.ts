@@ -150,8 +150,20 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cell.className = `${classPrefix}-table-header-cell`;
     cell.setAttribute("role", "columnheader");
     cell.setAttribute("aria-colindex", String(colIndex + 1));
-    cell.setAttribute("tabindex", colIndex === 0 ? "0" : "-1");
+    cell.tabIndex = colIndex ? -1 : 0;
     cell.dataset.columnKey = col.def.key;
+
+    // Focus can arrive without the arrow keys: a click focuses the clicked
+    // cell (mousedown's default action on its tabindex), a programmatic
+    // focus() does too, and a control inside a label takes focus into the
+    // cell. Wherever focus lands the index follows it, so Enter, Space and
+    // Ctrl+Arrow act on the cell the user is on: the index and the header's
+    // one tab stop move here (#348).
+    cell.addEventListener("focusin", () => {
+      cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
+      focusedCellIndex = colIndex;
+      cell.tabIndex = 0;
+    });
 
     // Alignment modifier class (left is the default — no class needed)
     const align = col.def.align;
@@ -449,7 +461,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
     focusedCellIndex = index;
     const cell = cells[focusedCellIndex]!;
-    cell.setAttribute("tabindex", "0");
+    cell.tabIndex = 0;
     cell.focus();
   };
 

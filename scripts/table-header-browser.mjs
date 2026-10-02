@@ -93,6 +93,22 @@ try {
  assert(Math.abs(spread-state.widths.name)<=2,`the header follows the resize: second cell starts ${spread}px after the first, width ${state.widths.name}`);
  console.log('PASS resize handle still resizes',JSON.stringify({widths:state.widths,events:resize}));
 
- console.log('SUMMARY',JSON.stringify({passes:5}));
+ // #348: a real click focuses the clicked cell (mousedown's default action on
+ // its tabindex), so Enter and the arrows must act from that cell, not from
+ // the cell the roving index was left on.
+ const valueLabel=await page.evaluate(()=>{const cells=[...document.querySelectorAll('.vlist-table-header-cell')];const r=cells[1].querySelector('.vlist-table-header-content').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};});
+ await page.mouse.click(valueLabel.x,valueLabel.y);await wait(50);
+ assert.equal(await page.evaluate(()=>document.activeElement&&document.activeElement.dataset.columnKey),'value','a real click focuses the clicked header cell');
+ await page.keyboard.press('Enter');await wait(50);
+ state=await page.evaluate(()=>snapshot());
+ const lastSort=state.events[state.events.length-1];
+ assert.equal(lastSort.type,'sort',`Enter after a click emits column:sort: ${JSON.stringify(state.events)}`);
+ assert.equal(lastSort.key,'value',`Enter sorts the clicked column, not the roving cell: ${JSON.stringify(state.events)}`);
+ assert.equal(lastSort.index,1,'column:sort reports the clicked column index');
+ await page.keyboard.press('ArrowLeft');await wait(50);
+ assert.equal(await page.evaluate(()=>document.activeElement&&document.activeElement.dataset.columnKey),'name','ArrowLeft moves to the neighbour of the clicked cell, not of the roving cell');
+ console.log('PASS click moves the roving index: Enter and the arrows continue from the clicked header cell',JSON.stringify({lastSort}));
+
+ console.log('SUMMARY',JSON.stringify({passes:6}));
  await page.close();
 } finally {await browser?.close();server.stop(true);}
