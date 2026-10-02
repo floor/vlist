@@ -324,6 +324,37 @@ describe("table — column events", () => {
     mockCtx.cleanup();
   });
 
+  it("sorts the clicked column on Enter, not the roving cell (#348)", () => {
+    const plugin = table({ columns: sortableColumns, rowHeight: 40 });
+    const mockCtx = createTrackingMockContext();
+
+    plugin.setup!(mockCtx.ctx);
+
+    const headerCells = mockCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const emailHeader = headerCells[1] as HTMLElement;
+
+    // A click sorts email ascending; the browser then focuses the clicked
+    // cell (mousedown's default action), which JSDOM does not perform.
+    emailHeader.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    emailHeader.focus();
+
+    emailHeader.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    const sortEvents = mockCtx.emitted.filter(e => e.event === "column:sort");
+    expect(sortEvents.length).toBe(2);
+
+    const payload = sortEvents[1]!.payload as {
+      key: string;
+      index: number;
+      direction: string | null;
+    };
+    expect(payload.key).toBe("email");
+    expect(payload.index).toBe(1);
+    expect(payload.direction).toBe("desc");
+
+    mockCtx.cleanup();
+  });
+
   it("does not emit column:sort for non-sortable columns", () => {
     const plugin = table({ columns: sortableColumns, rowHeight: 40 });
     const mockCtx = createTrackingMockContext();

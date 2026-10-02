@@ -28,6 +28,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `a11y()` and `selection()` restore focus to the list after a focused row is
+  removed, without reentering the renderer or stealing focus from another control.
+  Keyboard navigation resumes from the prior row. Recovery runs before the next
+  frame and also covers browsers that omit removal `focusout` events (#339).
 - `table()` declares a conflict with `autosize()` (#346). Creating a list with both now throws `[vlist] Plugin "table" conflicts with "autosize"`, where the pair used to build and then not auto-size the rows: the table writes its fixed row height over the measuring size function, and the absolutely positioned cells measure 0.
 - With `table()`, `ariaLabel` names the element that carries `role="grid"` — the root,
   which is also what takes focus — instead of the rowgroup inside it. Core writes the
@@ -47,6 +51,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   that content, so a header button's own click or Enter runs and the column neither sorts
   nor reports a click (#340). `table` 16,634 → 16,668 B gzip of its 16,691 B budget;
   `vlist-table.css` 15,266 → 15,240 B raw.
+- The header's roving tabindex follows the focused cell, so Enter, Space and Ctrl+Arrow act
+  on the cell the user is on. A click focuses the clicked cell (mousedown's default action on
+  its `tabindex`), but the keyboard handler's index only moved with the arrow keys: after
+  clicking header B, Enter still sorted the column the index was left on. The index and the
+  header's one tab stop now follow focus wherever it arrives — a click, a programmatic
+  `focus()`, a control inside a label — and Tab re-enters the header on the cell last
+  focused (#348). After `updateColumns()` rebuilds the header, the next click still
+  leaves exactly one tab stop on the focused cell (#350).
 
 ## [3.1.0] - 2026-10-01
 

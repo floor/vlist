@@ -10,6 +10,7 @@
 
 import type { VListItem, ItemState } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
+import { retainFocus } from "./focus";
 import { clampPageTarget } from "../../utils/grid-nav";
 
 export interface A11yPluginConfig {
@@ -186,8 +187,13 @@ export function a11y<T extends VListItem = VListItem>(
 
       // ── Focus handlers ──────────────────────────────────────────
 
+      const restoringFocus = retainFocus(ctx, (): void => {
+        focusVis = false;
+        dom.content.removeAttribute("aria-activedescendant");
+        ctx.render.force();
+      });
       const onFocusIn = (): void => {
-        if (engineState.destroyed) return;
+        if (engineState.destroyed || restoringFocus()) return;
         if (!dom.content.matches(":focus-visible")) return;
         const t = getTotal();
         if (t === 0) return;
@@ -196,17 +202,7 @@ export function a11y<T extends VListItem = VListItem>(
         move(tgt);
       };
 
-      const onFocusOut = (e: FocusEvent): void => {
-        if (engineState.destroyed) return;
-        const rel = e.relatedTarget as Node | null;
-        if (rel && dom.root.contains(rel)) return;
-        focusVis = false;
-        dom.content.removeAttribute("aria-activedescendant");
-        ctx.render.force();
-      };
-
       dom.content.addEventListener("focusin", onFocusIn);
-      dom.content.addEventListener("focusout", onFocusOut);
 
       // ── Keyboard handler ────────────────────────────────────────
       // Skipped when keyboard:false — click-selection, focus, and ARIA stay
@@ -296,7 +292,6 @@ export function a11y<T extends VListItem = VListItem>(
 
       ctx.hooks.onDestroy(() => {
         dom.content.removeEventListener("focusin", onFocusIn);
-        dom.content.removeEventListener("focusout", onFocusOut);
       });
     },
   };
