@@ -45,6 +45,13 @@ import type {
 // Constants
 // =============================================================================
 
+/**
+ * The core's focusable set (src/core/dom.ts). An event that lands on one of
+ * these inside a header cell belongs to it, not to the header: a caller's
+ * button in a label opens its own menu instead of sorting the column.
+ */
+const INTERACTIVE = "a[href],button,input,select,textarea,[tabindex]";
+
 /** Minimum drag distance (px) before resize is committed */
 const MIN_DRAG_DELTA = 1;
 
@@ -405,6 +412,12 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
     if (colIndex === -1) return;
 
+    // A control the caller supplied inside the cell (a button in the label)
+    // owns its own clicks; only the cell itself, its text and our own
+    // indicator sort the column.
+    const control = target.closest(INTERACTIVE);
+    if (control && control !== cell) return;
+
     const col = columns[colIndex]!;
 
     // Emit general click
@@ -442,6 +455,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   const onKeyDown = (e: KeyboardEvent): void => {
     const key = e.key;
+
+    // Keys aimed at interactive content inside a cell are that content's own:
+    // the header must not move focus or sort out from under a focused button.
+    const control = (e.target as HTMLElement).closest(INTERACTIVE);
+    if (control && !control.hasAttribute("data-column-key")) return;
 
     if (key === "ArrowRight") {
       if (e.ctrlKey || e.metaKey) {

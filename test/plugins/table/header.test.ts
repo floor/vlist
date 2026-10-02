@@ -5,6 +5,8 @@
  * resize interaction, scroll sync, visibility, and destroy.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import {
   describe,
@@ -643,6 +645,75 @@ describe("createTableHeader - click interaction", () => {
     const event = new MouseEvent("click", { bubbles: true });
     expect(() => header.element.dispatchEvent(event)).not.toThrow();
     expect(onSort).not.toHaveBeenCalled();
+  });
+
+  it("should still sort when the click lands on supplied non-interactive content", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const label = document.createElement("span");
+    label.textContent = "Name";
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { label, sortable: true })]);
+
+    header.rebuild(layout);
+
+    // The stylesheet no longer makes this wrapper transparent, so a span label
+    // is a real hit target; the walk-up must still reach the cell.
+    label.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSort).toHaveBeenCalledWith({ key: "name", index: 0, direction: "asc" });
+  });
+
+  it("should leave clicks on a supplied button to the button", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const onClick = mock(() => {});
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort, onClick);
+    const layout = createResolvedLayout([col("name", { label, sortable: true, resizable: true })]);
+
+    header.rebuild(layout);
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSort).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("should leave Enter on a supplied button to the button", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { label, sortable: true })]);
+
+    header.rebuild(layout);
+
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(onSort).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Header Content — Stylesheet
+// =============================================================================
+
+describe("createTableHeader - header content stylesheet", () => {
+  it("should not disable pointer events on the content wrapper", () => {
+    // JSDOM applies no stylesheets, so the rule that made supplied content
+    // unreachable is asserted here; scripts/table-header-browser.mjs clicks it.
+    const css = readFileSync(
+      resolve(import.meta.dir, "../../../src/styles/vlist-table.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.vlist-table-header-content\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).not.toContain("pointer-events");
   });
 });
 

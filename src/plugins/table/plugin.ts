@@ -27,6 +27,7 @@ import type {
   TableLayout,
   ColumnResizeEvent,
   ColumnSortEvent,
+  ColumnClickEvent,
 } from "./types";
 
 // =============================================================================
@@ -354,6 +355,11 @@ export function table<T extends VListItem = VListItem>(
         emitter.emit("column:sort" as never, event as never);
       };
 
+      // ── Column click handler ────────────────────────────────────
+      const onColumnClick = (event: ColumnClickEvent): void => {
+        emitter.emit("column:click" as never, event as never);
+      };
+
       // ── Create table header ─────────────────────────────────────
       tableHeader = createTableHeader<T>(
         dom.root,
@@ -361,6 +367,7 @@ export function table<T extends VListItem = VListItem>(
         classPrefix,
         onColumnResize,
         onColumnSort,
+        onColumnClick,
       );
 
       tableHeader.rebuild(tableLayout);
