@@ -27,6 +27,7 @@ import type {
   TableLayout,
   ColumnResizeEvent,
   ColumnSortEvent,
+  ColumnClickEvent,
 } from "./types";
 
 // =============================================================================
@@ -307,6 +308,17 @@ export function table<T extends VListItem = VListItem>(
       dom.viewport.setAttribute("role", "none");
       dom.content.setAttribute("role", "rowgroup");
 
+      // Core writes `ariaLabel` onto the content element, where it names the
+      // listbox. Here that element is a rowgroup and the root is the grid that
+      // owns the composite role, so the name moves up with the role: an
+      // element named by a child cannot be reached, and the grid took focus
+      // with no accessible name at all. Moved back on destroy.
+      const movedAriaLabel = dom.content.getAttribute("aria-label");
+      if (movedAriaLabel !== null) {
+        dom.root.setAttribute("aria-label", movedAriaLabel);
+        dom.content.removeAttribute("aria-label");
+      }
+
       // ── Resolve initial column widths ───────────────────────────
       const containerWidth = engineState.crossSize;
       tableLayout.resolve(containerWidth);
@@ -343,6 +355,11 @@ export function table<T extends VListItem = VListItem>(
         emitter.emit("column:sort" as never, event as never);
       };
 
+      // ── Column click handler ────────────────────────────────────
+      const onColumnClick = (event: ColumnClickEvent): void => {
+        emitter.emit("column:click" as never, event as never);
+      };
+
       // ── Create table header ─────────────────────────────────────
       tableHeader = createTableHeader<T>(
         dom.root,
@@ -350,6 +367,7 @@ export function table<T extends VListItem = VListItem>(
         classPrefix,
         onColumnResize,
         onColumnSort,
+        onColumnClick,
       );
 
       tableHeader.rebuild(tableLayout);
@@ -518,6 +536,11 @@ export function table<T extends VListItem = VListItem>(
         dom.root.removeAttribute("tabindex");
         dom.viewport.removeAttribute("role");
         dom.content.removeAttribute("role");
+        // Put the name back where core wrote it, for the same reason it moved.
+        if (movedAriaLabel !== null) {
+          dom.content.setAttribute("aria-label", movedAriaLabel);
+          dom.root.removeAttribute("aria-label");
+        }
       });
     },
 

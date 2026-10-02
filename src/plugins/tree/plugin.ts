@@ -481,38 +481,26 @@ export function tree<T extends VListItem = VListItem>(
 
   // ── Render pipeline ──────────────────────────────────────────────
 
-  // Columns to the left of this row's own branch. A column continues only
-  // while that ancestor still has a sibling below it; a last child closes it.
-  function continuingGuides(flatNode: FlatNode<T>): boolean[] {
-    const guides: boolean[] = [];
-    let parentId = flatNode.parentId;
-    while (parentId !== null) {
-      const parentIdx = layout.idToIndex.get(parentId);
-      if (parentIdx === undefined) break;
-      const parent = layout.flatNodes[parentIdx]!;
-      if (parent.parentId === null) break;
-      guides.push(!parent.isLastChild);
+  // One 1px line per guide column, right to left: the row's own column unless
+  // it is a last child (CSS draws its elbow from the --last class), then each
+  // ancestor's column while that ancestor has a sibling below it. Every run has
+  // both ends: a position of 0 clamps to the previous stop, so the gradient never
+  // interpolates, which would fade from the left edge into the first line. A
+  // line at column 0 opens the gradient itself: a transparent stop at 0 in front
+  // of it costs it its half-covered device pixel at 150% and 175% in Chromium.
+  function guides({ depth, isLastChild, parentId }: FlatNode<T>): string {
+    let stops = "";
+    let through = !isLastChild;
+    for (let column = depth - 1; column >= 0; column--) {
+      const x = column * indent;
+      if (through) stops = `${x ? `,transparent 0 ${x}px` : ""},var(--vlist-tree-line, currentColor) 0 ${x + 1}px${stops}`;
+      // A root's parentId is null: the lookup misses on purpose and ends the walk.
+      const parent = layout.flatNodes[layout.idToIndex.get(parentId!) ?? -1];
+      if (!parent) break;
+      through = !parent.isLastChild;
       parentId = parent.parentId;
     }
-    guides.reverse();
-    return guides;
-  }
-
-  const guideColor = "var(--vlist-tree-line, currentColor)";
-
-  function guideGradient(depth: number, through: boolean[], isLast: boolean, step: number): string {
-    const stops: string[] = [];
-    const lastColumn = isLast ? depth - 2 : depth - 1;
-    for (let column = 0; column <= lastColumn; column++) {
-      if (column < depth - 1 && !through[column]) continue;
-      const x = column * step;
-      // The first color stop paints back to the left edge. A line that does
-      // not start at 0 would fill the whole gutter, a gray bar beside the row.
-      if (stops.length > 0 || x > 0) stops.push(`transparent ${x}px`);
-      stops.push(`${guideColor} ${x}px`, `${guideColor} ${x + 1}px`, `transparent ${x + 1}px`);
-    }
-    if (stops.length === 0) return "none";
-    return `linear-gradient(to right, ${stops.join(", ")})`;
+    return stops ? `linear-gradient(to right${stops},transparent 0)` : "none";
   }
 
   function renderNodeElement(
@@ -547,13 +535,7 @@ export function tree<T extends VListItem = VListItem>(
     if (connectorLines) {
       element.style.setProperty("--vlist-tree-indent", `${indent}px`);
       element.style.setProperty("--vlist-tree-pad", `${paddingStart}px`);
-      if (depth > 0) {
-        element.style.setProperty("--vlist-tree-guides", guideGradient(depth, continuingGuides(flatNode), isLastChild, indent));
-        element.style.setProperty("--vlist-tree-elbow", isLastChild ? `linear-gradient(${guideColor}, ${guideColor})` : "none");
-      } else {
-        element.style.setProperty("--vlist-tree-guides", "none");
-        element.style.setProperty("--vlist-tree-elbow", "none");
-      }
+      element.style.setProperty("--vlist-tree-guides", guides(flatNode));
     }
 
     if (isf) isf(flatIndex, itemState);

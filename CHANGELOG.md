@@ -11,6 +11,57 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-10-03
+
+### Changed
+
+- `tree()` with `connectorLines` is smaller: the JavaScript 117 B (16,050 → 15,933 B gzip;
+  budget 15.8 → 15.7 kB), the stylesheet 27 B larger (`vlist-tree.css` 497 → 524 B gzip),
+  about 90 B net. The second look at #283's +315 B. One loop walks a row's
+  ancestors and writes its guide gradient, two double-position stops per line, each clamped
+  to the stop before it, so the gradient never interpolates; a line at column 0 opens the
+  gradient, as in 3.1.0, which keeps its half-covered device pixel in Chromium at 150% and
+  175% (`scripts/tree-guides-browser.mjs` compares the rendering with 3.1.0's at five
+  scales). The last child's elbow is drawn by the stylesheet from the existing
+  `vlist-tree-node--last` class. `--vlist-tree-elbow` is no longer set inline on each
+  row, so a value set on an ancestor (or on `.vlist-tree-node`) now applies (in 3.1.0
+  only a value on the row's `::before` did); the default rendering is unchanged. The
+  variable still overrides the elbow (`none` hides it). #283's other half, `findItem`
+  for nodes inside closed folders, keeps its bytes: it is the fix, and dropping its
+  fast path saves nothing after gzip.
+
+### Fixed
+
+- `a11y()` and `selection()` restore focus to the list after a focused row is
+  removed, without reentering the renderer or stealing focus from another control.
+  Keyboard navigation resumes from the prior row. Recovery runs before the next
+  frame and also covers browsers that omit removal `focusout` events (#339).
+- With `table()`, `ariaLabel` names the element that carries `role="grid"` — the root,
+  which is also what takes focus — instead of the rowgroup inside it. Core writes the
+  label onto the content element, which in a table is a rowgroup, so the grid announced
+  no accessible name while a child carried one; the name now moves with the composite
+  role and moves back when the table is destroyed (#342). A plain list, a display-only
+  list and a grid list already named the element carrying their role and are unchanged.
+- `table()` emits `column:click` when a header cell is clicked, with the payload its type
+  declares (`{ key, index, event }`), before `column:sort` for a sortable column. The type,
+  its exports and the header's `onClick` parameter have existed since the 3.0 rewrite, but
+  the plugin never handed the header the handler, so the event was declared and never
+  emitted (#341).
+- A header label can be an element that takes pointer events. `.vlist-table-header-content`
+  no longer sets `pointer-events: none`, which made a button supplied as a label unreachable
+  for a pointer click or tap; events aimed at interactive content inside a cell
+  (`a[href],button,input,select,textarea,[tabindex]` — the core's focusable set) are left to
+  that content, so a header button's own click or Enter runs and the column neither sorts
+  nor reports a click (#340).
+- The header's roving tabindex follows the focused cell, so Enter, Space and Ctrl+Arrow act
+  on the cell the user is on. A click focuses the clicked cell (mousedown's default action on
+  its `tabindex`), but the keyboard handler's index only moved with the arrow keys: after
+  clicking header B, Enter still sorted the column the index was left on. The index and the
+  header's one tab stop now follow focus wherever it arrives — a click, a programmatic
+  `focus()`, a control inside a label — and Tab re-enters the header on the cell last
+  focused (#348). After `updateColumns()` rebuilds the header, the next click still
+  leaves exactly one tab stop on the focused cell (#350).
+
 ## [3.1.0] - 2026-10-01
 
 The 3.1 line, on the npm `latest` tag. Everything in `3.0.1-next.1` through `3.1.0-next.3`
@@ -1736,7 +1787,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v2.0.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/floor/vlist/compare/v3.1.0...v3.1.1
 [2.0.4]: https://github.com/floor/vlist/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/floor/vlist/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.2

@@ -5,6 +5,8 @@
  * resize interaction, scroll sync, visibility, and destroy.
  */
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import {
   describe,
@@ -644,6 +646,75 @@ describe("createTableHeader - click interaction", () => {
     expect(() => header.element.dispatchEvent(event)).not.toThrow();
     expect(onSort).not.toHaveBeenCalled();
   });
+
+  it("should still sort when the click lands on supplied non-interactive content", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const label = document.createElement("span");
+    label.textContent = "Name";
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { label, sortable: true })]);
+
+    header.rebuild(layout);
+
+    // The stylesheet no longer makes this wrapper transparent, so a span label
+    // is a real hit target; the walk-up must still reach the cell.
+    label.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSort).toHaveBeenCalledWith({ key: "name", index: 0, direction: "asc" });
+  });
+
+  it("should leave clicks on a supplied button to the button", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const onClick = mock(() => {});
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort, onClick);
+    const layout = createResolvedLayout([col("name", { label, sortable: true, resizable: true })]);
+
+    header.rebuild(layout);
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    expect(onSort).not.toHaveBeenCalled();
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("should leave Enter on a supplied button to the button", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([col("name", { label, sortable: true })]);
+
+    header.rebuild(layout);
+
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(onSort).not.toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Header Content — Stylesheet
+// =============================================================================
+
+describe("createTableHeader - header content stylesheet", () => {
+  it("should not disable pointer events on the content wrapper", () => {
+    // JSDOM applies no stylesheets, so the rule that made supplied content
+    // unreachable is asserted here; scripts/table-header-browser.mjs clicks it.
+    const css = readFileSync(
+      resolve(import.meta.dir, "../../../src/styles/vlist-table.css"),
+      "utf8",
+    );
+    const rule = css.match(/\.vlist-table-header-content\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).not.toContain("pointer-events");
+  });
 });
 
 // =============================================================================
@@ -1048,6 +1119,164 @@ describe("createTableHeader - keyboard navigation", () => {
     header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
 
     expect(root.focus).toHaveBeenCalled();
+  });
+});
+
+// =============================================================================
+// Roving Index Follows Focus
+// =============================================================================
+
+describe("createTableHeader - roving index follows focus", () => {
+  for (const columnCount of [4, 2]) {
+    // Serial: focus and document.activeElement are process globals.
+    it.serial(`keeps one focused tab stop after rebuilding with ${columnCount} columns`, () => {
+      const { root } = createTestDOM();
+      const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+      const columns = [col("a"), col("b"), col("c"), col("d")];
+      const layout = createResolvedLayout(columns);
+      const getCells = () => Array.from(
+        header.element.querySelectorAll<HTMLElement>('[role="columnheader"]'),
+      );
+      const clickCell = (cell: HTMLElement) => {
+        // The DOM shim does not perform mousedown's default focus action.
+        cell.focus();
+        cell.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      };
+
+      try {
+        header.rebuild(layout);
+        clickCell(getCells()[3]!);
+        expect(getCells().map((cell) => cell.getAttribute("tabindex")))
+          .toEqual(["-1", "-1", "-1", "0"]);
+
+        // The same layout update and header rebuild used by updateColumns().
+        expect(() => {
+          layout.updateColumns(columns.slice(0, columnCount));
+          layout.resolve(600);
+          header.rebuild(layout);
+        }).not.toThrow();
+        const cells = getCells();
+        expect(cells.map((cell) => cell.getAttribute("tabindex")))
+          .toEqual(columnCount === 4 ? ["0", "-1", "-1", "-1"] : ["0", "-1"]);
+
+        expect(() => clickCell(cells[1]!)).not.toThrow();
+        expect(document.activeElement).toBe(cells[1]!);
+        const tabStops = cells.filter((cell) => cell.getAttribute("tabindex") === "0");
+        expect(tabStops).toHaveLength(1);
+        expect(document.activeElement).toBe(tabStops[0]!);
+      } finally {
+        header.destroy();
+        root.remove();
+      }
+    });
+  }
+
+  // The roving index is what Enter, Space and Ctrl+Arrow act on. Only the
+  // arrow keys moved it; a browser click focuses the clicked cell (it carries
+  // tabindex) and left the index on the cell the arrows were last on (#348).
+
+  it("sorts the cell a click focused, not the roving cell", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([
+      col("name", { sortable: true }),
+      col("value", { sortable: true }),
+    ]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const valueCell = scrollContainer.children[1] as HTMLElement;
+    const content = valueCell.querySelector(".vlist-table-header-content") as HTMLElement;
+
+    // A real click sorts the column; the browser then focuses the cell
+    // (mousedown's default action), which JSDOM does not perform.
+    content.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    valueCell.focus();
+    header.updateSort("value", "asc"); // what the plugin does on column:sort
+    expect(onSort).toHaveBeenLastCalledWith({ key: "value", index: 1, direction: "asc" });
+
+    valueCell.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(onSort).toHaveBeenLastCalledWith({ key: "value", index: 1, direction: "desc" });
+    // One tab stop in the header, on the focused cell.
+    expect((scrollContainer.children[0] as HTMLElement).getAttribute("tabindex")).toBe("-1");
+    expect(valueCell.getAttribute("tabindex")).toBe("0");
+  });
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("continues arrow navigation from the cell a click focused", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cellB = scrollContainer.children[1] as HTMLElement;
+    const cellC = scrollContainer.children[2] as HTMLElement;
+
+    cellB.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    cellB.focus();
+
+    // ArrowRight goes to c, b's neighbour. With the index left behind it went
+    // to b, the neighbour of the cell the arrows were last on.
+    cellB.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(document.activeElement).toBe(cellC);
+    expect(cellC.getAttribute("tabindex")).toBe("0");
+    expect(cellB.getAttribute("tabindex")).toBe("-1");
+
+    cellC.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    expect(document.activeElement).toBe(cellB);
+    expect(cellB.getAttribute("tabindex")).toBe("0");
+  });
+
+  it("follows a programmatic focus() to that cell", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([
+      col("name", { sortable: true }),
+      col("value", { sortable: true }),
+    ]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const valueCell = scrollContainer.children[1] as HTMLElement;
+
+    valueCell.focus();
+
+    expect((scrollContainer.children[0] as HTMLElement).getAttribute("tabindex")).toBe("-1");
+    expect(valueCell.getAttribute("tabindex")).toBe("0");
+
+    valueCell.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(onSort).toHaveBeenCalledWith({ key: "value", index: 1, direction: "asc" });
+  });
+
+  it("moves the tab stop into the cell a label's control takes focus in", () => {
+    const { root } = createTestDOM();
+    const onSort = mock(() => {});
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([
+      col("name", { sortable: true }),
+      col("value", { label, sortable: true }),
+    ]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+
+    // Clicking a supplied button focuses it, never the cell, but the header's
+    // one tab stop must still be the cell it lives in.
+    button.focus();
+
+    expect((scrollContainer.children[0] as HTMLElement).getAttribute("tabindex")).toBe("-1");
+    expect((scrollContainer.children[1] as HTMLElement).getAttribute("tabindex")).toBe("0");
+
+    // The control still owns its own keys.
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(onSort).not.toHaveBeenCalled();
   });
 });
 

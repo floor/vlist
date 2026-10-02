@@ -324,6 +324,37 @@ describe("table — column events", () => {
     mockCtx.cleanup();
   });
 
+  it("sorts the clicked column on Enter, not the roving cell (#348)", () => {
+    const plugin = table({ columns: sortableColumns, rowHeight: 40 });
+    const mockCtx = createTrackingMockContext();
+
+    plugin.setup!(mockCtx.ctx);
+
+    const headerCells = mockCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    const emailHeader = headerCells[1] as HTMLElement;
+
+    // A click sorts email ascending; the browser then focuses the clicked
+    // cell (mousedown's default action), which JSDOM does not perform.
+    emailHeader.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    emailHeader.focus();
+
+    emailHeader.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    const sortEvents = mockCtx.emitted.filter(e => e.event === "column:sort");
+    expect(sortEvents.length).toBe(2);
+
+    const payload = sortEvents[1]!.payload as {
+      key: string;
+      index: number;
+      direction: string | null;
+    };
+    expect(payload.key).toBe("email");
+    expect(payload.index).toBe(1);
+    expect(payload.direction).toBe("desc");
+
+    mockCtx.cleanup();
+  });
+
   it("does not emit column:sort for non-sortable columns", () => {
     const plugin = table({ columns: sortableColumns, rowHeight: 40 });
     const mockCtx = createTrackingMockContext();
@@ -337,6 +368,105 @@ describe("table — column events", () => {
 
     const sortEvents = mockCtx.emitted.filter(e => e.event === "column:sort");
     expect(sortEvents.length).toBe(0);
+
+    mockCtx.cleanup();
+  });
+
+  it("emits column:click with the declared payload when a header cell is clicked", () => {
+    const plugin = table({ columns: sortableColumns, rowHeight: 40 });
+    const mockCtx = createTrackingMockContext();
+
+    plugin.setup!(mockCtx.ctx);
+
+    const headerCells = mockCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    // The "role" column (index 2) is not sortable: column:click is the only event.
+    const roleHeader = headerCells[2] as HTMLElement;
+    const event = new MouseEvent("click", { bubbles: true });
+    roleHeader.dispatchEvent(event);
+
+    const clickEvents = mockCtx.emitted.filter(e => e.event === "column:click");
+    expect(clickEvents.length).toBe(1);
+
+    const payload = clickEvents[0]!.payload as { key: string; index: number; event: MouseEvent };
+    expect(Object.keys(payload).sort()).toEqual(["event", "index", "key"]);
+    expect(payload.key).toBe("role");
+    expect(payload.index).toBe(2);
+    expect(payload.event).toBe(event);
+
+    expect(mockCtx.emitted.filter(e => e.event === "column:sort").length).toBe(0);
+
+    mockCtx.cleanup();
+  });
+
+  it("emits column:click before column:sort for a sortable header", () => {
+    const plugin = table({ columns: sortableColumns, rowHeight: 40 });
+    const mockCtx = createTrackingMockContext();
+
+    plugin.setup!(mockCtx.ctx);
+
+    const headerCells = mockCtx.dom.root.querySelectorAll(".vlist-table-header-cell");
+    (headerCells[0] as HTMLElement).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    const columnEvents = mockCtx.emitted.filter(e => e.event.startsWith("column:"));
+    expect(columnEvents.map(e => e.event)).toEqual(["column:click", "column:sort"]);
+    for (const emitted of columnEvents) {
+      const payload = emitted.payload as { key: string; index: number };
+      expect(payload.key).toBe("name");
+      expect(payload.index).toBe(0);
+    }
+
+    mockCtx.cleanup();
+  });
+
+  it("leaves a click on interactive content inside a header label to that content", () => {
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+    const buttonClicks: Event[] = [];
+    button.addEventListener("click", (e) => buttonClicks.push(e));
+
+    const columns: TableColumn<TableTestItem>[] = [
+      { key: "name", label, width: 200, sortable: true },
+      { key: "email", label: "Email", width: 300 },
+    ];
+    const plugin = table({ columns, rowHeight: 40 });
+    const mockCtx = createTrackingMockContext();
+
+    plugin.setup!(mockCtx.ctx);
+
+    const cell = mockCtx.dom.root.querySelectorAll(".vlist-table-header-cell")[0] as HTMLElement;
+    expect(cell.contains(button)).toBe(true);
+
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+
+    // The button's own handler ran; the header did not sort or report a click.
+    expect(buttonClicks.length).toBe(1);
+    expect(mockCtx.emitted.filter(
+      e => e.event === "column:click" || e.event === "column:sort",
+    ).length).toBe(0);
+
+    mockCtx.cleanup();
+  });
+
+  it("leaves Enter on a button inside a header label to that content", () => {
+    const button = document.createElement("button");
+    const label = document.createElement("span");
+    label.appendChild(button);
+
+    const columns: TableColumn<TableTestItem>[] = [
+      { key: "name", label, width: 200, sortable: true },
+    ];
+    const plugin = table({ columns, rowHeight: 40 });
+    const mockCtx = createTrackingMockContext();
+
+    plugin.setup!(mockCtx.ctx);
+
+    const cell = mockCtx.dom.root.querySelectorAll(".vlist-table-header-cell")[0] as HTMLElement;
+    expect(cell.contains(button)).toBe(true);
+
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+
+    expect(mockCtx.emitted.filter(e => e.event === "column:sort").length).toBe(0);
 
     mockCtx.cleanup();
   });
