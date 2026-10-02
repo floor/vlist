@@ -326,6 +326,14 @@ myTable.on('column:sort', ({ key, direction }) => { /* re-sort data */ })
 myTable.on('column:resize', ({ key, width }) => { /* persist widths */ })
 ```
 
+A control supplied in a header `label` that is not one of `a[href]`, `button`, `input`, `select`,
+`textarea` or an element with `tabindex` — a custom element with a button in its shadow root, or a
+`div` with `role="button"` and no `tabindex` — runs its own handler, and the click still reaches the
+cell, which sorts the column when it is sortable: give the control `tabindex`, or call
+`stopPropagation()` in its handler. `column:click` is emitted for a pointer click or tap only;
+Enter and Space emit `column:sort` on a sortable header and never `column:click`, so an action a
+keyboard user must reach should be a `button` supplied in the header label.
+
 ### Grid Layout
 
 ```typescript
