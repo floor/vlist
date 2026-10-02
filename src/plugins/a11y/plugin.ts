@@ -186,8 +186,14 @@ export function a11y<T extends VListItem = VListItem>(
 
       // ── Focus handlers ──────────────────────────────────────────
 
+      // True while _releaseFocus hands focus to the list's focus target. The
+      // focusin that follows is the handoff, not a user arriving: reacting to
+      // it would scroll back to the focused item and force a render from
+      // inside the release that is moving focus away.
+      let releasing = false;
+
       const onFocusIn = (): void => {
-        if (engineState.destroyed) return;
+        if (engineState.destroyed || releasing) return;
         if (!dom.content.matches(":focus-visible")) return;
         const t = getTotal();
         if (t === 0) return;
@@ -207,6 +213,25 @@ export function a11y<T extends VListItem = VListItem>(
 
       dom.content.addEventListener("focusin", onFocusIn);
       dom.content.addEventListener("focusout", onFocusOut);
+
+      // Renderers ask the focus owner before they remove a row that may hold
+      // DOM focus (#339). Removing a focused node fires focusout with no
+      // relatedTarget while the removal is still in flight; onFocusOut's
+      // force() would then re-enter the render that is removing the row, which
+      // removes it twice — the second removeChild throws NotFoundError.
+      // Moving focus out first fixes it at the source: the focusout that
+      // follows carries a relatedTarget inside the root, so onFocusOut ignores
+      // it, and the list keeps a focus target instead of losing focus to body.
+      // The target is the same one the plugin focuses on click: the listbox
+      // content when it is focusable, else the viewport (whose tabindex="-1"
+      // exists for exactly this).
+      ctx.hooks.method("_releaseFocus", (element: HTMLElement): void => {
+        const active = document.activeElement;
+        if (active === null || !element.contains(active)) return;
+        releasing = true;
+        (dom.content.getAttribute("tabindex") !== null ? dom.content : dom.viewport).focus({ preventScroll: true });
+        releasing = false;
+      });
 
       // ── Keyboard handler ────────────────────────────────────────
       // Skipped when keyboard:false — click-selection, focus, and ARIA stay

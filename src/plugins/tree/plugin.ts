@@ -320,8 +320,20 @@ export function tree<T extends VListItem = VListItem>(
     else contentElement.style[isX ? "width" : "height"] = totalSize + "px";
   }
 
+  /**
+   * The focus owner's handoff before a row leaves the DOM (#339). Resolved
+   * at release time, not at setup: a11y()/selection() (priority 50/55) call
+   * ctx.hooks.method("_releaseFocus") after this plugin's setup. A plugin that
+   * does not own focus costs one property read; the owner itself checks
+   * activeElement with contains(), no query.
+   */
+  function releaseFocus(element: HTMLElement): void {
+    (getMethod?.("_releaseFocus") as ((el: HTMLElement) => void) | undefined)?.(element);
+  }
+
   function detachAll(): void {
     rendered.forEach((element) => {
+      releaseFocus(element);
       element.remove();
       pool.release(element);
     });
@@ -601,6 +613,7 @@ export function tree<T extends VListItem = VListItem>(
 
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
+        releaseFocus(element);
         element.remove();
         pool.release(element);
         rendered.delete(idx);

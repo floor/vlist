@@ -178,6 +178,17 @@ export function grid<T extends VListItem = VListItem>(
     rowContentWritten(el);
   }
 
+  /**
+   * The focus owner's handoff before a row leaves the DOM (#339). Resolved
+   * at release time, not at setup: a11y()/selection() (priority 50/55) call
+   * ctx.hooks.method("_releaseFocus") after this plugin's priority-10 setup.
+   * A null storedCtx or a plugin that does not own focus costs one property
+   * read; the owner itself checks activeElement with contains(), no query.
+   */
+  function releaseFocus(element: HTMLElement): void {
+    (storedCtx?.hooks.get("_releaseFocus") as ((el: HTMLElement) => void) | undefined)?.(element);
+  }
+
   function gridRenderIfNeeded(): void {
     if (engineState.destroyed) return;
 
@@ -220,6 +231,7 @@ export function grid<T extends VListItem = VListItem>(
     // Release items outside the new range
     for (const [idx, tracked] of rendered) {
       if (idx < rangeStart || idx > rangeEnd) {
+        releaseFocus(tracked.el);
         tracked.el.remove();
         pool.release(tracked.el);
         rendered.delete(idx);

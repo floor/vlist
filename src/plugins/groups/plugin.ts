@@ -342,8 +342,20 @@ export function groups<T extends VListItem = VListItem>(
   }
 
 
+  /**
+   * The focus owner's handoff before a row leaves the DOM (#339). Resolved
+   * at release time, not at setup: a11y()/selection() (priority 50/55) call
+   * ctx.hooks.method("_releaseFocus") after this plugin's priority-11 setup.
+   * A plugin that does not own focus costs one property read; the owner
+   * itself checks activeElement with contains(), no query.
+   */
+  function releaseFocus(element: HTMLElement): void {
+    (getMethod?.("_releaseFocus") as ((el: HTMLElement) => void) | undefined)?.(element);
+  }
+
   function detachAll(): void {
     rendered.forEach((element) => {
+      releaseFocus(element);
       element.remove();
       const id = element.getAttribute("data-id");
       if (id) {
@@ -493,6 +505,7 @@ export function groups<T extends VListItem = VListItem>(
     if (cs <= 0 || totalItems === 0) {
       if (rendered.size > 0) {
         rendered.forEach((element) => {
+          releaseFocus(element);
           element.remove();
           pool.release(element);
         });
@@ -553,6 +566,7 @@ export function groups<T extends VListItem = VListItem>(
     // Recycle elements outside the new range
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
+        releaseFocus(element);
         element.remove();
         pool.release(element);
         rendered.delete(idx);

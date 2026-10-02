@@ -481,6 +481,12 @@ export function masonry<T extends VListItem = VListItem>(
         undefined,
         resolveInteractive,
         scroll.getRenderOrigin,
+        // The focus owner's handoff (#339), resolved per removal rather
+        // than at setup: a11y()/selection() register it after this plugin's
+        // priority-10 setup runs.
+        (element: HTMLElement): void => {
+          (ctx.hooks.get("_releaseFocus") as ((el: HTMLElement) => void) | undefined)?.(element);
+        },
       );
 
       ctx.dom.root.classList.add(`${classPrefix}--masonry`);

@@ -379,8 +379,14 @@ export function selection<T extends VListItem = VListItem>(
         dom.content.setAttribute("aria-activedescendant", el?.id ?? `${classPrefix}-item-${index}`);
       };
 
+      // True while _releaseFocus hands focus to the list's focus target. The
+      // focusin that follows is the handoff, not a user arriving: reacting to
+      // it would scroll back to the focused item and force a render from
+      // inside the release that is moving focus away.
+      let releasing = false;
+
       const onFocusIn = (): void => {
-        if (engineState.destroyed) return;
+        if (engineState.destroyed || releasing) return;
         resolveOnce(ctx);
         if (!dom.content.matches(":focus-visible") && !dom.root.matches(":focus-visible")) return;
         const t = getTotalFn();
@@ -404,6 +410,23 @@ export function selection<T extends VListItem = VListItem>(
         dom.content.removeAttribute("aria-activedescendant");
       };
       dom.root.addEventListener("focusout", onFocusOut);
+
+      // Renderers ask the focus owner before they remove a row that may hold
+      // DOM focus (#339): removing a focused node fires focusout with no
+      // relatedTarget mid-removal, and forceRender() from there re-enters the
+      // render that is removing the row (its second removeChild throws).
+      // Moving focus out first fixes it at the source — the focusout that
+      // follows carries a relatedTarget inside the root, so onFocusOut ignores
+      // it, and the list keeps focus instead of dropping it to body. The
+      // fallback is the viewport, which always carries tabindex="-1" for
+      // programmatic focus; the root carries none.
+      ctx.hooks.method("_releaseFocus", (element: HTMLElement): void => {
+        const active = document.activeElement;
+        if (active === null || !element.contains(active)) return;
+        releasing = true;
+        (dom.content.getAttribute("tabindex") !== null ? dom.content : dom.viewport).focus(focusPreventScroll);
+        releasing = false;
+      });
 
       ctx.hooks.onDestroy(() => {
         dom.root.removeEventListener("focusin", onFocusIn);

@@ -291,13 +291,15 @@ describe("selection — Method Registration", () => {
     cleanup();
   });
 
-  it("should register all 15 methods in single mode (9 public + 6 internal)", () => {
+  it("should register all 16 methods in single mode (9 public + 7 internal)", () => {
     const plugin = selection<TestItem>();
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
     plugin.setup!(ctx);
 
-    expect(methods.size).toBe(15);
+    expect(methods.size).toBe(16);
+    // The focus owner's pre-removal handoff (#339).
+    expect(methods.has("_releaseFocus")).toBe(true);
 
     cleanup();
   });

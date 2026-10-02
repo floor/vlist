@@ -82,7 +82,7 @@ interface ElementPool {
   clear: () => void;
 }
 
-const createElementPool = (maxSize: number = 200): ElementPool => {
+const createElementPool = (releaseFocus?: (element: HTMLElement) => void, maxSize: number = 200): ElementPool => {
   const pool: HTMLElement[] = [];
 
   const acquire = (): HTMLElement => {
@@ -98,6 +98,10 @@ const createElementPool = (maxSize: number = 200): ElementPool => {
   };
 
   const release = (element: HTMLElement): void => {
+    // Hand focus off while the item is still in the DOM (#339): the
+    // focusout that remove() fires for a focused descendant is what
+    // re-enters the render that is releasing this item.
+    releaseFocus?.(element);
     // Remove from DOM immediately — prevents blank divs in the container
     element.remove();
 
@@ -188,8 +192,13 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   // RFC-012: the main-axis placement offset is shifted into the content
   // element by subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
   getBaseOffset: () => number = () => 0,
+  /**
+   * The focus owner's pre-removal handoff (#339). The plugin resolves it
+   * per call: a11y()/selection() set up after this plugin and register it then.
+   */
+  releaseFocus?: (element: HTMLElement) => void,
 ): MasonryRenderer<T> => {
-  const pool = createElementPool();
+  const pool = createElementPool(releaseFocus);
   const rendered = new Map<number, TrackedItem>();
 
   // ── Reusable visibleSet — cleared and repopulated each frame (no allocation) ──

@@ -220,6 +220,12 @@ export function phase2Commit<T extends VListItem>(
   hooks: CompiledHooks,
   getItemFn?: ((index: number) => T | undefined) | null,
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
+  /**
+   * The focus owner's hook (#339), asked before a released row leaves the
+   * DOM so it can move focus off an element the row still contains. Optional:
+   * without a focus-owning plugin there is nothing to hand off.
+   */
+  releaseFocus?: ((element: HTMLElement) => void) | null,
 ): void {
   const items = getItemFn ? null : getItems();
   const count = state.visibleCount;
@@ -413,6 +419,7 @@ export function phase2Commit<T extends VListItem>(
     const rangeEnd = newIndices[count - 1]!;
     for (const [idx, element] of rendered) {
       if (idx < rangeStart || idx > rangeEnd) {
+        releaseFocus?.(element);
         element.remove();
         pool.release(element);
         rendered.delete(idx);
@@ -421,6 +428,7 @@ export function phase2Commit<T extends VListItem>(
   } else {
     for (const [idx, element] of rendered) {
       if (!isInVisible(newIndices, count, idx)) {
+        releaseFocus?.(element);
         element.remove();
         pool.release(element);
         rendered.delete(idx);
@@ -450,6 +458,8 @@ export function render<T extends VListItem>(
   hooks: CompiledHooks,
   getItemFn?: ((index: number) => T | undefined) | null,
   itemStateFn?: ((index: number, state: ItemState) => void) | null,
+  /** See phase2Commit: the focus owner's pre-removal handoff (#339). */
+  releaseFocus?: ((element: HTMLElement) => void) | null,
 ): void {
   const changed = phase1Calculate(state, sizeCache, overscan, hooks, rc.startPadding);
   // Clamping silently is the failure the ceiling replaced, not a fix for it:
@@ -472,6 +482,6 @@ export function render<T extends VListItem>(
     });
   }
   if (changed) {
-    phase2Commit(state, pool, contentElement, template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
+    phase2Commit(state, pool, contentElement, template, getItems, rendered, rc, hooks, getItemFn, itemStateFn, releaseFocus);
   }
 }

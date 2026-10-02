@@ -11,6 +11,22 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Removing a row that holds DOM focus no longer throws (#339). With `table()` (and equally `grid()`,
+  `groups()`, `tree()`, `masonry()` or a plain list) plus `a11y()`, focusing a control inside a
+  cell and scrolling its row away with `list.scrollToIndex(49999, "center")` threw
+  `NotFoundError` from the second `removeChild` of the same row: removing the focused node fires
+  `focusout` mid-removal, and the forced render the focus owner ran from there re-entered the
+  render that was doing the removing. The focus owner now moves focus to the list's focus target
+  before the row leaves the DOM — `a11y()` and `selection()` register an internal `_releaseFocus`
+  hook that the core pipeline and every layout's release path ask first — and a render asked for
+  while one is running is deferred to the end of that pass instead of re-entering it. The handoff
+  costs no DOM query per released row: the caller resolves the owner's hook once per pass, the
+  owner checks `document.activeElement` with `contains()`. Base 10,539 → 10,622 B gzip (budget
+  10,547 B) and the plugin scenarios rise with it; `scripts/focus-removal-browser.mjs` covers the
+  browser path the JSDOM tests cannot reach.
+
 ### Changed
 
 - `tree()` with `connectorLines` is smaller: the JavaScript 117 B (16,050 → 15,933 B gzip;

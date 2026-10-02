@@ -95,11 +95,15 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
 // Element Pool (row-level)
 // =============================================================================
 
-const createElementPool = (): { acquire: () => HTMLElement; release: (el: HTMLElement) => void; clear: () => void } => {
+const createElementPool = (releaseFocus?: (element: HTMLElement) => void): { acquire: () => HTMLElement; release: (el: HTMLElement) => void; clear: () => void } => {
   const pool: HTMLElement[] = [];
   return {
     acquire: (): HTMLElement => pool.pop() || document.createElement("div"),
     release: (el: HTMLElement): void => {
+      // Hand focus off while the row is still in the DOM (#339): the
+      // focusout that removeChild fires for a focused descendant is what
+      // re-enters the render that is releasing this row.
+      releaseFocus?.(el);
       el.parentNode?.removeChild(el);
       if (pool.length < 200) {
         el.className = "";
@@ -185,8 +189,13 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   // RFC-012: absolute row offsets are shifted into the content element by
   // subtracting baseOffset. Returns 0 in native mode (transforms unchanged).
   getBaseOffset: () => number = () => 0,
+  /**
+   * The focus owner's pre-removal handoff (#339). The plugin resolves it
+   * per call: a11y()/selection() set up after this plugin and register it then.
+   */
+  releaseFocus?: (element: HTMLElement) => void,
 ): TableRendererInstance<T> => {
-  const pool = createElementPool();
+  const pool = createElementPool(releaseFocus);
   const rendered = new Map<number, TrackedRow>();
 
   let lastAriaSetSize = -1;
@@ -373,6 +382,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
 
     // Remove excess cells
     for (let i = targetCount; i < existingCells.length; i++) {
+      releaseFocus?.(existingCells[i]!);
       existingCells[i]!.remove();
     }
 

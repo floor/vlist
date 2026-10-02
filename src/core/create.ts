@@ -694,12 +694,49 @@ export function createCore<T extends VListItem = VListItem>(
     api.scrollToIndex(wanted.index, wanted.alignOrOptions);
   }
 
-  function doRender(): void {
-    if (customRenderIfNeeded) {
-      customRenderIfNeeded();
-    } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
+  /** One pipeline pass. Custom renderers replace it through render.setFn. */
+  function renderCore(): void {
+    render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn,
+      methods.get("_releaseFocus") as ((element: HTMLElement) => void) | undefined);
+  }
+
+  // A render asked for while one is running is deferred to the end of that
+  // pass instead of re-entering it (#339). The a11y and selection plugins
+  // force a render from focusout when the focused row is removed; re-entering
+  // the pass that is removing that row releases it a second time and the
+  // second removeChild throws NotFoundError. A deferred force still runs, so
+  // no forced commit is lost.
+  let rendering = false;
+  let renderQueued = false;
+
+  function renderPass(force: boolean): void {
+    if (rendering) {
+      renderQueued = renderQueued || force;
+      return;
     }
+    rendering = true;
+    try {
+      do {
+        renderQueued = false;
+        if (force) {
+          state.renderPending = true;
+          if (customForceRender) customForceRender();
+          else renderCore();
+        } else if (customRenderIfNeeded) {
+          customRenderIfNeeded();
+        } else {
+          renderCore();
+        }
+        // A deferred pass must commit even when nothing moved, so it runs forced.
+        force = true;
+      } while (renderQueued);
+    } finally {
+      rendering = false;
+    }
+  }
+
+  function doRender(): void {
+    renderPass(false);
     // After the render: layout plugins rebuild their own state during it (grid
     // rows, masonry placements, group entries), and a scroll held from before
     // the list had a total must land on that rebuilt layout, not the stale one.
@@ -798,12 +835,7 @@ export function createCore<T extends VListItem = VListItem>(
   }
 
   function doForceRender(): void {
-    state.renderPending = true;
-    if (customForceRender) {
-      customForceRender();
-    } else {
-      render(state, sizeCache, config.overscan, pool, dom.content, rawConfig.item.template, getItems, rendered, rc, hooks, getItemFn, itemStateFn);
-    }
+    renderPass(true);
     // Same ordering as doRender: the held scroll lands on the layout the
     // plugins just rebuilt for the new items, not on the previous one.
     flushPendingScroll();
