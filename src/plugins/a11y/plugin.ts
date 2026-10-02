@@ -42,6 +42,12 @@ export function a11y<T extends VListItem = VListItem>(
       const emitter = ctx.emitter;
       const classPrefix = config.classPrefix;
       const liveRegion = dom.liveRegion;
+      // The element that takes focus — the content when enableListbox() could
+      // give it a tabindex, the root otherwise (a table's content is a
+      // rowgroup). The table plugin puts the tab stop on that root for either
+      // focus owner, and the click path below, the focus-in that rings a row
+      // and cleanup all use this one rule. #352
+      const focusTarget = dom.content.hasAttribute("tabindex") ? dom.content : dom.root;
 
       let focusIdx = -1;
       let focusVis = false;
@@ -194,7 +200,7 @@ export function a11y<T extends VListItem = VListItem>(
       });
       const onFocusIn = (): void => {
         if (engineState.destroyed || restoringFocus()) return;
-        if (!dom.content.matches(":focus-visible")) return;
+        if (!focusTarget.matches(":focus-visible")) return;
         const t = getTotal();
         if (t === 0) return;
         let tgt = focusIdx >= 0 ? Math.min(focusIdx, t - 1) : 0;
@@ -202,7 +208,7 @@ export function a11y<T extends VListItem = VListItem>(
         move(tgt);
       };
 
-      dom.content.addEventListener("focusin", onFocusIn);
+      focusTarget.addEventListener("focusin", onFocusIn);
 
       // ── Keyboard handler ────────────────────────────────────────
       // Skipped when keyboard:false — click-selection, focus, and ARIA stay
@@ -284,14 +290,14 @@ export function a11y<T extends VListItem = VListItem>(
         const it = getItem(idx);
         if (!it || (it as Record<string, unknown>).__groupHeader) return;
         focusVis = false;
-        dom.content.focus({ preventScroll: true });
+        focusTarget.focus({ preventScroll: true });
         select(idx, false);
       });
 
       // ── Cleanup ─────────────────────────────────────────────────
 
       ctx.hooks.onDestroy(() => {
-        dom.content.removeEventListener("focusin", onFocusIn);
+        focusTarget.removeEventListener("focusin", onFocusIn);
       });
     },
   };

@@ -11,6 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- With `table()` and `a11y()` when `selection()` does not own focus (including
+  `selection({ mode: "none" })`), Tab now reaches the grid root before the header;
+  Shift+Tab reaches it on the way back. Landing there rings the first row, and
+  ArrowDown, End and Home move the active row. Clicking a row now focuses the grid
+  instead of the viewport. Tables whose focus is owned by `selection()` already
+  had that grid stop and focused it on click; their behavior is unchanged. A
+  display-only table keeps its header tab stop and no grid stop (#352).
+
 ## [3.1.1] - 2026-10-03
 
 ### Changed
