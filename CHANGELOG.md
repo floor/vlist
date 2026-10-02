@@ -26,6 +26,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   closed folders, keeps its bytes: it is the fix, and dropping its fast path saves nothing
   after gzip.
 
+### Fixed
+
+- With `table()`, `ariaLabel` names the element that carries `role="grid"` — the root,
+  which is also what takes focus — instead of the rowgroup inside it. Core writes the
+  label onto the content element, which in a table is a rowgroup, so the grid announced
+  no accessible name while a child carried one; the name now moves with the composite
+  role and moves back when the table is destroyed (#342). A plain list, a display-only
+  list and a grid list already named the element carrying their role and are unchanged.
+
 ## [3.1.0] - 2026-10-01
 
 The 3.1 line, on the npm `latest` tag. Everything in `3.0.1-next.1` through `3.1.0-next.3`
