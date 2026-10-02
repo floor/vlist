@@ -22,6 +22,7 @@ import type { VListConfig } from "../../src/config";
 import type { VListPlugin } from "../../src/core/types";
 import { grid } from "../../src/plugins/grid";
 import { autosize } from "../../src/plugins/autosize";
+import { table } from "../../src/plugins/table";
 
 beforeAll(() => setupDOM());
 afterAll(() => teardownDOM());
@@ -332,6 +333,78 @@ describe("resolvePlugins — plugins escape hatch (#119)", () => {
     const autosizes = resolved.filter((p) => p.name === "autosize");
     expect(autosizes).toHaveLength(1);
     expect(autosizes[0]).toBe(userAutosize); // the user's instance wins
+  });
+});
+
+describe("resolvePlugins — table() with an estimated item size (#346)", () => {
+  const other: VListPlugin<TestItem> = { name: "custom-z", setup: () => {} };
+  const tableFor = (): VListPlugin<TestItem> =>
+    table({ columns: [{ key: "a", label: "A" }], rowHeight: 40 });
+
+  /** What creating the list throws, or "" when it builds. */
+  const creationMessage = (config: Partial<VListConfig<TestItem>>): string => {
+    const container = createContainer({ width: 300, height: 500 });
+    let list: { destroy(): void } | undefined;
+    try {
+      list = createVListFromConfig({
+        container,
+        item: { estimatedHeight: 50, template },
+        items: createTestItems(10),
+        ...config,
+      });
+      return "";
+    } catch (error) {
+      return (error as Error).message;
+    } finally {
+      list?.destroy();
+      container.remove();
+    }
+  };
+
+  it("names the estimate and table(), never autosize, in either plugin order", () => {
+    // The config layer wires autosize() for the estimate; the core conflict
+    // would name a plugin the caller never wrote. The message names what they
+    // did write — the estimate field and table() — and the way out.
+    const messages = [
+      [tableFor(), other],
+      [other, tableFor()],
+    ].map((plugins) => creationMessage({ plugins }));
+    expect(messages[0]).toBe(messages[1]);
+    for (const message of messages) {
+      expect(message).toContain("item.estimatedHeight");
+      expect(message).toContain("table()");
+      expect(message).toContain("rowHeight");
+      expect(message).not.toContain("autosize");
+    }
+  });
+
+  it("names estimatedWidth for a horizontal list", () => {
+    const message = creationMessage({
+      orientation: "horizontal",
+      item: { estimatedWidth: 80, template },
+      plugins: [tableFor()],
+    });
+    expect(message).toContain("item.estimatedWidth");
+    expect(message).not.toContain("autosize");
+  });
+
+  it("keeps the plugin-level message when the caller wrote autosize() themselves", () => {
+    // They named autosize(), so it is the honest thing for the message to name.
+    const message = creationMessage({ plugins: [tableFor(), autosize()] });
+    expect(message).toBe('[vlist] Plugin "table" conflicts with "autosize"');
+  });
+
+  it("builds a table when the item size is fixed", () => {
+    const message = creationMessage({
+      item: { height: 40, template },
+      plugins: [tableFor()],
+    });
+    expect(message).toBe("");
+  });
+
+  it("leaves the grid message to the grid case", () => {
+    const message = creationMessage({ layout: "grid", grid: { columns: 2 } });
+    expect(message).toContain('layout: "grid" needs a fixed item size');
   });
 });
 

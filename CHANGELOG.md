@@ -25,6 +25,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   overrides the elbow (`none` hides it). #283's other half, `findItem` for nodes inside
   closed folders, keeps its bytes: it is the fix, and dropping its fast path saves nothing
   after gzip.
+- `table()` with `autosize()` or with an estimated item size now throws at creation
+  (#346). The pair used to build a list whose rows never grew: the table wrote its fixed
+  row height over the measuring size function, and the absolutely positioned cells
+  measured 0. Where a framework adapter's config asked for the estimate, the message now
+  names the fields its caller wrote (`item.estimatedHeight`, `table()`) instead of the
+  `autosize()` the config layer wires; the way out is a fixed `rowHeight` on the table
+  and a fixed item size (`item.height`, `item.width` when horizontal) in place of the
+  estimate.
 
 ### Fixed
 
@@ -32,7 +40,6 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   removed, without reentering the renderer or stealing focus from another control.
   Keyboard navigation resumes from the prior row. Recovery runs before the next
   frame and also covers browsers that omit removal `focusout` events (#339).
-- `table()` declares a conflict with `autosize()` (#346). Creating a list with both now throws `[vlist] Plugin "table" conflicts with "autosize"`, where the pair used to build and then not auto-size the rows: the table writes its fixed row height over the measuring size function, and the absolutely positioned cells measure 0.
 - With `table()`, `ariaLabel` names the element that carries `role="grid"` — the root,
   which is also what takes focus — instead of the rowgroup inside it. Core writes the
   label onto the content element, which in a table is a rowgroup, so the grid announced

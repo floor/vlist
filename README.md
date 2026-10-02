@@ -334,6 +334,11 @@ cell, which sorts the column when it is sortable: give the control `tabindex`, o
 Enter and Space emit `column:sort` on a sortable header and never `column:click`, so an action a
 keyboard user must reach should be a `button` supplied in the header label.
 
+A table's rows have a fixed height, so `autosize()` and an estimated item size
+(`item.estimatedHeight`, or `item.estimatedWidth` for a horizontal list) cannot be combined with
+`table()` — creating such a list throws; give the table a fixed `rowHeight` and the config a fixed
+`item.height` instead.
+
 ### Grid Layout
 
 ```typescript

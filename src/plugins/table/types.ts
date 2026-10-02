@@ -116,6 +116,11 @@ export interface TableConfig<T extends VListItem = VListItem> {
    * - `(index: number) => number` — Variable height per row
    *
    * For auto-measured variable heights, use `estimatedRowHeight` instead.
+   *
+   * Each row's height is fixed here and never measured, so a table cannot be
+   * combined with `autosize()` or with an estimated item size
+   * (`item.estimatedHeight`, `item.estimatedWidth` when horizontal): creating
+   * such a list throws.
    */
   rowHeight: number | ((index: number) => number);
 
@@ -128,6 +133,10 @@ export interface TableConfig<T extends VListItem = VListItem> {
    * is ignored.
    *
    * Use for tables with wrapping text or dynamic cell content.
+   *
+   * A table's rows have a fixed height, so `autosize()` and an estimated item
+   * size (`item.estimatedHeight`, `item.estimatedWidth` when horizontal)
+   * cannot be combined with it: creating such a list throws.
    */
   estimatedRowHeight?: number;
 
