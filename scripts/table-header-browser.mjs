@@ -109,6 +109,32 @@ try {
  assert.equal(await page.evaluate(()=>document.activeElement&&document.activeElement.dataset.columnKey),'name','ArrowLeft moves to the neighbour of the clicked cell, not of the roving cell');
  console.log('PASS click moves the roving index: Enter and the arrows continue from the clicked header cell',JSON.stringify({lastSort}));
 
- console.log('SUMMARY',JSON.stringify({passes:6}));
+ // #350: updateColumns replaces the focused header node and resets its tab
+ // stop. The next real click must clear that stop, including after shrinking.
+ const focusState=()=>page.evaluate(()=>({
+   tabs:[...document.querySelectorAll('.vlist-table-header-cell')].map(c=>c.getAttribute('tabindex')),
+   focused:document.activeElement?.dataset.columnKey??null,
+   bodyFocused:document.activeElement===document.body,
+ }));
+ const clickHeader=async key=>{
+   const p=await page.evaluate(key=>pointOf('[data-column-key="'+key+'"] .vlist-table-header-content'),key);
+   await page.mouse.click(p.x,p.y);await settle(page);
+ };
+ for(const count of [4,2]){
+   await page.evaluate(()=>list.updateColumns(['a','b','c','d'].map(key=>({key,label:key.toUpperCase(),width:90,sortable:true}))));
+   await settle(page);
+   await clickHeader('d');
+   assert.deepEqual(await focusState(),{tabs:['-1','-1','-1','0'],focused:'d',bodyFocused:false});
+   await page.evaluate(count=>list.updateColumns(['a','b','c','d'].slice(0,count).map(key=>({key,label:key.toUpperCase(),width:90,sortable:true}))),count);
+   await settle(page);
+   const rebuilt=await focusState();
+   assert.deepEqual(rebuilt,{tabs:count===4?['0','-1','-1','-1']:['0','-1'],focused:null,bodyFocused:true},'rebuild removes the focused cell and starts with one tab stop');
+   await clickHeader('b');
+   const clicked=await focusState();
+   assert.deepEqual(clicked,{tabs:count===4?['-1','0','-1','-1']:['-1','0'],focused:'b',bodyFocused:false},'the only tab stop follows the click after updateColumns');
+   console.log('PASS updateColumns keeps one tab stop after a real click',JSON.stringify({columns:count,rebuilt,clicked}));
+ }
+
+ console.log('SUMMARY',JSON.stringify({passes:8}));
  await page.close();
 } finally {await browser?.close();server.stop(true);}

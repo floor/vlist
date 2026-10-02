@@ -53,6 +53,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   header's one tab stop now follow focus wherever it arrives — a click, a programmatic
   `focus()`, a control inside a label — and Tab re-enters the header on the cell last
   focused (#348). `table` 16,668 → 16,690 B gzip of its 16,691 B budget.
+  After `updateColumns()` rebuilds the header, the next click still
+  leaves exactly one tab stop on the focused cell (#350).
 
 ## [3.1.0] - 2026-10-01
 

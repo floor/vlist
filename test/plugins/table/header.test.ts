@@ -1127,6 +1127,50 @@ describe("createTableHeader - keyboard navigation", () => {
 // =============================================================================
 
 describe("createTableHeader - roving index follows focus", () => {
+  for (const columnCount of [4, 2]) {
+    // Serial: focus and document.activeElement are process globals.
+    it.serial(`keeps one focused tab stop after rebuilding with ${columnCount} columns`, () => {
+      const { root } = createTestDOM();
+      const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+      const columns = [col("a"), col("b"), col("c"), col("d")];
+      const layout = createResolvedLayout(columns);
+      const getCells = () => Array.from(
+        header.element.querySelectorAll<HTMLElement>('[role="columnheader"]'),
+      );
+      const clickCell = (cell: HTMLElement) => {
+        // The DOM shim does not perform mousedown's default focus action.
+        cell.focus();
+        cell.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      };
+
+      try {
+        header.rebuild(layout);
+        clickCell(getCells()[3]!);
+        expect(getCells().map((cell) => cell.getAttribute("tabindex")))
+          .toEqual(["-1", "-1", "-1", "0"]);
+
+        // The same layout update and header rebuild used by updateColumns().
+        expect(() => {
+          layout.updateColumns(columns.slice(0, columnCount));
+          layout.resolve(600);
+          header.rebuild(layout);
+        }).not.toThrow();
+        const cells = getCells();
+        expect(cells.map((cell) => cell.getAttribute("tabindex")))
+          .toEqual(columnCount === 4 ? ["0", "-1", "-1", "-1"] : ["0", "-1"]);
+
+        expect(() => clickCell(cells[1]!)).not.toThrow();
+        expect(document.activeElement).toBe(cells[1]!);
+        const tabStops = cells.filter((cell) => cell.getAttribute("tabindex") === "0");
+        expect(tabStops).toHaveLength(1);
+        expect(document.activeElement).toBe(tabStops[0]!);
+      } finally {
+        header.destroy();
+        root.remove();
+      }
+    });
+  }
+
   // The roving index is what Enter, Space and Ctrl+Arrow act on. Only the
   // arrow keys moved it; a browser click focuses the clicked cell (it carries
   // tabindex) and left the index on the cell the arrows were last on (#348).

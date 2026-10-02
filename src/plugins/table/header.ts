@@ -228,6 +228,8 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     scrollContainer.textContent = "";
     cells = [];
     sortIndicators = [];
+    // Rebuilt cells start with their one tab stop on the first column.
+    focusedCellIndex = 0;
 
     const columns = layout.columns;
 
