@@ -278,7 +278,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `transition()` | 34.1 KB | 12.3 KB |
 | `autosize()` | 30.6 KB | 11.5 KB |
 | `grid()` | 34.7 KB | 12.9 KB |
-| `table()` | 45.8 KB | 16.2 KB |
+| `table()` | 46.2 KB | 16.3 KB |
 | `masonry()` | 39.4 KB | 14.7 KB |
 | `tree()` | 43.1 KB | 15.6 KB |
 | `search()` | 36.9 KB | 13.6 KB |
@@ -325,6 +325,14 @@ myTable.on('column:click', ({ key, index, event }) => { /* a header cell was cli
 myTable.on('column:sort', ({ key, direction }) => { /* re-sort data */ })
 myTable.on('column:resize', ({ key, width }) => { /* persist widths */ })
 ```
+
+A control supplied in a header `label` that is not one of `a[href]`, `button`, `input`, `select`,
+`textarea` or an element with `tabindex` — a custom element with a button in its shadow root, or a
+`div` with `role="button"` and no `tabindex` — runs its own handler, and the click still reaches the
+cell, which sorts the column when it is sortable: give the control `tabindex`, or call
+`stopPropagation()` in its handler. `column:click` is emitted for a pointer click or tap only;
+Enter and Space emit `column:sort` on a sortable header and never `column:click`, so an action a
+keyboard user must reach should be a `button` supplied in the header label.
 
 ### Grid Layout
 
