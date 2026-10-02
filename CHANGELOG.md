@@ -28,6 +28,11 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- `a11y()` and `selection()` restore focus to the list after a focused row is
+  removed, without reentering the renderer or stealing focus from another control.
+  Keyboard navigation resumes from the prior row. Recovery runs before the next
+  frame and also covers browsers that omit removal `focusout` events (#339).
+
 - `table()` emits `column:click` when a header cell is clicked, with the payload its type
   declares (`{ key, index, event }`), before `column:sort` for a sortable column. The type,
   its exports and the header's `onClick` parameter have existed since the 3.0 rewrite, but
