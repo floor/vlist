@@ -50,7 +50,7 @@ const tick = (ms = 10): Promise<void> => new Promise((resolve) => setTimeout(res
 const LABEL = "Orders";
 
 type Layout = "plain" | "grid" | "groups" | "tree" | "masonry" | "table";
-type Owner = "none" | "a11y" | "selection" | "a11y+selection";
+type Owner = "none" | "a11y" | "selection" | "a11y+selection" | "none+a11y";
 interface FixtureConfig {
   readonly layout: Layout;
   readonly owner: Owner;
@@ -80,6 +80,7 @@ function fixture(config: FixtureConfig, count = 100): Fixture {
   if (config.layout === "masonry") plugins.push(masonry({ columns: 3, gap: 8 }));
   if (config.owner === "a11y" || config.owner === "a11y+selection") plugins.push(a11y());
   if (config.owner === "selection" || config.owner === "a11y+selection") plugins.push(selection());
+  if (config.owner === "none+a11y") plugins.push(selection({ mode: "none" }), a11y());
   const list = createVList<TestItem>(
     { container, ariaLabel: LABEL, items: createTestItems(count), item: { height: 32, template: simpleTemplate } },
     plugins,
@@ -163,6 +164,23 @@ describe("#352 — table() + a11y(): the grid root is the tab stop", () => {
       }
     }
   });
+});
+
+describe("table teardown before the deferred grid tab stop", () => {
+  for (const owner of ["a11y", "selection", "none+a11y"] as const) {
+    it(`${owner}: immediate destroy leaves no root tabindex after the microtask`, async () => {
+      const f = fixture({ layout: "table", owner });
+      const root = f.list.element;
+      try {
+        f.list.destroy();
+        expect(root.hasAttribute("tabindex")).toBe(false);
+        await Promise.resolve();
+        expect(root.hasAttribute("tabindex")).toBe(false);
+      } finally {
+        f.dispose();
+      }
+    });
+  }
 });
 
 describe("#352 — keys reach the grid", () => {

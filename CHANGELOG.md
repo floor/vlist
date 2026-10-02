@@ -13,13 +13,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- With `table()`, an `a11y()`- or `selection()`-driven grid is one more tab stop: the
-  grid root, before the header. Tab reaches it once forward and once back with
-  Shift+Tab; landing there rings the first row, and ArrowDown, End and Home move the
-  active row from it. Previously only the header cell was reachable — that has not
-  changed except that the grid now comes first — and a click on a row focused the
-  viewport (`tabindex="-1"`) instead of an element that can take focus. A table with
-  no focus owner stays out of the tab order, as before (#352).
+- With `table()` and `a11y()` when `selection()` does not own focus (including
+  `selection({ mode: "none" })`), Tab now reaches the grid root before the header;
+  Shift+Tab reaches it on the way back. Landing there rings the first row, and
+  ArrowDown, End and Home move the active row. Clicking a row now focuses the grid
+  instead of the viewport. Tables whose focus is owned by `selection()` already
+  had that grid stop and focused it on click; their behavior is unchanged. A
+  display-only table keeps its header tab stop and no grid stop (#352).
 
 ## [3.1.1] - 2026-10-03
 

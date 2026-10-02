@@ -307,6 +307,7 @@ export function table<T extends VListItem = VListItem>(
       // plugin setup, so selection (50) and a11y (55) have registered the
       // hook by the time it runs. #352
       queueMicrotask(() => {
+        if (ctx.getState().destroyed) return;
         if (ctx.hooks.get("_getFocusedIndex")) {
           dom.root.setAttribute("tabindex", "0");
         }
