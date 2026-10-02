@@ -7,7 +7,7 @@
  * Priority 10 — runs before selection (50) so layout is ready.
  *
  * Restrictions:
- * - Cannot be combined with grid or masonry plugins
+ * - Cannot be combined with grid, masonry, or autosize
  * - Cannot be combined with horizontal orientation
  * - Cannot be combined with reverse mode
  */
@@ -233,7 +233,11 @@ export function table<T extends VListItem = VListItem>(
   return {
     name: "table",
     priority: 10,
-    conflicts: ["grid", "masonry"],
+    // autosize measures items, then this plugin's setConfig(rowHeight)
+    // replaces that size function (priority 10, after autosize's 5). The
+    // cells are position:absolute, so the measurement is 0 and the rows
+    // never grow.
+    conflicts: ["grid", "masonry", "autosize"],
 
     validateConfig(resolvedConfig: ResolvedConfig): void {
       if (resolvedConfig.axis.primary === "x") {
