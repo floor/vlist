@@ -25,6 +25,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   overrides the elbow (`none` hides it). #283's other half, `findItem` for nodes inside
   closed folders, keeps its bytes: it is the fix, and dropping its fast path saves nothing
   after gzip.
+- `table()` with `autosize()` or with an estimated item size now throws at creation
+  (#346). The pair used to build a list whose rows never grew: the table wrote its fixed
+  row height over the measuring size function, and the absolutely positioned cells
+  measured 0. Where a framework adapter's config asked for the estimate, the message now
+  names the fields its caller wrote (`item.estimatedHeight`, `table()`) instead of the
+  `autosize()` the config layer wires; the way out is a fixed `rowHeight` on the table
+  and a fixed item size (`item.height`, `item.width` when horizontal) in place of the
+  estimate.
 
 ### Fixed
 
