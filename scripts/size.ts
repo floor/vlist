@@ -181,7 +181,7 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   transition: kb(12.4),
   autosize: kb(11.6),
   grid: kb(13.0),
-  table: kb(16.3),
+  table: kb(16.4),
   masonry: kb(14.8),
   tree: kb(15.7),
   search: kb(13.7),

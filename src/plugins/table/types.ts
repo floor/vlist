@@ -30,7 +30,16 @@ export interface TableColumn<T extends VListItem = VListItem> {
   /** Unique column key — used for identification and as default item property accessor */
   key: string;
 
-  /** Header label — string or DOM element */
+  /**
+   * Header label — string or DOM element.
+   *
+   * A supplied control outside the focusable set (`a[href]`, `button`, `input`,
+   * `select`, `textarea`, `[tabindex]`) — a custom element with a button in its
+   * shadow root, or a `div` with `role="button"` and no `tabindex` — runs its
+   * own handler and the click still reaches the cell, which sorts the column
+   * when it is sortable: give it `tabindex`, or call `stopPropagation()` in its
+   * handler. For an action a keyboard user must reach, supply a `button`.
+   */
   label: string | HTMLElement;
 
   /**
@@ -360,7 +369,9 @@ export interface ColumnSortEvent {
  *
  * Emitted when a header cell is clicked — before `column:sort` for a sortable
  * column. A click on interactive content the caller supplied inside the cell (a
- * button in the label) is left to that content and emits neither.
+ * button in the label) is left to that content and emits neither. A pointer
+ * click or tap only: Enter and Space emit `column:sort` on a sortable header
+ * and never this event.
  */
 export interface ColumnClickEvent {
   /** Column key */

@@ -32,7 +32,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   removed, without reentering the renderer or stealing focus from another control.
   Keyboard navigation resumes from the prior row. Recovery runs before the next
   frame and also covers browsers that omit removal `focusout` events (#339).
-
+- With `table()`, `ariaLabel` names the element that carries `role="grid"` — the root,
+  which is also what takes focus — instead of the rowgroup inside it. Core writes the
+  label onto the content element, which in a table is a rowgroup, so the grid announced
+  no accessible name while a child carried one; the name now moves with the composite
+  role and moves back when the table is destroyed (#342). A plain list, a display-only
+  list and a grid list already named the element carrying their role and are unchanged.
 - `table()` emits `column:click` when a header cell is clicked, with the payload its type
   declares (`{ key, index, event }`), before `column:sort` for a sortable column. The type,
   its exports and the header's `onClick` parameter have existed since the 3.0 rewrite, but
