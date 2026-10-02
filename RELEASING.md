@@ -64,8 +64,10 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
    `latest` (FLO-245). Once the version is on npm, a maintainer runs
    `npm dist-tag add vlist@X.Y.Z next --auth-type=web` (browser 2FA; no token).
    `bun run release` prints the exact command as its last line, and
-   `publish.yml` fails its last step, after the package and the GitHub Release
-   are out, while `next` is below `latest`.
+   `publish.yml` warns at its last step, after the package and the GitHub Release
+   are out, while `next` is below `latest`: it prints that exact command in a
+   warning and exits 0. When the registry cannot be read, it warns that the tags
+   are unknown and still exits 0.
 
 ### Pre-releases
 
