@@ -93,6 +93,48 @@ try {
  assert(Math.abs(spread-state.widths.name)<=2,`the header follows the resize: second cell starts ${spread}px after the first, width ${state.widths.name}`);
  console.log('PASS resize handle still resizes',JSON.stringify({widths:state.widths,events:resize}));
 
- console.log('SUMMARY',JSON.stringify({passes:5}));
+ // #348: a real click focuses the clicked cell (mousedown's default action on
+ // its tabindex), so Enter and the arrows must act from that cell, not from
+ // the cell the roving index was left on.
+ const valueLabel=await page.evaluate(()=>{const cells=[...document.querySelectorAll('.vlist-table-header-cell')];const r=cells[1].querySelector('.vlist-table-header-content').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2};});
+ await page.mouse.click(valueLabel.x,valueLabel.y);await wait(50);
+ assert.equal(await page.evaluate(()=>document.activeElement&&document.activeElement.dataset.columnKey),'value','a real click focuses the clicked header cell');
+ await page.keyboard.press('Enter');await wait(50);
+ state=await page.evaluate(()=>snapshot());
+ const lastSort=state.events[state.events.length-1];
+ assert.equal(lastSort.type,'sort',`Enter after a click emits column:sort: ${JSON.stringify(state.events)}`);
+ assert.equal(lastSort.key,'value',`Enter sorts the clicked column, not the roving cell: ${JSON.stringify(state.events)}`);
+ assert.equal(lastSort.index,1,'column:sort reports the clicked column index');
+ await page.keyboard.press('ArrowLeft');await wait(50);
+ assert.equal(await page.evaluate(()=>document.activeElement&&document.activeElement.dataset.columnKey),'name','ArrowLeft moves to the neighbour of the clicked cell, not of the roving cell');
+ console.log('PASS click moves the roving index: Enter and the arrows continue from the clicked header cell',JSON.stringify({lastSort}));
+
+ // #350: updateColumns replaces the focused header node and resets its tab
+ // stop. The next real click must clear that stop, including after shrinking.
+ const focusState=()=>page.evaluate(()=>({
+   tabs:[...document.querySelectorAll('.vlist-table-header-cell')].map(c=>c.getAttribute('tabindex')),
+   focused:document.activeElement?.dataset.columnKey??null,
+   bodyFocused:document.activeElement===document.body,
+ }));
+ const clickHeader=async key=>{
+   const p=await page.evaluate(key=>pointOf('[data-column-key="'+key+'"] .vlist-table-header-content'),key);
+   await page.mouse.click(p.x,p.y);await settle(page);
+ };
+ for(const count of [4,2]){
+   await page.evaluate(()=>list.updateColumns(['a','b','c','d'].map(key=>({key,label:key.toUpperCase(),width:90,sortable:true}))));
+   await settle(page);
+   await clickHeader('d');
+   assert.deepEqual(await focusState(),{tabs:['-1','-1','-1','0'],focused:'d',bodyFocused:false});
+   await page.evaluate(count=>list.updateColumns(['a','b','c','d'].slice(0,count).map(key=>({key,label:key.toUpperCase(),width:90,sortable:true}))),count);
+   await settle(page);
+   const rebuilt=await focusState();
+   assert.deepEqual(rebuilt,{tabs:count===4?['0','-1','-1','-1']:['0','-1'],focused:null,bodyFocused:true},'rebuild removes the focused cell and starts with one tab stop');
+   await clickHeader('b');
+   const clicked=await focusState();
+   assert.deepEqual(clicked,{tabs:count===4?['-1','0','-1','-1']:['-1','0'],focused:'b',bodyFocused:false},'the only tab stop follows the click after updateColumns');
+   console.log('PASS updateColumns keeps one tab stop after a real click',JSON.stringify({columns:count,rebuilt,clicked}));
+ }
+
+ console.log('SUMMARY',JSON.stringify({passes:8}));
  await page.close();
 } finally {await browser?.close();server.stop(true);}
