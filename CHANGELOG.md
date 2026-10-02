@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- `table()` declares a conflict with `autosize()` (#346). Creating a list with both now throws `[vlist] Plugin "table" conflicts with "autosize"`, where the pair used to build and then not auto-size the rows: the table writes its fixed row height over the measuring size function, and the absolutely positioned cells measure 0.
+
 ## [3.1.8] - 2026-10-20
 
 a11y() and table(): focus stops flipping on items taller than the viewport, and dragged column widths survive scrollbar-driven resizes (#31).
