@@ -11,6 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Correct the table's `estimatedRowHeight` documentation: it satisfies the runtime
+  required-option check but does not size or measure rows. `rowHeight` takes
+  precedence; without it, rows use the core item size (40 px by default), and tall
+  cell content is clipped (#345).
+
 ## [3.1.1] - 2026-10-03
 
 ### Changed
