@@ -48,7 +48,7 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
 1. **Prep (manual)** — stamp `[Unreleased]` → `[X.Y.Z] - <date>` in
    `CHANGELOG.md` and add a fresh `[Unreleased]`; run `bun run size` and refresh
    the README plugin-size table + base-size tagline and `npm-readme.md`. Commit.
-2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run]`.
+2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run] [--tag]`.
    The script derives the source branch from the version being released (`next`
    for 3.x, `staging` for 2.x), requires you to be on that branch, bumps
    `package.json` (a prerelease such as `3.0.0-next.2` is never bumped — its
@@ -58,8 +58,16 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
    from the source branch, commits `chore(release): vX.Y.Z` on that branch, pushes
    the release branch (never the source branch directly), opens a PR into the source
    branch, and waits for it to merge. Once merged, it opens a PR from the source
-   branch onto `main`, waits for it to merge, then tags `vX.Y.Z` on `main` and pushes
-   the tag. The tag triggers `publish.yml` → `npm publish` + GitHub Release.
+   branch onto `main` and waits for it to merge.
+   Once the PR onto `main` merges, the script verifies the merge commit is on `main`,
+   verifies `package.json` matches the release version, verifies all check runs on that
+   commit are completed and successful, prints the verified SHA and the exact next command,
+   and stops without tagging.
+   The tag is a separate, deliberate invocation:
+   `bun run release X.Y.Z --tag`.
+   This re-verifies all preconditions from scratch, creates an annotated tag
+   `git tag -a vX.Y.Z <sha> -m vX.Y.Z` on the verified commit, and pushes it.
+   The tag triggers `publish.yml` → `npm publish` + GitHub Release.
    Pass `--dry-run` to preview all planned steps and commands without touching files,
    branches, PRs, or tags.
    `--from` confirms the derived branch; it cannot send 3.x through `staging`.

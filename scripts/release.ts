@@ -2,7 +2,7 @@
 /**
  * vlist release script
  *
- * Usage: bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run]
+ * Usage: bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run] [--tag]
  *
  * What it does:
  *   1. Resolves the source branch from the version being released
@@ -36,8 +36,8 @@ export type BumpType = "patch" | "minor" | "major";
 export type ReleaseBranch = "next" | "staging";
 
 export type ReleaseArgs =
-  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined }
-  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined };
+  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined }
+  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined };
 
 export type ReleaseState =
   | "create-source-pr"
@@ -45,20 +45,53 @@ export type ReleaseState =
   | "create-main-pr"
   | "await-main-pr"
   | "tag-release"
+  | "push-local-tag"
   | "already-tagged";
+
+export interface PrInfo {
+  readonly number: number;
+  readonly title: string;
+  readonly state: "OPEN" | "MERGED" | "CLOSED";
+  readonly headRefName: string;
+  readonly baseRefName: string;
+  readonly headRefOid: string;
+  readonly mergedAt?: string | null | undefined;
+  readonly mergeCommitOid?: string | null | undefined;
+  readonly packageVersion?: string | null | undefined;
+}
+
+export interface CheckRunInfo {
+  readonly name: string;
+  readonly status: "queued" | "in_progress" | "completed";
+  readonly conclusion: "success" | "failure" | "neutral" | "cancelled" | "timed_out" | "action_required" | "skipped" | null;
+}
 
 export interface ReleaseContext {
   readonly currentVersion: string;
   readonly targetVersion: string;
-  readonly isTagPresent: boolean;
-  readonly sourcePr?: { readonly number: number; readonly state: "OPEN" | "MERGED" | "CLOSED" } | null | undefined;
-  readonly mainPr?: { readonly number: number; readonly state: "OPEN" | "MERGED" | "CLOSED" } | null | undefined;
+  readonly remoteTagSha: string | null;
+  readonly localTagSha: string | null;
+  readonly tag?: boolean | undefined;
+  readonly sourcePr?: PrInfo | null | undefined;
+  readonly mainPr?: PrInfo | null | undefined;
+  readonly blockingPr?: PrInfo | null | undefined;
+  readonly remoteBranchExists?: boolean | undefined;
+  readonly isMergeCommitAncestor?: boolean | undefined;
+  readonly packageVersionAtMergeSha?: string | null | undefined;
+  readonly checkRuns?: readonly CheckRunInfo[] | undefined;
 }
 
 export interface PlanOptions {
   readonly targetVersion: string;
   readonly sourceBranch: ReleaseBranch;
   readonly state: ReleaseState;
+  readonly tag?: boolean | undefined;
+  readonly sourcePr?: PrInfo | null | undefined;
+  readonly mainPr?: PrInfo | null | undefined;
+  readonly blockingPr?: PrInfo | null | undefined;
+  readonly verifiedSha?: string | null | undefined;
+  readonly remoteTagSha?: string | null | undefined;
+  readonly localTagSha?: string | null | undefined;
   readonly sourcePrNumber?: number | undefined;
   readonly mainPrNumber?: number | undefined;
 }
@@ -78,7 +111,7 @@ export interface ParsedVersion {
 export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
 export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["next", "staging"];
 
-export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run]";
+export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run] [--tag]";
 
 const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
@@ -197,10 +230,98 @@ export const assertCurrentBranch = (
   source: ReleaseBranch,
   version: string,
 ): void => {
-  if (current !== source) {
+  const releaseBranch = releaseBranchFor(version);
+  if (current !== source && current !== releaseBranch) {
+    const on = currentBranchLabel(current);
     throw new Error(
-      `Must be on ${source} to release v${version} (currently on '${currentBranchLabel(current)}')`,
+      `Must be on ${source} to release v${version} (currently on '${on}')`,
     );
+  }
+};
+
+/**
+ * Fail-closed PR selector.
+ * Matches candidate PRs by head and base, filtering by packageVersion matching targetVersion.
+ * Stops if multiple match, or if any matching PR is closed unmerged.
+ */
+export const selectPullRequest = (
+  candidates: readonly PrInfo[],
+  head: string,
+  base: string,
+  targetVersion: string,
+): PrInfo | null => {
+  const filtered = candidates.filter(
+    (pr) => pr.headRefName === head && pr.baseRefName === base,
+  );
+
+  const matching = filtered.filter(
+    (pr) => pr.packageVersion === targetVersion,
+  );
+
+  const closedUnmerged = matching.find(
+    (pr) => pr.state === "CLOSED" && !pr.mergedAt,
+  );
+  if (closedUnmerged) {
+    throw new Error(
+      `Pull request #${closedUnmerged.number} (${head} → ${base}) was closed without merging`,
+    );
+  }
+
+  if (matching.length > 1) {
+    const numbers = matching.map((pr) => `#${pr.number}`).join(", ");
+    throw new Error(
+      `Multiple matching pull requests found for ${head} → ${base}: ${numbers}`,
+    );
+  }
+
+  return matching[0] ?? null;
+};
+
+/**
+ * Detects whether an unrelated open release PR on sourceBranch exists that blocks a new release.
+ */
+export const detectBlockingPr = (
+  candidates: readonly PrInfo[],
+  sourceBranch: ReleaseBranch,
+  targetVersion: string,
+): PrInfo | null => {
+  return (
+    candidates.find(
+      (pr) =>
+        pr.headRefName === sourceBranch &&
+        pr.baseRefName === "main" &&
+        pr.state === "OPEN" &&
+        pr.packageVersion !== null &&
+        pr.packageVersion !== undefined &&
+        pr.packageVersion !== targetVersion,
+    ) ?? null
+  );
+};
+
+/**
+ * Fail-closed check runs verification.
+ * Verifies all check runs are completed and successful.
+ */
+export const verifyCheckRuns = (
+  checkRuns: readonly CheckRunInfo[],
+  commitSha: string,
+): void => {
+  const failingOrPending = checkRuns.filter(
+    (run) =>
+      run.status !== "completed" ||
+      (run.conclusion !== "success" &&
+        run.conclusion !== "neutral" &&
+        run.conclusion !== "skipped"),
+  );
+
+  if (failingOrPending.length > 0) {
+    const list = failingOrPending
+      .map(
+        (run) =>
+          `  • ${run.name}: ${run.status} (${run.conclusion ?? "pending"})`,
+      )
+      .join("\n");
+    throw new Error(`Checks on ${commitSha} are not passing:\n${list}`);
   }
 };
 
@@ -268,53 +389,184 @@ export const resolveNewVersion = (
 };
 
 export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
-  if (ctx.isTagPresent) {
+  if (ctx.remoteTagSha || (ctx as unknown as { isTagPresent?: boolean }).isTagPresent) {
     return "already-tagged";
   }
-  if (ctx.mainPr?.state === "MERGED") {
-    return "tag-release";
+
+  if (ctx.tag) {
+    if (!ctx.mainPr) {
+      throw new Error(`Cannot tag v${ctx.targetVersion}: no pull request into main found`);
+    }
+    if (ctx.mainPr.state === "OPEN") {
+      throw new Error(
+        `Cannot tag v${ctx.targetVersion}: pull request #${ctx.mainPr.number} into main is still open`,
+      );
+    }
+    if (ctx.mainPr.state === "CLOSED" && !ctx.mainPr.mergedAt) {
+      throw new Error(
+        `Pull request #${ctx.mainPr.number} (${ctx.mainPr.headRefName} → ${ctx.mainPr.baseRefName}) was closed without merging`,
+      );
+    }
   }
-  if (ctx.mainPr?.state === "OPEN") {
-    return "await-main-pr";
+
+  // Check main PR
+  if (ctx.mainPr) {
+    if (ctx.mainPr.state === "CLOSED" && !ctx.mainPr.mergedAt) {
+      throw new Error(
+        `Pull request #${ctx.mainPr.number} (${ctx.mainPr.headRefName} → ${ctx.mainPr.baseRefName}) was closed without merging`,
+      );
+    }
+
+    if (ctx.mainPr.state === "MERGED") {
+      const mergeSha =
+        ctx.mainPr.mergeCommitOid ??
+        (ctx.mainPr as unknown as { mergeCommit?: { oid: string } }).mergeCommit?.oid;
+
+      if (!mergeSha) {
+        throw new Error(
+          `Merge commit for PR #${ctx.mainPr.number} could not be determined`,
+        );
+      }
+
+      if (ctx.isMergeCommitAncestor === false) {
+        throw new Error(
+          `Merge commit ${mergeSha} from PR #${ctx.mainPr.number} is not an ancestor of origin/main`,
+        );
+      }
+
+      if (
+        ctx.packageVersionAtMergeSha &&
+        ctx.packageVersionAtMergeSha !== ctx.targetVersion
+      ) {
+        throw new Error(
+          `package.json at merge commit ${mergeSha} is v${ctx.packageVersionAtMergeSha}, not target v${ctx.targetVersion}`,
+        );
+      }
+
+      if (ctx.checkRuns && ctx.checkRuns.length > 0) {
+        verifyCheckRuns(ctx.checkRuns, mergeSha);
+      }
+
+      if (ctx.localTagSha !== null && ctx.localTagSha !== undefined) {
+        if (ctx.localTagSha !== mergeSha) {
+          throw new Error(
+            `Local tag v${ctx.targetVersion} points to ${ctx.localTagSha}, but verified merge commit is ${mergeSha}`,
+          );
+        }
+        return "push-local-tag";
+      }
+
+      return "tag-release";
+    }
+
+    if (ctx.mainPr.state === "OPEN") {
+      return "await-main-pr";
+    }
   }
-  if (ctx.sourcePr?.state === "MERGED" || ctx.currentVersion === ctx.targetVersion) {
+
+  if (ctx.tag) {
+    throw new Error(`Cannot tag v${ctx.targetVersion}: main pull request is not merged`);
+  }
+
+  // If local tag exists but main PR is not merged, local tag is invalid
+  if (ctx.localTagSha !== null && ctx.localTagSha !== undefined) {
+    throw new Error(
+      `Local tag v${ctx.targetVersion} exists at ${ctx.localTagSha}, but target version is not merged onto main`,
+    );
+  }
+
+  // Check source PR
+  if (ctx.sourcePr) {
+    if (ctx.sourcePr.state === "CLOSED" && !ctx.sourcePr.mergedAt) {
+      throw new Error(
+        `Pull request #${ctx.sourcePr.number} (${ctx.sourcePr.headRefName} → ${ctx.sourcePr.baseRefName}) was closed without merging`,
+      );
+    }
+
+    if (ctx.sourcePr.state === "MERGED") {
+      return "create-main-pr";
+    }
+
+    if (ctx.sourcePr.state === "OPEN") {
+      return "await-source-pr";
+    }
+  }
+
+  // When currentVersion on sourceBranch is already targetVersion
+  if (ctx.currentVersion === ctx.targetVersion) {
     return "create-main-pr";
   }
-  if (ctx.sourcePr?.state === "OPEN") {
-    return "await-source-pr";
+
+  // Check remote release branch collision
+  if (ctx.remoteBranchExists && !ctx.sourcePr) {
+    const branch = releaseBranchFor(ctx.targetVersion);
+    throw new Error(
+      `Remote branch ${branch} exists on origin, but no open or merged pull request matches it`,
+    );
   }
+
   return "create-source-pr";
 };
 
 export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
   const branch = releaseBranchFor(opts.targetVersion);
   const steps: ReleaseStep[] = [];
+  const verifiedSha = opts.verifiedSha ?? "<sha>";
+  const isTag = opts.tag === true;
 
   switch (opts.state) {
     case "already-tagged":
       steps.push({
-        description: `v${opts.targetVersion} is already tagged on main`,
+        description: `v${opts.targetVersion} is already released on remote${opts.remoteTagSha ? ` at ${opts.remoteTagSha}` : ""}`,
       });
       break;
 
+    case "push-local-tag":
+      if (isTag) {
+        steps.push(
+          {
+            description: `Push existing verified local tag v${opts.targetVersion}`,
+            command: `git push origin v${opts.targetVersion}`,
+          },
+          {
+            description: `Return to ${opts.sourceBranch}`,
+            command: `git checkout ${opts.sourceBranch}`,
+          },
+        );
+      } else {
+        steps.push({
+          description: `Local tag v${opts.targetVersion} verified at ${verifiedSha}. Run 'bun run release ${opts.targetVersion} --tag' to push.`,
+        });
+      }
+      break;
+
     case "tag-release":
-      steps.push(
-        { description: "Check out main", command: "git checkout main" },
-        { description: "Pull latest main", command: "git pull origin main" },
-        { description: `Tag v${opts.targetVersion}`, command: `git tag v${opts.targetVersion}` },
-        { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
-        { description: `Return to ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
-      );
+      if (isTag) {
+        steps.push(
+          { description: "Check out main", command: "git checkout main" },
+          { description: "Pull latest main", command: "git pull origin main" },
+          {
+            description: `Tag v${opts.targetVersion} at verified commit ${verifiedSha}`,
+            command: `git tag -a v${opts.targetVersion} ${verifiedSha} -m v${opts.targetVersion}`,
+          },
+          { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
+          { description: `Return to ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
+        );
+      } else {
+        steps.push({
+          description: `Main PR merged and verified at ${verifiedSha}. Run 'bun run release ${opts.targetVersion} --tag' to tag and push.`,
+        });
+      }
       break;
 
     case "await-main-pr":
       steps.push(
-        { description: `Wait for PR #${opts.mainPrNumber ?? "<number>"} (${opts.sourceBranch} → main) to be merged` },
-        { description: "Check out main", command: "git checkout main" },
-        { description: "Pull latest main", command: "git pull origin main" },
-        { description: `Tag v${opts.targetVersion}`, command: `git tag v${opts.targetVersion}` },
-        { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
-        { description: `Return to ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
+        {
+          description: `Wait for PR #${opts.mainPr?.number ?? opts.mainPrNumber ?? "<number>"} (${opts.sourceBranch} → main, ${opts.targetVersion}) to be merged`,
+        },
+        {
+          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+        },
       );
       break;
 
@@ -327,17 +579,17 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base main --head ${opts.sourceBranch} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
         { description: `Wait for PR (${opts.sourceBranch} → main) to be merged` },
-        { description: "Check out main", command: "git checkout main" },
-        { description: "Pull latest main", command: "git pull origin main" },
-        { description: `Tag v${opts.targetVersion}`, command: `git tag v${opts.targetVersion}` },
-        { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
-        { description: `Return to ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
+        {
+          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+        },
       );
       break;
 
     case "await-source-pr":
       steps.push(
-        { description: `Wait for PR #${opts.sourcePrNumber ?? "<number>"} into ${opts.sourceBranch} to be merged` },
+        {
+          description: `Wait for PR #${opts.sourcePr?.number ?? opts.sourcePrNumber ?? "<number>"} into ${opts.sourceBranch} to be merged`,
+        },
         { description: `Check out ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
         { description: `Pull latest ${opts.sourceBranch}`, command: `git pull origin ${opts.sourceBranch}` },
         {
@@ -345,11 +597,9 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base main --head ${opts.sourceBranch} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
         { description: `Wait for PR (${opts.sourceBranch} → main) to be merged` },
-        { description: "Check out main", command: "git checkout main" },
-        { description: "Pull latest main", command: "git pull origin main" },
-        { description: `Tag v${opts.targetVersion}`, command: `git tag v${opts.targetVersion}` },
-        { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
-        { description: `Return to ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
+        {
+          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+        },
       );
       break;
 
@@ -360,7 +610,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         { description: `Update README.md version badge to v${opts.targetVersion}` },
         { description: "Update CHANGELOG.md stats" },
         { description: "Stage modified files", command: "git add package.json README.md CHANGELOG.md" },
-        { description: `Commit release bump`, command: `git commit -m "chore(release): v${opts.targetVersion}"` },
+        { description: "Commit release bump", command: `git commit -m "chore(release): v${opts.targetVersion}"` },
         { description: `Push branch ${branch}`, command: `git push origin ${branch}` },
         {
           description: `Create PR ${branch} → ${opts.sourceBranch}`,
@@ -374,11 +624,9 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base main --head ${opts.sourceBranch} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
         { description: `Wait for PR (${opts.sourceBranch} → main) to be merged` },
-        { description: "Check out main", command: "git checkout main" },
-        { description: "Pull latest main", command: "git pull origin main" },
-        { description: `Tag v${opts.targetVersion}`, command: `git tag v${opts.targetVersion}` },
-        { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
-        { description: `Return to ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
+        {
+          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+        },
       );
       break;
   }
@@ -391,12 +639,30 @@ export const formatReleasePlan = (
   sourceBranch: ReleaseBranch,
   state: ReleaseState,
   steps: readonly ReleaseStep[],
+  options?: {
+    evidence?: readonly string[] | undefined;
+    blockingPr?: PrInfo | null | undefined;
+  },
 ): string => {
   const lines: string[] = [
     `Release plan for v${targetVersion} (from ${sourceBranch}):`,
     `State: ${state}`,
-    "Commands / actions to execute:",
   ];
+
+  if (options?.evidence && options.evidence.length > 0) {
+    lines.push("Evidence:");
+    for (const ev of options.evidence) {
+      lines.push(`  • ${ev}`);
+    }
+  }
+
+  if (options?.blockingPr) {
+    lines.push(
+      `Warning: a ${targetVersion} release cannot start while ${options.blockingPr.packageVersion ?? "prior version"}'s release (PR #${options.blockingPr.number}) is unmerged.`,
+    );
+  }
+
+  lines.push("Commands / actions to execute:");
   let num = 1;
   for (const step of steps) {
     if (step.command) {
@@ -425,6 +691,7 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
   let exactVersion: string | null = null;
   let from: ReleaseBranch | null = null;
   let dryRun = false;
+  let tag = false;
   let positional = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -433,6 +700,10 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
 
     if (arg === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (arg === "--tag") {
+      tag = true;
       continue;
     }
     if (arg === "--from") {
@@ -460,9 +731,9 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
   }
 
   if (exactVersion !== null) {
-    return { kind: "exact", version: exactVersion, from, dryRun };
+    return { kind: "exact", version: exactVersion, from, dryRun, tag };
   }
-  return { kind: "bump", bumpType: bumpType ?? "patch", from, dryRun };
+  return { kind: "bump", bumpType: bumpType ?? "patch", from, dryRun, tag };
 };
 
 // =============================================================================
@@ -485,6 +756,174 @@ export const updateChangelogStats = (changelog: string, statsLine: string): stri
   changelog.replace(/^\d+ commits · \d+ days · .+$/m, statsLine);
 
 // =============================================================================
+// Live Git / GitHub readers
+// =============================================================================
+
+export const parseLsRemoteTags = (output: string, tag: string): string | null => {
+  const lines = output.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+  let directSha: string | null = null;
+  let peeledSha: string | null = null;
+  for (const line of lines) {
+    const [sha, ref] = line.split(/\s+/);
+    if (!sha || !ref) continue;
+    if (ref === `refs/tags/${tag}^{}`) {
+      peeledSha = sha;
+    } else if (ref === `refs/tags/${tag}`) {
+      directSha = sha;
+    }
+  }
+  return peeledSha ?? directSha;
+};
+
+export const getRemoteTag = (version: string): string | null => {
+  const output = run(
+    `git ls-remote --tags origin refs/tags/v${version} "refs/tags/v${version}^{}"`,
+    { silent: true },
+  );
+  return parseLsRemoteTags(output, `v${version}`);
+};
+
+export const getLocalTag = (version: string): string | null => {
+  const list = run(`git tag -l "v${version}"`, { silent: true });
+  if (!list.split("\n").some((t) => t.trim() === `v${version}`)) {
+    return null;
+  }
+  return run(`git rev-parse -q --verify refs/tags/v${version}^{commit}`, { silent: true });
+};
+
+export const checkRemoteBranchExists = (branch: string): boolean => {
+  const out = run(`git ls-remote --heads origin "refs/heads/${branch}"`, { silent: true });
+  return out.trim().length > 0;
+};
+
+export const readPackageVersionAtSha = (sha: string): string => {
+  try {
+    const raw = run(`git show ${sha}:package.json`, { silent: true });
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    if (typeof parsed.version !== "string") {
+      throw new Error(`package.json at commit ${sha} does not contain a valid version string`);
+    }
+    return parsed.version;
+  } catch (err: unknown) {
+    try {
+      const rawBase64 = run(
+        `gh api repos/floor/vlist/contents/package.json?ref=${sha} --jq .content`,
+        { silent: true },
+      );
+      const decoded = Buffer.from(rawBase64, "base64").toString("utf8");
+      const parsed = JSON.parse(decoded) as { version?: unknown };
+      if (typeof parsed.version !== "string") {
+        throw new Error(`package.json at commit ${sha} does not contain a valid version string`);
+      }
+      return parsed.version;
+    } catch {
+      throw new Error(
+        `Could not read package.json at commit ${sha}: ${execErrorMessage(err)}`,
+      );
+    }
+  }
+};
+
+export const fetchCheckRuns = (commitSha: string): CheckRunInfo[] => {
+  const raw = run(`gh api repos/floor/vlist/commits/${commitSha}/check-runs`, { silent: true });
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: unknown) {
+    throw new Error(`Failed to parse check-runs API response: ${execErrorMessage(err)}`);
+  }
+  const data = parsed as {
+    check_runs?: Array<{
+      name?: unknown;
+      status?: unknown;
+      conclusion?: unknown;
+    }>;
+  };
+  if (!Array.isArray(data.check_runs)) {
+    throw new Error(`Invalid response from check-runs API for commit ${commitSha}`);
+  }
+  return data.check_runs.map((r) => ({
+    name: String(r.name ?? "unnamed"),
+    status: (r.status as CheckRunInfo["status"]) ?? "in_progress",
+    conclusion: (r.conclusion as CheckRunInfo["conclusion"]) ?? null,
+  }));
+};
+
+export const isCommitAncestorOf = (commitSha: string, targetRef: string): boolean => {
+  try {
+    execSync(`git merge-base --is-ancestor ${commitSha} ${targetRef}`, {
+      stdio: "pipe",
+    });
+    return true;
+  } catch (err: unknown) {
+    if (typeof err === "object" && err !== null && "status" in err) {
+      const status = (err as { status: unknown }).status;
+      if (status === 1) return false;
+    }
+    throw new Error(
+      `Failed to check if ${commitSha} is ancestor of ${targetRef}: ${execErrorMessage(err)}`,
+    );
+  }
+};
+
+export const fetchPrCandidates = (
+  sourceBranch: ReleaseBranch,
+  releaseBranch: string,
+): PrInfo[] => {
+  const raw = run(
+    `gh pr list --state all --limit 100 --json number,title,state,headRefName,baseRefName,headRefOid,mergedAt,mergeCommit`,
+    { silent: true },
+  );
+  let parsedList: unknown;
+  try {
+    parsedList = JSON.parse(raw);
+  } catch (err: unknown) {
+    throw new Error(`Failed to parse PR list from GitHub: ${execErrorMessage(err)}`);
+  }
+  if (!Array.isArray(parsedList)) {
+    throw new Error("Invalid PR list response from GitHub");
+  }
+
+  const results: PrInfo[] = [];
+  for (const item of parsedList) {
+    const pr = item as {
+      number: number;
+      title: string;
+      state: "OPEN" | "MERGED" | "CLOSED";
+      headRefName: string;
+      baseRefName: string;
+      headRefOid: string;
+      mergedAt?: string | null;
+      mergeCommit?: { oid: string } | null;
+    };
+
+    const isSourceCandidate =
+      pr.headRefName === releaseBranch && pr.baseRefName === sourceBranch;
+    const isMainCandidate =
+      pr.headRefName === sourceBranch && pr.baseRefName === "main";
+
+    if (isSourceCandidate || isMainCandidate) {
+      let packageVersion: string | null = null;
+      if (pr.headRefOid) {
+        packageVersion = readPackageVersionAtSha(pr.headRefOid);
+      }
+      results.push({
+        number: pr.number,
+        title: pr.title,
+        state: pr.state,
+        headRefName: pr.headRefName,
+        baseRefName: pr.baseRefName,
+        headRefOid: pr.headRefOid,
+        mergedAt: pr.mergedAt ?? null,
+        mergeCommitOid: pr.mergeCommit?.oid ?? null,
+        packageVersion,
+      });
+    }
+  }
+  return results;
+};
+
+// =============================================================================
 // Main
 // =============================================================================
 
@@ -497,40 +936,26 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  const checkTagExists = (tag: string): boolean => {
-    try {
-      const res = run(`git tag -l ${tag}`, { silent: true });
-      return Boolean(res && res.split("\n").some((t) => t.trim() === tag));
-    } catch {
-      return false;
-    }
-  };
-
-  const findPr = (head: string, base: string): { number: number; state: "OPEN" | "MERGED" | "CLOSED" } | null => {
-    try {
-      const out = run(`gh pr list --head ${head} --base ${base} --state all --json number,state --limit 1`, { silent: true });
-      const list = JSON.parse(out) as Array<{ number: number; state: "OPEN" | "MERGED" | "CLOSED" }>;
-      return list[0] ?? null;
-    } catch {
-      return null;
-    }
-  };
-
-  // ── Guard: must be on the source branch for this version ──────────────────
-  step(1, "Checking branch and working tree...");
+  step(1, "Checking release state and preconditions...");
 
   const pkg = JSON.parse(await Bun.file("package.json").text()) as { version: string };
   const oldVersion: string = pkg.version;
-  const isCurrentUntagged = !checkTagExists("v" + oldVersion);
+  const currentRemoteTagSha = getRemoteTag(oldVersion);
+  const isCurrentUntagged = currentRemoteTagSha === null;
 
   let newVersion: string;
   let sourceBranch: ReleaseBranch;
+  let releaseBranch: string;
+
   try {
     newVersion = resolveNewVersion(oldVersion, args, {
       allowSame: true,
       isCurrentUntagged: isCurrentUntagged && args.kind === "bump",
+      isTagPresent: !isCurrentUntagged,
     });
     sourceBranch = resolveSourceBranch(newVersion, args.from);
+    releaseBranch = releaseBranchFor(newVersion);
+
     const currentBranch = run("git branch --show-current", { silent: true });
     if (!args.dryRun) {
       assertCurrentBranch(currentBranch, sourceBranch, newVersion);
@@ -540,29 +965,103 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  const releaseBranch = releaseBranchFor(newVersion);
-  const isTargetTagPresent = checkTagExists("v" + newVersion);
-  const sourcePr = !args.dryRun ? findPr(releaseBranch, sourceBranch) : null;
-  const mainPr = !args.dryRun ? findPr(sourceBranch, "main") : null;
+  const remoteTagSha = getRemoteTag(newVersion);
+  const localTagSha = getLocalTag(newVersion);
+  const remoteBranchExists = checkRemoteBranchExists(releaseBranch);
+  const candidates = fetchPrCandidates(sourceBranch, releaseBranch);
+  const sourcePr = selectPullRequest(candidates, releaseBranch, sourceBranch, newVersion);
+  const mainPr = selectPullRequest(candidates, sourceBranch, "main", newVersion);
+  const blockingPr = detectBlockingPr(candidates, sourceBranch, newVersion);
 
-  const state = detectReleaseState({
-    currentVersion: oldVersion,
-    targetVersion: newVersion,
-    isTagPresent: isTargetTagPresent,
-    sourcePr,
-    mainPr,
-  });
+  let isMergeCommitAncestor: boolean | undefined;
+  let packageVersionAtMergeSha: string | null | undefined;
+  let checkRuns: CheckRunInfo[] | undefined;
+  const mergeSha = mainPr?.mergeCommitOid;
+
+  if (mainPr?.state === "MERGED" && mergeSha) {
+    isMergeCommitAncestor = isCommitAncestorOf(mergeSha, "origin/main");
+    packageVersionAtMergeSha = readPackageVersionAtSha(mergeSha);
+    checkRuns = fetchCheckRuns(mergeSha);
+  }
+
+  let state: ReleaseState;
+  try {
+    state = detectReleaseState({
+      currentVersion: oldVersion,
+      targetVersion: newVersion,
+      remoteTagSha,
+      localTagSha,
+      sourcePr,
+      mainPr,
+      blockingPr,
+      remoteBranchExists,
+      isMergeCommitAncestor,
+      packageVersionAtMergeSha,
+      checkRuns,
+      tag: args.tag,
+    });
+  } catch (err: unknown) {
+    console.error(`  ✗ ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+
+  const evidence: string[] = [];
+  if (remoteTagSha) {
+    evidence.push(`Remote tag v${newVersion} exists (${remoteTagSha})`);
+  } else {
+    evidence.push(`Remote tag v${newVersion}: not found`);
+  }
+  if (localTagSha) {
+    evidence.push(`Local tag v${newVersion} exists (${localTagSha})`);
+  } else {
+    evidence.push(`Local tag v${newVersion}: not found`);
+  }
+  if (sourcePr) {
+    evidence.push(
+      `Pull request #${sourcePr.number} (${sourcePr.headRefName} → ${sourcePr.baseRefName}, ${newVersion}) is ${sourcePr.state.toLowerCase()}` +
+        (sourcePr.headRefOid ? ` (head: ${sourcePr.headRefOid.slice(0, 8)})` : ""),
+    );
+  }
+  if (mainPr) {
+    evidence.push(
+      `Pull request #${mainPr.number} (${mainPr.headRefName} → ${mainPr.baseRefName}, ${newVersion}) is ${mainPr.state.toLowerCase()}: wait for it to merge` +
+        (mainPr.headRefOid ? ` (head: ${mainPr.headRefOid.slice(0, 8)})` : ""),
+    );
+    if (mainPr.state === "MERGED" && mergeSha) {
+      evidence.push(`Merge commit: ${mergeSha} (ancestor of origin/main: ${isMergeCommitAncestor ? "yes" : "no"})`);
+      evidence.push(`package.json at merge commit: v${packageVersionAtMergeSha}`);
+      evidence.push(`Check runs on merge commit: ${checkRuns?.length ?? 0} runs completed and successful`);
+    }
+  }
+  if (blockingPr) {
+    evidence.push(
+      `Unrelated release PR #${blockingPr.number} (${blockingPr.headRefName} → ${blockingPr.baseRefName}, ${blockingPr.packageVersion}) is ${blockingPr.state.toLowerCase()}`,
+    );
+  }
 
   if (args.dryRun) {
     const plan = planRelease({
       targetVersion: newVersion,
       sourceBranch,
       state,
-      sourcePrNumber: sourcePr?.number,
-      mainPrNumber: mainPr?.number,
+      tag: args.tag,
+      verifiedSha: mergeSha,
+      remoteTagSha,
+      localTagSha,
+      sourcePr,
+      mainPr,
+      blockingPr,
     });
-    console.log(formatReleasePlan(newVersion, sourceBranch, state, plan));
+    console.log(formatReleasePlan(newVersion, sourceBranch, state, plan, { evidence, blockingPr }));
     return;
+  }
+
+  // Live run assertions
+  if (blockingPr) {
+    console.error(
+      `  ✗ A ${newVersion} release cannot start while ${blockingPr.packageVersion ?? "prior version"}'s release (PR #${blockingPr.number}) is unmerged.`,
+    );
+    process.exit(1);
   }
 
   const status = run("git status --porcelain", { silent: true });
@@ -571,16 +1070,67 @@ const main = async (): Promise<void> => {
     process.exit(1);
   }
 
-  run(`git pull origin ${sourceBranch}`, { silent: true });
-  console.log(`  ✓ On ${sourceBranch}, working tree clean, pulled latest`);
-
+  // If already tagged
   if (state === "already-tagged") {
-    console.log(`  ✓ v${newVersion} is already tagged on main.`);
+    console.log(`  ✓ v${newVersion} is already released on remote.`);
     return;
   }
 
+  // If tag flag passed and ready to tag
+  if (args.tag) {
+    if (state === "push-local-tag") {
+      step(2, `Pushing existing verified tag v${newVersion}...`);
+      run(`git push origin v${newVersion}`);
+      run(`git checkout ${sourceBranch}`, { silent: true });
+      console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
+      log(`Done! v${newVersion} is publishing to npm.`);
+      log(`Monitor: https://github.com/floor/vlist/actions`);
+      log(`Last step, once it is on npm: ${nextTagCommand(newVersion)}`);
+      return;
+    }
+    if (state === "tag-release") {
+      step(2, `Tagging v${newVersion} at verified commit ${mergeSha} and pushing...`);
+      run(`git checkout main`, { silent: true });
+      run(`git pull origin main`, { silent: true });
+      run(`git tag -a v${newVersion} ${mergeSha} -m v${newVersion}`);
+      run(`git push origin v${newVersion}`);
+      run(`git checkout ${sourceBranch}`, { silent: true });
+      console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
+      log(`Done! v${newVersion} is publishing to npm.`);
+      log(`Monitor: https://github.com/floor/vlist/actions`);
+      log(`Last step, once it is on npm: ${nextTagCommand(newVersion)}`);
+      return;
+    }
+    console.error(`  ✗ Cannot tag v${newVersion}: state is ${state}`);
+    process.exit(1);
+  }
+
+  // If state is tag-release or push-local-tag without --tag: print message and exit 0
+  if (state === "tag-release") {
+    console.log(`  ✓ Main pull request #${mainPr?.number} is merged and verified at ${mergeSha}.`);
+    console.log(`\nNext step to create and push the tag:\n  bun run release ${newVersion} --tag`);
+    return;
+  }
+  if (state === "push-local-tag") {
+    console.log(`  ✓ Local tag v${newVersion} is verified at ${mergeSha}.`);
+    console.log(`\nNext step to push the tag:\n  bun run release ${newVersion} --tag`);
+    return;
+  }
+
+  run(`git pull origin ${sourceBranch}`, { silent: true });
+  console.log(`  ✓ On ${sourceBranch}, working tree clean, pulled latest`);
+
   // ── Step 1: Release commit on chore/release-X.Y.Z & PR into sourceBranch ──
   if (state === "create-source-pr") {
+    const localBranchExists = run(`git branch --list ${releaseBranch}`, { silent: true });
+    if (localBranchExists) {
+      console.error(
+        `  ✗ Local branch ${releaseBranch} already exists from an earlier run.\n` +
+          `    Switch to it (\`git checkout ${releaseBranch}\`) to continue, or delete it (\`git branch -D ${releaseBranch}\`) to restart from ${sourceBranch}.`,
+      );
+      process.exit(1);
+    }
+
     step(2, `Creating release branch ${releaseBranch} and opening PR into ${sourceBranch}...`);
 
     run(`git checkout -b ${releaseBranch}`);
@@ -686,7 +1236,9 @@ const main = async (): Promise<void> => {
     }
 
     if (!merged) {
-      console.error(`\n  ✗ Timed out waiting for PR #${mainPrNumber} to merge. Merge it manually, then run:\n    git checkout main && git pull && git tag v${newVersion} && git push origin v${newVersion}`);
+      console.error(
+        `\n  ✗ Timed out waiting for PR #${mainPrNumber} to merge. Merge it manually, then run:\n    bun run release ${newVersion} --tag`,
+      );
       process.exit(1);
     }
 
@@ -706,28 +1258,38 @@ const main = async (): Promise<void> => {
     }
 
     if (!merged) {
-      console.error(`\n  ✗ Timed out waiting for PR #${mainPrNumber} to merge. Merge it manually, then run:\n    git checkout main && git pull && git tag v${newVersion} && git push origin v${newVersion}`);
+      console.error(
+        `\n  ✗ Timed out waiting for PR #${mainPrNumber} to merge. Merge it manually, then run:\n    bun run release ${newVersion} --tag`,
+      );
       process.exit(1);
     }
 
     console.log(`\n  ✓ PR #${mainPrNumber} merged`);
   }
 
-  // ── Step 3: Pull main and push tag ─────────────────────────────────────────
-  step(4, `Tagging v${newVersion} and pushing...`);
+  // ── Step 3: Verify and prompt for tag ───────────────────────────────────────
+  step(4, `Verifying merge commit and checks on main...`);
+  const freshPrRaw = run(`gh pr view ${mainPrNumber} --json mergeCommit`, { silent: true });
+  const freshPr = JSON.parse(freshPrRaw) as { mergeCommit?: { oid?: string } };
+  const freshMergeSha = freshPr.mergeCommit?.oid;
+  if (!freshMergeSha) {
+    console.error(`\n  ✗ Could not retrieve merge commit SHA for PR #${mainPrNumber}`);
+    process.exit(1);
+  }
+  if (!isCommitAncestorOf(freshMergeSha, "origin/main")) {
+    console.error(`\n  ✗ Merge commit ${freshMergeSha} is not an ancestor of origin/main`);
+    process.exit(1);
+  }
+  const pkgVer = readPackageVersionAtSha(freshMergeSha);
+  if (pkgVer !== newVersion) {
+    console.error(`\n  ✗ package.json at merge commit ${freshMergeSha} is v${pkgVer}, not target v${newVersion}`);
+    process.exit(1);
+  }
+  const freshChecks = fetchCheckRuns(freshMergeSha);
+  verifyCheckRuns(freshChecks, freshMergeSha);
 
-  run(`git checkout main`, { silent: true });
-  run(`git pull origin main`, { silent: true });
-  run(`git tag v${newVersion}`);
-  run(`git push origin v${newVersion}`);
-  run(`git checkout ${sourceBranch}`, { silent: true });
-
-  console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
-
-  log(`Done! v${newVersion} is publishing to npm.`);
-  log(`Monitor: https://github.com/floor/vlist/actions`);
-  // Trusted publishing moves `latest` only: `next` needs a maintainer.
-  log(`Last step, once it is on npm: ${nextTagCommand(newVersion)}`);
+  console.log(`  ✓ Merge commit ${freshMergeSha} verified with all passing checks.`);
+  console.log(`\nNext step to create and push the tag:\n  bun run release ${newVersion} --tag`);
 };
 
 if (import.meta.main) {
