@@ -151,7 +151,8 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     // apply. The core conflict would name autosize() — wired here for the
     // estimate, which the caller never wrote; name the estimate field and
     // table() instead. A caller who passed autosize() themselves keeps the
-    // core message, which names a plugin they did write.
+    // core message, which names a plugin they did write. The guard recognises
+    // the pairing by plugin name and declared conflict, as the core check does.
     const userPlugins = config.plugins ?? [];
     if (
       userPlugins.some((p) => p.name === "table" && p.conflicts?.includes("autosize")) &&
