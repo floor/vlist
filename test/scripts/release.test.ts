@@ -31,6 +31,20 @@ import {
   updateChangelogStats,
   updateReadmeVersion,
   verifyCheckRuns,
+  validate,
+  validateValue,
+  read,
+  mergeCommitOidSchema,
+  prCandidateSchema,
+  prCandidateListSchema,
+  prStateSchema,
+  prMergeCommitSchema,
+  checkRunAppSchema,
+  checkRunItemSchema,
+  checkRunsPageSchema,
+  compareSchema,
+  packageJsonSchema,
+  ghContentSchema,
 } from "../../scripts/release";
 import * as releaseMod from "../../scripts/release";
 
@@ -617,7 +631,7 @@ describe("resolveNewVersion — re-entrancy", () => {
       resolveNewVersion(
         "3.1.2",
         { kind: "exact", version: "3.1.2", from: "next", dryRun: false },
-        { allowSame: true, isTagPresent: true },
+        { allowSame: true },
       ),
     ).toBe("3.1.2");
   });
@@ -904,7 +918,7 @@ describe("check runs pagination and total_count verification (fail-closed)", () 
       ],
     });
     expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
-      "missing total_count",
+      "field 'total_count' is missing",
     );
   });
 
@@ -1050,6 +1064,30 @@ describe("tag and branch verification (fail-closed)", () => {
         packageVersionAtMergeSha: "3.1.3",
       }),
     ).toBe("already-tagged");
+  });
+
+  it("remote tag present with conflicting local tag: stops with both shas", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: "bbbb111122223333444455556666777788889999",
+        localTagSha: "aaaa111122223333444455556666777788889999",
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "bbbb111122223333444455556666777788889999",
+          packageVersion: "3.1.3",
+        },
+        packageVersionAtMergeSha: "3.1.3",
+      }),
+    ).toThrow(
+      "Local tag v3.1.3 points to aaaa111122223333444455556666777788889999, but remote tag is at bbbb111122223333444455556666777788889999",
+    );
   });
 
   it("blocked release: stops immediately when an unrelated release PR is open", () => {
@@ -1521,6 +1559,8 @@ describe("typed validators for gh and git responses (fail-closed)", () => {
     { name: "missing headRefOid", mutate: ({ headRefOid: _, ...r }) => r, expectedField: "headRefOid" },
     { name: "invalid headRefOid length/format", mutate: (r) => ({ ...r, headRefOid: "deadbeef" }), expectedField: "headRefOid" },
     { name: "invalid mergedAt type", mutate: (r) => ({ ...r, mergedAt: 12345 }), expectedField: "mergedAt" },
+    { name: "missing mergeCommit from merged PR", mutate: ({ mergeCommit: _, ...r }) => r, expectedField: "mergeCommit" },
+    { name: "missing mergedAt from merged PR", mutate: ({ mergedAt: _, ...r }) => r, expectedField: "mergedAt" },
     { name: "invalid mergeCommit.oid format", mutate: (r) => ({ ...r, mergeCommit: { oid: "not-a-sha" } }), expectedField: "mergeCommit.oid" },
   ];
 
@@ -1550,6 +1590,8 @@ describe("typed validators for gh and git responses (fail-closed)", () => {
     { name: "missing name", mutate: ({ name: _, ...r }) => r, expectedField: "name" },
     { name: "missing status", mutate: ({ status: _, ...r }) => r, expectedField: "status" },
     { name: "invalid status enum", mutate: (r) => ({ ...r, status: "broken" }), expectedField: "status" },
+    { name: "missing conclusion when completed", mutate: ({ conclusion: _, ...r }) => r, expectedField: "conclusion" },
+    { name: "invalid conclusion enum", mutate: (r) => ({ ...r, conclusion: "bogus" }), expectedField: "conclusion" },
     { name: "missing app", mutate: ({ app: _, ...r }) => r, expectedField: "app" },
     { name: "missing app.slug", mutate: (r) => ({ ...r, app: { name: "GitHub Actions" } }), expectedField: "app.slug" },
     { name: "invalid conclusion type", mutate: (r) => ({ ...r, conclusion: 123 }), expectedField: "conclusion" },
@@ -1563,11 +1605,13 @@ describe("typed validators for gh and git responses (fail-closed)", () => {
   }
 
   it("parseCompareResponse accepts valid compare output", () => {
-    expect(parseCompareResponse(JSON.stringify({ status: "identical" }), "gh api compare")).toEqual({
+    const validCompare = {
       status: "identical",
-      behind_by: undefined,
-      merge_base_commit: undefined,
-    });
+      ahead_by: 0,
+      behind_by: 0,
+      merge_base_commit: { sha: "a".repeat(40) },
+    };
+    expect(parseCompareResponse(JSON.stringify(validCompare), "gh api compare")).toEqual(validCompare);
   });
 
   it("parseCompareResponse fails closed on missing status", () => {
@@ -1578,15 +1622,261 @@ describe("typed validators for gh and git responses (fail-closed)", () => {
     expect(() => parseCompareResponse(JSON.stringify({ status: "unknown" }), "gh api compare")).toThrow("field 'status'");
   });
 
+  it("parseCompareResponse fails closed on missing ahead_by", () => {
+    expect(() =>
+      parseCompareResponse(
+        JSON.stringify({ status: "identical", behind_by: 0, merge_base_commit: { sha: "a".repeat(40) } }),
+        "gh api compare",
+      ),
+    ).toThrow("field 'ahead_by' is missing");
+  });
+
+  it("parseCompareResponse fails closed on missing behind_by", () => {
+    expect(() =>
+      parseCompareResponse(
+        JSON.stringify({ status: "identical", ahead_by: 0, merge_base_commit: { sha: "a".repeat(40) } }),
+        "gh api compare",
+      ),
+    ).toThrow("field 'behind_by' is missing");
+  });
+
+  it("parseCompareResponse fails closed on missing merge_base_commit", () => {
+    expect(() =>
+      parseCompareResponse(
+        JSON.stringify({ status: "identical", ahead_by: 0, behind_by: 0 }),
+        "gh api compare",
+      ),
+    ).toThrow("field 'merge_base_commit' is missing");
+  });
+
+  it("parseCompareResponse fails closed on invalid merge_base_commit.sha", () => {
+    expect(() =>
+      parseCompareResponse(
+        JSON.stringify({ status: "identical", ahead_by: 0, behind_by: 0, merge_base_commit: { sha: "bad" } }),
+        "gh api compare",
+      ),
+    ).toThrow("field 'merge_base_commit.sha' is missing or not a 40-hex SHA");
+  });
+
   it("parsePackageJsonVersion accepts valid package.json", () => {
     expect(parsePackageJsonVersion(JSON.stringify({ version: "3.1.2" }), "test")).toBe("3.1.2");
   });
 
   it("parsePackageJsonVersion fails closed on missing version", () => {
-    expect(() => parsePackageJsonVersion(JSON.stringify({}), "test")).toThrow("does not contain a valid version string");
+    expect(() => parsePackageJsonVersion(JSON.stringify({}), "test")).toThrow("field 'version' is missing");
   });
 
   it("parsePackageJsonVersion fails closed on empty version", () => {
-    expect(() => parsePackageJsonVersion(JSON.stringify({ version: "  " }), "test")).toThrow("does not contain a valid version string");
+    expect(() => parsePackageJsonVersion(JSON.stringify({ version: "  " }), "test")).toThrow("field 'version' is missing or not a valid semver string");
+  });
+});
+
+describe("table-driven declarative schema tests (fail-closed, generated from schema)", () => {
+  function testSchemaFields(
+    schemaName: string,
+    schema: any,
+    validFixture: Record<string, any>,
+    cmdName = "test-cmd",
+  ) {
+    describe(`schema: ${schemaName}`, () => {
+      it("accepts valid fixture", () => {
+        expect(() => validateValue(validFixture, schema, cmdName)).not.toThrow();
+      });
+
+      for (const [key, def] of Object.entries<any>(schema.fields)) {
+        const isRequired = def.requiredWhen ? def.requiredWhen(validFixture) : !def.optionalReason;
+
+        if (isRequired) {
+          it(`fails when required field '${key}' is missing`, () => {
+            const bad = { ...validFixture };
+            delete bad[key];
+            expect(() => validateValue(bad, schema, cmdName)).toThrow(
+              `Invalid response from ${cmdName}: field '${key}' is missing`,
+            );
+          });
+
+          it(`fails when required field '${key}' is null`, () => {
+            const bad = { ...validFixture, [key]: null };
+            expect(() => validateValue(bad, schema, cmdName)).toThrow(
+              `Invalid response from ${cmdName}: field '${key}' is missing`,
+            );
+          });
+        } else {
+          it(`accepts omission/null of optional field '${key}' (${def.optionalReason})`, () => {
+            const omitted = { ...validFixture };
+            delete omitted[key];
+            expect(() => validateValue(omitted, schema, cmdName)).not.toThrow();
+
+            const nulled = { ...validFixture, [key]: null };
+            expect(() => validateValue(nulled, schema, cmdName)).not.toThrow();
+          });
+        }
+
+        if (def.kind === "enum") {
+          it(`fails when enum field '${key}' has invalid value`, () => {
+            const bad = { ...validFixture, [key]: "INVALID_ENUM_VALUE" };
+            expect(() => validateValue(bad, schema, cmdName)).toThrow(
+              `Invalid response from ${cmdName}: field '${key}' is invalid (got INVALID_ENUM_VALUE)`,
+            );
+          });
+        }
+
+        if (def.kind === "scalar") {
+          if (def.type === "sha40") {
+            it(`fails when sha40 field '${key}' is invalid format`, () => {
+              const bad = { ...validFixture, [key]: "not-a-valid-sha40" };
+              expect(() => validateValue(bad, schema, cmdName)).toThrow(
+                `field '${key}' is missing or not a 40-hex SHA`,
+              );
+            });
+          } else if (def.type === "semver") {
+            it(`fails when semver field '${key}' is invalid format`, () => {
+              const bad = { ...validFixture, [key]: "invalid-semver" };
+              expect(() => validateValue(bad, schema, cmdName)).toThrow(
+                `field '${key}' is missing or not a valid semver string`,
+              );
+            });
+          } else if (def.type === "positive-integer") {
+            it(`fails when positive-integer field '${key}' is 0 or negative`, () => {
+              const bad0 = { ...validFixture, [key]: 0 };
+              expect(() => validateValue(bad0, schema, cmdName)).toThrow(
+                `field '${key}' expected positive integer`,
+              );
+              const badNeg = { ...validFixture, [key]: -1 };
+              expect(() => validateValue(badNeg, schema, cmdName)).toThrow(
+                `field '${key}' expected positive integer`,
+              );
+            });
+          } else if (def.type === "non-negative-integer") {
+            it(`fails when non-negative-integer field '${key}' is negative`, () => {
+              const badNeg = { ...validFixture, [key]: -1 };
+              expect(() => validateValue(badNeg, schema, cmdName)).toThrow(
+                `field '${key}' expected non-negative integer`,
+              );
+            });
+          } else if (def.type === "non-empty-string") {
+            it(`fails when non-empty-string field '${key}' is blank`, () => {
+              const badBlank = { ...validFixture, [key]: "   " };
+              expect(() => validateValue(badBlank, schema, cmdName)).toThrow(
+                `field '${key}' is missing or empty`,
+              );
+            });
+          }
+        }
+
+        if (def.kind === "object") {
+          it(`fails when object field '${key}' is not an object`, () => {
+            const bad = { ...validFixture, [key]: "not-an-object" };
+            expect(() => validateValue(bad, schema, cmdName)).toThrow(
+              `Invalid response from ${cmdName}: expected object at '${key}'`,
+            );
+          });
+          for (const [nestedKey, nestedDef] of Object.entries<any>(def.schema.fields)) {
+            const nestedPath = `${key}.${nestedKey}`;
+            const isNestedRequired = nestedDef.requiredWhen
+              ? nestedDef.requiredWhen(validFixture[key])
+              : !nestedDef.optionalReason;
+            if (isNestedRequired) {
+              it(`fails when nested required field '${nestedPath}' is missing`, () => {
+                const badNested = { ...validFixture[key] };
+                delete badNested[nestedKey];
+                const bad = { ...validFixture, [key]: badNested };
+                expect(() => validateValue(bad, schema, cmdName)).toThrow(
+                  `Invalid response from ${cmdName}: field '${nestedPath}' is missing`,
+                );
+              });
+            }
+            if (nestedDef.kind === "scalar" && nestedDef.type === "sha40") {
+              it(`fails when nested sha40 field '${nestedPath}' is invalid`, () => {
+                const badNested = { ...validFixture[key], [nestedKey]: "bad-sha" };
+                const bad = { ...validFixture, [key]: badNested };
+                expect(() => validateValue(bad, schema, cmdName)).toThrow(
+                  `field '${nestedPath}' is missing or not a 40-hex SHA`,
+                );
+              });
+            }
+          }
+        }
+      }
+    });
+  }
+
+  testSchemaFields("mergeCommitOidSchema", mergeCommitOidSchema, {
+    oid: "a".repeat(40),
+  });
+
+  testSchemaFields("prCandidateSchema (state=MERGED)", prCandidateSchema, {
+    number: 360,
+    title: "chore(release): v3.1.3",
+    state: "MERGED",
+    headRefName: "next",
+    baseRefName: "main",
+    headRefOid: "a".repeat(40),
+    mergedAt: "2026-10-09T10:00:00Z",
+    mergeCommit: { oid: "b".repeat(40) },
+  });
+
+  testSchemaFields("prCandidateSchema (state=OPEN)", prCandidateSchema, {
+    number: 360,
+    title: "chore(release): v3.1.3",
+    state: "OPEN",
+    headRefName: "next",
+    baseRefName: "main",
+    headRefOid: "a".repeat(40),
+    mergedAt: null,
+    mergeCommit: null,
+  });
+
+  testSchemaFields("prStateSchema", prStateSchema, {
+    state: "MERGED",
+  });
+
+  testSchemaFields("prMergeCommitSchema", prMergeCommitSchema, {
+    mergeCommit: { oid: "c".repeat(40) },
+  });
+
+  testSchemaFields("checkRunAppSchema", checkRunAppSchema, {
+    slug: "github-actions",
+    name: "GitHub Actions",
+  });
+
+  testSchemaFields("checkRunItemSchema (status=completed)", checkRunItemSchema, {
+    name: "Test & Build",
+    status: "completed",
+    conclusion: "success",
+    app: { slug: "github-actions", name: "GitHub Actions" },
+  });
+
+  testSchemaFields("checkRunItemSchema (status=in_progress)", checkRunItemSchema, {
+    name: "Test & Build",
+    status: "in_progress",
+    app: { slug: "github-actions", name: "GitHub Actions" },
+  });
+
+  testSchemaFields("checkRunsPageSchema", checkRunsPageSchema, {
+    total_count: 1,
+    check_runs: [
+      {
+        name: "Test & Build",
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions", name: "GitHub Actions" },
+      },
+    ],
+  });
+
+  testSchemaFields("compareSchema", compareSchema, {
+    status: "ahead",
+    ahead_by: 1,
+    behind_by: 0,
+    merge_base_commit: { sha: "d".repeat(40) },
+  });
+
+  testSchemaFields("packageJsonSchema", packageJsonSchema, {
+    version: "3.1.2",
+  });
+
+  testSchemaFields("ghContentSchema", ghContentSchema, {
+    content: "dGVzdA==",
   });
 });
