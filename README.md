@@ -11,7 +11,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 - **Accessible** — `a11y()` or a selection mode adds WAI-ARIA, 2D keyboard navigation, focus recovery, screen-reader DOM ordering
 - **Zero dependencies** — framework-agnostic core, with Vue, Svelte, Solid and React entries in the same package
-- **10.3 KB gzipped** — composable plugins with perfect tree-shaking
+- **10.3 KB gzipped** — composable plugins with perfect tree-shaking (Bundlephobia's badge measures the root entry with every plugin at once)
 - **Constant memory** — ~0.1 MB overhead at any scale, from 10K to 1M+ items
 - **Tree, grid, masonry, carousel, table, groups, data, selection, search, sortable, transition** — all opt-in
 - **Axis-neutral** — vertical and horizontal scrolling through a single code path, all plugins work in both orientations
@@ -292,6 +292,8 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `vlist/react` + `grid()` | 35.2 KB | 13.1 KB |
 
 Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,539 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,192 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+
+Bundlephobia's badge measures the package's root entry, which re-exports every plugin, minified and gzipped as one bundle. With a tree-shaking bundler, an app that imports named exports from `vlist` bundles the base (**10.3 KB gzipped**) and the features it uses; the table's rows are each a combined size, not amounts to add up.
 
 ## Examples
 
