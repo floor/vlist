@@ -110,12 +110,13 @@ export interface TableConfig<T extends VListItem = VListItem> {
   columns: TableColumn<T>[];
 
   /**
-   * Row height in pixels (required).
+   * Row height in pixels.
    *
    * - `number` — Fixed height for all rows (fast path)
    * - `(index: number) => number` — Variable height per row
    *
-   * For auto-measured variable heights, use `estimatedRowHeight` instead.
+   * At runtime, either `rowHeight` or `estimatedRowHeight` is required.
+   * When supplied, `rowHeight` determines row sizes; rows are not auto-measured.
    *
    * Each row's height is fixed here and never measured, so a table cannot be
    * combined with `autosize()` or with an estimated item size
@@ -125,18 +126,19 @@ export interface TableConfig<T extends VListItem = VListItem> {
   rowHeight: number | ((index: number) => number);
 
   /**
-   * Estimated row height for auto-measurement (Mode B).
+   * Satisfies the runtime "rowHeight or estimatedRowHeight is required" check.
    *
-   * When set, rows are rendered at this estimated height, then measured
-   * via ResizeObserver and corrected. Takes precedence only when
-   * `rowHeight` is a single number — if `rowHeight` is a function, this
-   * is ignored.
-   *
-   * Use for tables with wrapping text or dynamic cell content.
+   * The value is not used to size rows. Without `rowHeight`, rows retain the
+   * core item size: `item.height`, then 40 px (the fallback in
+   * `src/core/create.ts`, `resolveSizeConfig`). If supplied, `rowHeight` takes
+   * precedence, whether a number or a function.
    *
    * A table's rows have a fixed height, so `autosize()` and an estimated item
    * size (`item.estimatedHeight`, `item.estimatedWidth` when horizontal)
    * cannot be combined with it: creating such a list throws.
+   *
+   * Rows are not measured via ResizeObserver; tall cell content is clipped
+   * at the row height. See #345.
    */
   estimatedRowHeight?: number;
 

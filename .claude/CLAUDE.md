@@ -226,9 +226,11 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 1. Checks out main, installs, builds
 2. Publishes to npm (`npm publish`)
 3. Creates a GitHub Release automatically (`gh release create`) with auto-generated notes
-4. On a stable release, fails its last step while npm `next` is below `latest`
+4. On a stable release, its last step warns while npm `next` is below `latest`
    (`scripts/check-dist-tags.ts`, FLO-245): trusted publishing cannot move `next`,
-   so a maintainer runs `npm dist-tag add vlist@X.Y.Z next --auth-type=web`
+   so a maintainer runs `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. The
+   step prints that exact command in a warning and exits 0; when the registry
+   cannot be read, it warns that the tags are unknown and still exits 0
 
 **Do not manually create GitHub Releases** — the workflow handles it.
 

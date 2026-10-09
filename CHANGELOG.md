@@ -13,18 +13,6 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Changed
 
-- `tree()` with `connectorLines` is smaller: the JavaScript 117 B (16,050 → 15,933 B gzip;
-  budget 15.8 → 15.7 kB), the stylesheet 27 B larger (`vlist-tree.css` 497 → 524 B gzip),
-  about 90 B net. The second look at #283's +315 B (FLO-244). One loop walks a row's
-  ancestors and writes its guide gradient, two double-position stops per line, each clamped
-  to the stop before it, so the gradient never interpolates; a line at column 0 opens the
-  gradient, as in 3.1.0, which keeps its half-covered device pixel in Chromium at 150% and
-  175% (`scripts/tree-guides-browser.mjs` compares the rendering with 3.1.0's at five
-  scales). The last child's elbow is drawn by the stylesheet from the existing
-  `vlist-tree-node--last` class, so rows no longer set `--vlist-tree-elbow`; it still
-  overrides the elbow (`none` hides it). #283's other half, `findItem` for nodes inside
-  closed folders, keeps its bytes: it is the fix, and dropping its fast path saves nothing
-  after gzip.
 - `table()` with `autosize()` or with an estimated item size now throws at creation
   (#346). The pair used to build a list whose rows never grew: the table wrote its fixed
   row height over the measuring size function, and the absolutely positioned cells
@@ -33,6 +21,32 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `autosize()` the config layer wires; the way out is a fixed `rowHeight` on the table
   and a fixed item size (`item.height`, `item.width` when horizontal) in place of the
   estimate.
+
+### Fixed
+
+- Correct the table's `estimatedRowHeight` documentation: it satisfies the runtime
+  required-option check but does not size or measure rows. `rowHeight` takes
+  precedence; without it, rows use the core item size (40 px by default), and tall
+  cell content is clipped (#345).
+
+## [3.1.1] - 2026-10-03
+
+### Changed
+
+- `tree()` with `connectorLines` is smaller: the JavaScript 117 B (16,050 → 15,933 B gzip;
+  budget 15.8 → 15.7 kB), the stylesheet 27 B larger (`vlist-tree.css` 497 → 524 B gzip),
+  about 90 B net. The second look at #283's +315 B. One loop walks a row's
+  ancestors and writes its guide gradient, two double-position stops per line, each clamped
+  to the stop before it, so the gradient never interpolates; a line at column 0 opens the
+  gradient, as in 3.1.0, which keeps its half-covered device pixel in Chromium at 150% and
+  175% (`scripts/tree-guides-browser.mjs` compares the rendering with 3.1.0's at five
+  scales). The last child's elbow is drawn by the stylesheet from the existing
+  `vlist-tree-node--last` class. `--vlist-tree-elbow` is no longer set inline on each
+  row, so a value set on an ancestor (or on `.vlist-tree-node`) now applies (in 3.1.0
+  only a value on the row's `::before` did); the default rendering is unchanged. The
+  variable still overrides the elbow (`none` hides it). #283's other half, `findItem`
+  for nodes inside closed folders, keeps its bytes: it is the fix, and dropping its
+  fast path saves nothing after gzip.
 
 ### Fixed
 
@@ -56,8 +70,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   for a pointer click or tap; events aimed at interactive content inside a cell
   (`a[href],button,input,select,textarea,[tabindex]` — the core's focusable set) are left to
   that content, so a header button's own click or Enter runs and the column neither sorts
-  nor reports a click (#340). `table` 16,634 → 16,668 B gzip of its 16,691 B budget;
-  `vlist-table.css` 15,266 → 15,240 B raw.
+  nor reports a click (#340).
 - The header's roving tabindex follows the focused cell, so Enter, Space and Ctrl+Arrow act
   on the cell the user is on. A click focuses the clicked cell (mousedown's default action on
   its `tabindex`), but the keyboard handler's index only moved with the arrow keys: after
@@ -1792,7 +1805,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v2.0.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/floor/vlist/compare/v3.1.0...v3.1.1
 [2.0.4]: https://github.com/floor/vlist/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/floor/vlist/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/floor/vlist/compare/v2.0.0...v2.0.2
