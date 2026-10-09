@@ -64,9 +64,9 @@ export function autosize<T extends VListItem = VListItem>(
   let sizeProp: "width" | "height";
   let estimatedSize: number;
 
-  const measuredSizes = new Map<number, number>();
+  const measured = new Map<string | number, [number, unknown]>();
   // Measured items queued for a fresh measurement on the next commit.
-  const pendingRemeasure = new Set<number>();
+  const pendingRemeasure = new Set<string | number>();
   const elementToIndex = new WeakMap<Element, number>();
 
   /**
@@ -78,16 +78,10 @@ export function autosize<T extends VListItem = VListItem>(
    * up after this one (priority 5), so they are not registered yet at setup.
    * Without a layout plugin the spaces coincide and the lookups are identity.
    */
-  const toLayoutIndex = (dataIndex: number): number => {
-    const fn = storedCtx?.hooks.get("_dataToLayoutIndex") as
-      ((i: number) => number) | undefined;
-    return fn ? fn(dataIndex) : dataIndex;
-  };
-  const toDataIndex = (layoutIndex: number): number => {
-    const fn = storedCtx?.hooks.get("_layoutToDataIndex") as
-      ((i: number) => number) | undefined;
-    return fn ? fn(layoutIndex) : layoutIndex;
-  };
+  const toLayoutIndex = (i: number): number =>
+    (storedCtx?.hooks.get("_dataToLayoutIndex") as ((x: number) => number) | undefined)?.(i) ?? i;
+  const toDataIndex = (i: number): number =>
+    (storedCtx?.hooks.get("_layoutToDataIndex") as ((x: number) => number) | undefined)?.(i) ?? i;
 
   let pendingScrollDelta = 0;
   let pendingContentSizeUpdate = false;
@@ -96,12 +90,20 @@ export function autosize<T extends VListItem = VListItem>(
 
   const END_THRESHOLD = 2;
 
+  const getItemId = (index: number): string | number => storedCtx?.items.at(index)?.id ?? index;
+
   function sizeFn(index: number): number {
-    return measuredSizes.get(index) ?? estimatedSize;
+    return measured.get(getItemId(index))?.[0] ?? estimatedSize;
   }
 
   function isMeasured(index: number): boolean {
-    return measuredSizes.has(index) && !pendingRemeasure.has(index);
+    const item = storedCtx?.items.at(index);
+    if (!item) return false;
+    const id = item.id ?? index;
+    if (pendingRemeasure.has(id)) return false;
+    const m = measured.get(id);
+    if (!m) return false;
+    return Boolean((item as Record<string, unknown>)._isPlaceholder) || m[1] === item;
   }
 
   /**
@@ -119,14 +121,15 @@ export function autosize<T extends VListItem = VListItem>(
   function remeasure(index?: number): void {
     if (!storedCtx || engineState.destroyed) return;
     if (index === undefined) {
-      if (measuredSizes.size === 0) return;
-      measuredSizes.clear();
+      if (measured.size === 0) return;
+      measured.clear();
       pendingRemeasure.clear();
       storedCtx.sizes.rebuild();
       updateContentSize();
     } else {
-      if (!measuredSizes.has(index)) return;
-      pendingRemeasure.add(index);
+      const id = getItemId(index);
+      if (!measured.has(id)) return;
+      pendingRemeasure.add(id);
     }
     storedCtx.render.force();
   }
@@ -213,13 +216,17 @@ export function autosize<T extends VListItem = VListItem>(
           const index = elementToIndex.get(el);
           if (index === undefined) continue;
 
-          // Verify element wasn't recycled to a different item. The stamp is
-          // in the layout space (groups counts the headers), the key in the
-          // data space — compare in the stamp's space (#363).
           if (el.getAttribute("data-index") !== String(toLayoutIndex(index))) {
             own.unobserve(el);
             continue;
           }
+
+          const item = storedCtx.items.at(index);
+          if (!item) {
+            own.unobserve(el);
+            continue;
+          }
+          const id = item.id ?? index;
 
           if (isMeasured(index)) continue;
 
@@ -239,11 +246,16 @@ export function autosize<T extends VListItem = VListItem>(
           const sizeWithGap = newSize + gap;
           // A remeasured item corrects by the delta from its previous
           // measurement, not from the estimate.
-          const wasMeasured = measuredSizes.has(index);
-          const oldSize = measuredSizes.get(index) ?? estimatedSize;
+          const wasMeasured = measured.has(id);
+          const oldSize = measured.get(id)?.[0] ?? estimatedSize;
 
-          measuredSizes.set(index, sizeWithGap);
-          pendingRemeasure.delete(index);
+          measured.set(id, [sizeWithGap, item]);
+          pendingRemeasure.delete(id);
+          const pid = `__placeholder_${index}`;
+          if (id !== pid) {
+            measured.delete(pid);
+            pendingRemeasure.delete(pid);
+          }
           if (!wasMeasured || sizeWithGap !== oldSize) {
             hasNewMeasurements = true;
             if (changedLow < 0 || index < changedLow) changedLow = index;
@@ -341,48 +353,37 @@ export function autosize<T extends VListItem = VListItem>(
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
 
-      ctx.hooks.onDestroy((): void => {
-        viewport.removeEventListener("wheel", unpinOnUserScroll);
-        viewport.removeEventListener("touchstart", unpinOnUserScroll);
-      });
-
-      // Late-sizing content: `load`/`error` from images, iframes and the like
-      // do not bubble, but a capture listener on the content element sees
-      // them. One listener pair per list, not per item. Unmeasured items are
-      // still observed and need nothing here.
       const content = ctx.dom.content;
       const onMediaEvent = (event: Event): void => {
         const target = event.target as Element | null;
         if (!target || target === content) return;
         const item = target.closest("[data-index]");
         if (!item || item.parentNode !== content) return;
-        // The stamp is in the layout space; a header translates to -1 and
-        // owns no measurement (#363).
         const index = toDataIndex(Number(item.getAttribute("data-index")));
         if (index >= 0 && isMeasured(index)) remeasure(index);
       };
       content.addEventListener("load", onMediaEvent, true);
       content.addEventListener("error", onMediaEvent, true);
 
-      ctx.hooks.onDestroy((): void => {
-        content.removeEventListener("load", onMediaEvent, true);
-        content.removeEventListener("error", onMediaEvent, true);
-      });
-
       // Public methods
       ctx.hooks.method("isMeasured", isMeasured);
       ctx.hooks.method("remeasure", remeasure);
 
       ctx.hooks.method("setMeasuredSize", (index: number, size: number): void => {
-        measuredSizes.set(index, size);
+        const id = getItemId(index);
+        measured.set(id, [size, storedCtx?.items.at(index)]);
+        pendingRemeasure.delete(id);
         refreshSizes(index, index);
       });
 
-      ctx.hooks.method("getMeasuredCount", (): number => measuredSizes.size);
+      ctx.hooks.method("getMeasuredCount", (): number => measured.size);
 
-      // Cleanup: this install's observer only. If a newer install has
-      // replaced it, the shared one is that install's and stays.
+      // Cleanup
       ctx.hooks.onDestroy((): void => {
+        viewport.removeEventListener("wheel", unpinOnUserScroll);
+        viewport.removeEventListener("touchstart", unpinOnUserScroll);
+        content.removeEventListener("load", onMediaEvent, true);
+        content.removeEventListener("error", onMediaEvent, true);
         own.disconnect();
         if (observer === own) observer = null;
       });
@@ -433,7 +434,7 @@ export function autosize<T extends VListItem = VListItem>(
         observer.disconnect();
         observer = null;
       }
-      measuredSizes.clear();
+      measured.clear();
       pendingRemeasure.clear();
       pinnedToEnd = false;
       animatingToEnd = false;

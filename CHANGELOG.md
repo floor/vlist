@@ -13,15 +13,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- With `groups()` and `autosize()` together, rows no longer render at a group
-  header's measured height. The measurement was keyed and read back in the data
-  index space but the measured element was looked up in the layout index space,
-  where groups counts the headers — the first row of a group could inherit its
-  header's measured height (and a header could be pinned to its own content's
-  height). Every data row now renders at its own measured height, the content
-  height is the sum of the rows plus the headers, and `remeasure(index)`
-  re-measures the row at that data index. Lists without `groups()` are
-  unchanged (#363).
+- With `groups()` and `autosize()` together, a row could be sized to a group
+  header's measured height, or to a neighbouring row's: the measurement was
+  keyed and read back in the data index space, but the element it was measured
+  from was looked up in the layout index space, where `groups()` counts the
+  headers. The two index spaces are now translated at each lookup, so a
+  measurement is taken from the element of the data index it belongs to (#363).
+- In `autosize()`, rows no longer keep the previous occupant's measured height
+  when the item at an index changes. After `setItems()`, a search filter change,
+  list mutations (`prepend`, `append`, `insert`, `remove`, `updateItem`), or
+  loading data over placeholders (with or without `groups()`), each row renders
+  at its own content height.
 
 ## [3.1.2] - 2026-10-09
 
