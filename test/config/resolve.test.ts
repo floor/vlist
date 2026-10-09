@@ -402,6 +402,23 @@ describe("resolvePlugins — table() with an estimated item size (#346)", () => 
     expect(message).toBe("");
   });
 
+  it("allows a custom plugin named 'table' that does not declare a conflict with autosize", () => {
+    const customTable: VListPlugin<TestItem> = {
+      name: "table",
+      setup: () => {},
+    };
+    const message = creationMessage({ plugins: [customTable] });
+    expect(message).toBe("");
+
+    const resolved = resolvePlugins(
+      base({
+        item: { estimatedHeight: 50, template },
+        plugins: [customTable],
+      }),
+    );
+    expect(names(resolved)).toEqual(["autosize", "table"]);
+  });
+
   it("leaves the grid message to the grid case", () => {
     const message = creationMessage({ layout: "grid", grid: { columns: 2 } });
     expect(message).toContain('layout: "grid" needs a fixed item size');
