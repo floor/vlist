@@ -160,7 +160,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 
 Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,539 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,192 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
-Bundlephobia's headline for `vlist`, **58.8 kB gzipped for 3.1.1**, measures the package's root entry with every plugin at once. An app pays the base, **10.3 KB gzipped**, plus only the plugins it imports.
+Bundlephobia's badge measures the package's root entry, which re-exports every plugin, minified and gzipped as one bundle. With a tree-shaking bundler, an app that imports named exports from `vlist` bundles the base (**10.3 KB gzipped**) and the features it uses; the table's rows are each a combined size, not amounts to add up.
 
 ## Frameworks
 
