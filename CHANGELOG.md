@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-10-09
+
 ### Fixed
 
 - Correct the table's `estimatedRowHeight` documentation: it satisfies the runtime
@@ -24,6 +26,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   instead of the viewport. Tables whose focus is owned by `selection()` already
   had that grid stop and focused it on click; their behavior is unchanged. A
   display-only table keeps its header tab stop and no grid stop (#352).
+  Verified in Chromium with real key presses; screen readers and other browsers
+  were not tested for this change.
 
 ## [3.1.1] - 2026-10-03
 
@@ -1801,7 +1805,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.2...HEAD
+[3.1.2]: https://github.com/floor/vlist/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/floor/vlist/compare/v3.1.0...v3.1.1
 [2.0.4]: https://github.com/floor/vlist/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/floor/vlist/compare/v2.0.2...v2.0.3
