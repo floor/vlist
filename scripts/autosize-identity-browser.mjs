@@ -24,6 +24,7 @@ const HEIGHTS = {
   I1: 90,
   I2: 120,
   I3: 150,
+  P0: 30,
 };
 
 const initialItems = [
@@ -219,6 +220,28 @@ try {
         reorderMatch,
         "groups: setItems reorder renders each row at its own content height",
         `actual=${JSON.stringify(reorderActual)}, expected=${JSON.stringify(reorderExpected)}, pairs=${JSON.stringify(reorderedPairs)}`
+      );
+
+      // Grow from 4 to 5 items under groups: [I3, I2, I1, I0, P0]
+      await page.evaluate(() => {
+        const items = window.initialItems;
+        window.list.setItems([
+          items[3], items[2], items[1], items[0],
+          { id: "P0", name: "Grow Item", text: "Special P0" },
+        ]);
+      });
+      await settle(page, null, 5);
+
+      const growPairs = await page.evaluate(() => window.rowHeightPairs());
+      const growExpected = [150, 120, 90, 60, 30];
+      const growActual = growPairs.map((p) => p.el);
+      const growMatch = JSON.stringify(growActual) === JSON.stringify(growExpected) &&
+        growPairs.every((p) => p.content > 0 && Math.abs(p.el - p.content) <= 1);
+
+      check(
+        growMatch,
+        "groups: setItems grow (4->5) renders rebinding and new rows at their own content heights",
+        `actual=${JSON.stringify(growActual)}, expected=${JSON.stringify(growExpected)}, pairs=${JSON.stringify(growPairs)}`
       );
 
       check(errors.length === 0, "groups: no pageerror", errors.join("\n"));
