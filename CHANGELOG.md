@@ -19,6 +19,11 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   from was looked up in the layout index space, where `groups()` counts the
   headers. The two index spaces are now translated at each lookup, so a
   measurement is taken from the element of the data index it belongs to (#363).
+- In `autosize()`, rows no longer keep the previous occupant's measured height
+  when the item at an index changes. After `setItems()`, a search filter change,
+  list mutations (`prepend`, `append`, `insert`, `remove`, `updateItem`), or
+  loading data over placeholders (with or without `groups()`), each row renders
+  at its own content height.
 
 ## [3.1.2] - 2026-10-09
 
