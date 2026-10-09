@@ -1792,3 +1792,53 @@ describe("groups — forceRender with async data", () => {
     cleanup();
   });
 });
+
+describe("groups — same-count rebind regression without autosize", () => {
+  it("re-renders item content when items are replaced with new objects at the same count", () => {
+    const plugin = groups<TestItem>({
+      getGroupForIndex: () => "G",
+      header: { height: 40, template: (key) => `<h1>${key}</h1>` },
+      sticky: false,
+    });
+    let currentItems: TestItem[] = [
+      { id: 1, name: "Item A", category: "G" },
+      { id: 2, name: "Item B", category: "G" },
+    ];
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(currentItems, {
+      template: (item) => `<div class="row">${item.name}</div>`,
+      itemSize: 50,
+      containerHeight: 500,
+    });
+
+    plugin.setup!(ctx);
+    ctx.render.force();
+
+    const getTexts = () =>
+      Array.from(dom.content.querySelectorAll(".row")).map((el) => el.textContent);
+
+    expect(getTexts()).toEqual(["Item A", "Item B"]);
+
+    // Replace with new items with same count (different IDs)
+    currentItems.splice(0, currentItems.length,
+      { id: 3, name: "Item C", category: "G" },
+      { id: 4, name: "Item D", category: "G" },
+    );
+    ctx.render.force();
+
+    expect(getTexts()).toEqual(["Item C", "Item D"]);
+
+    // Replace with new object instances sharing the SAME IDs but different names
+    currentItems.splice(0, currentItems.length,
+      { id: 3, name: "Item C Updated", category: "G" },
+      { id: 4, name: "Item D Updated", category: "G" },
+    );
+    ctx.render.force();
+
+    expect(getTexts()).toEqual(["Item C Updated", "Item D Updated"]);
+
+
+    cleanup();
+  });
+});
+
+

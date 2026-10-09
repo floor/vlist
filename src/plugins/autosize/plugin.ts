@@ -90,21 +90,31 @@ export function autosize<T extends VListItem = VListItem>(
 
   const END_THRESHOLD = 2;
 
-  const getItemId = (index: number): string | number => storedCtx?.items.at(index)?.id ?? index;
+  const getItem = (i: number): T | undefined => {
+    const h = storedCtx?.hooks.get("_getLoadedItem") as ((x: number) => T | undefined) | undefined;
+    return h ? h(i) : storedCtx?.items.at(i);
+  };
 
-  function sizeFn(index: number): number {
-    return measured.get(getItemId(index))?.[0] ?? estimatedSize;
+  const getItemId = (i: number): string | number => getItem(i)?.id ?? "__" + i;
+
+  function sizeFn(i: number): number {
+    return measured.get(getItemId(i))?.[0] ?? estimatedSize;
   }
 
-  function isMeasured(index: number): boolean {
-    const item = storedCtx?.items.at(index);
-    if (!item) return false;
-    const id = item.id ?? index;
+  function isMeasured(i: number): boolean {
+    const id = getItemId(i);
     if (pendingRemeasure.has(id)) return false;
     const m = measured.get(id);
     if (!m) return false;
-    return Boolean((item as Record<string, unknown>)._isPlaceholder) || m[1] === item;
+    const it = getItem(i);
+    return !it || Boolean((it as any)._isPlaceholder) || (Array.isArray(m[1]) ? m[1].includes(it) : m[1] === it);
   }
+
+  const recordMeasure = (id: string | number, size: number, item?: T): void => {
+    const p = measured.get(id);
+    measured.set(id, [size, p && p[1] !== item ? [p[1], item].flat() : item]);
+    pendingRemeasure.delete(id);
+  };
 
   /**
    * Queue a fresh measurement. With an index, the item is re-observed on the
@@ -152,15 +162,13 @@ export function autosize<T extends VListItem = VListItem>(
   }
 
   function snapToEnd(): void {
-    const maxScroll = maxScrollPos();
-    if (maxScroll > scroll.getPixelEquivalent()) {
-      storedCtx!.scroll.to(maxScroll);
-    }
+    const m = maxScrollPos();
+    if (m > scroll.getPixelEquivalent()) storedCtx!.scroll.to(m);
   }
 
-  function updateContentSize(): void {
+  const updateContentSize = (): void => {
     storedCtx!.render.contentSize(storedCtx!.sizes.cache.getTotalSize());
-  }
+  };
 
   /**
    * Refresh the prefix sums over `low..high`, the indices a batch changed.
@@ -171,11 +179,21 @@ export function autosize<T extends VListItem = VListItem>(
    * signal to fall back to the full rebuild — the only call that still lands
    * on the right entries.
    */
-  function refreshSizes(low: number, high: number): void {
-    const ctx = storedCtx!;
-    if (ctx.hooks.get("_setSizeCacheBase")) ctx.sizes.rebuild();
-    else ctx.sizes.cache.invalidate(low, high);
-  }
+  const refreshSizes = (low: number, high: number): void => {
+    if (storedCtx!.hooks.get("_setSizeCacheBase")) storedCtx!.sizes.rebuild();
+    else storedCtx!.sizes.cache.invalidate(low, high);
+  };
+
+  const prune = (): void => {
+    if (!storedCtx || storedCtx.hooks.get("_getLoadedItem") || !measured.size) return;
+    const ids = new Set(storedCtx.items.all().map((it) => it?.id));
+    for (const k of measured.keys()) {
+      if (!ids.has(k) && (typeof k === "number" || !k.startsWith("__"))) {
+        measured.delete(k);
+        pendingRemeasure.delete(k);
+      }
+    }
+  };
 
   return {
     name: "autosize",
@@ -192,12 +210,13 @@ export function autosize<T extends VListItem = VListItem>(
 
       // Read estimated size from the current sizeCache before replacing it.
       // The initial cache already has gap baked in — read the raw spec size.
-      estimatedSize = typeof ctx.sizes.rawSpec === "function"
-        ? (ctx.sizes.rawSpec as (i: number) => number)(0) + gap
-        : (ctx.sizes.rawSpec as number) + gap;
+      const rs = ctx.sizes.rawSpec;
+      estimatedSize = (typeof rs === "function" ? (rs as (i: number) => number)(0) : (rs as number)) + gap;
 
       // Replace the fixed sizeCache with a variable one backed by measurements
       ctx.sizes.setConfig(sizeFn, gap);
+      const rb = ctx.sizes.cache.rebuild;
+      ctx.sizes.cache.rebuild = (n: number) => { prune(); rb(n); };
 
       // ResizeObserver for measuring items
       const own = new ResizeObserver((entries) => {
@@ -221,14 +240,9 @@ export function autosize<T extends VListItem = VListItem>(
             continue;
           }
 
-          const item = storedCtx.items.at(index);
-          if (!item) {
-            own.unobserve(el);
-            continue;
-          }
-          const id = item.id ?? index;
-
+          const id = getItemId(index);
           if (isMeasured(index)) continue;
+          const item = getItem(index);
 
           // borderBoxSize is missing on polyfills and on older WebKit, which
           // shipped ResizeObserver with contentRect only. contentRect is the
@@ -249,9 +263,8 @@ export function autosize<T extends VListItem = VListItem>(
           const wasMeasured = measured.has(id);
           const oldSize = measured.get(id)?.[0] ?? estimatedSize;
 
-          measured.set(id, [sizeWithGap, item]);
-          pendingRemeasure.delete(id);
-          const pid = `__placeholder_${index}`;
+          recordMeasure(id, sizeWithGap, item);
+          const pid = `__${index}`;
           if (id !== pid) {
             measured.delete(pid);
             pendingRemeasure.delete(pid);
@@ -321,22 +334,12 @@ export function autosize<T extends VListItem = VListItem>(
       ctx.scroll.setToIndexFn((index: number, align: string, behavior?: string, duration?: number, easing?: (t: number) => number): void | false => {
         const isEndAligned = index >= engineState.totalItems - 1 && align === "end";
         pinnedToEnd = isEndAligned;
-        animatingToEnd = false;
-
         if (!isEndAligned) return false;
-
-        const mp = ctx.config.mainAxisPadding;
-        const dynamicTarget = (): number => {
-          const totalSize = ctx.sizes.cache.getTotalSize();
-          return Math.max(0, totalSize + mp - engineState.containerSize);
-        };
 
         if (behavior === "smooth") {
           animatingToEnd = true;
-          ctx.scroll.smoothTo(dynamicTarget, duration ?? 300, easing, () => {
+          ctx.scroll.smoothTo(maxScrollPos, duration ?? 300, easing, () => {
             animatingToEnd = false;
-            // Measurements taken on the last frames defer their height write
-            // until this moment. Publish it, then land on the end it describes.
             if (pendingContentSizeUpdate) {
               updateContentSize();
               pendingContentSizeUpdate = false;
@@ -344,7 +347,7 @@ export function autosize<T extends VListItem = VListItem>(
             snapToEnd();
           });
         } else {
-          ctx.scroll.to(dynamicTarget());
+          ctx.scroll.to(maxScrollPos());
         }
       });
 
@@ -370,9 +373,7 @@ export function autosize<T extends VListItem = VListItem>(
       ctx.hooks.method("remeasure", remeasure);
 
       ctx.hooks.method("setMeasuredSize", (index: number, size: number): void => {
-        const id = getItemId(index);
-        measured.set(id, [size, storedCtx?.items.at(index)]);
-        pendingRemeasure.delete(id);
+        recordMeasure(getItemId(index), size, getItem(index));
         refreshSizes(index, index);
       });
 

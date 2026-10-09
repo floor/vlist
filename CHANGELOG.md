@@ -20,10 +20,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   headers. The two index spaces are now translated at each lookup, so a
   measurement is taken from the element of the data index it belongs to (#363).
 - In `autosize()`, rows no longer keep the previous occupant's measured height
-  when the item at an index changes. After `setItems()`, a search filter change,
-  list mutations (`prepend`, `append`, `insert`, `remove`, `updateItem`), or
-  loading data over placeholders (with or without `groups()`), each row renders
-  at its own content height.
+  when the item at an index changes. Measurements track item identities rather than
+  array positions across `setItems()`, search filter changes, list mutations
+  (`prepend`, `append`, `insert`, `remove`, `updateItem`), and placeholder-to-data
+  transitions (with or without `groups()`). In-place mutations of existing item
+  objects are not detected automatically — call `remeasure(index)` to measure their
+  new content (#372).
+- In `groups()`, re-render active rows when item data changes at the same item count.
+  Previously, a forced render without a count or boundary change skipped re-rendering
+  content for mounted items.
 
 ## [3.1.2] - 2026-10-09
 

@@ -125,6 +125,21 @@ describe("autosize() stale measurement prevention — plain list", () => {
     cleanup = null;
   });
 
+  const makeList = (initialItems: TestRow[], extraPlugins: VListPlugin<TestRow, any>[] = []) => {
+    const container = createContainer();
+    let ctx!: PluginContext<TestRow>;
+    const capture: VListPlugin<TestRow> = {
+      name: "capture-ctx",
+      setup(val) { ctx = val; },
+    };
+    const list = createVList({
+      container,
+      items: initialItems,
+      item: { estimatedHeight: 40, template: itemTemplate },
+    }, [autosize(), ...extraPlugins, capture]);
+    return { container, list, getCtx: () => ctx };
+  };
+
   it.serial("setItems: same ids reordered renders each row at its own content height", () => {
     const ro = captureResizeObserver();
     const container = createContainer();
@@ -459,6 +474,145 @@ describe("autosize() stale measurement prevention — plain list", () => {
 
     expect(rowHeights(container)).toEqual([100, 180, 140]);
   });
+
+  it.serial("finding 1: 10,000 replacements prune unbounded map growth", () => {
+    const ro = captureResizeObserver();
+    const { container, list } = makeList([{ id: "item-init", name: "Init", h: 50 }]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect((list as unknown as AutosizeMethods).getMeasuredCount()).toBe(1);
+
+    for (let i = 0; i < 10000; i++) {
+      list.setItems([{ id: `item-${i}`, name: `Item ${i}`, h: 50 + (i % 10) }]);
+    }
+    ro.measureAll();
+
+    expect((list as unknown as AutosizeMethods).getMeasuredCount()).toBe(1);
+  });
+
+  it.serial("finding 2: duplicate IDs measure and do not ping-pong", () => {
+    const ro = captureResizeObserver();
+    const items: TestRow[] = [
+      { id: "dup", name: "Row A", h: 60 },
+      { id: "dup", name: "Row B", h: 90 },
+    ];
+    const { container, list } = makeList(items);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([90, 90]);
+    expect((list as unknown as AutosizeMethods).getMeasuredCount()).toBe(1);
+
+    // Another measurement pass should not invalidate or ping-pong
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([90, 90]);
+    expect((list as unknown as AutosizeMethods).getMeasuredCount()).toBe(1);
+  });
+
+  it.serial("finding 2: no-id items do not collide with numeric id 0", () => {
+    const ro = captureResizeObserver();
+    const itemNoId = { name: "No ID", h: 100 } as unknown as TestRow;
+    const itemZeroId = { id: 0, name: "Zero ID", h: 200 } as unknown as TestRow;
+    const { container, list } = makeList([itemNoId, itemZeroId]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([100, 200]);
+    expect((list as unknown as AutosizeMethods).getMeasuredCount()).toBe(2);
+  });
+
+  it.serial("finding 1: removed ID re-added with different height does not resurrect old height", () => {
+    const ro = captureResizeObserver();
+    const { container, list, getCtx } = makeList([{ id: "X", name: "Old X", h: 80 }]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([80]);
+
+    // Remove X by replacing items with Y
+    list.setItems([{ id: "Y", name: "Item Y", h: 120 }]);
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([120]);
+
+    // Re-add X with a new height 250
+    list.setItems([{ id: "X", name: "New X", h: 250 }]);
+    // Before observer measures, size should be estimatedHeight (40), NOT the old 80
+    expect(getCtx().sizes.cache.getSize(0)).toBe(40);
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([250]);
+    expect(getCtx().sizes.cache.getSize(0)).toBe(250);
+  });
+
+  it.serial("in-place mutation requires explicit remeasure(index)", () => {
+    const ro = captureResizeObserver();
+    const item: TestRow = { id: "M1", name: "Mutable", h: 60 };
+    const { container, list, getCtx } = makeList([item]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60]);
+    expect(getCtx().sizes.cache.getSize(0)).toBe(60);
+
+    // In-place mutation of the object; also update natural DOM height
+    item.h = 160;
+    container.querySelector("[data-h]")?.setAttribute("data-h", "160");
+    list.setItems([item]);
+    ro.measureAll();
+    // Since item reference has not changed, autosize keeps cached size at 60
+    expect(getCtx().sizes.cache.getSize(0)).toBe(60);
+
+    // Calling remeasure(0) clears the cached size and remeasures
+    (list as unknown as AutosizeMethods).remeasure(0);
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([160]);
+    expect(getCtx().sizes.cache.getSize(0)).toBe(160);
+  });
+
+  it.serial("finding 3: sizeFn does not allocate or call placeholder.generate for unloaded items", () => {
+    const ro = captureResizeObserver();
+    const container = createContainer();
+    let generateCalls = 0;
+    let capturedCtx!: PluginContext<TestRow>;
+    const capture: VListPlugin<TestRow> = {
+      name: "capture-ctx",
+      setup(val) { capturedCtx = val; },
+    };
+
+    const adapter: VListAdapter<TestRow> = {
+      read: () => new Promise(() => {}),
+    };
+
+    const list = createVList({
+      container,
+      item: {
+        estimatedHeight: 40,
+        template: itemTemplate,
+      },
+    }, [
+      autosize(),
+      data({ adapter, autoLoad: false, total: 100 }),
+      capture,
+    ]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    // Wrap ctx.items.at to count any calls made during sizing
+    let itemsAtCalls = 0;
+    const origAt = capturedCtx.items.at;
+    capturedCtx.items.at = (idx: number) => {
+      itemsAtCalls++;
+      return origAt(idx);
+    };
+
+    // Probe getSize across unloaded indices — this exercises sizeFn
+    for (let i = 0; i < 50; i++) {
+      capturedCtx.sizes.cache.getSize(i);
+    }
+
+    // sizeFn uses _getLoadedItem and must NOT call ctx.items.at for unloaded items
+    expect(itemsAtCalls).toBe(0);
+  });
 });
 
 // =============================================================================
@@ -679,4 +833,72 @@ describe("autosize() stale measurement prevention — under groups()", () => {
 
     expect(rowHeights(container)).toEqual([100, 180]);
   });
+
+  it.serial("groups: setItems shorter renders remaining items at their own heights", () => {
+    const ro = captureResizeObserver();
+    const initialItems: TestRow[] = [
+      { id: "G0", name: "Item 0", h: 60 },
+      { id: "G1", name: "Item 1", h: 90 },
+      { id: "G2", name: "Item 2", h: 120 },
+      { id: "G3", name: "Item 3", h: 150 },
+    ];
+    const { container, list } = makeGroupedList(initialItems);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60, 90, 120, 150]);
+
+    // Replace with shorter list
+    list.setItems([
+      { id: "S0", name: "Short 0", h: 75 },
+      { id: "S1", name: "Short 1", h: 115 },
+    ]);
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([75, 115]);
+  });
+
+  it.serial("groups: setItems longer renders existing and new items at their own heights", () => {
+    const ro = captureResizeObserver();
+    const initialItems: TestRow[] = [
+      { id: "G0", name: "Item 0", h: 60 },
+      { id: "G1", name: "Item 1", h: 90 },
+    ];
+    const { container, list } = makeGroupedList(initialItems);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60, 90]);
+
+    // Replace with longer list
+    list.setItems([
+      { id: "G0", name: "Item 0", h: 60 },
+      { id: "G1", name: "Item 1", h: 90 },
+      { id: "L2", name: "Long 2", h: 130 },
+      { id: "L3", name: "Long 3", h: 170 },
+    ]);
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60, 90, 130, 170]);
+  });
+
+  it.serial("groups: sortable() moving an item preserves each row's measurement", () => {
+    const ro = captureResizeObserver();
+    const initialItems: TestRow[] = [
+      { id: "S0", name: "Sort 0", h: 60 },
+      { id: "S1", name: "Sort 1", h: 90 },
+      { id: "S2", name: "Sort 2", h: 120 },
+      { id: "S3", name: "Sort 3", h: 150 },
+    ];
+    const { container, list } = makeGroupedList(initialItems, [sortable()]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60, 90, 120, 150]);
+
+    // Reorder as sortable drop does: move S3 to index 0 -> [S3, S0, S1, S2]
+    list.setItems([initialItems[3]!, initialItems[0]!, initialItems[1]!, initialItems[2]!]);
+    ro.measureAll();
+
+    expect(rowHeights(container)).toEqual([150, 60, 90, 120]);
+  });
 });
+
