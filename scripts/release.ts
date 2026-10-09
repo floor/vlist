@@ -270,9 +270,6 @@ export const resolveNewVersion = (
     assertStableRelease(args.version);
     const comparison = compareVersions(args.version, current);
     if (comparison === 0 && opts.allowSame) {
-      if (opts.isTagPresent) {
-        throw new Error(`v${args.version} is already tagged on main`);
-      }
       return args.version;
     }
     if (comparison <= 0) {
@@ -465,7 +462,8 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
   // Must be checked BEFORE any "version already equals target -> create-main-pr" shortcut
   if (ctx.remoteBranchExists && !ctx.sourcePr) {
     const branch = releaseBranchFor(ctx.targetVersion);
-    const resumeCmd = `gh pr create --base next --head ${branch} --title "chore(release): v${ctx.targetVersion}"`;
+    const sourceBranch = ctx.sourceBranch ?? resolveSourceBranch(ctx.targetVersion, null);
+    const resumeCmd = `gh pr create --base ${sourceBranch} --head ${branch} --title "chore(release): v${ctx.targetVersion}"`;
     throw new Error(
       `Remote branch ${branch} exists on origin, but no open or merged pull request matches it. ` +
         `If the previous release run was interrupted after pushing the release branch, verify that origin/${branch}'s ` +
@@ -917,25 +915,34 @@ export const checkRemoteBranchExists = (branch: string): boolean => {
   return getRemoteBranchSha(branch) !== null;
 };
 
+export const parsePackageJsonVersion = (raw: string, source: string): string => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: unknown) {
+    throw new Error(`Failed to parse package.json from ${source}: ${execErrorMessage(err)}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`Invalid package.json from ${source}: expected object`);
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.version !== "string" || !obj.version.trim()) {
+    throw new Error(`package.json at ${source} does not contain a valid version string`);
+  }
+  return obj.version.trim();
+};
+
 export const readPackageVersionAtSha = (sha: string): string => {
   const cmd = `git show ${sha}:package.json`;
   try {
     const raw = execCommand(cmd, { silent: true });
-    const parsed = JSON.parse(raw) as { version?: unknown };
-    if (typeof parsed.version === "string" && parsed.version.trim()) {
-      return parsed.version.trim();
-    }
-    throw new Error(`package.json at commit ${sha} does not contain a valid version string`);
+    return parsePackageJsonVersion(raw, `commit ${sha}`);
   } catch (err: unknown) {
     const apiCmd = `gh api repos/floor/vlist/contents/package.json?ref=${sha} --jq .content`;
     try {
       const rawBase64 = execCommand(apiCmd, { silent: true });
       const decoded = Buffer.from(rawBase64, "base64").toString("utf8");
-      const parsed = JSON.parse(decoded) as { version?: unknown };
-      if (typeof parsed.version === "string" && parsed.version.trim()) {
-        return parsed.version.trim();
-      }
-      throw new Error(`package.json at commit ${sha} does not contain a valid version string`);
+      return parsePackageJsonVersion(decoded, `commit ${sha} via api`);
     } catch (apiErr: unknown) {
       throw new Error(
         `Could not read package.json at commit ${sha} (tried '${cmd}' and '${apiCmd}'): ${execErrorMessage(
@@ -944,6 +951,55 @@ export const readPackageVersionAtSha = (sha: string): string => {
       );
     }
   }
+};
+
+const CHECK_RUN_STATUSES = new Set([
+  "completed",
+  "in_progress",
+  "queued",
+  "waiting",
+  "requested",
+  "pending",
+] as const);
+
+export const parseCheckRunItem = (raw: unknown, cmd: string): CheckRunInfo => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`Invalid check run in response from ${cmd}: expected object`);
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.name !== "string" || !obj.name.trim()) {
+    throw new Error(`Invalid check run in response from ${cmd}: field 'name' is missing or empty`);
+  }
+  if (typeof obj.status !== "string" || !CHECK_RUN_STATUSES.has(obj.status as any)) {
+    throw new Error(
+      `Invalid check run in response from ${cmd}: field 'status' is missing or invalid (got ${String(obj.status)})`,
+    );
+  }
+  if (obj.conclusion !== null && obj.conclusion !== undefined && typeof obj.conclusion !== "string") {
+    throw new Error(`Invalid check run in response from ${cmd}: field 'conclusion' must be string or null`);
+  }
+  if (!obj.app || typeof obj.app !== "object" || Array.isArray(obj.app)) {
+    throw new Error(
+      `Invalid check run in response from ${cmd}: field 'app' is missing or not an object for check '${obj.name}'`,
+    );
+  }
+  const appObj = obj.app as Record<string, unknown>;
+  if (typeof appObj.slug !== "string" || !appObj.slug.trim()) {
+    throw new Error(
+      `Invalid check run in response from ${cmd}: field 'app.slug' is missing or empty for check '${obj.name}'`,
+    );
+  }
+
+  return {
+    name: obj.name,
+    status: obj.status,
+    conclusion: (obj.conclusion as string | null) ?? null,
+    app: {
+      slug: appObj.slug,
+      name: typeof appObj.name === "string" ? appObj.name : undefined,
+    },
+  };
 };
 
 export const parseCheckRunsResponse = (
@@ -959,41 +1015,40 @@ export const parseCheckRunsResponse = (
   }
 
   const pages = Array.isArray(parsed) ? parsed : [parsed];
+  if (pages.length === 0) {
+    throw new Error(`Invalid response from check-runs API for commit ${commitSha}: empty response (${cmd})`);
+  }
+
   let expectedTotal: number | null = null;
-  const allRuns: Array<{
-    name?: unknown;
-    status?: unknown;
-    conclusion?: unknown;
-    app?: { slug?: string | undefined; name?: string | undefined } | null;
-  }> = [];
+  const allRuns: CheckRunInfo[] = [];
 
   for (const page of pages) {
-    if (!page || typeof page !== "object") {
-      throw new Error(`Invalid response from check-runs API for commit ${commitSha} (${cmd})`);
+    if (!page || typeof page !== "object" || Array.isArray(page)) {
+      throw new Error(`Invalid response from check-runs API for commit ${commitSha}: page is not an object (${cmd})`);
     }
-    const p = page as {
-      total_count?: unknown;
-      check_runs?: Array<{
-        name?: unknown;
-        status?: unknown;
-        conclusion?: unknown;
-        app?: { slug?: string | undefined; name?: string | undefined } | null;
-      }>;
-    };
-    if (typeof p.total_count !== "number") {
+    const p = page as { total_count?: unknown; check_runs?: unknown };
+    if (typeof p.total_count !== "number" || !Number.isInteger(p.total_count) || p.total_count < 0) {
       throw new Error(
         `Invalid response from check-runs API for commit ${commitSha}: missing total_count (${cmd})`,
       );
     }
     if (expectedTotal === null) {
       expectedTotal = p.total_count;
-    }
-    if (!Array.isArray(p.check_runs)) {
+    } else if (p.total_count !== expectedTotal) {
       throw new Error(
-        `Invalid response from check-runs API for commit ${commitSha}: check_runs is not an array (${cmd})`,
+        `Inconsistent check-runs API response for commit ${commitSha}: total_count mismatch across pages (${expectedTotal} vs ${p.total_count}) (${cmd})`,
       );
     }
-    allRuns.push(...p.check_runs);
+
+    if (!Array.isArray(p.check_runs)) {
+      throw new Error(
+        `Invalid response from check-runs API for commit ${commitSha}: field 'check_runs' is not an array (${cmd})`,
+      );
+    }
+
+    for (const item of p.check_runs) {
+      allRuns.push(parseCheckRunItem(item, cmd));
+    }
   }
 
   if (expectedTotal === null || allRuns.length < expectedTotal) {
@@ -1002,12 +1057,7 @@ export const parseCheckRunsResponse = (
     );
   }
 
-  return allRuns.map((r) => ({
-    name: String(r.name ?? "unnamed"),
-    status: String(r.status ?? "in_progress"),
-    conclusion: r.conclusion ? String(r.conclusion) : null,
-    app: r.app ? { slug: r.app.slug, name: r.app.name } : null,
-  }));
+  return allRuns;
 };
 
 export const fetchCheckRuns = (
@@ -1018,6 +1068,42 @@ export const fetchCheckRuns = (
   const cmd = `gh api --paginate --slurp repos/${owner}/${repo}/commits/${commitSha}/check-runs`;
   const raw = execCommand(cmd, { silent: true });
   return parseCheckRunsResponse(raw, commitSha, cmd);
+};
+
+const COMPARE_STATUSES = new Set(["ahead", "behind", "identical", "diverged"] as const);
+type CompareStatus = "ahead" | "behind" | "identical" | "diverged";
+
+export const parseCompareResponse = (
+  raw: string,
+  cmd: string,
+): { status: CompareStatus; behind_by?: number | undefined; merge_base_commit?: { sha?: string } | undefined } => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err: unknown) {
+    throw new Error(`Failed to parse GitHub compare API response (${cmd}): ${execErrorMessage(err)}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`Invalid compare API response (${cmd}): expected object`);
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.status !== "string" || !COMPARE_STATUSES.has(obj.status as CompareStatus)) {
+    throw new Error(
+      `Invalid compare API response (${cmd}): field 'status' is missing or invalid (got ${String(obj.status)})`,
+    );
+  }
+  let merge_base_commit: { sha?: string } | undefined;
+  if (obj.merge_base_commit && typeof obj.merge_base_commit === "object" && !Array.isArray(obj.merge_base_commit)) {
+    const mbc = obj.merge_base_commit as { sha?: unknown };
+    if (typeof mbc.sha === "string" && /^[0-9a-f]{40}$/i.test(mbc.sha)) {
+      merge_base_commit = { sha: mbc.sha };
+    }
+  }
+  return {
+    status: obj.status as CompareStatus,
+    behind_by: typeof obj.behind_by === "number" ? obj.behind_by : undefined,
+    merge_base_commit,
+  };
 };
 
 export const isCommitAncestorOfRemoteMain = (
@@ -1036,16 +1122,7 @@ export const isCommitAncestorOfRemoteMain = (
 
   const cmd = `gh api repos/${owner}/${repo}/compare/${commitSha}...${remoteMainSha}`;
   const raw = execCommand(cmd, { silent: true });
-  let parsed: { status?: string; behind_by?: number; merge_base_commit?: { sha?: string } };
-  try {
-    parsed = JSON.parse(raw);
-  } catch (err: unknown) {
-    throw new Error(`Failed to parse GitHub compare API response (${cmd}): ${execErrorMessage(err)}`);
-  }
-
-  if (!parsed || typeof parsed !== "object" || typeof parsed.status !== "string") {
-    throw new Error(`Invalid compare API response structure for ${commitSha}...${remoteMainSha} (${cmd})`);
-  }
+  const parsed = parseCompareResponse(raw, cmd);
 
   if (parsed.status === "identical") return true;
   if (parsed.status === "ahead" && parsed.behind_by === 0) {
@@ -1054,13 +1131,70 @@ export const isCommitAncestorOfRemoteMain = (
   return false;
 };
 
-export const fetchPrCandidatesForBranches = (
-  headBranch: string,
-  baseBranch: string,
-): PrInfo[] => {
-  const cmd = `gh pr list --state all --head ${headBranch} --base ${baseBranch} --limit ${PR_QUERY_LIMIT} --json number,title,state,headRefName,baseRefName,headRefOid,mergedAt,mergeCommit`;
-  const raw = execCommand(cmd, { silent: true });
+const PR_STATES = new Set(["OPEN", "MERGED", "CLOSED"] as const);
+type PrState = "OPEN" | "MERGED" | "CLOSED";
 
+export const parsePrCandidate = (raw: unknown, cmd: string): PrInfo => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error(`Invalid PR response from ${cmd}: expected object`);
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.number !== "number" || !Number.isInteger(obj.number) || obj.number <= 0) {
+    throw new Error(`Invalid PR response from ${cmd}: field 'number' is missing or not a positive integer`);
+  }
+  if (typeof obj.title !== "string") {
+    throw new Error(`Invalid PR response from ${cmd}: field 'title' is missing or not a string`);
+  }
+  if (typeof obj.state !== "string" || !PR_STATES.has(obj.state as PrState)) {
+    throw new Error(
+      `Invalid PR response from ${cmd}: field 'state' is missing or invalid (expected OPEN|MERGED|CLOSED, got ${String(obj.state)})`,
+    );
+  }
+  if (typeof obj.headRefName !== "string" || !obj.headRefName.trim()) {
+    throw new Error(`Invalid PR response from ${cmd}: field 'headRefName' is missing or empty`);
+  }
+  if (typeof obj.baseRefName !== "string" || !obj.baseRefName.trim()) {
+    throw new Error(`Invalid PR response from ${cmd}: field 'baseRefName' is missing or empty`);
+  }
+  if (typeof obj.headRefOid !== "string" || !/^[0-9a-f]{40}$/i.test(obj.headRefOid)) {
+    throw new Error(
+      `Invalid PR response from ${cmd}: field 'headRefOid' is missing or not a 40-hex SHA (got ${String(obj.headRefOid)})`,
+    );
+  }
+  if (obj.mergedAt !== null && obj.mergedAt !== undefined && typeof obj.mergedAt !== "string") {
+    throw new Error(`Invalid PR response from ${cmd}: field 'mergedAt' must be string or null`);
+  }
+  let mergeCommitOid: string | null = null;
+  if (obj.mergeCommit && typeof obj.mergeCommit === "object" && !Array.isArray(obj.mergeCommit)) {
+    const mc = obj.mergeCommit as { oid?: unknown };
+    if (mc.oid !== null && mc.oid !== undefined) {
+      if (typeof mc.oid !== "string" || !/^[0-9a-f]{40}$/i.test(mc.oid)) {
+        throw new Error(`Invalid PR response from ${cmd}: field 'mergeCommit.oid' is not a 40-hex SHA`);
+      }
+      mergeCommitOid = mc.oid;
+    }
+  } else if (obj.mergeCommitOid !== null && obj.mergeCommitOid !== undefined) {
+    if (typeof obj.mergeCommitOid !== "string" || !/^[0-9a-f]{40}$/i.test(obj.mergeCommitOid)) {
+      throw new Error(`Invalid PR response from ${cmd}: field 'mergeCommitOid' is not a 40-hex SHA`);
+    }
+    mergeCommitOid = obj.mergeCommitOid;
+  }
+
+  return {
+    number: obj.number,
+    title: obj.title,
+    state: obj.state as PrState,
+    headRefName: obj.headRefName,
+    baseRefName: obj.baseRefName,
+    headRefOid: obj.headRefOid,
+    mergedAt: (obj.mergedAt as string | null) ?? null,
+    mergeCommitOid,
+    packageVersion: typeof obj.packageVersion === "string" ? obj.packageVersion : undefined,
+  };
+};
+
+export const parsePrCandidatesResponse = (raw: string, cmd: string): PrInfo[] => {
   let parsedList: unknown;
   try {
     parsedList = JSON.parse(raw);
@@ -1068,50 +1202,27 @@ export const fetchPrCandidatesForBranches = (
     throw new Error(`Failed to parse PR list from GitHub (${cmd}): ${execErrorMessage(err)}`);
   }
   if (!Array.isArray(parsedList)) {
-    throw new Error(`Invalid PR list response from GitHub (${cmd})`);
+    throw new Error(`Invalid PR list response from GitHub (${cmd}): expected array`);
   }
-
   if (parsedList.length >= PR_QUERY_LIMIT) {
     throw new Error(
       `PR query (${cmd}) returned ${parsedList.length} results, which reaches the limit (${PR_QUERY_LIMIT}). Cannot guarantee all matching candidates were examined.`,
     );
   }
+  return parsedList.map((item) => parsePrCandidate(item, cmd));
+};
 
-  const results: PrInfo[] = [];
-  for (const item of parsedList) {
-    const pr = item as {
-      number: number;
-      title: string;
-      state: "OPEN" | "MERGED" | "CLOSED";
-      headRefName: string;
-      baseRefName: string;
-      headRefOid?: string | null | undefined;
-      mergedAt?: string | null | undefined;
-      mergeCommit?: { oid: string } | null | undefined;
-    };
-
-    if (!pr.headRefOid) {
-      throw new Error(
-        `Pull request #${pr.number} (${pr.headRefName} → ${pr.baseRefName}) returned no headRefOid from GitHub`,
-      );
-    }
-
-    const packageVersion = readPackageVersionAtSha(pr.headRefOid);
-
-    results.push({
-      number: pr.number,
-      title: pr.title,
-      state: pr.state,
-      headRefName: pr.headRefName,
-      baseRefName: pr.baseRefName,
-      headRefOid: pr.headRefOid,
-      mergedAt: pr.mergedAt ?? null,
-      mergeCommitOid: pr.mergeCommit?.oid ?? null,
-      packageVersion,
-    });
-  }
-
-  return results;
+export const fetchPrCandidatesForBranches = (
+  headBranch: string,
+  baseBranch: string,
+): PrInfo[] => {
+  const cmd = `gh pr list --state all --head ${headBranch} --base ${baseBranch} --limit ${PR_QUERY_LIMIT} --json number,title,state,headRefName,baseRefName,headRefOid,mergedAt,mergeCommit`;
+  const raw = execCommand(cmd, { silent: true });
+  const candidates = parsePrCandidatesResponse(raw, cmd);
+  return candidates.map((pr) => ({
+    ...pr,
+    packageVersion: readPackageVersionAtSha(pr.headRefOid),
+  }));
 };
 
 export const fetchPrCandidates = (
@@ -1273,7 +1384,8 @@ const main = async (): Promise<void> => {
   }
   if (mainPr) {
     evidence.push(
-      `Pull request #${mainPr.number} (${mainPr.headRefName} → ${mainPr.baseRefName}, ${newVersion}) is ${mainPr.state.toLowerCase()}: wait for it to merge` +
+      `Pull request #${mainPr.number} (${mainPr.headRefName} → ${mainPr.baseRefName}, ${newVersion}) is ${mainPr.state.toLowerCase()}` +
+        (mainPr.state === "OPEN" ? ": wait for it to merge" : "") +
         (mainPr.headRefOid ? ` (head: ${mainPr.headRefOid.slice(0, 8)})` : ""),
     );
     if (mainPr.state === "MERGED" && mergeSha) {

@@ -35,7 +35,12 @@ import {
 import * as releaseMod from "../../scripts/release";
 
 const parseCheckRunsResponse: any = (releaseMod as any).parseCheckRunsResponse;
+const parseCheckRunItem: any = (releaseMod as any).parseCheckRunItem;
 const parseRemoteBranchSha: any = (releaseMod as any).parseRemoteBranchSha;
+const parsePrCandidate: any = (releaseMod as any).parsePrCandidate;
+const parsePrCandidatesResponse: any = (releaseMod as any).parsePrCandidatesResponse;
+const parseCompareResponse: any = (releaseMod as any).parseCompareResponse;
+const parsePackageJsonVersion: any = (releaseMod as any).parsePackageJsonVersion;
 
 describe("parseVersion", () => {
   it("parses a stable version", () => {
@@ -607,14 +612,14 @@ describe("resolveNewVersion — re-entrancy", () => {
     ).toBe("3.1.3");
   });
 
-  it("refuses if the target version is already tagged", () => {
-    expect(() =>
+  it("allows inspecting an already-tagged target version when exact and allowSame is set", () => {
+    expect(
       resolveNewVersion(
-        "3.1.3",
-        { kind: "exact", version: "3.1.3", from: "next", dryRun: false },
+        "3.1.2",
+        { kind: "exact", version: "3.1.2", from: "next", dryRun: false },
         { allowSame: true, isTagPresent: true },
       ),
-    ).toThrow("already tagged");
+    ).toBe("3.1.2");
   });
 });
 
@@ -965,6 +970,26 @@ describe("check runs pagination and total_count verification (fail-closed)", () 
       "Precondition failed: commit abc1234 has non-successful check runs: [job-31: completed (failure)]",
     );
   });
+
+  it("check runs with conflicting total_count across pages: throws error", () => {
+    const page1 = {
+      total_count: 30,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    };
+    const page2 = {
+      total_count: 31,
+      check_runs: [],
+    };
+    const raw = JSON.stringify([page1, page2]);
+    expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
+      "total_count mismatch across pages",
+    );
+  });
 });
 
 describe("tag and branch verification (fail-closed)", () => {
@@ -1200,6 +1225,20 @@ describe("tag and branch verification (fail-closed)", () => {
         sourcePr: null,
       }),
     ).toThrow("verify that origin/chore/release-3.1.3's package.json version is 3.1.3");
+  });
+
+  it("remote release branch collision error targets staging for 2.x", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
+        sourceBranch: "staging",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("gh pr create --base staging --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
   });
 
   it("interruption on release branch without commit: stops with instructions", () => {
@@ -1448,5 +1487,106 @@ describe("parseRemoteBranchSha (fail-closed)", () => {
     expect(() => parseRemoteBranchSha("fatal: repository not found", "main")).toThrow(
       "Malformed git ls-remote output for branch main: expected 40-hex SHA",
     );
+  });
+});
+
+describe("typed validators for gh and git responses (fail-closed)", () => {
+  const validPr = {
+    number: 360,
+    title: "chore(release): v3.1.2",
+    state: "MERGED",
+    headRefName: "next",
+    baseRefName: "main",
+    headRefOid: "dccf137b59e8a9ffc907a37a859daaf7d1801110",
+    mergedAt: "2026-10-09T12:00:00Z",
+    mergeCommit: { oid: "dccf137b59e8a9ffc907a37a859daaf7d1801110" },
+  };
+
+  it("parsePrCandidate accepts fully valid candidate", () => {
+    const pr = parsePrCandidate(validPr, "gh pr list");
+    expect(pr.number).toBe(360);
+    expect(pr.state).toBe("MERGED");
+    expect(pr.headRefOid).toBe("dccf137b59e8a9ffc907a37a859daaf7d1801110");
+  });
+
+  const prTestCases: Array<{ name: string; mutate: (obj: any) => any; expectedField: string }> = [
+    { name: "missing number", mutate: ({ number: _, ...r }) => r, expectedField: "number" },
+    { name: "invalid non-numeric number", mutate: (r) => ({ ...r, number: "360" }), expectedField: "number" },
+    { name: "invalid non-positive number", mutate: (r) => ({ ...r, number: 0 }), expectedField: "number" },
+    { name: "missing title", mutate: ({ title: _, ...r }) => r, expectedField: "title" },
+    { name: "missing state (reviewer probe)", mutate: ({ state: _, ...r }) => r, expectedField: "state" },
+    { name: "invalid state enum", mutate: (r) => ({ ...r, state: "PENDING" }), expectedField: "state" },
+    { name: "missing headRefName", mutate: ({ headRefName: _, ...r }) => r, expectedField: "headRefName" },
+    { name: "missing baseRefName", mutate: ({ baseRefName: _, ...r }) => r, expectedField: "baseRefName" },
+    { name: "missing headRefOid", mutate: ({ headRefOid: _, ...r }) => r, expectedField: "headRefOid" },
+    { name: "invalid headRefOid length/format", mutate: (r) => ({ ...r, headRefOid: "deadbeef" }), expectedField: "headRefOid" },
+    { name: "invalid mergedAt type", mutate: (r) => ({ ...r, mergedAt: 12345 }), expectedField: "mergedAt" },
+    { name: "invalid mergeCommit.oid format", mutate: (r) => ({ ...r, mergeCommit: { oid: "not-a-sha" } }), expectedField: "mergeCommit.oid" },
+  ];
+
+  for (const { name, mutate, expectedField } of prTestCases) {
+    it(`parsePrCandidate fails closed on ${name}`, () => {
+      const bad = mutate(validPr);
+      expect(() => parsePrCandidate(bad, "gh pr list")).toThrow(`field '${expectedField}'`);
+    });
+  }
+
+  const validCheckRun = {
+    name: "Test & Build",
+    status: "completed",
+    conclusion: "success",
+    app: { slug: "github-actions", name: "GitHub Actions" },
+  };
+
+  it("parseCheckRunItem accepts fully valid check run", () => {
+    const item = parseCheckRunItem(validCheckRun, "gh api check-runs");
+    expect(item.name).toBe("Test & Build");
+    expect(item.status).toBe("completed");
+    expect(item.conclusion).toBe("success");
+    expect(item.app?.slug).toBe("github-actions");
+  });
+
+  const checkRunTestCases: Array<{ name: string; mutate: (obj: any) => any; expectedField: string }> = [
+    { name: "missing name", mutate: ({ name: _, ...r }) => r, expectedField: "name" },
+    { name: "missing status", mutate: ({ status: _, ...r }) => r, expectedField: "status" },
+    { name: "invalid status enum", mutate: (r) => ({ ...r, status: "broken" }), expectedField: "status" },
+    { name: "missing app", mutate: ({ app: _, ...r }) => r, expectedField: "app" },
+    { name: "missing app.slug", mutate: (r) => ({ ...r, app: { name: "GitHub Actions" } }), expectedField: "app.slug" },
+    { name: "invalid conclusion type", mutate: (r) => ({ ...r, conclusion: 123 }), expectedField: "conclusion" },
+  ];
+
+  for (const { name, mutate, expectedField } of checkRunTestCases) {
+    it(`parseCheckRunItem fails closed on ${name}`, () => {
+      const bad = mutate(validCheckRun);
+      expect(() => parseCheckRunItem(bad, "gh api check-runs")).toThrow(`field '${expectedField}'`);
+    });
+  }
+
+  it("parseCompareResponse accepts valid compare output", () => {
+    expect(parseCompareResponse(JSON.stringify({ status: "identical" }), "gh api compare")).toEqual({
+      status: "identical",
+      behind_by: undefined,
+      merge_base_commit: undefined,
+    });
+  });
+
+  it("parseCompareResponse fails closed on missing status", () => {
+    expect(() => parseCompareResponse(JSON.stringify({}), "gh api compare")).toThrow("field 'status'");
+  });
+
+  it("parseCompareResponse fails closed on invalid status enum", () => {
+    expect(() => parseCompareResponse(JSON.stringify({ status: "unknown" }), "gh api compare")).toThrow("field 'status'");
+  });
+
+  it("parsePackageJsonVersion accepts valid package.json", () => {
+    expect(parsePackageJsonVersion(JSON.stringify({ version: "3.1.2" }), "test")).toBe("3.1.2");
+  });
+
+  it("parsePackageJsonVersion fails closed on missing version", () => {
+    expect(() => parsePackageJsonVersion(JSON.stringify({}), "test")).toThrow("does not contain a valid version string");
+  });
+
+  it("parsePackageJsonVersion fails closed on empty version", () => {
+    expect(() => parsePackageJsonVersion(JSON.stringify({ version: "  " }), "test")).toThrow("does not contain a valid version string");
   });
 });
