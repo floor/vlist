@@ -302,8 +302,17 @@ export function table<T extends VListItem = VListItem>(
       if (config.columnBorders) dom.root.classList.add(`${classPrefix}--table-col-borders`);
 
       // ── ARIA ────────────────────────────────────────────────────
+      // The root is the grid and owns the composite role, so it is the element
+      // that takes focus: the content is a rowgroup and cannot. A focus owner
+      // makes it a tab stop — `_getFocusedIndex` is how a focus owner is
+      // recognised here (tree() reads it the same way) and both selection()
+      // and a11y() register it. Without one the grid stays out of the tab
+      // order, as a display-only table should. The microtask defers past
+      // plugin setup, so selection (50) and a11y (55) have registered the
+      // hook by the time it runs. #352
       queueMicrotask(() => {
-        if (ctx.hooks.get("_getSelectedIds")) {
+        if (ctx.getState().destroyed) return;
+        if (ctx.hooks.get("_getFocusedIndex")) {
           dom.root.setAttribute("tabindex", "0");
         }
       });
