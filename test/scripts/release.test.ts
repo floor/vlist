@@ -32,6 +32,10 @@ import {
   updateReadmeVersion,
   verifyCheckRuns,
 } from "../../scripts/release";
+import * as releaseMod from "../../scripts/release";
+
+const parseCheckRunsResponse: any = (releaseMod as any).parseCheckRunsResponse;
+const parseRemoteBranchSha: any = (releaseMod as any).parseRemoteBranchSha;
 
 describe("parseVersion", () => {
   it("parses a stable version", () => {
@@ -861,6 +865,106 @@ describe("check runs verification (fail-closed)", () => {
     expect(result.formattedEvidence).toContain("Test & Build (success)");
     expect(result.formattedEvidence).toContain("Browser suites (success)");
   });
+
+  it("check run with app: null throws unreadable evidence error", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Test & Build", status: "completed", conclusion: "success", app: null },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has check runs without app identity: [Test & Build]");
+  });
+
+  it("check run with app missing throws unreadable evidence error", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Test & Build", status: "completed", conclusion: "success" },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has check runs without app identity: [Test & Build]");
+  });
+});
+
+describe("check runs pagination and total_count verification (fail-closed)", () => {
+  it("missing total_count: throws error", () => {
+    const raw = JSON.stringify({
+      check_runs: [
+        { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+      ],
+    });
+    expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
+      "missing total_count",
+    );
+  });
+
+  it("total_count exceeds read check_runs: throws incomplete read error", () => {
+    const raw = JSON.stringify({
+      total_count: 31,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    });
+    expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
+      "Incomplete check-runs read for commit abc1234: read 30 of 31 runs",
+    );
+  });
+
+  it("paginated check runs across two pages: merges all pages correctly", () => {
+    const page1 = {
+      total_count: 31,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: i === 0 ? "Test & Build" : `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    };
+    const page2 = {
+      total_count: 31,
+      check_runs: [
+        { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+      ],
+    };
+    const raw = JSON.stringify([page1, page2]);
+    const runs = parseCheckRunsResponse(raw, "abc1234");
+    expect(runs.length).toBe(31);
+    const verification = verifyCheckRuns(runs, "abc1234");
+    expect(verification.formattedEvidence).toContain("Test & Build (success)");
+    expect(verification.formattedEvidence).toContain("Browser suites (success)");
+  });
+
+  it("a 31-run answer across pages whose 31st is failing: verification fails closed", () => {
+    const page1 = {
+      total_count: 31,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: i === 0 ? "Test & Build" : i === 1 ? "Browser suites" : `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    };
+    const page2 = {
+      total_count: 31,
+      check_runs: [
+        { name: "job-31", status: "completed", conclusion: "failure", app: { slug: "github-actions" } },
+      ],
+    };
+    const raw = JSON.stringify([page1, page2]);
+    const runs = parseCheckRunsResponse(raw, "abc1234");
+    expect(runs.length).toBe(31);
+    expect(() => verifyCheckRuns(runs, "abc1234")).toThrow(
+      "Precondition failed: commit abc1234 has non-successful check runs: [job-31: completed (failure)]",
+    );
+  });
 });
 
 describe("tag and branch verification (fail-closed)", () => {
@@ -1028,8 +1132,8 @@ describe("tag and branch verification (fail-closed)", () => {
         isMergeCommitAncestor: true,
         packageVersionAtMergeSha: "3.1.3",
         checkRuns: [
-          { name: "Test & Build", status: "completed", conclusion: "success" },
-          { name: "Browser suites", status: "completed", conclusion: "success" },
+          { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
         ],
       }),
     ).toBe("push-local-tag");
@@ -1055,8 +1159,8 @@ describe("tag and branch verification (fail-closed)", () => {
         isMergeCommitAncestor: true,
         packageVersionAtMergeSha: "3.1.3",
         checkRuns: [
-          { name: "Test & Build", status: "completed", conclusion: "success" },
-          { name: "Browser suites", status: "completed", conclusion: "success" },
+          { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
         ],
       }),
     ).toThrow("Local tag v3.1.3 points to 999, but verified merge commit is 222");
@@ -1073,6 +1177,29 @@ describe("tag and branch verification (fail-closed)", () => {
         sourcePr: null,
       }),
     ).toThrow("Remote branch chore/release-3.1.3 exists on origin, but no open or merged pull request matches it");
+  });
+
+  it("remote release branch collision error includes resumption command and branch discrimination advice", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("gh pr create --base next --head chore/release-3.1.3 --title \"chore(release): v3.1.3\"");
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("verify that origin/chore/release-3.1.3's package.json version is 3.1.3");
   });
 
   it("interruption on release branch without commit: stops with instructions", () => {
@@ -1298,5 +1425,28 @@ describe("parseLsRemoteTags", () => {
 
   it("returns null when tag is not found", () => {
     expect(parseLsRemoteTags("", "v3.1.2")).toBeNull();
+  });
+
+  it("malformed ls-remote output for tags throws error", () => {
+    expect(() => parseLsRemoteTags("not-a-sha refs/tags/v3.1.2", "v3.1.2")).toThrow(
+      "Malformed git ls-remote tag output",
+    );
+  });
+});
+
+describe("parseRemoteBranchSha (fail-closed)", () => {
+  it("extracts 40-hex SHA for remote branch", () => {
+    const raw = "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd\trefs/heads/main\n";
+    expect(parseRemoteBranchSha(raw, "main")).toBe("b626354e1d91e73ecbe4adbd2c81a49e4611c0bd");
+  });
+
+  it("returns null when remote branch does not exist (empty output)", () => {
+    expect(parseRemoteBranchSha("", "chore/release-3.1.3")).toBeNull();
+  });
+
+  it("malformed ls-remote output without 40-hex SHA throws error", () => {
+    expect(() => parseRemoteBranchSha("fatal: repository not found", "main")).toThrow(
+      "Malformed git ls-remote output for branch main: expected 40-hex SHA",
+    );
   });
 });

@@ -388,13 +388,19 @@ export const verifyCheckRuns = (
     );
   }
 
+  // A check run without app identity is unreadable evidence: stop
+  const missingApp = checkRuns.filter((r) => !r.app || !r.app.slug);
+  if (missingApp.length > 0) {
+    const list = missingApp.map((r) => r.name).join(", ");
+    throw new Error(
+      `Precondition failed: commit ${commitSha} has check runs without app identity: [${list}]`,
+    );
+  }
+
   const successfulGhActionsNames = new Set(
     checkRuns
       .filter((r) => {
-        const isGhActions =
-          !r.app ||
-          r.app.slug === "github-actions" ||
-          r.app.name === "GitHub Actions";
+        const isGhActions = r.app?.slug === "github-actions";
         return isGhActions && r.status === "completed" && r.conclusion === "success";
       })
       .map((r) => r.name),
@@ -459,8 +465,13 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
   // Must be checked BEFORE any "version already equals target -> create-main-pr" shortcut
   if (ctx.remoteBranchExists && !ctx.sourcePr) {
     const branch = releaseBranchFor(ctx.targetVersion);
+    const resumeCmd = `gh pr create --base next --head ${branch} --title "chore(release): v${ctx.targetVersion}"`;
     throw new Error(
-      `Remote branch ${branch} exists on origin, but no open or merged pull request matches it`,
+      `Remote branch ${branch} exists on origin, but no open or merged pull request matches it. ` +
+        `If the previous release run was interrupted after pushing the release branch, verify that origin/${branch}'s ` +
+        `package.json version is ${ctx.targetVersion} and its head commit subject is "chore(release): v${ctx.targetVersion}". ` +
+        `If verified, resume by opening the pull request: '${resumeCmd}'. ` +
+        `Otherwise, if it is a foreign or conflicting branch, delete or rename it before proceeding.`,
     );
   }
 
@@ -839,16 +850,24 @@ export const updateChangelogStats = (changelog: string, statsLine: string): stri
 // =============================================================================
 
 export const parseLsRemoteTags = (output: string, tag: string): string | null => {
-  const lines = output.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+  const trimmed = output.trim();
+  if (trimmed === "") return null;
+  const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
   let directSha: string | null = null;
   let peeledSha: string | null = null;
   for (const line of lines) {
-    const [sha, ref] = line.split(/\s+/);
-    if (!sha || !ref) continue;
+    const parts = line.split(/\s+/);
+    if (parts.length < 2 || !/^[0-9a-f]{40}$/.test(parts[0]!)) {
+      throw new Error(`Malformed git ls-remote tag output: ${JSON.stringify(line)}`);
+    }
+    const sha = parts[0]!;
+    const ref = parts[1]!;
     if (ref === `refs/tags/${tag}^{}`) {
       peeledSha = sha;
     } else if (ref === `refs/tags/${tag}`) {
       directSha = sha;
+    } else {
+      throw new Error(`Unexpected ref in git ls-remote output for ${tag}: ${ref}`);
     }
   }
   return peeledSha ?? directSha;
@@ -867,13 +886,31 @@ export const getLocalTag = (version: string): string | null => {
   if (!list.split("\n").some((t) => t.trim() === `v${version}`)) {
     return null;
   }
-  return execCommand(`git rev-parse -q --verify refs/tags/v${version}^{commit}`, { silent: true });
+  const rev = execCommand(`git rev-parse -q --verify refs/tags/v${version}^{commit}`, { silent: true });
+  const trimmedRev = rev.trim();
+  if (!/^[0-9a-f]{40}$/.test(trimmedRev)) {
+    throw new Error(`Malformed git rev-parse output for local tag v${version}: ${JSON.stringify(rev)}`);
+  }
+  return trimmedRev;
+};
+
+export const parseRemoteBranchSha = (output: string, branch: string): string | null => {
+  const trimmed = output.trim();
+  if (trimmed === "") {
+    return null;
+  }
+  const match = trimmed.match(/^([0-9a-f]{40})\s+/m);
+  if (!match?.[1]) {
+    throw new Error(
+      `Malformed git ls-remote output for branch ${branch}: expected 40-hex SHA, got ${JSON.stringify(output)}`,
+    );
+  }
+  return match[1];
 };
 
 export const getRemoteBranchSha = (branch: string): string | null => {
   const out = execCommand(`git ls-remote --heads origin "refs/heads/${branch}"`, { silent: true });
-  const match = out.match(/^([0-9a-f]{40})\s+/m);
-  return match?.[1] ?? null;
+  return parseRemoteBranchSha(out, branch);
 };
 
 export const checkRemoteBranchExists = (branch: string): boolean => {
@@ -909,36 +946,78 @@ export const readPackageVersionAtSha = (sha: string): string => {
   }
 };
 
-export const fetchCheckRuns = (
+export const parseCheckRunsResponse = (
+  raw: string,
   commitSha: string,
-  owner = "floor",
-  repo = "vlist",
+  cmd = "gh api",
 ): CheckRunInfo[] => {
-  const cmd = `gh api repos/${owner}/${repo}/commits/${commitSha}/check-runs`;
-  const raw = execCommand(cmd, { silent: true });
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (err: unknown) {
     throw new Error(`Failed to parse check-runs API response (${cmd}): ${execErrorMessage(err)}`);
   }
-  const data = parsed as {
-    check_runs?: Array<{
-      name?: unknown;
-      status?: unknown;
-      conclusion?: unknown;
-      app?: { slug?: string | undefined; name?: string | undefined } | null;
-    }>;
-  };
-  if (!Array.isArray(data.check_runs)) {
-    throw new Error(`Invalid response from check-runs API for commit ${commitSha} (${cmd})`);
+
+  const pages = Array.isArray(parsed) ? parsed : [parsed];
+  let expectedTotal: number | null = null;
+  const allRuns: Array<{
+    name?: unknown;
+    status?: unknown;
+    conclusion?: unknown;
+    app?: { slug?: string | undefined; name?: string | undefined } | null;
+  }> = [];
+
+  for (const page of pages) {
+    if (!page || typeof page !== "object") {
+      throw new Error(`Invalid response from check-runs API for commit ${commitSha} (${cmd})`);
+    }
+    const p = page as {
+      total_count?: unknown;
+      check_runs?: Array<{
+        name?: unknown;
+        status?: unknown;
+        conclusion?: unknown;
+        app?: { slug?: string | undefined; name?: string | undefined } | null;
+      }>;
+    };
+    if (typeof p.total_count !== "number") {
+      throw new Error(
+        `Invalid response from check-runs API for commit ${commitSha}: missing total_count (${cmd})`,
+      );
+    }
+    if (expectedTotal === null) {
+      expectedTotal = p.total_count;
+    }
+    if (!Array.isArray(p.check_runs)) {
+      throw new Error(
+        `Invalid response from check-runs API for commit ${commitSha}: check_runs is not an array (${cmd})`,
+      );
+    }
+    allRuns.push(...p.check_runs);
   }
-  return data.check_runs.map((r) => ({
+
+  if (expectedTotal === null || allRuns.length < expectedTotal) {
+    throw new Error(
+      `Incomplete check-runs read for commit ${commitSha}: read ${allRuns.length} of ${expectedTotal ?? "unknown"} runs (${cmd})`,
+    );
+  }
+
+  return allRuns.map((r) => ({
     name: String(r.name ?? "unnamed"),
     status: String(r.status ?? "in_progress"),
     conclusion: r.conclusion ? String(r.conclusion) : null,
     app: r.app ? { slug: r.app.slug, name: r.app.name } : null,
   }));
+};
+
+export const fetchCheckRuns = (
+  commitSha: string,
+  owner = "floor",
+  repo = "vlist",
+): CheckRunInfo[] => {
+  const cmd = `gh api --paginate --slurp repos/${owner}/${repo}/commits/${commitSha}/check-runs`;
+  const raw = execCommand(cmd, { silent: true });
+  return parseCheckRunsResponse(raw, commitSha, cmd);
 };
 
 export const isCommitAncestorOfRemoteMain = (
@@ -962,6 +1041,10 @@ export const isCommitAncestorOfRemoteMain = (
     parsed = JSON.parse(raw);
   } catch (err: unknown) {
     throw new Error(`Failed to parse GitHub compare API response (${cmd}): ${execErrorMessage(err)}`);
+  }
+
+  if (!parsed || typeof parsed !== "object" || typeof parsed.status !== "string") {
+    throw new Error(`Invalid compare API response structure for ${commitSha}...${remoteMainSha} (${cmd})`);
   }
 
   if (parsed.status === "identical") return true;
@@ -1014,11 +1097,6 @@ export const fetchPrCandidatesForBranches = (
     }
 
     const packageVersion = readPackageVersionAtSha(pr.headRefOid);
-    if (!packageVersion) {
-      throw new Error(
-        `Could not read package.json at commit ${pr.headRefOid} for pull request #${pr.number}`,
-      );
-    }
 
     results.push({
       number: pr.number,
