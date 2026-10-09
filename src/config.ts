@@ -154,7 +154,7 @@ export function resolvePlugins<T extends VListItem = VListItem>(
     // core message, which names a plugin they did write.
     const userPlugins = config.plugins ?? [];
     if (
-      userPlugins.some((p) => p.name === "table") &&
+      userPlugins.some((p) => p.name === "table" && p.conflicts?.includes("autosize")) &&
       !userPlugins.some((p) => p.name === "autosize")
     ) {
       throw new Error(
