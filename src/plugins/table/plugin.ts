@@ -7,7 +7,7 @@
  * Priority 10 — runs before selection (50) so layout is ready.
  *
  * Restrictions:
- * - Cannot be combined with grid or masonry plugins
+ * - Cannot be combined with grid, masonry, or autosize
  * - Cannot be combined with horizontal orientation
  * - Cannot be combined with reverse mode
  */
@@ -56,6 +56,13 @@ export interface TableMethods<T extends VListItem = VListItem> {
   getSort(): { key: string | null; direction: "asc" | "desc" };
 }
 
+let estimatedRowHeightWarned = false;
+
+/** @internal Reset warning state for testing. */
+export function _resetEstimatedRowHeightWarning(): void {
+  estimatedRowHeightWarned = false;
+}
+
 export function table<T extends VListItem = VListItem>(
   config: TablePluginConfig<T>,
 ): VListPlugin<T, TableMethods<T>> {
@@ -65,6 +72,15 @@ export function table<T extends VListItem = VListItem>(
 
   if (config.rowHeight === undefined && config.estimatedRowHeight === undefined) {
     throw new Error("[vlist] table: either rowHeight or estimatedRowHeight is required");
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    if (config.estimatedRowHeight !== undefined && !estimatedRowHeightWarned) {
+      estimatedRowHeightWarned = true;
+      console.warn(
+        "[vlist] table: estimatedRowHeight is deprecated and will be removed in 4.0. It sizes nothing; use rowHeight for fixed rows or see #347 for measured rows.",
+      );
+    }
   }
 
   let tableLayout: TableLayout<T> | null = null;
@@ -234,7 +250,11 @@ export function table<T extends VListItem = VListItem>(
   return {
     name: "table",
     priority: 10,
-    conflicts: ["grid", "masonry"],
+    // autosize measures items, then this plugin's setConfig(rowHeight)
+    // replaces that size function (priority 10, after autosize's 5). The
+    // cells are position:absolute, so the measurement is 0 and the rows
+    // never grow.
+    conflicts: ["grid", "masonry", "autosize"],
 
     validateConfig(resolvedConfig: ResolvedConfig): void {
       if (resolvedConfig.axis.primary === "x") {

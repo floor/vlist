@@ -9,7 +9,9 @@
 
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
-import { table } from "../../../src/plugins/table/plugin";
+import { createVList } from "../../../src/core/create";
+import { table, _resetEstimatedRowHeightWarning } from "../../../src/plugins/table/plugin";
+import { autosize } from "../../../src/plugins/autosize/plugin";
 import type { VListItem } from "../../../src/types";
 import type { TableColumn } from "../../../src/plugins/table/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -126,7 +128,7 @@ describe("table - Factory", () => {
     expect(plugin.priority).toBe(10);
   });
 
-  it("should declare conflicts with grid and masonry", () => {
+  it("should declare conflicts with grid, masonry and autosize", () => {
     const plugin = table({
       columns: testColumns,
       rowHeight: 40,
@@ -134,6 +136,7 @@ describe("table - Factory", () => {
 
     expect(plugin.conflicts).toContain("grid");
     expect(plugin.conflicts).toContain("masonry");
+    expect(plugin.conflicts).toContain("autosize");
   });
 
   it("should throw if columns is empty", () => {
@@ -159,6 +162,121 @@ describe("table - Factory", () => {
     });
 
     expect(plugin.name).toBe("table");
+  });
+});
+
+// =============================================================================
+// estimatedRowHeight deprecation
+// =============================================================================
+
+describe("table — estimatedRowHeight deprecation", () => {
+  // Uses it.serial because this test intercepts the process global console.warn
+  it.serial(
+    "warns once when estimatedRowHeight is passed, does not warn without it, and builds the list",
+    () => {
+      const originalWarn = console.warn;
+      const warnCalls: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnCalls.push(args.map(String).join(" "));
+      };
+      _resetEstimatedRowHeightWarning();
+
+      try {
+        // 1. Without estimatedRowHeight, no deprecation warning is emitted
+        table({ columns: testColumns, rowHeight: 40 });
+        expect(warnCalls.length).toBe(0);
+
+        // 2. First table with estimatedRowHeight emits deprecation warning
+        const container1 = document.createElement("div");
+        Object.defineProperty(container1, "clientHeight", { value: 400, configurable: true });
+        const plugin1 = table<TestItem>({ columns: testColumns, estimatedRowHeight: 40 } as any);
+        expect(warnCalls.length).toBe(1);
+        expect(warnCalls[0]).toContain("[vlist] table: estimatedRowHeight is deprecated");
+        expect(warnCalls[0]).toContain("4.0");
+        expect(warnCalls[0]).toContain("#347");
+
+        const list1 = createVList<TestItem>({
+          container: container1,
+          items: createTestItems(1),
+          item: { height: 40, template: () => document.createElement("div") },
+        }, [plugin1]);
+        expect(list1).toBeDefined();
+
+        // 3. Second table with estimatedRowHeight does not warn again (once per page/module)
+        const container2 = document.createElement("div");
+        Object.defineProperty(container2, "clientHeight", { value: 400, configurable: true });
+        const plugin2 = table<TestItem>({ columns: testColumns, estimatedRowHeight: 50 } as any);
+        expect(warnCalls.length).toBe(1);
+
+        const list2 = createVList<TestItem>({
+          container: container2,
+          items: createTestItems(1),
+          item: { height: 50, template: () => document.createElement("div") },
+        }, [plugin2]);
+        expect(list2).toBeDefined();
+
+        list1.destroy();
+        list2.destroy();
+      } finally {
+        console.warn = originalWarn;
+      }
+    },
+  );
+});
+
+// =============================================================================
+// table + autosize
+// =============================================================================
+
+describe("table — conflicts with autosize", () => {
+  it("throws at creation in either plugin order", () => {
+    // autosize (priority 5) installs a measuring size function, then table
+    // (priority 10) replaces it with the fixed row height. The cells are
+    // position:absolute, so that measurement is 0 and the rows never grow.
+    // The name set is complete before conflicts are checked, so the message
+    // does not depend on which plugin the caller wrote first.
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(container, "clientWidth", { value: 600, configurable: true });
+    document.body.appendChild(container);
+    const items: TestItem[] = [
+      { id: 1, name: "Ada", email: "ada@example.com", role: "admin" },
+      { id: 2, name: "Bea", email: "bea@example.com", role: "editor" },
+    ];
+    const config = {
+      container,
+      items,
+      item: {
+        estimatedHeight: 40,
+        template: (row: TestItem) => row.name,
+      },
+    };
+    const tablePlugin = () => table<TestItem>({ columns: testColumns, rowHeight: 40 });
+    const orders = [
+      [tablePlugin(), autosize<TestItem>()],
+      [autosize<TestItem>(), tablePlugin()],
+    ];
+    // Record both orders before asserting, so a missing declaration shows
+    // each one building a list rather than stopping at the first.
+    const outcomes: string[] = [];
+    try {
+      for (const plugins of orders) {
+        try {
+          const list = createVList<TestItem>(config, plugins);
+          list.destroy();
+          outcomes.push("built a list");
+        } catch (error) {
+          outcomes.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+      expect(outcomes).toEqual([
+        '[vlist] Plugin "table" conflicts with "autosize"',
+        '[vlist] Plugin "table" conflicts with "autosize"',
+      ]);
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });
 

@@ -334,6 +334,11 @@ cell, which sorts the column when it is sortable: give the control `tabindex`, o
 Enter and Space emit `column:sort` on a sortable header and never `column:click`, so an action a
 keyboard user must reach should be a `button` supplied in the header label.
 
+A table's rows have a fixed height, so `autosize()` cannot be combined with `table()`;
+the `vlist/config` route wires `autosize()` when only an estimate is given (`item.estimatedHeight`)
+and throws at creation. Give the table a fixed `rowHeight` and the config a fixed `item.height` instead.
+(`estimatedRowHeight` on `table()` is deprecated and will be removed in 4.0; it does not measure or size rows — see #347 for measured rows).
+
 ### Grid Layout
 
 ```typescript
@@ -588,7 +593,7 @@ masonry({ columns: 4, gap: 16 })
 groups({ getGroupForIndex, header: { height, template }, sticky?: true })
 selection({ mode: 'single' | 'multiple', initial?: [...ids] })
 data({ adapter: { read }, loading?: { cancelThreshold? } })
-table({ columns, rowHeight, headerHeight?, resizable? })
+table({ columns, rowHeight, headerHeight?, resizable? })  // estimatedRowHeight is deprecated
 autosize()                        // auto-measure items (requires estimatedHeight); list.remeasure(index?) after late content
 scrollbar({ autoHide?, autoHideDelay?, minThumbSize? })
 transition({ duration?: 200, insert?: timing, remove?: timing })
