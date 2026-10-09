@@ -335,9 +335,8 @@ Enter and Space emit `column:sort` on a sortable header and never `column:click`
 keyboard user must reach should be a `button` supplied in the header label.
 
 A table's rows have a fixed height, so `autosize()` cannot be combined with `table()`;
-the `vlist/config` route wires `autosize()` for an estimated item size (`item.estimatedHeight`,
-or `item.estimatedWidth` for a horizontal list) and throws at creation. Give the table a fixed
-`rowHeight` and the config a fixed `item.height` instead.
+the `vlist/config` route wires `autosize()` when only an estimate is given (`item.estimatedHeight`)
+and throws at creation. Give the table a fixed `rowHeight` and the config a fixed `item.height` instead.
 
 ### Grid Layout
 
