@@ -746,7 +746,7 @@ describe("sortable — sort events", () => {
 // =============================================================================
 
 describe("sortable — ghost position", () => {
-  // Measured on an iPhone (FLO-87, 2026-09-25): pinch-zoomed and panned by
+  // Measured on an iPhone (#303, 2026-09-25): pinch-zoomed and panned by
   // (86, 215), a `position: fixed` ghost at the pointer's client coordinates
   // rendered exactly (86, 215) away from the finger -- fixed positioning and
   // the client space disagree by the visual viewport's offset on WebKit. The
