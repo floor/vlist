@@ -14,11 +14,9 @@ dist/
 *~
 
 #AI
-# The agent manifest is tracked; everything else here is local run state
-# (STATE_DIR defaults to runs/ beside it). Excluding the directory itself
-# would make the negation below unreachable: git never descends into it.
+# Local agent run state (STATE_DIR defaults to runs/ beside it); nothing here
+# is tracked.
 .agents/*
-!.agents/agents.yaml
 .cursor/
 .claude/
 .claude/settings.local.json
