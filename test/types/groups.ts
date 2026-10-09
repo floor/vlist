@@ -161,7 +161,7 @@ void fromInlineItem;
 //
 // Both callbacks below safely accept every Row, so they must be accepted — and
 // they must not widen the list to Entity: `items` is the only place the item
-// type comes from. (Codex, on floor/vlist#261: the template was blocked as an
+// type comes from. (review on #261: the template was blocked as an
 // inference site, the grouping callback was not.)
 
 const widerGroups = createVListFromConfig({

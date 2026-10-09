@@ -36,6 +36,14 @@ jobs:
         continue-on-error: true
         run: bun run typecheck
 
+      # The tree is public: it cites work by its issue or pull request number
+      # (`#NNN`) and never by an internal tracker id. Reads tracked files, not
+      # dist/, so it sits with the other static gates.
+      - name: Docs check
+        id: docs
+        continue-on-error: true
+        run: bun run docs:check
+
       - name: Test
         id: test
         continue-on-error: true
@@ -74,6 +82,7 @@ jobs:
       - name: Gate
         env:
           TYPECHECK: ${{ steps.typecheck.outcome }}
+          DOCS: ${{ steps.docs.outcome }}
           TEST: ${{ steps.test.outcome }}
           CONCURRENT: ${{ steps.concurrent.outcome }}
           COVERAGE: ${{ steps.coverage.outcome }}
@@ -82,7 +91,7 @@ jobs:
           HEAP: ${{ steps.heap.outcome }}
         run: |
           red=""
-          for gate in TYPECHECK TEST CONCURRENT COVERAGE BUILD SIZE HEAP; do
+          for gate in TYPECHECK DOCS TEST CONCURRENT COVERAGE BUILD SIZE HEAP; do
             case "${!gate}" in
               success) ;;
               skipped) red="$red $gate(skipped)";;

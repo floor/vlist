@@ -1,4 +1,4 @@
-/** scroll.mode "auto": past the browser's element size limit, the last row is reachable (RFC-015, FLO-247).
+/** scroll.mode "auto": past the browser's element size limit, the last row is reachable (RFC-015, #319).
  *
  * Chrome stops an element at 33,554,428 px. A native list of a million 40 px
  * rows is 40,000,000 px, so with `scroll.mode: "native"` its last rows cannot
