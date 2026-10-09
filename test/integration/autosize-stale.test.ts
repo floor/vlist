@@ -251,7 +251,7 @@ describe("autosize() stale measurement prevention — plain list", () => {
       container,
       items: initialItems,
       item: { estimatedHeight: 40, template: itemTemplate },
-    }, [autosize(), search<TestRow>({ mode: "filter", fields: ["name"] })]);
+    }, [autosize(), search<TestRow>({ mode: "filter", field: "name" })]);
     cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
 
     ro.measureAll();
@@ -551,7 +551,7 @@ describe("autosize() stale measurement prevention — under groups()", () => {
       { id: "I3", name: "Date", h: 150 },
     ];
     const { container, list } = makeGroupedList(initialItems, [
-      search<TestRow>({ mode: "filter", fields: ["name"] }),
+      search<TestRow>({ mode: "filter", field: "name" }),
     ]);
     cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
 
