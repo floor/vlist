@@ -374,18 +374,19 @@ describe("resolvePlugins — table() with an estimated item size (#346)", () => 
       expect(message).toContain("item.estimatedHeight");
       expect(message).toContain("table()");
       expect(message).toContain("rowHeight");
+      expect(message).toContain("Use item.height.");
       expect(message).not.toContain("autosize");
+      expect(message).not.toContain("horizontal");
     }
   });
 
-  it("names estimatedWidth for a horizontal list", () => {
+  it("reports orientation, never a sizing remedy, for a horizontal list with table() and an estimate", () => {
     const message = creationMessage({
       orientation: "horizontal",
       item: { estimatedWidth: 80, template },
       plugins: [tableFor()],
     });
-    expect(message).toContain("item.estimatedWidth");
-    expect(message).not.toContain("autosize");
+    expect(message).toBe("[vlist] table: cannot be used with horizontal orientation");
   });
 
   it("keeps the plugin-level message when the caller wrote autosize() themselves", () => {

@@ -20,13 +20,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 ### Changed
 
 - `table()` with `autosize()` — or with an estimated item size in the config
-  route — now throws at creation (#346). The pair used to build a list whose rows never
+  route when only an estimate is given — now throws at creation (#346). The pair used to build a list whose rows never
   grew: the table wrote its fixed row height over the measuring size function, and the
   absolutely positioned cells measured 0. Where a framework adapter's config asked for the estimate, the message now
   names the fields its caller wrote (`item.estimatedHeight`, `table()`) instead of the
   `autosize()` the config layer wires; the way out is a fixed `rowHeight` on the table
-  and a fixed item size (`item.height`, `item.width` when horizontal) in place of the
-  estimate.
+  and a fixed `item.height` in place of the estimate.
 
 ## [3.1.2] - 2026-10-09
 

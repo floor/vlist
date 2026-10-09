@@ -120,9 +120,8 @@ export interface TableConfig<T extends VListItem = VListItem> {
    *
    * Each row's height is fixed here and never measured, so `table()` conflicts
    * with `autosize()`. An explicit `autosize()` plugin throws the core conflict
-   * error; the `vlist/config` route wires `autosize()` for an estimated item
-   * size (`item.estimatedHeight`, `item.estimatedWidth` when horizontal) and
-   * throws before building.
+   * error; the `vlist/config` route wires `autosize()` when only an estimate
+   * is given (`item.estimatedHeight`) and throws before building.
    */
   rowHeight: number | ((index: number) => number);
 
@@ -133,16 +132,14 @@ export interface TableConfig<T extends VListItem = VListItem> {
    * fixed rows, or see #347 for measured rows.
    *
    * The value is not used to size rows. Without `rowHeight`, rows retain the
-   * core item size: `item.height`, then `item.estimatedHeight` (or
-   * `item.estimatedWidth` horizontally), then 40 px (100 px horizontally)
+   * core item size: `item.height`, then `item.estimatedHeight`, then 40 px
    * (the fallback in `src/core/create.ts`, `resolveSizeConfig`). If supplied,
    * `rowHeight` takes precedence, whether a number or a function.
    *
    * A table's rows have a fixed height, so `table()` conflicts with `autosize()`.
    * An explicit `autosize()` plugin throws the core conflict error; the
-   * `vlist/config` route wires `autosize()` for an estimated item size
-   * (`item.estimatedHeight`, `item.estimatedWidth` when horizontal) and
-   * throws before building.
+   * `vlist/config` route wires `autosize()` when only an estimate is given
+   * (`item.estimatedHeight`) and throws before building.
    *
    * Rows are not measured via ResizeObserver; tall cell content is clipped
    * at the row height. See #345.
