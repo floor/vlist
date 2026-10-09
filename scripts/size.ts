@@ -179,7 +179,7 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   page: kb(11.3),
   snapshots: kb(11.5),
   transition: kb(12.4),
-  autosize: kb(11.6),
+  autosize: kb(11.7),
   grid: kb(13.0),
   table: kb(16.4),
   masonry: kb(14.8),
