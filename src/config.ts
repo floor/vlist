@@ -147,6 +147,29 @@ export function resolvePlugins<T extends VListItem = VListItem>(
           "row, autosize measures items. Use item.height (item.width when horizontal).",
       );
     }
+    // table() sets every row's height itself, so a measured row size cannot
+    // apply. The core conflict would name autosize() — wired here for the
+    // estimate, which the caller never wrote; name the estimate field and
+    // table() instead. A caller who passed autosize() themselves keeps the
+    // core message, which names a plugin they did write. The guard recognises
+    // the pairing by plugin name and declared conflict, as the core check does.
+    // table() only supports vertical orientation; if horizontal, report the
+    // orientation error directly rather than offering a sizing remedy.
+    const userPlugins = config.plugins ?? [];
+    if (
+      userPlugins.some((p) => p.name === "table" && p.conflicts?.includes("autosize")) &&
+      !userPlugins.some((p) => p.name === "autosize")
+    ) {
+      if (isHorizontal) {
+        throw new Error("[vlist] table: cannot be used with horizontal orientation");
+      }
+      throw new Error(
+        "[vlist] config: item.estimatedHeight cannot be combined with table(): " +
+          "an estimated item size asks for measured rows, and table() gives every row " +
+          "a fixed height. Give the table a fixed rowHeight and drop the estimate. " +
+          "Use item.height.",
+      );
+    }
     plugins.push(autosize<T>());
   }
 

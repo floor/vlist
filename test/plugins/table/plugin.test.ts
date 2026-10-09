@@ -9,7 +9,9 @@
 
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
+import { createVList } from "../../../src/core/create";
 import { table } from "../../../src/plugins/table/plugin";
+import { autosize } from "../../../src/plugins/autosize/plugin";
 import type { VListItem } from "../../../src/types";
 import type { TableColumn } from "../../../src/plugins/table/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -126,7 +128,7 @@ describe("table - Factory", () => {
     expect(plugin.priority).toBe(10);
   });
 
-  it("should declare conflicts with grid and masonry", () => {
+  it("should declare conflicts with grid, masonry and autosize", () => {
     const plugin = table({
       columns: testColumns,
       rowHeight: 40,
@@ -134,6 +136,7 @@ describe("table - Factory", () => {
 
     expect(plugin.conflicts).toContain("grid");
     expect(plugin.conflicts).toContain("masonry");
+    expect(plugin.conflicts).toContain("autosize");
   });
 
   it("should throw if columns is empty", () => {
@@ -159,6 +162,62 @@ describe("table - Factory", () => {
     });
 
     expect(plugin.name).toBe("table");
+  });
+});
+
+// =============================================================================
+// table + autosize
+// =============================================================================
+
+describe("table — conflicts with autosize", () => {
+  it("throws at creation in either plugin order", () => {
+    // autosize (priority 5) installs a measuring size function, then table
+    // (priority 10) replaces it with the fixed row height. The cells are
+    // position:absolute, so that measurement is 0 and the rows never grow.
+    // The name set is complete before conflicts are checked, so the message
+    // does not depend on which plugin the caller wrote first.
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(container, "clientWidth", { value: 600, configurable: true });
+    document.body.appendChild(container);
+    const items: TestItem[] = [
+      { id: 1, name: "Ada", email: "ada@example.com", role: "admin" },
+      { id: 2, name: "Bea", email: "bea@example.com", role: "editor" },
+    ];
+    const config = {
+      container,
+      items,
+      item: {
+        estimatedHeight: 40,
+        template: (row: TestItem) => row.name,
+      },
+    };
+    const tablePlugin = () => table<TestItem>({ columns: testColumns, rowHeight: 40 });
+    const orders = [
+      [tablePlugin(), autosize<TestItem>()],
+      [autosize<TestItem>(), tablePlugin()],
+    ];
+    // Record both orders before asserting, so a missing declaration shows
+    // each one building a list rather than stopping at the first.
+    const outcomes: string[] = [];
+    try {
+      for (const plugins of orders) {
+        try {
+          const list = createVList<TestItem>(config, plugins);
+          list.destroy();
+          outcomes.push("built a list");
+        } catch (error) {
+          outcomes.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+      expect(outcomes).toEqual([
+        '[vlist] Plugin "table" conflicts with "autosize"',
+        '[vlist] Plugin "table" conflicts with "autosize"',
+      ]);
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });
 
