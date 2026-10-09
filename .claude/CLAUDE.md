@@ -198,7 +198,7 @@ nothing `next` does not, and staging.vlist.io deploys from `next`, not from it.
 - ❌ **NEVER merge, tag, release, deploy, or post publicly without explicit permission**
 - ✅ Feature branches branch off `next` and merge back into `next` through a PR
 - ✅ Committing on your own branch and opening a PR is ordinary work — no need to ask
-- ✅ A PR merges only after the gate in `.agents/agents.yaml` passes on a clean export
+- ✅ A PR merges only after CI is green on its head — **Test & Build** (Typecheck, Test, Test `--concurrent`, Coverage threshold, Build, Bundle size + tree-shaking, Heap growth) and **Browser suites** — and a review has passed
 - ✅ **A PR merges only when `next` is green at its base.** If `next` is red, the first PR is
   the one that makes it green — nothing else merges on top. Ten PRs merged onto a red `next`
   in 2026-09 and hid five layers of failure for three days
