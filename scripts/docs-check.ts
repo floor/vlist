@@ -1,23 +1,30 @@
 #!/usr/bin/env bun
 /**
- * vlist — the migration notes must not name an API that no longer exists.
+ * vlist — two rules about what the public tree may say.
  *
- * A reader following the 3.0 migration notes writes code against whatever they
- * say. When `PluginContext` was grouped by capability, the notes kept the flat
- * names — `registerMethod`, `ctx.getMethod`, `setScrollToIndexFn` — so the
- * instructions described an API that had been renamed in the same release.
+ * **Renamed APIs.** A reader following the 3.0 migration notes writes code
+ * against whatever they say. When `PluginContext` was grouped by capability,
+ * the notes kept the flat names — `registerMethod`, `ctx.getMethod`,
+ * `setScrollToIndexFn` — so the instructions described an API that had been
+ * renamed in the same release. The rule needs no line numbers and no exception
+ * list: a line that names an old API is wrong *unless it also names the
+ * replacement*, because then it is describing the rename rather than
+ * instructing with it. That distinction is the whole check. Only the
+ * unreleased section of the changelog is examined: released entries are
+ * history and are never rewritten.
  *
- * The rule needs no line numbers and no exception list: a line that names an
- * old API is wrong *unless it also names the replacement*, because then it is
- * describing the rename rather than instructing with it. That distinction is
- * the whole check.
- *
- * Only the unreleased section of the changelog is examined. Released entries
- * are history and are never rewritten.
+ * **Internal tracker ids.** The repository is public; its files cite work by
+ * the public issue or pull request number (`#NNN`), never by the internal
+ * tracker. Every tracked file is scanned — git decides what is tracked, so
+ * scratch files and build output never count. An exemption is a file that
+ * still carries an id, for a stated reason; every exemption is printed on
+ * each run so it cannot rot unseen, and an exemption that skips nothing is
+ * reported for removal.
  *
  * Usage: bun run scripts/docs-check.ts
  */
 
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 interface Rename {
@@ -95,27 +102,132 @@ const scan = (
   }
 };
 
-const problems: Problem[] = [];
-scan("CHANGELOG.md", unreleased(read("CHANGELOG.md")), problems);
-scan("npm-readme.md", all(read("npm-readme.md")), problems);
-scan("README.md", all(read("README.md")), problems);
+/**
+ * Tracker prefixes the public tree must not name (an id is `<prefix>-<digits>`).
+ * Add a prefix here to extend the rule to another tracker.
+ */
+export const TRACKER_PREFIXES: readonly string[] = ["FLO"];
 
-console.log("");
-if (problems.length === 0) {
-  console.log(`  ✓ migration notes name no renamed API (${RENAMES.length} renames checked)`);
-  console.log("");
-  process.exit(0);
+/** The id pattern for a set of prefixes; exported so tests can extend it. */
+export const trackerIdPattern = (prefixes: readonly string[]): RegExp =>
+  new RegExp(`(?:${prefixes.join("|")})-\\d+`);
+
+/** A tracked file and its lines. */
+export interface TrackedFile {
+  readonly path: string;
+  readonly lines: readonly string[];
 }
 
-console.log(`  ✗ ${problems.length} line(s) name an API that no longer exists:`);
-console.log("");
-for (const p of problems) {
-  console.log(`  ${p.file}:${p.line}`);
-  console.log(`      "${p.old}" → should be "${p.now}"`);
-  console.log(`      ${p.text.slice(0, 140)}`);
-  console.log("");
+/** A file allowed to carry a tracker id, with the reason — ideally none. */
+export interface TrackerExemption {
+  readonly file: string;
+  readonly reason: string;
 }
-console.log(`  A line may keep an old name only if it also names the replacement,`);
-console.log(`  which is how an entry describing the rename differs from one using it.`);
-console.log("");
-process.exit(1);
+
+/**
+ * Files that may still carry a tracker id. Every entry is printed on each run;
+ * an entry that skips nothing is reported so it can be removed. Empty: the
+ * tracked tree carries no id, so the rule needs no exception.
+ */
+export const TRACKER_EXEMPT: readonly TrackerExemption[] = [];
+
+export interface TrackerHit {
+  readonly file: string;
+  readonly line: number;
+  readonly id: string;
+  readonly text: string;
+}
+
+export interface TrackerScan {
+  readonly hits: readonly TrackerHit[];
+  /** Exemptions that actually skipped at least one id. */
+  readonly exempted: readonly TrackerExemption[];
+  /** Exemptions whose file carries no id (or is not tracked): remove them. */
+  readonly unused: readonly TrackerExemption[];
+}
+
+/** Every occurrence of a tracker id, in tracked order; exempt files skipped. */
+export const scanTrackerIds = (
+  files: readonly TrackedFile[],
+  exempt: readonly TrackerExemption[] = TRACKER_EXEMPT,
+): TrackerScan => {
+  const pattern = new RegExp(trackerIdPattern(TRACKER_PREFIXES).source, "g");
+  const exemptFiles = new Set(exempt.map((e) => e.file));
+  const hits: TrackerHit[] = [];
+  const skipped = new Set<string>();
+  for (const { path, lines } of files) {
+    const isExempt = exemptFiles.has(path);
+    for (let i = 0; i < lines.length; i++) {
+      for (const match of lines[i]!.matchAll(pattern)) {
+        if (isExempt) {
+          skipped.add(path);
+          continue;
+        }
+        hits.push({ file: path, line: i + 1, id: match[0], text: lines[i]!.trim() });
+      }
+    }
+  }
+  return {
+    hits,
+    exempted: exempt.filter((e) => skipped.has(e.file)),
+    unused: exempt.filter((e) => !skipped.has(e.file)),
+  };
+};
+
+/** The tracked files, from git itself, so untracked scratch never counts. */
+const trackedFiles = (): readonly string[] =>
+  execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+    .split("\0")
+    .filter((p) => p.length > 0);
+
+const run = (): void => {
+  const problems: Problem[] = [];
+  scan("CHANGELOG.md", unreleased(read("CHANGELOG.md")), problems);
+  scan("npm-readme.md", all(read("npm-readme.md")), problems);
+  scan("README.md", all(read("README.md")), problems);
+
+  const tracked = trackedFiles();
+  const tracker = scanTrackerIds(tracked.map((path) => ({ path, lines: read(path) })));
+
+  console.log("");
+  if (problems.length === 0) {
+    console.log(`  ✓ migration notes name no renamed API (${RENAMES.length} renames checked)`);
+  } else {
+    console.log(`  ✗ ${problems.length} line(s) name an API that no longer exists:`);
+    console.log("");
+    for (const p of problems) {
+      console.log(`  ${p.file}:${p.line}`);
+      console.log(`      "${p.old}" → should be "${p.now}"`);
+      console.log(`      ${p.text.slice(0, 140)}`);
+      console.log("");
+    }
+    console.log(`  A line may keep an old name only if it also names the replacement,`);
+    console.log(`  which is how an entry describing the rename differs from one using it.`);
+  }
+
+  if (tracker.hits.length === 0) {
+    console.log(`  ✓ no tracker id in ${tracked.length} tracked files (${TRACKER_PREFIXES.join(", ")})`);
+  } else {
+    console.log(`  ✗ ${tracker.hits.length} tracker id(s) in tracked files:`);
+    console.log("");
+    for (const hit of tracker.hits) {
+      console.log(`  ${hit.file}:${hit.line}`);
+      console.log(`      "${hit.id}" → cite the public issue or pull request ("#NNN")`);
+      console.log(`      ${hit.text.slice(0, 140)}`);
+      console.log("");
+    }
+    console.log(`  This repository is public: files cite work by its public number,`);
+    console.log(`  or say it without a number — never by an internal tracker id.`);
+  }
+  for (const e of tracker.exempted) {
+    console.log(`  ⚠ ${e.file} is exempt from the tracker-id rule: ${e.reason}`);
+  }
+  for (const e of tracker.unused) {
+    console.log(`  ⚠ the exemption for ${e.file} skips nothing — remove it from the list (${e.reason})`);
+  }
+  console.log("");
+
+  process.exit(problems.length === 0 && tracker.hits.length === 0 ? 0 : 1);
+};
+
+if (import.meta.main) run();
