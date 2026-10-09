@@ -15,15 +15,32 @@ import {
   bumpVersion,
   compareVersions,
   currentBranchLabel,
+  detectBlockingPr,
+  detectReleaseState,
   execErrorMessage,
+  formatReleasePlan,
   parseArgs,
+  parseLsRemoteTags,
   parseVersion,
+  planRelease,
+  releaseBranchFor,
   resolveNewVersion,
   resolveSourceBranch,
+  selectPullRequest,
   sourceBranchFor,
   updateChangelogStats,
   updateReadmeVersion,
+  verifyCheckRuns,
 } from "../../scripts/release";
+import * as releaseMod from "../../scripts/release";
+
+const parseCheckRunsResponse: any = (releaseMod as any).parseCheckRunsResponse;
+const parseCheckRunItem: any = (releaseMod as any).parseCheckRunItem;
+const parseRemoteBranchSha: any = (releaseMod as any).parseRemoteBranchSha;
+const parsePrCandidate: any = (releaseMod as any).parsePrCandidate;
+const parsePrCandidatesResponse: any = (releaseMod as any).parsePrCandidatesResponse;
+const parseCompareResponse: any = (releaseMod as any).parseCompareResponse;
+const parsePackageJsonVersion: any = (releaseMod as any).parsePackageJsonVersion;
 
 describe("parseVersion", () => {
   it("parses a stable version", () => {
@@ -180,30 +197,60 @@ describe("resolveNewVersion", () => {
 
 describe("parseArgs", () => {
   it("defaults to a patch bump with no --from", () => {
-    expect(parseArgs([])).toEqual({ kind: "bump", bumpType: "patch", from: null });
+    expect(parseArgs([])).toEqual({ kind: "bump", bumpType: "patch", from: null, dryRun: false, tag: false });
   });
 
   it("parses bump types and --from in either order", () => {
-    expect(parseArgs(["minor"])).toEqual({ kind: "bump", bumpType: "minor", from: null });
+    expect(parseArgs(["minor"])).toEqual({ kind: "bump", bumpType: "minor", from: null, dryRun: false, tag: false });
     expect(parseArgs(["major", "--from", "next"])).toEqual({
       kind: "bump",
       bumpType: "major",
       from: "next",
+      dryRun: false,
+      tag: false,
     });
     expect(parseArgs(["--from", "staging", "patch"])).toEqual({
       kind: "bump",
       bumpType: "patch",
       from: "staging",
+      dryRun: false,
+      tag: false,
     });
-    expect(parseArgs(["--from=next"])).toEqual({ kind: "bump", bumpType: "patch", from: "next" });
+    expect(parseArgs(["--from=next"])).toEqual({ kind: "bump", bumpType: "patch", from: "next", dryRun: false, tag: false });
   });
 
   it("parses an exact version", () => {
-    expect(parseArgs(["3.0.0"])).toEqual({ kind: "exact", version: "3.0.0", from: null });
+    expect(parseArgs(["3.0.0"])).toEqual({ kind: "exact", version: "3.0.0", from: null, dryRun: false, tag: false });
     expect(parseArgs(["3.0.0", "--from", "next"])).toEqual({
       kind: "exact",
       version: "3.0.0",
       from: "next",
+      dryRun: false,
+      tag: false,
+    });
+  });
+
+  it("parses --tag flag", () => {
+    expect(parseArgs(["--tag"])).toEqual({
+      kind: "bump",
+      bumpType: "patch",
+      from: null,
+      dryRun: false,
+      tag: true,
+    });
+    expect(parseArgs(["3.1.3", "--tag"])).toEqual({
+      kind: "exact",
+      version: "3.1.3",
+      from: null,
+      dryRun: false,
+      tag: true,
+    });
+    expect(parseArgs(["3.1.3", "--tag", "--dry-run"])).toEqual({
+      kind: "exact",
+      version: "3.1.3",
+      from: null,
+      dryRun: true,
+      tag: true,
     });
   });
 
@@ -269,5 +316,1277 @@ describe("execErrorMessage", () => {
     expect(execErrorMessage({ stderr: "  boom  ", message: "ignored" })).toBe("boom");
     expect(execErrorMessage(new Error("fallback"))).toBe("fallback");
     expect(execErrorMessage("plain")).toBe("plain");
+  });
+});
+
+describe("releaseBranchFor", () => {
+  it("names the release branch from the target version", () => {
+    expect(releaseBranchFor("3.1.3")).toBe("chore/release-3.1.3");
+    expect(releaseBranchFor("2.8.2")).toBe("chore/release-2.8.2");
+  });
+});
+
+describe("parseArgs — --dry-run", () => {
+  it("defaults dryRun to false", () => {
+    expect(parseArgs([])).toEqual({ kind: "bump", bumpType: "patch", from: null, dryRun: false, tag: false });
+  });
+
+  it("parses --dry-run with bump types, exact versions, and --from", () => {
+    expect(parseArgs(["--dry-run"])).toEqual({
+      kind: "bump",
+      bumpType: "patch",
+      from: null,
+      dryRun: true,
+      tag: false,
+    });
+    expect(parseArgs(["3.1.3", "--dry-run"])).toEqual({
+      kind: "exact",
+      version: "3.1.3",
+      from: null,
+      dryRun: true,
+      tag: false,
+    });
+    expect(parseArgs(["--dry-run", "minor", "--from", "next"])).toEqual({
+      kind: "bump",
+      bumpType: "minor",
+      from: "next",
+      dryRun: true,
+      tag: false,
+    });
+  });
+});
+
+describe("detectReleaseState", () => {
+  it("detects already-tagged when tag exists on main matching verified merge commit", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
+        localTagSha: null,
+        mainPr: {
+          number: 360,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
+          packageVersion: "3.1.3",
+        },
+        packageVersionAtMergeSha: "3.1.3",
+      }),
+    ).toBe("already-tagged");
+  });
+
+  it("detects tag-release when PR into main is merged", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 360,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+          packageVersion: "3.1.3",
+        },
+      }),
+    ).toBe("tag-release");
+  });
+
+  it("detects await-main-pr when PR into main is open", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 360,
+          title: "chore(release): v3.1.3",
+          state: "OPEN",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          packageVersion: "3.1.3",
+        },
+      }),
+    ).toBe("await-main-pr");
+  });
+
+  it("detects create-main-pr when step 1 merged or package.json is already at target version", () => {
+    // Case A: source PR merged
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        sourcePr: {
+          number: 359,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "chore/release-3.1.3",
+          baseRefName: "next",
+          headRefOid: "111",
+          packageVersion: "3.1.3",
+        },
+      }),
+    ).toBe("create-main-pr");
+
+    // Case B: package.json on sourceBranch already at targetVersion
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+      }),
+    ).toBe("create-main-pr");
+  });
+
+  it("detects await-source-pr when PR into source branch is open", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        sourcePr: {
+          number: 359,
+          title: "chore(release): v3.1.3",
+          state: "OPEN",
+          headRefName: "chore/release-3.1.3",
+          baseRefName: "next",
+          headRefOid: "111",
+          packageVersion: "3.1.3",
+        },
+      }),
+    ).toBe("await-source-pr");
+  });
+
+  it("detects create-source-pr on fresh run", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+      }),
+    ).toBe("create-source-pr");
+  });
+});
+
+describe("planRelease", () => {
+  it("plans create-source-pr: pushes release branch, never the source branch directly, and never tags without --tag", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "create-source-pr",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+
+    // Verifies it cuts chore/release-3.1.3
+    expect(commands).toContain("git checkout -b chore/release-3.1.3");
+    // Verifies it pushes chore/release-3.1.3
+    expect(commands).toContain("git push origin chore/release-3.1.3");
+    // CRITICAL: Verifies it NEVER pushes next directly!
+    expect(commands).not.toContain("git push origin next");
+    // Verifies PR chore/release-3.1.3 -> next is opened
+    expect(
+      commands.some((c) => c?.includes("gh pr create --base next --head chore/release-3.1.3")),
+    ).toBe(true);
+    // Verifies PR next -> main is opened
+    expect(
+      commands.some((c) => c?.includes("gh pr create --base main --head next")),
+    ).toBe(true);
+    // Verifies NO tag commands without --tag
+    expect(commands.some((c) => c?.startsWith("git tag"))).toBe(false);
+    expect(commands.some((c) => c?.startsWith("git push origin v"))).toBe(false);
+    expect(steps.some((s) => s.description.includes("bun run release 3.1.3 --tag"))).toBe(true);
+  });
+
+  it("plans create-main-pr when resuming with package.json already bumped", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "create-main-pr",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+
+    // Does NOT cut chore/release-3.1.3 or push it again
+    expect(commands).not.toContain("git checkout -b chore/release-3.1.3");
+    expect(commands).not.toContain("git push origin chore/release-3.1.3");
+    // Opens PR next -> main
+    expect(
+      commands.some((c) => c?.includes("gh pr create --base main --head next")),
+    ).toBe(true);
+    // Verifies NO tag commands without --tag
+    expect(commands.some((c) => c?.startsWith("git tag"))).toBe(false);
+    expect(steps.some((s) => s.description.includes("bun run release 3.1.3 --tag"))).toBe(true);
+  });
+
+  it("plans tag-release without --tag: prompts to run with --tag and issues no tag command", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+    expect(commands).toEqual([]);
+    expect(steps[0]?.description).toContain("Run 'bun run release 3.1.3 --tag' to tag and push");
+  });
+
+  it("plans tag-release with --tag: issues annotated tag and push commands", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+      tag: true,
+      verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+    expect(commands).toEqual([
+      "git checkout main",
+      "git pull origin main",
+      "git tag -a v3.1.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v3.1.3",
+      "git push origin v3.1.3",
+      "git checkout next",
+    ]);
+  });
+});
+
+describe("formatReleasePlan", () => {
+  it("formats plan with state and numbered commands when --tag is passed", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+      tag: true,
+      verifiedSha: "425ecd4b",
+    });
+    const formatted = formatReleasePlan("3.1.3", "next", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v3.1.3 (from next)");
+    expect(formatted).toContain("State: tag-release");
+    expect(formatted).toContain("git tag -a v3.1.3");
+  });
+
+  it("formats plan prompting for --tag when no flag is passed", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+      verifiedSha: "425ecd4b",
+    });
+    const formatted = formatReleasePlan("3.1.3", "next", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v3.1.3 (from next)");
+    expect(formatted).toContain("State: tag-release");
+    expect(formatted).toContain("bun run release 3.1.3 --tag");
+  });
+});
+
+describe("resolveNewVersion — re-entrancy", () => {
+  it("picks up current version when package.json is already at target version", () => {
+    // When resuming with exact version matching current package.json
+    expect(
+      resolveNewVersion(
+        "3.1.3",
+        { kind: "exact", version: "3.1.3", from: "next", dryRun: false },
+        { allowSame: true },
+      ),
+    ).toBe("3.1.3");
+
+    // When resuming with bump but current package.json is untagged
+    expect(
+      resolveNewVersion(
+        "3.1.3",
+        { kind: "bump", bumpType: "patch", from: "next", dryRun: false },
+        { isCurrentUntagged: true },
+      ),
+    ).toBe("3.1.3");
+  });
+
+  it("allows inspecting an already-tagged target version when exact and allowSame is set", () => {
+    expect(
+      resolveNewVersion(
+        "3.1.2",
+        { kind: "exact", version: "3.1.2", from: "next", dryRun: false },
+        { allowSame: true, isTagPresent: true },
+      ),
+    ).toBe("3.1.2");
+  });
+});
+
+describe("pull request identification (fail-closed)", () => {
+  it("target ≠ the open main pull request's version: does not attach", () => {
+    const candidates = [
+      {
+        number: 360,
+        title: "chore(release): v3.1.2",
+        state: "OPEN" as const,
+        headRefName: "next",
+        baseRefName: "main",
+        headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+        mergedAt: null,
+        packageVersion: "3.1.2",
+      },
+    ];
+    expect(selectPullRequest(candidates, "next", "main", "3.1.3")).toBeNull();
+    expect(selectPullRequest(candidates, "next", "main", "3.1.2")).toEqual(candidates[0]!);
+  });
+
+  it("an old merged pull request for another version: does not attach", () => {
+    const candidates = [
+      {
+        number: 354,
+        title: "chore(release): v3.1.1",
+        state: "MERGED" as const,
+        headRefName: "next",
+        baseRefName: "main",
+        headRefOid: "e16296a882831a7aebf2e1fe60609e834368ad91",
+        mergedAt: "2026-10-02T22:56:04Z",
+        mergeCommitOid: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
+        packageVersion: "3.1.1",
+      },
+    ];
+    expect(selectPullRequest(candidates, "next", "main", "3.1.3")).toBeNull();
+  });
+
+  it("two candidates: stops and names all matching candidates", () => {
+    const candidates = [
+      {
+        number: 400,
+        title: "chore(release): v3.1.3",
+        state: "OPEN" as const,
+        headRefName: "chore/release-3.1.3",
+        baseRefName: "next",
+        headRefOid: "aaa1",
+        mergedAt: null,
+        packageVersion: "3.1.3",
+      },
+      {
+        number: 401,
+        title: "chore(release): v3.1.3",
+        state: "OPEN" as const,
+        headRefName: "chore/release-3.1.3",
+        baseRefName: "next",
+        headRefOid: "aaa2",
+        mergedAt: null,
+        packageVersion: "3.1.3",
+      },
+    ];
+    expect(() =>
+      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
+    ).toThrow("Multiple matching pull requests found for chore/release-3.1.3 → next: #400, #401");
+  });
+
+  it("a closed-unmerged candidate: stops and names the closed PR", () => {
+    const candidates = [
+      {
+        number: 399,
+        title: "chore(release): v3.1.3",
+        state: "CLOSED" as const,
+        headRefName: "chore/release-3.1.3",
+        baseRefName: "next",
+        headRefOid: "deadbeef",
+        mergedAt: null,
+        packageVersion: "3.1.3",
+      },
+    ];
+    expect(() =>
+      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
+    ).toThrow("Pull request #399 (chore/release-3.1.3 → next) was closed without merging");
+  });
+
+  it("a candidate without headRefOid: stops and names the unreadable PR", () => {
+    const candidates = [
+      {
+        number: 402,
+        title: "chore(release): v3.1.3",
+        state: "OPEN" as const,
+        headRefName: "chore/release-3.1.3",
+        baseRefName: "next",
+        headRefOid: "",
+        mergedAt: null,
+        packageVersion: "3.1.3",
+      },
+    ];
+    expect(() =>
+      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
+    ).toThrow("Pull request #402 (chore/release-3.1.3 → next) returned no headRefOid from GitHub");
+  });
+
+  it("a candidate with unreadable packageVersion: stops and names the PR", () => {
+    const candidates = [
+      {
+        number: 403,
+        title: "chore(release): v3.1.3",
+        state: "OPEN" as const,
+        headRefName: "chore/release-3.1.3",
+        baseRefName: "next",
+        headRefOid: "deadbeef",
+        mergedAt: null,
+        packageVersion: null,
+      },
+    ];
+    expect(() =>
+      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
+    ).toThrow("Could not determine package.json version for pull request #403 (chore/release-3.1.3 → next) at commit deadbeef");
+  });
+
+  it("detects an unrelated open release PR on source branch as blocking", () => {
+    const candidates = [
+      {
+        number: 360,
+        title: "chore(release): v3.1.2",
+        state: "OPEN" as const,
+        headRefName: "next",
+        baseRefName: "main",
+        headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+        mergedAt: null,
+        packageVersion: "3.1.2",
+      },
+    ];
+    const blocking = detectBlockingPr(candidates, "next", "3.1.3");
+    expect(blocking).toEqual(candidates[0]!);
+  });
+});
+
+describe("check runs verification (fail-closed)", () => {
+  it("zero check runs: throws error", () => {
+    expect(() => verifyCheckRuns([], "abc1234")).toThrow(
+      "Precondition failed: commit abc1234 has 0 check runs (required: Test & Build, Browser suites)",
+    );
+  });
+
+  it("a check pending: throws and lists the pending check", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Browser suites", status: "completed", conclusion: "success" },
+          { name: "Test & Build", status: "in_progress", conclusion: null },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has non-successful check runs");
+  });
+
+  it("a check failed: throws and lists the failed check", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Browser suites", status: "completed", conclusion: "failure" },
+          { name: "Test & Build", status: "completed", conclusion: "success" },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has non-successful check runs");
+  });
+
+  it("a check skipped: throws and lists the skipped check", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Browser suites", status: "completed", conclusion: "skipped" },
+          { name: "Test & Build", status: "completed", conclusion: "success" },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has non-successful check runs");
+  });
+
+  it("a check neutral: throws and lists the neutral check", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Browser suites", status: "completed", conclusion: "neutral" },
+          { name: "Test & Build", status: "completed", conclusion: "success" },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has non-successful check runs");
+  });
+
+  it("a run from another app only: throws missing required project checks", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          {
+            name: "Other App Check",
+            status: "completed",
+            conclusion: "success",
+            app: { slug: "other-app" },
+          },
+        ],
+        "abc1234",
+      ),
+    ).toThrow(
+      "Precondition failed: commit abc1234 is missing required successful GitHub Actions check runs: [Test & Build, Browser suites]",
+    );
+  });
+
+  it("missing a required check name: throws listing missing checks", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          {
+            name: "Test & Build",
+            status: "completed",
+            conclusion: "success",
+            app: { slug: "github-actions" },
+          },
+        ],
+        "abc1234",
+      ),
+    ).toThrow(
+      "Precondition failed: commit abc1234 is missing required successful GitHub Actions check runs: [Browser suites]",
+    );
+  });
+
+  it("all required checks completed and successful: returns formatted evidence", () => {
+    const result = verifyCheckRuns(
+      [
+        {
+          name: "Test & Build",
+          status: "completed",
+          conclusion: "success",
+          app: { slug: "github-actions" },
+        },
+        {
+          name: "Browser suites",
+          status: "completed",
+          conclusion: "success",
+          app: { slug: "github-actions" },
+        },
+      ],
+      "abc1234",
+    );
+    expect(result.formattedEvidence).toContain("Test & Build (success)");
+    expect(result.formattedEvidence).toContain("Browser suites (success)");
+  });
+
+  it("check run with app: null throws unreadable evidence error", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Test & Build", status: "completed", conclusion: "success", app: null },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has check runs without app identity: [Test & Build]");
+  });
+
+  it("check run with app missing throws unreadable evidence error", () => {
+    expect(() =>
+      verifyCheckRuns(
+        [
+          { name: "Test & Build", status: "completed", conclusion: "success" },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+        ],
+        "abc1234",
+      ),
+    ).toThrow("Precondition failed: commit abc1234 has check runs without app identity: [Test & Build]");
+  });
+});
+
+describe("check runs pagination and total_count verification (fail-closed)", () => {
+  it("missing total_count: throws error", () => {
+    const raw = JSON.stringify({
+      check_runs: [
+        { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+      ],
+    });
+    expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
+      "missing total_count",
+    );
+  });
+
+  it("total_count exceeds read check_runs: throws incomplete read error", () => {
+    const raw = JSON.stringify({
+      total_count: 31,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    });
+    expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
+      "Incomplete check-runs read for commit abc1234: read 30 of 31 runs",
+    );
+  });
+
+  it("paginated check runs across two pages: merges all pages correctly", () => {
+    const page1 = {
+      total_count: 31,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: i === 0 ? "Test & Build" : `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    };
+    const page2 = {
+      total_count: 31,
+      check_runs: [
+        { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+      ],
+    };
+    const raw = JSON.stringify([page1, page2]);
+    const runs = parseCheckRunsResponse(raw, "abc1234");
+    expect(runs.length).toBe(31);
+    const verification = verifyCheckRuns(runs, "abc1234");
+    expect(verification.formattedEvidence).toContain("Test & Build (success)");
+    expect(verification.formattedEvidence).toContain("Browser suites (success)");
+  });
+
+  it("a 31-run answer across pages whose 31st is failing: verification fails closed", () => {
+    const page1 = {
+      total_count: 31,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: i === 0 ? "Test & Build" : i === 1 ? "Browser suites" : `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    };
+    const page2 = {
+      total_count: 31,
+      check_runs: [
+        { name: "job-31", status: "completed", conclusion: "failure", app: { slug: "github-actions" } },
+      ],
+    };
+    const raw = JSON.stringify([page1, page2]);
+    const runs = parseCheckRunsResponse(raw, "abc1234");
+    expect(runs.length).toBe(31);
+    expect(() => verifyCheckRuns(runs, "abc1234")).toThrow(
+      "Precondition failed: commit abc1234 has non-successful check runs: [job-31: completed (failure)]",
+    );
+  });
+
+  it("check runs with conflicting total_count across pages: throws error", () => {
+    const page1 = {
+      total_count: 30,
+      check_runs: Array.from({ length: 30 }, (_, i) => ({
+        name: `job-${i}`,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+      })),
+    };
+    const page2 = {
+      total_count: 31,
+      check_runs: [],
+    };
+    const raw = JSON.stringify([page1, page2]);
+    expect(() => parseCheckRunsResponse(raw, "abc1234")).toThrow(
+      "total_count mismatch across pages",
+    );
+  });
+});
+
+describe("tag and branch verification (fail-closed)", () => {
+  it("remote tag present with no merged main PR: stops because tag is unverified", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.2",
+        remoteTagSha: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
+        localTagSha: null,
+      }),
+    ).toThrow(
+      "Remote tag v3.1.2 exists at b626354e1d91e73ecbe4adbd2c81a49e4611c0bd, but no merged pull request into main was found to verify it against",
+    );
+  });
+
+  it("remote tag at a wrong SHA: stops and reports mismatch", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: "cccc111122223333444455556666777788889999",
+        localTagSha: null,
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "bbbb111122223333444455556666777788889999",
+          packageVersion: "3.1.3",
+        },
+        packageVersionAtMergeSha: "3.1.3",
+      }),
+    ).toThrow(
+      "Remote tag v3.1.3 points to cccc111122223333444455556666777788889999, but verified merge commit from PR #370 is bbbb111122223333444455556666777788889999",
+    );
+  });
+
+  it("remote tag present matching verified merge commit: detects already-tagged", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: "bbbb111122223333444455556666777788889999",
+        localTagSha: null,
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "bbbb111122223333444455556666777788889999",
+          packageVersion: "3.1.3",
+        },
+        packageVersionAtMergeSha: "3.1.3",
+      }),
+    ).toBe("already-tagged");
+  });
+
+  it("blocked release: stops immediately when an unrelated release PR is open", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        blockingPr: {
+          number: 360,
+          title: "chore(release): v3.1.2",
+          state: "OPEN",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+          packageVersion: "3.1.2",
+        },
+      }),
+    ).toThrow(
+      "A 3.1.3 release cannot start while 3.1.2's release (PR #360) is unmerged",
+    );
+  });
+
+  it("collision before version shortcut: remote release branch exists without PR when package.json is already target version", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow(
+      "Remote branch chore/release-3.1.3 exists on origin, but no open or merged pull request matches it",
+    );
+  });
+
+  it("merge sha not on main: stops when mergeCommit is not an ancestor of origin/main", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "222",
+          packageVersion: "3.1.3",
+        },
+        isMergeCommitAncestor: false,
+        packageVersionAtMergeSha: "3.1.3",
+        checkRuns: [{ name: "CI", status: "completed", conclusion: "success" }],
+      }),
+    ).toThrow("Merge commit 222 from PR #370 is not an ancestor of origin/main");
+  });
+
+  it("package.json at the sha ≠ target: stops when package.json at merge SHA does not match target", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "222",
+          packageVersion: "3.1.3",
+        },
+        isMergeCommitAncestor: true,
+        packageVersionAtMergeSha: "3.1.2",
+        checkRuns: [{ name: "CI", status: "completed", conclusion: "success" }],
+      }),
+    ).toThrow("package.json at merge commit 222 is v3.1.2, not target v3.1.3");
+  });
+
+  it("local-only tag at the right sha: detects push-local-tag", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: "222",
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "222",
+          packageVersion: "3.1.3",
+        },
+        isMergeCommitAncestor: true,
+        packageVersionAtMergeSha: "3.1.3",
+        checkRuns: [
+          { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+        ],
+      }),
+    ).toBe("push-local-tag");
+  });
+
+  it("local-only tag at a wrong sha: stops and reports the mismatch", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: "999",
+        mainPr: {
+          number: 370,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "222",
+          packageVersion: "3.1.3",
+        },
+        isMergeCommitAncestor: true,
+        packageVersionAtMergeSha: "3.1.3",
+        checkRuns: [
+          { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+          { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+        ],
+      }),
+    ).toThrow("Local tag v3.1.3 points to 999, but verified merge commit is 222");
+  });
+
+  it("remote release branch without a pull request: stops on collision", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("Remote branch chore/release-3.1.3 exists on origin, but no open or merged pull request matches it");
+  });
+
+  it("remote release branch collision error includes resumption command and branch discrimination advice", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("gh pr create --base next --head chore/release-3.1.3 --title \"chore(release): v3.1.3\"");
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("verify that origin/chore/release-3.1.3's package.json version is 3.1.3");
+  });
+
+  it("remote release branch collision error targets staging for 2.x", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
+        sourceBranch: "staging",
+        remoteTagSha: null,
+        localTagSha: null,
+        remoteBranchExists: true,
+        sourcePr: null,
+      }),
+    ).toThrow("gh pr create --base staging --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
+  });
+
+  it("interruption on release branch without commit: stops with instructions", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        currentBranch: "chore/release-3.1.3",
+        releaseBranchCommitVersion: "3.1.2",
+        remoteTagSha: null,
+        localTagSha: null,
+      }),
+    ).toThrow(
+      "Release branch chore/release-3.1.3 is checked out, but release commit for v3.1.3 is not committed. Switch to source branch or commit the release bump.",
+    );
+  });
+
+  it("interruption on release branch with commit but not pushed: detects create-source-pr", () => {
+    const state = detectReleaseState({
+      currentVersion: "3.1.2",
+      targetVersion: "3.1.3",
+      currentBranch: "chore/release-3.1.3",
+      releaseBranchCommitVersion: "3.1.3",
+      isReleaseBranchPushed: false,
+      remoteTagSha: null,
+      localTagSha: null,
+    });
+    expect(state).toBe("create-source-pr");
+
+    const plan = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      currentBranch: "chore/release-3.1.3",
+      state,
+      isReleaseBranchPushed: false,
+    });
+    const cmds = plan.map((p) => p.command).filter(Boolean);
+    // Pushes existing branch, does NOT checkout -b or commit again
+    expect(cmds).not.toContain("git checkout -b chore/release-3.1.3");
+    expect(cmds).toContain("git push origin chore/release-3.1.3");
+  });
+
+  it("interruption on release branch with PR merged but origin/<source> package.json below target: stops", () => {
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        currentBranch: "chore/release-3.1.3",
+        sourceBranch: "next",
+        sourcePr: {
+          number: 359,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "chore/release-3.1.3",
+          baseRefName: "next",
+          headRefOid: "111",
+          packageVersion: "3.1.3",
+        },
+        originSourceVersion: "3.1.2",
+        remoteTagSha: null,
+        localTagSha: null,
+      }),
+    ).toThrow(
+      "Pull request #359 into next is merged, but origin/next package.json is v3.1.2, not target v3.1.3",
+    );
+  });
+
+  it("assertCurrentBranch accepts release branch of target version", () => {
+    expect(() => assertCurrentBranch("chore/release-3.1.3", "next", "3.1.3")).not.toThrow();
+    expect(() => assertCurrentBranch("chore/release-3.1.2", "next", "3.1.3")).toThrow(
+      "Must be on next to release v3.1.3 (currently on 'chore/release-3.1.2')",
+    );
+  });
+});
+
+describe("stop before the tag — ruled behavior", () => {
+  it("no flag: never a tag command in the plan across all states", () => {
+    const states = [
+      "create-source-pr",
+      "await-source-pr",
+      "create-main-pr",
+      "await-main-pr",
+      "tag-release",
+      "push-local-tag",
+    ] as const;
+
+    for (const state of states) {
+      const steps = planRelease({
+        targetVersion: "3.1.3",
+        sourceBranch: "next",
+        state,
+      });
+      const commands = steps.map((s) => s.command).filter(Boolean);
+      for (const cmd of commands) {
+        expect(cmd).not.toMatch(/^git tag/);
+        expect(cmd).not.toMatch(/^git push origin v/);
+      }
+      expect(steps.some((s) => s.description.includes("bun run release 3.1.3 --tag"))).toBe(true);
+    }
+  });
+
+  it("with --tag flag on verified release: includes tag and push commands", () => {
+    const tagSteps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+      tag: true,
+      verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+    });
+    const tagCommands = tagSteps.map((s) => s.command).filter(Boolean);
+    expect(tagCommands).toContain(
+      "git tag -a v3.1.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v3.1.3",
+    );
+    expect(tagCommands).toContain("git push origin v3.1.3");
+
+    const pushSteps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "push-local-tag",
+      tag: true,
+      verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
+    });
+    const pushCommands = pushSteps.map((s) => s.command).filter(Boolean);
+    expect(pushCommands).toEqual([
+      "git push origin v3.1.3",
+      "git checkout next",
+    ]);
+  });
+
+  it("with --tag flag and a failing precondition: stops with reason", () => {
+    // Failing precondition 1: main PR is not merged yet (OPEN)
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 360,
+          title: "chore(release): v3.1.3",
+          state: "OPEN",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          packageVersion: "3.1.3",
+        },
+        tag: true,
+      }),
+    ).toThrow("Cannot tag v3.1.3: pull request #360 into main is still open");
+
+    // Failing precondition 2: no main PR found
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: null,
+        tag: true,
+      }),
+    ).toThrow("Cannot tag v3.1.3: no pull request into main found");
+
+    // Failing precondition 3: check runs pending
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 360,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "222",
+          packageVersion: "3.1.3",
+        },
+        isMergeCommitAncestor: true,
+        packageVersionAtMergeSha: "3.1.3",
+        checkRuns: [{ name: "CI", status: "in_progress", conclusion: null }],
+        tag: true,
+      }),
+    ).toThrow("Precondition failed: commit 222 has non-successful check runs");
+
+    // Failing precondition 4: merge commit not on main
+    expect(() =>
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        remoteTagSha: null,
+        localTagSha: null,
+        mainPr: {
+          number: 360,
+          title: "chore(release): v3.1.3",
+          state: "MERGED",
+          headRefName: "next",
+          baseRefName: "main",
+          headRefOid: "111",
+          mergeCommitOid: "222",
+          packageVersion: "3.1.3",
+        },
+        isMergeCommitAncestor: false,
+        packageVersionAtMergeSha: "3.1.3",
+        checkRuns: [{ name: "CI", status: "completed", conclusion: "success" }],
+        tag: true,
+      }),
+    ).toThrow("Merge commit 222 from PR #360 is not an ancestor of origin/main");
+  });
+});
+
+describe("parseLsRemoteTags", () => {
+  it("extracts peeled sha when annotated tag is present", () => {
+    const raw = "b93cb2bd74070eafe390b3c619aeadb293dca23f\trefs/tags/v3.1.1\nb626354e1d91e73ecbe4adbd2c81a49e4611c0bd\trefs/tags/v3.1.1^{}";
+    expect(parseLsRemoteTags(raw, "v3.1.1")).toBe("b626354e1d91e73ecbe4adbd2c81a49e4611c0bd");
+  });
+
+  it("extracts direct sha for lightweight tag", () => {
+    const raw = "b93cb2bd74070eafe390b3c619aeadb293dca23f\trefs/tags/v3.1.1";
+    expect(parseLsRemoteTags(raw, "v3.1.1")).toBe("b93cb2bd74070eafe390b3c619aeadb293dca23f");
+  });
+
+  it("returns null when tag is not found", () => {
+    expect(parseLsRemoteTags("", "v3.1.2")).toBeNull();
+  });
+
+  it("malformed ls-remote output for tags throws error", () => {
+    expect(() => parseLsRemoteTags("not-a-sha refs/tags/v3.1.2", "v3.1.2")).toThrow(
+      "Malformed git ls-remote tag output",
+    );
+  });
+});
+
+describe("parseRemoteBranchSha (fail-closed)", () => {
+  it("extracts 40-hex SHA for remote branch", () => {
+    const raw = "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd\trefs/heads/main\n";
+    expect(parseRemoteBranchSha(raw, "main")).toBe("b626354e1d91e73ecbe4adbd2c81a49e4611c0bd");
+  });
+
+  it("returns null when remote branch does not exist (empty output)", () => {
+    expect(parseRemoteBranchSha("", "chore/release-3.1.3")).toBeNull();
+  });
+
+  it("malformed ls-remote output without 40-hex SHA throws error", () => {
+    expect(() => parseRemoteBranchSha("fatal: repository not found", "main")).toThrow(
+      "Malformed git ls-remote output for branch main: expected 40-hex SHA",
+    );
+  });
+});
+
+describe("typed validators for gh and git responses (fail-closed)", () => {
+  const validPr = {
+    number: 360,
+    title: "chore(release): v3.1.2",
+    state: "MERGED",
+    headRefName: "next",
+    baseRefName: "main",
+    headRefOid: "dccf137b59e8a9ffc907a37a859daaf7d1801110",
+    mergedAt: "2026-10-09T12:00:00Z",
+    mergeCommit: { oid: "dccf137b59e8a9ffc907a37a859daaf7d1801110" },
+  };
+
+  it("parsePrCandidate accepts fully valid candidate", () => {
+    const pr = parsePrCandidate(validPr, "gh pr list");
+    expect(pr.number).toBe(360);
+    expect(pr.state).toBe("MERGED");
+    expect(pr.headRefOid).toBe("dccf137b59e8a9ffc907a37a859daaf7d1801110");
+  });
+
+  const prTestCases: Array<{ name: string; mutate: (obj: any) => any; expectedField: string }> = [
+    { name: "missing number", mutate: ({ number: _, ...r }) => r, expectedField: "number" },
+    { name: "invalid non-numeric number", mutate: (r) => ({ ...r, number: "360" }), expectedField: "number" },
+    { name: "invalid non-positive number", mutate: (r) => ({ ...r, number: 0 }), expectedField: "number" },
+    { name: "missing title", mutate: ({ title: _, ...r }) => r, expectedField: "title" },
+    { name: "missing state (reviewer probe)", mutate: ({ state: _, ...r }) => r, expectedField: "state" },
+    { name: "invalid state enum", mutate: (r) => ({ ...r, state: "PENDING" }), expectedField: "state" },
+    { name: "missing headRefName", mutate: ({ headRefName: _, ...r }) => r, expectedField: "headRefName" },
+    { name: "missing baseRefName", mutate: ({ baseRefName: _, ...r }) => r, expectedField: "baseRefName" },
+    { name: "missing headRefOid", mutate: ({ headRefOid: _, ...r }) => r, expectedField: "headRefOid" },
+    { name: "invalid headRefOid length/format", mutate: (r) => ({ ...r, headRefOid: "deadbeef" }), expectedField: "headRefOid" },
+    { name: "invalid mergedAt type", mutate: (r) => ({ ...r, mergedAt: 12345 }), expectedField: "mergedAt" },
+    { name: "invalid mergeCommit.oid format", mutate: (r) => ({ ...r, mergeCommit: { oid: "not-a-sha" } }), expectedField: "mergeCommit.oid" },
+  ];
+
+  for (const { name, mutate, expectedField } of prTestCases) {
+    it(`parsePrCandidate fails closed on ${name}`, () => {
+      const bad = mutate(validPr);
+      expect(() => parsePrCandidate(bad, "gh pr list")).toThrow(`field '${expectedField}'`);
+    });
+  }
+
+  const validCheckRun = {
+    name: "Test & Build",
+    status: "completed",
+    conclusion: "success",
+    app: { slug: "github-actions", name: "GitHub Actions" },
+  };
+
+  it("parseCheckRunItem accepts fully valid check run", () => {
+    const item = parseCheckRunItem(validCheckRun, "gh api check-runs");
+    expect(item.name).toBe("Test & Build");
+    expect(item.status).toBe("completed");
+    expect(item.conclusion).toBe("success");
+    expect(item.app?.slug).toBe("github-actions");
+  });
+
+  const checkRunTestCases: Array<{ name: string; mutate: (obj: any) => any; expectedField: string }> = [
+    { name: "missing name", mutate: ({ name: _, ...r }) => r, expectedField: "name" },
+    { name: "missing status", mutate: ({ status: _, ...r }) => r, expectedField: "status" },
+    { name: "invalid status enum", mutate: (r) => ({ ...r, status: "broken" }), expectedField: "status" },
+    { name: "missing app", mutate: ({ app: _, ...r }) => r, expectedField: "app" },
+    { name: "missing app.slug", mutate: (r) => ({ ...r, app: { name: "GitHub Actions" } }), expectedField: "app.slug" },
+    { name: "invalid conclusion type", mutate: (r) => ({ ...r, conclusion: 123 }), expectedField: "conclusion" },
+  ];
+
+  for (const { name, mutate, expectedField } of checkRunTestCases) {
+    it(`parseCheckRunItem fails closed on ${name}`, () => {
+      const bad = mutate(validCheckRun);
+      expect(() => parseCheckRunItem(bad, "gh api check-runs")).toThrow(`field '${expectedField}'`);
+    });
+  }
+
+  it("parseCompareResponse accepts valid compare output", () => {
+    expect(parseCompareResponse(JSON.stringify({ status: "identical" }), "gh api compare")).toEqual({
+      status: "identical",
+      behind_by: undefined,
+      merge_base_commit: undefined,
+    });
+  });
+
+  it("parseCompareResponse fails closed on missing status", () => {
+    expect(() => parseCompareResponse(JSON.stringify({}), "gh api compare")).toThrow("field 'status'");
+  });
+
+  it("parseCompareResponse fails closed on invalid status enum", () => {
+    expect(() => parseCompareResponse(JSON.stringify({ status: "unknown" }), "gh api compare")).toThrow("field 'status'");
+  });
+
+  it("parsePackageJsonVersion accepts valid package.json", () => {
+    expect(parsePackageJsonVersion(JSON.stringify({ version: "3.1.2" }), "test")).toBe("3.1.2");
+  });
+
+  it("parsePackageJsonVersion fails closed on missing version", () => {
+    expect(() => parsePackageJsonVersion(JSON.stringify({}), "test")).toThrow("does not contain a valid version string");
+  });
+
+  it("parsePackageJsonVersion fails closed on empty version", () => {
+    expect(() => parsePackageJsonVersion(JSON.stringify({ version: "  " }), "test")).toThrow("does not contain a valid version string");
   });
 });
