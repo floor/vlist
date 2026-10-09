@@ -15,9 +15,13 @@ import {
   bumpVersion,
   compareVersions,
   currentBranchLabel,
+  detectReleaseState,
   execErrorMessage,
+  formatReleasePlan,
   parseArgs,
   parseVersion,
+  planRelease,
+  releaseBranchFor,
   resolveNewVersion,
   resolveSourceBranch,
   sourceBranchFor,
@@ -180,30 +184,33 @@ describe("resolveNewVersion", () => {
 
 describe("parseArgs", () => {
   it("defaults to a patch bump with no --from", () => {
-    expect(parseArgs([])).toEqual({ kind: "bump", bumpType: "patch", from: null });
+    expect(parseArgs([])).toEqual({ kind: "bump", bumpType: "patch", from: null, dryRun: false });
   });
 
   it("parses bump types and --from in either order", () => {
-    expect(parseArgs(["minor"])).toEqual({ kind: "bump", bumpType: "minor", from: null });
+    expect(parseArgs(["minor"])).toEqual({ kind: "bump", bumpType: "minor", from: null, dryRun: false });
     expect(parseArgs(["major", "--from", "next"])).toEqual({
       kind: "bump",
       bumpType: "major",
       from: "next",
+      dryRun: false,
     });
     expect(parseArgs(["--from", "staging", "patch"])).toEqual({
       kind: "bump",
       bumpType: "patch",
       from: "staging",
+      dryRun: false,
     });
-    expect(parseArgs(["--from=next"])).toEqual({ kind: "bump", bumpType: "patch", from: "next" });
+    expect(parseArgs(["--from=next"])).toEqual({ kind: "bump", bumpType: "patch", from: "next", dryRun: false });
   });
 
   it("parses an exact version", () => {
-    expect(parseArgs(["3.0.0"])).toEqual({ kind: "exact", version: "3.0.0", from: null });
+    expect(parseArgs(["3.0.0"])).toEqual({ kind: "exact", version: "3.0.0", from: null, dryRun: false });
     expect(parseArgs(["3.0.0", "--from", "next"])).toEqual({
       kind: "exact",
       version: "3.0.0",
       from: "next",
+      dryRun: false,
     });
   });
 
@@ -269,5 +276,223 @@ describe("execErrorMessage", () => {
     expect(execErrorMessage({ stderr: "  boom  ", message: "ignored" })).toBe("boom");
     expect(execErrorMessage(new Error("fallback"))).toBe("fallback");
     expect(execErrorMessage("plain")).toBe("plain");
+  });
+});
+
+describe("releaseBranchFor", () => {
+  it("names the release branch from the target version", () => {
+    expect(releaseBranchFor("3.1.3")).toBe("chore/release-3.1.3");
+    expect(releaseBranchFor("2.8.2")).toBe("chore/release-2.8.2");
+  });
+});
+
+describe("parseArgs — --dry-run", () => {
+  it("defaults dryRun to false", () => {
+    expect(parseArgs([])).toEqual({ kind: "bump", bumpType: "patch", from: null, dryRun: false });
+  });
+
+  it("parses --dry-run with bump types, exact versions, and --from", () => {
+    expect(parseArgs(["--dry-run"])).toEqual({
+      kind: "bump",
+      bumpType: "patch",
+      from: null,
+      dryRun: true,
+    });
+    expect(parseArgs(["3.1.3", "--dry-run"])).toEqual({
+      kind: "exact",
+      version: "3.1.3",
+      from: null,
+      dryRun: true,
+    });
+    expect(parseArgs(["--dry-run", "minor", "--from", "next"])).toEqual({
+      kind: "bump",
+      bumpType: "minor",
+      from: "next",
+      dryRun: true,
+    });
+  });
+});
+
+describe("detectReleaseState", () => {
+  it("detects already-tagged when tag exists on main", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        isTagPresent: true,
+      }),
+    ).toBe("already-tagged");
+  });
+
+  it("detects tag-release when PR into main is merged", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        isTagPresent: false,
+        mainPr: { number: 360, state: "MERGED" },
+      }),
+    ).toBe("tag-release");
+  });
+
+  it("detects await-main-pr when PR into main is open", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        isTagPresent: false,
+        mainPr: { number: 360, state: "OPEN" },
+      }),
+    ).toBe("await-main-pr");
+  });
+
+  it("detects create-main-pr when step 1 merged or package.json is already at target version", () => {
+    // Case A: source PR merged
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        isTagPresent: false,
+        sourcePr: { number: 359, state: "MERGED" },
+      }),
+    ).toBe("create-main-pr");
+
+    // Case B: package.json on sourceBranch already at targetVersion
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.3",
+        targetVersion: "3.1.3",
+        isTagPresent: false,
+      }),
+    ).toBe("create-main-pr");
+  });
+
+  it("detects await-source-pr when PR into source branch is open", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        isTagPresent: false,
+        sourcePr: { number: 359, state: "OPEN" },
+      }),
+    ).toBe("await-source-pr");
+  });
+
+  it("detects create-source-pr on fresh run", () => {
+    expect(
+      detectReleaseState({
+        currentVersion: "3.1.2",
+        targetVersion: "3.1.3",
+        isTagPresent: false,
+      }),
+    ).toBe("create-source-pr");
+  });
+});
+
+describe("planRelease", () => {
+  it("plans create-source-pr: pushes release branch, never the source branch directly", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "create-source-pr",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+
+    // Verifies it cuts chore/release-3.1.3
+    expect(commands).toContain("git checkout -b chore/release-3.1.3");
+    // Verifies it pushes chore/release-3.1.3
+    expect(commands).toContain("git push origin chore/release-3.1.3");
+    // CRITICAL: Verifies it NEVER pushes next directly!
+    expect(commands).not.toContain("git push origin next");
+    // Verifies PR chore/release-3.1.3 -> next is opened
+    expect(
+      commands.some((c) => c?.includes("gh pr create --base next --head chore/release-3.1.3")),
+    ).toBe(true);
+    // Verifies PR next -> main is opened
+    expect(
+      commands.some((c) => c?.includes("gh pr create --base main --head next")),
+    ).toBe(true);
+    // Verifies tag is pushed
+    expect(commands).toContain("git tag v3.1.3");
+    expect(commands).toContain("git push origin v3.1.3");
+  });
+
+  it("plans create-main-pr when resuming with package.json already bumped", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "create-main-pr",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+
+    // Does NOT cut chore/release-3.1.3 or push it again
+    expect(commands).not.toContain("git checkout -b chore/release-3.1.3");
+    expect(commands).not.toContain("git push origin chore/release-3.1.3");
+    // Opens PR next -> main
+    expect(
+      commands.some((c) => c?.includes("gh pr create --base main --head next")),
+    ).toBe(true);
+  });
+
+  it("plans tag-release when PR onto main is already merged", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+    });
+    const commands = steps.map((s) => s.command).filter(Boolean);
+    expect(commands).toEqual([
+      "git checkout main",
+      "git pull origin main",
+      "git tag v3.1.3",
+      "git push origin v3.1.3",
+      "git checkout next",
+    ]);
+  });
+});
+
+describe("formatReleasePlan", () => {
+  it("formats plan with state and numbered commands", () => {
+    const steps = planRelease({
+      targetVersion: "3.1.3",
+      sourceBranch: "next",
+      state: "tag-release",
+    });
+    const formatted = formatReleasePlan("3.1.3", "next", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v3.1.3 (from next)");
+    expect(formatted).toContain("State: tag-release");
+    expect(formatted).toContain("git tag v3.1.3");
+  });
+});
+
+describe("resolveNewVersion — re-entrancy", () => {
+  it("picks up current version when package.json is already at target version", () => {
+    // When resuming with exact version matching current package.json
+    expect(
+      resolveNewVersion(
+        "3.1.3",
+        { kind: "exact", version: "3.1.3", from: "next", dryRun: false },
+        { allowSame: true },
+      ),
+    ).toBe("3.1.3");
+
+    // When resuming with bump but current package.json is untagged
+    expect(
+      resolveNewVersion(
+        "3.1.3",
+        { kind: "bump", bumpType: "patch", from: "next", dryRun: false },
+        { isCurrentUntagged: true },
+      ),
+    ).toBe("3.1.3");
+  });
+
+  it("refuses if the target version is already tagged", () => {
+    expect(() =>
+      resolveNewVersion(
+        "3.1.3",
+        { kind: "exact", version: "3.1.3", from: "next", dryRun: false },
+        { allowSame: true, isTagPresent: true },
+      ),
+    ).toThrow("already tagged");
   });
 });

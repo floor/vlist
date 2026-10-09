@@ -48,20 +48,25 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
 1. **Prep (manual)** — stamp `[Unreleased]` → `[X.Y.Z] - <date>` in
    `CHANGELOG.md` and add a fresh `[Unreleased]`; run `bun run size` and refresh
    the README plugin-size table + base-size tagline and `npm-readme.md`. Commit.
-2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging]`.
+2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run]`.
    The script derives the source branch from the version being released (`next`
    for 3.x, `staging` for 2.x), requires you to be on that branch, bumps
    `package.json` (a prerelease such as `3.0.0-next.2` is never bumped — its
    stable release is named, `bun run release 3.0.0` — and a version not above the
-   current one is refused), updates the README version badge and
-   CHANGELOG stats line, commits `chore(release): vX.Y.Z`, pushes the source
-   branch, opens a PR onto `main`, waits for it to merge, then tags `vX.Y.Z` on
-   `main`. The tag triggers `publish.yml` → `npm publish` + GitHub Release.
+   current one is refused unless resuming an already-bumped release), updates the
+   README version badge and CHANGELOG stats line, cuts branch `chore/release-X.Y.Z`
+   from the source branch, commits `chore(release): vX.Y.Z` on that branch, pushes
+   the release branch (never the source branch directly), opens a PR into the source
+   branch, and waits for it to merge. Once merged, it opens a PR from the source
+   branch onto `main`, waits for it to merge, then tags `vX.Y.Z` on `main` and pushes
+   the tag. The tag triggers `publish.yml` → `npm publish` + GitHub Release.
+   Pass `--dry-run` to preview all planned steps and commands without touching files,
+   branches, PRs, or tags.
    `--from` confirms the derived branch; it cannot send 3.x through `staging`.
 3. **Point `next` at the release (manual)** — a stable publish moves `latest`
    only, and trusted publishing cannot move `next` (OIDC authorizes
    `npm publish` alone), so `next` is left on the last prerelease, below
-   `latest` (FLO-245). Once the version is on npm, a maintainer runs
+   `latest`. Once the version is on npm, a maintainer runs
    `npm dist-tag add vlist@X.Y.Z next --auth-type=web` (browser 2FA; no token).
    `bun run release` prints the exact command as its last line, and
    `publish.yml` warns at its last step, after the package and the GitHub Release
