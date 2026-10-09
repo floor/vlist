@@ -48,13 +48,15 @@ try {
       const result = await page.evaluate(async () => {
         const params = new URLSearchParams(location.search);
         const content = document.querySelector('.vlist-content');
-        // Recovery target (#339): table + selection's grid root takes focus —
-        // the element selection()'s own click path focuses; every other
-        // owner/layout keeps the content, or the viewport where the content
-        // has no tabindex (table + a11y).
-        const target = params.get('layout')==='table' && params.get('owner')==='selection'
-          ? document.querySelector('.vlist')
-          : content.hasAttribute('tabindex') ? content : document.querySelector('.vlist-viewport');
+        // Recovery target (#339, #352): the first of content, root, viewport
+        // that carries a tabindex — the rule retainFocus uses. In a table the
+        // grid root carries it for either focus owner, and that is the element
+        // the owner's own click path focuses; elsewhere the content does.
+        const target = content.hasAttribute('tabindex')
+          ? content
+          : document.querySelector('.vlist').hasAttribute('tabindex')
+            ? document.querySelector('.vlist')
+            : document.querySelector('.vlist-viewport');
         target.focus();
         target.dispatchEvent(new KeyboardEvent('keydown', {key:'Home',bubbles:true}));
         if (params.get('layout')==='groups') target.dispatchEvent(new KeyboardEvent('keydown', {key:'ArrowDown',bubbles:true}));
@@ -110,7 +112,9 @@ try {
     } catch (error) { failures++; console.error(`FAIL ${owner}/${layout}: ${error.stack ?? error}`); }
     finally { await page.close(); }
   }
-  // The original reported configuration leaves keyboard navigation to its caller.
+  // The original reported configuration leaves keyboard navigation to its
+  // caller. a11y() still owns focus, so the grid root is the tab stop and
+  // recovery lands there rather than on the viewport. #352
   const page = await browser.newPage();
   const errors = [];
   page.on("pageerror", e => errors.push(e.stack ?? String(e)));
@@ -121,10 +125,10 @@ try {
       document.querySelector('.vlist-content span').focus();
       window.list.scrollToIndex(49999, 'center');
       await new Promise(requestAnimationFrame);
-      return document.activeElement===document.querySelector('.vlist-viewport');
+      return document.activeElement===document.querySelector('.vlist');
     });
     assert(recovered && errors.length===0, errors.join('\n'));
-    console.log('PASS original table + a11y({keyboard:false}): viewport focus, no pageerror');
+    console.log('PASS original table + a11y({keyboard:false}): grid root focus, no pageerror');
   } catch (error) { failures++; console.error(error.stack ?? String(error)); }
   finally { await page.close(); }
   assert.equal(failures, 0, `${failures} focus-removal scenarios failed`);

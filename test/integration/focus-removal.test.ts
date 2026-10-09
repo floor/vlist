@@ -45,12 +45,16 @@ function fixture(layout: Layout, owner: "a11y" | "selection") {
   const list = createVList<Row>({ container, ariaLabel: tableLabel, items: Array.from({ length: 50000 }, (_, id) => ({ id, value: `Row ${id}` })), item: { height: 48, template: cell } }, plugins);
   const root = container.querySelector<HTMLElement>(".vlist")!;
   const content = container.querySelector<HTMLElement>(".vlist-content")!;
-  // In a table with selection() the content is a rowgroup without a tabindex
-  // and the grid root carries it, so recovery lands there, as the plugin's
-  // own click path does. Every other owner/layout keeps its target. #339
-  const target = layout === "table" && owner === "selection"
-    ? root
-    : content.hasAttribute("tabindex") ? content : container.querySelector<HTMLElement>(".vlist-viewport")!;
+  // The first of content, root, viewport that carries a tabindex — the rule
+  // retainFocus uses. In a table the content is a rowgroup without a tabindex
+  // and the grid root carries it for either focus owner, so recovery lands
+  // there, as the owner's own click path does. #339, #352
+  // Read lazily: table() sets that tabindex from a microtask after setup.
+  const target = (): HTMLElement => content.hasAttribute("tabindex")
+    ? content
+    : root.hasAttribute("tabindex")
+      ? root
+      : container.querySelector<HTMLElement>(".vlist-viewport")!;
   const span = content.querySelector<HTMLElement>("span[tabindex]")!;
   return { list, root, content, target, span, outside, get passes() { return passes; }, scrollAway() {
     list.scrollToIndex(layout === "masonry" ? 49900 : 49999, "center");
@@ -70,7 +74,7 @@ for (const owner of ["a11y", "selection"] as const) {
         f.scrollAway();
         const synchronous = f.passes;
         await settle();
-        expect(document.activeElement === f.target).toBe(true);
+        expect(document.activeElement === f.target()).toBe(true);
         expect(f.content.contains(f.span)).toBe(false);
         expect(f.content.textContent).toContain("Row 49999");
         expect(f.passes - synchronous).toBe(1);
@@ -123,7 +127,7 @@ for (const owner of ["a11y", "selection"] as const) {
       const synchronous = f.passes;
       await settle();
       expect(reentries).toBe(0);
-      expect(document.activeElement === f.target).toBe(true);
+      expect(document.activeElement === f.target()).toBe(true);
       expect(f.passes - synchronous).toBe(1);
     } finally { f.content.removeChild = original; f.destroy(); }
   });
@@ -149,16 +153,16 @@ for (const owner of ["a11y", "selection"] as const) {
       row.focus();
       f.scrollAway();
       await settle();
-      expect(document.activeElement === f.target).toBe(true);
+      expect(document.activeElement === f.target()).toBe(true);
     } finally { f.destroy(); }
   });
   it.serial(`${owner}: an ordinary blur clears active descendant without restoring focus`, async () => {
     const f = fixture("plain", owner);
     try {
-      f.target.focus();
-      f.target.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      f.target().focus();
+      f.target().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
       expect(f.content.hasAttribute("aria-activedescendant")).toBe(true);
-      f.target.blur();
+      f.target().blur();
       await settle();
       expect(document.activeElement === document.body).toBe(true);
       expect(f.content.hasAttribute("aria-activedescendant")).toBe(false);
@@ -173,24 +177,25 @@ for (const owner of ["a11y", "selection"] as const) {
       f.list.destroy();
       const synchronous = f.passes;
       await settle();
-      expect(document.activeElement === f.target).toBe(false);
+      expect(document.activeElement === f.target()).toBe(false);
       expect(f.passes).toBe(synchronous);
     } finally { f.destroy(); }
   });
 }
 
-// #339: in a table with selection() the recovery returns focus to the grid
-// root — the element selection()'s own click path focuses — and the role and
-// the name given at creation sit on that same element.
-it.serial("selection: table removal returns focus to the named grid root", async () => {
-  const f = fixture("table", "selection");
-  try {
-    f.span.focus();
-    f.scrollAway();
-    await settle();
-    const active = document.activeElement as HTMLElement;
-    expect(active === f.root).toBe(true);
-    expect(active.getAttribute("role")).toBe("grid");
-    expect(active.getAttribute("aria-label")).toBe(tableLabel);
-  } finally { f.destroy(); }
-});
+// #339, #352: in a table the recovery returns focus to the grid root — the
+// element the focus owner's own click path focuses — and the role and the
+// name given at creation sit on that same element, for either owner.
+for (const owner of ["selection", "a11y"] as const)
+  it.serial(`${owner}: table removal returns focus to the named grid root`, async () => {
+    const f = fixture("table", owner);
+    try {
+      f.span.focus();
+      f.scrollAway();
+      await settle();
+      const active = document.activeElement as HTMLElement;
+      expect(active === f.root).toBe(true);
+      expect(active.getAttribute("role")).toBe("grid");
+      expect(active.getAttribute("aria-label")).toBe(tableLabel);
+    } finally { f.destroy(); }
+  });
