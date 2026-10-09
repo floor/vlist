@@ -1,5 +1,5 @@
 /**
- * scroll.mode — who owns scroll input (RFC-015, FLO-247).
+ * scroll.mode — who owns scroll input (RFC-015, #319).
  *
  * `"auto"` (the default) scrolls natively and hands input to the synthetic
  * handler in place past the browser's element size limit, and back below 3/4

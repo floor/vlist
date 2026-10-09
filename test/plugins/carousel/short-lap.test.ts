@@ -1,5 +1,5 @@
 /**
- * FLO-204 — a lap shorter than the viewport.
+ * #316 — a lap shorter than the viewport.
  *
  * Two or three 100 px slides in a 400 px viewport: a lap is 200 or 300 px, so
  * the viewport shows more than one lap and each slide must be painted once per

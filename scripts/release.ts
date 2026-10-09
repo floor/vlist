@@ -1722,6 +1722,7 @@ const main = async (): Promise<void> => {
 
       run(`git checkout -b ${releaseBranch}`);
 
+<<<<<<< HEAD
       const pkgContent = read("cat package.json", { kind: "text", name: "cat_package_json", parse: (raw) => raw });
       const updatedPkg = pkgContent.replace(/"version":\s*"[^"]+"/, `"version": "${newVersion}"`);
       await Bun.write("package.json", updatedPkg);

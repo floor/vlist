@@ -1,6 +1,6 @@
 /** tree() connector guides paint exactly as in 3.1.0, at every display scale.
  *
- * FLO-244 rewrote how a row's guide gradient is spelled and moved the last
+ * #335 rewrote how a row's guide gradient is spelled and moved the last
  * child's elbow into the stylesheet. Spellings that read the same can still
  * rasterize differently: with a transparent stop at 0 in front of a line at
  * column 0, Chromium at 150% and 175% drops that line's half-covered device
@@ -27,7 +27,7 @@ const root = resolve(import.meta.dir, "..");
 const RATIOS = [1, 1.25, 1.5, 1.75, 2];
 // Indent, horizontal offset and paddingStart. A spelling difference shows only
 // where a guide's left edge falls between device pixels, so these include the
-// cases where the reviewed FLO-244 head (a45aaec) differed from 3.1.0.
+// cases where the reviewed #335 head (a45aaec) differed from 3.1.0.
 const SCENARIOS = [[24, 0, 0], [24, 0, 12], [17, 0, 0], [13.5, 0, 0], [20, 7, 0]];
 
 const page = (indent, left, pad) => `<!doctype html><meta charset="utf-8">
