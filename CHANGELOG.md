@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Deprecated
+
+- `estimatedRowHeight` on `table()` is deprecated and will be removed in 4.0 (#345).
+  It satisfies the runtime required-option check but does not size or measure rows.
+  Use `rowHeight` for fixed rows, or see #347 for measured rows.
+
 ### Changed
 
 - `table()` with `autosize()` — or with an estimated item size in the config

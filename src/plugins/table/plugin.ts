@@ -56,6 +56,13 @@ export interface TableMethods<T extends VListItem = VListItem> {
   getSort(): { key: string | null; direction: "asc" | "desc" };
 }
 
+let estimatedRowHeightWarned = false;
+
+/** @internal Reset warning state for testing. */
+export function _resetEstimatedRowHeightWarning(): void {
+  estimatedRowHeightWarned = false;
+}
+
 export function table<T extends VListItem = VListItem>(
   config: TablePluginConfig<T>,
 ): VListPlugin<T, TableMethods<T>> {
@@ -65,6 +72,15 @@ export function table<T extends VListItem = VListItem>(
 
   if (config.rowHeight === undefined && config.estimatedRowHeight === undefined) {
     throw new Error("[vlist] table: either rowHeight or estimatedRowHeight is required");
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    if (config.estimatedRowHeight !== undefined && !estimatedRowHeightWarned) {
+      estimatedRowHeightWarned = true;
+      console.warn(
+        "[vlist] table: estimatedRowHeight is deprecated and will be removed in 4.0. It sizes nothing; use rowHeight for fixed rows or see #347 for measured rows.",
+      );
+    }
   }
 
   let tableLayout: TableLayout<T> | null = null;

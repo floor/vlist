@@ -115,7 +115,7 @@ export interface TableConfig<T extends VListItem = VListItem> {
    * - `number` — Fixed height for all rows (fast path)
    * - `(index: number) => number` — Variable height per row
    *
-   * At runtime, either `rowHeight` or `estimatedRowHeight` is required.
+   * At runtime, either `rowHeight` or `estimatedRowHeight` (deprecated) is required.
    * When supplied, `rowHeight` determines row sizes; rows are not auto-measured.
    *
    * Each row's height is fixed here and never measured, so `table()` conflicts
@@ -128,6 +128,9 @@ export interface TableConfig<T extends VListItem = VListItem> {
 
   /**
    * Satisfies the runtime "rowHeight or estimatedRowHeight is required" check.
+   *
+   * @deprecated Sizes nothing and will be removed in 4.0. Use `rowHeight` for
+   * fixed rows, or see #347 for measured rows.
    *
    * The value is not used to size rows. Without `rowHeight`, rows retain the
    * core item size: `item.height`, then `item.estimatedHeight` (or

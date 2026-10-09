@@ -10,7 +10,7 @@
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { createVList } from "../../../src/core/create";
-import { table } from "../../../src/plugins/table/plugin";
+import { table, _resetEstimatedRowHeightWarning } from "../../../src/plugins/table/plugin";
 import { autosize } from "../../../src/plugins/autosize/plugin";
 import type { VListItem } from "../../../src/types";
 import type { TableColumn } from "../../../src/plugins/table/types";
@@ -163,6 +163,65 @@ describe("table - Factory", () => {
 
     expect(plugin.name).toBe("table");
   });
+});
+
+// =============================================================================
+// estimatedRowHeight deprecation
+// =============================================================================
+
+describe("table — estimatedRowHeight deprecation", () => {
+  // Uses it.serial because this test intercepts the process global console.warn
+  it.serial(
+    "warns once when estimatedRowHeight is passed, does not warn without it, and builds the list",
+    () => {
+      const originalWarn = console.warn;
+      const warnCalls: string[] = [];
+      console.warn = (...args: any[]) => {
+        warnCalls.push(args.map(String).join(" "));
+      };
+      _resetEstimatedRowHeightWarning();
+
+      try {
+        // 1. Without estimatedRowHeight, no deprecation warning is emitted
+        table({ columns: testColumns, rowHeight: 40 });
+        expect(warnCalls.length).toBe(0);
+
+        // 2. First table with estimatedRowHeight emits deprecation warning
+        const container1 = document.createElement("div");
+        Object.defineProperty(container1, "clientHeight", { value: 400, configurable: true });
+        const plugin1 = table<TestItem>({ columns: testColumns, estimatedRowHeight: 40 } as any);
+        expect(warnCalls.length).toBe(1);
+        expect(warnCalls[0]).toContain("[vlist] table: estimatedRowHeight is deprecated");
+        expect(warnCalls[0]).toContain("4.0");
+        expect(warnCalls[0]).toContain("#347");
+
+        const list1 = createVList<TestItem>({
+          container: container1,
+          items: createTestItems(1),
+          item: { height: 40, template: () => document.createElement("div") },
+        }, [plugin1]);
+        expect(list1).toBeDefined();
+
+        // 3. Second table with estimatedRowHeight does not warn again (once per page/module)
+        const container2 = document.createElement("div");
+        Object.defineProperty(container2, "clientHeight", { value: 400, configurable: true });
+        const plugin2 = table<TestItem>({ columns: testColumns, estimatedRowHeight: 50 } as any);
+        expect(warnCalls.length).toBe(1);
+
+        const list2 = createVList<TestItem>({
+          container: container2,
+          items: createTestItems(1),
+          item: { height: 50, template: () => document.createElement("div") },
+        }, [plugin2]);
+        expect(list2).toBeDefined();
+
+        list1.destroy();
+        list2.destroy();
+      } finally {
+        console.warn = originalWarn;
+      }
+    },
+  );
 });
 
 // =============================================================================
