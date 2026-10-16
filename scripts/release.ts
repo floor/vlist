@@ -247,6 +247,27 @@ export const assertCurrentBranch = (
   }
 };
 
+// =============================================================================
+// Merge Pinning
+// =============================================================================
+
+/** The merge a human (or the operator) must run: merge commits only, pinned to the head. */
+export const pinMergeCommand = (prNumber: number, headRefOid: string): string =>
+  `gh pr merge ${prNumber} --merge --match-head-commit ${headRefOid}`;
+
+/** The line a wait step prints, so the merge is pinned by hand the same way. */
+export const pinMergeInstruction = (prNumber: number, headRefOid: string): string =>
+  `Merge it pinned to the head this run verified:\n  ${pinMergeCommand(prNumber, headRefOid)}`;
+
+/** The timeout message: the same pinned command, plus the step to run once it lands. */
+export const pinMergeTimeoutMessage = (
+  prNumber: number,
+  description: string,
+  targetVersion: string,
+  headRefOid: string,
+): string =>
+  `Timed out waiting for PR #${prNumber} (${description}) to merge. Merge it pinned to the verified head, then run:\n  ${pinMergeCommand(prNumber, headRefOid)}\n  bun run release ${targetVersion} --tag`;
+
 export const releaseBranchFor = (version: string): string => `chore/release-${version}`;
 
 export const compareVersions = (a: string, b: string): number => {
@@ -607,6 +628,15 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
   const isTag = opts.tag === true;
   const onReleaseBranch = opts.currentBranch === branch;
 
+  // Merge commits only, pinned to the head: the run refuses anything else, so the plan
+  // hands over the exact command rather than a bare "merge it".
+  const pinnedMergeStep = (pr: PrInfo | null | undefined, what: string): ReleaseStep => ({
+    description: `Merge ${what} pinned to the head (merge commits only)`,
+    command: pr
+      ? pinMergeCommand(pr.number, pr.headRefOid)
+      : "gh pr merge <number> --merge --match-head-commit <headRefOid>",
+  });
+
   switch (opts.state) {
     case "already-tagged":
       steps.push({
@@ -657,6 +687,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         {
           description: `Wait for PR #${opts.mainPr?.number ?? opts.mainPrNumber ?? "<number>"} (${opts.sourceBranch} → main, ${opts.targetVersion}) to be merged`,
         },
+        pinnedMergeStep(opts.mainPr, `${opts.sourceBranch} → main`),
         {
           description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
         },
@@ -676,6 +707,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base main --head ${opts.sourceBranch} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
         { description: `Wait for PR (${opts.sourceBranch} → main) to be merged` },
+        pinnedMergeStep(opts.mainPr, `${opts.sourceBranch} → main`),
         {
           description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
         },
@@ -687,6 +719,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         {
           description: `Wait for PR #${opts.sourcePr?.number ?? opts.sourcePrNumber ?? "<number>"} into ${opts.sourceBranch} to be merged`,
         },
+        pinnedMergeStep(opts.sourcePr, `${branch} → ${opts.sourceBranch}`),
         { description: `Check out ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
         { description: `Pull latest ${opts.sourceBranch}`, command: `git pull origin ${opts.sourceBranch}` },
         {
@@ -694,6 +727,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base main --head ${opts.sourceBranch} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
         { description: `Wait for PR (${opts.sourceBranch} → main) to be merged` },
+        pinnedMergeStep(opts.mainPr, `${opts.sourceBranch} → main`),
         {
           description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
         },
@@ -722,6 +756,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base ${opts.sourceBranch} --head ${branch} --title "chore(release): v${opts.targetVersion}" --body "Release commit for v${opts.targetVersion}."`,
         },
         { description: `Wait for PR into ${opts.sourceBranch} to be merged` },
+        pinnedMergeStep(opts.sourcePr, `${branch} → ${opts.sourceBranch}`),
         { description: `Check out ${opts.sourceBranch}`, command: `git checkout ${opts.sourceBranch}` },
         { description: `Pull latest ${opts.sourceBranch}`, command: `git pull origin ${opts.sourceBranch}` },
         {
@@ -729,6 +764,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           command: `gh pr create --base main --head ${opts.sourceBranch} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
         { description: `Wait for PR (${opts.sourceBranch} → main) to be merged` },
+        pinnedMergeStep(opts.mainPr, `${opts.sourceBranch} → main`),
         {
           description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
         },
@@ -1108,6 +1144,20 @@ export const prMergeCommitSchema: ObjectSchema = {
   },
 };
 
+/** The facts the pin is checked on: the merged pull request's head and merge commit. */
+export const prPinSchema: ObjectSchema = {
+  kind: "object",
+  name: "pr_pin",
+  fields: {
+    headRefOid: { kind: "scalar", type: "sha40" },
+    mergeCommit: {
+      kind: "object",
+      schema: mergeCommitOidSchema,
+      optionalReason: "absent while the pull request is open",
+    },
+  },
+};
+
 export const checkRunAppSchema: ObjectSchema = {
   kind: "object",
   name: "app",
@@ -1406,6 +1456,17 @@ export const isCommitAncestorOfRemoteMain = (
   return false;
 };
 
+/** Fresh head and merge commit of a pull request — the facts the pin is checked on. */
+export const readPrPin = (
+  prNumber: number,
+): { headRefOid: string; mergeCommitOid: string | null } => {
+  const pr = read(`gh pr view ${prNumber} --json headRefOid,mergeCommit`, prPinSchema) as {
+    headRefOid: string;
+    mergeCommit: { oid: string } | null;
+  };
+  return { headRefOid: pr.headRefOid, mergeCommitOid: pr.mergeCommit?.oid ?? null };
+};
+
 export const parsePrCandidate = (raw: unknown, cmd: string): PrInfo => {
   const v = validateValue(raw, prCandidateSchema, cmd);
   return {
@@ -1472,8 +1533,10 @@ const waitForPrMerge = async (
   prNumber: number,
   description: string,
   targetVersion: string,
+  pinnedHead: string,
 ): Promise<void> => {
   log(`Waiting for PR #${prNumber} (${description}) to be merged (CI must pass)...`);
+  log(`  ${pinMergeInstruction(prNumber, pinnedHead)}`);
   for (let i = 0; i < 60; i++) {
     await sleep(10_000);
     const { state: prState } = read(`gh pr view ${prNumber} --json state`, prStateSchema);
@@ -1483,9 +1546,7 @@ const waitForPrMerge = async (
     }
     process.stdout.write(".");
   }
-  throw new Error(
-    `Timed out waiting for PR #${prNumber} (${description}) to merge. Merge it manually, then run:\n  bun run release ${targetVersion} --tag`,
-  );
+  throw new Error(pinMergeTimeoutMessage(prNumber, description, targetVersion, pinnedHead));
 };
 
 // =============================================================================
@@ -1749,6 +1810,9 @@ const main = async (): Promise<void> => {
       console.log(`  ✓ Pushed to ${releaseBranch}`);
     }
 
+    // The branch is pushed: HEAD is the release commit this run stands behind, and the
+    // merge it waits for must be pinned to exactly that commit.
+    const pushedHead = run("git rev-parse HEAD", { silent: true });
     const prUrl = run(
       `gh pr create --base ${sourceBranch} --head ${releaseBranch} --title "chore(release): v${newVersion}" --body "Release commit for v${newVersion}."`,
       { silent: true },
@@ -1756,12 +1820,17 @@ const main = async (): Promise<void> => {
     const prNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
     console.log(`  ✓ PR #${prNumber} created: ${prUrl}`);
 
-    await waitForPrMerge(prNumber, `${releaseBranch} → ${sourceBranch}`, newVersion);
+    await waitForPrMerge(prNumber, `${releaseBranch} → ${sourceBranch}`, newVersion, pushedHead);
     run(`git checkout ${sourceBranch}`, { silent: true });
     run(`git pull origin ${sourceBranch}`, { silent: true });
   } else if (state === "await-source-pr") {
     const prNumber = sourcePr!.number;
-    await waitForPrMerge(prNumber, `${releaseBranch} → ${sourceBranch}`, newVersion);
+    await waitForPrMerge(
+      prNumber,
+      `${releaseBranch} → ${sourceBranch}`,
+      newVersion,
+      sourcePr!.headRefOid,
+    );
     run(`git checkout ${sourceBranch}`, { silent: true });
     run(`git pull origin ${sourceBranch}`, { silent: true });
   }
@@ -1782,10 +1851,16 @@ const main = async (): Promise<void> => {
     mainPrNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
     console.log(`  ✓ PR #${mainPrNumber} created: ${prUrl}`);
 
-    await waitForPrMerge(mainPrNumber, `${sourceBranch} → main`, newVersion);
+    const freshMainPin = readPrPin(mainPrNumber);
+    await waitForPrMerge(
+      mainPrNumber,
+      `${sourceBranch} → main`,
+      newVersion,
+      freshMainPin.headRefOid,
+    );
   } else if (state === "await-main-pr") {
     mainPrNumber = mainPr!.number;
-    await waitForPrMerge(mainPrNumber, `${sourceBranch} → main`, newVersion);
+    await waitForPrMerge(mainPrNumber, `${sourceBranch} → main`, newVersion, mainPr!.headRefOid);
   }
 
   // ── Step 3: Verify and prompt for tag ───────────────────────────────────────
