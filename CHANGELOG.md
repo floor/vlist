@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.4] - 2026-10-16
+
+### Fixed
+
+- In `autosize()`, rows no longer keep the previous occupant's measured height
+  when the item at an index changes. After `setItems()`, a search filter change,
+  list mutations (`prepend`, `append`, `insert`, `remove`, `updateItem`), or
+  loading data over placeholders (with or without `groups()`), each row renders
+  at its own content height (#372). The measured-height cache no longer keeps
+  entries for items that have left the list, so `getMeasuredCount()` tracks the
+  rows in the list.
+
 ## [3.1.3] - 2026-10-16
 
 ### Fixed
@@ -21,13 +33,6 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   from was looked up in the layout index space, where `groups()` counts the
   headers. The two index spaces are now translated at each lookup, so a
   measurement is taken from the element of the data index it belongs to (#363).
-- In `autosize()`, rows no longer keep the previous occupant's measured height
-  when the item at an index changes. After `setItems()`, a search filter change,
-  list mutations (`prepend`, `append`, `insert`, `remove`, `updateItem`), or
-  loading data over placeholders (with or without `groups()`), each row renders
-  at its own content height (#372). The measured-height cache no longer keeps
-  entries for items that have left the list, so `getMeasuredCount()` tracks the
-  rows in the list.
 
 ## [3.1.2] - 2026-10-09
 
@@ -1823,7 +1828,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.3...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+[3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/floor/vlist/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/floor/vlist/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/floor/vlist/compare/v3.1.0...v3.1.1
