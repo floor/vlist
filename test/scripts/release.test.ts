@@ -11,6 +11,7 @@ import { describe, expect, it } from "bun:test";
 import {
   USAGE,
   assertCurrentBranch,
+  assertPinnedMerge,
   assertStableRelease,
   bumpVersion,
   compareVersions,
@@ -22,6 +23,9 @@ import {
   parseArgs,
   parseLsRemoteTags,
   parseVersion,
+  pinMergeCommand,
+  pinMergeInstruction,
+  pinMergeTimeoutMessage,
   planRelease,
   releaseBranchFor,
   resolveNewVersion,
@@ -388,6 +392,7 @@ describe("detectReleaseState", () => {
           mergeCommitOid: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
           packageVersion: "3.1.3",
         },
+        mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
         packageVersionAtMergeSha: "3.1.3",
       }),
     ).toBe("already-tagged");
@@ -410,6 +415,7 @@ describe("detectReleaseState", () => {
           mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
           packageVersion: "3.1.3",
         },
+        mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
       }),
     ).toBe("tag-release");
   });
@@ -449,8 +455,10 @@ describe("detectReleaseState", () => {
           headRefName: "chore/release-3.1.3",
           baseRefName: "next",
           headRefOid: "111",
+          mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
           packageVersion: "3.1.3",
         },
+        sourcePrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
       }),
     ).toBe("create-main-pr");
 
@@ -494,6 +502,238 @@ describe("detectReleaseState", () => {
         localTagSha: null,
       }),
     ).toBe("create-source-pr");
+  });
+});
+
+describe("merge pinning — merge commits only, pinned to the head the run pushed", () => {
+  // A release is certified from one commit only: the merge commit whose second parent
+  // is the head this run put on the pull request. A squash collapses the release commit
+  // out of history and a head that moved after the push merges something the run never
+  // made; both leave the tag certifying a commit nobody verified.
+  const BASE = "aaaa111122223333444455556666777788889999";
+  const HEAD = "bbbb111122223333444455556666777788889999";
+  const MERGE = "cccc111122223333444455556666777788889999";
+  const OTHER = "dddd111122223333444455556666777788889999";
+
+  const mergedMainPr = (overrides: Record<string, unknown> = {}) => ({
+    number: 376,
+    title: "chore(release): v3.1.3",
+    state: "MERGED" as const,
+    headRefName: "next",
+    baseRefName: "main",
+    headRefOid: HEAD,
+    mergeCommitOid: MERGE,
+    packageVersion: "3.1.3",
+    ...overrides,
+  });
+
+  const mergedSourcePr = (overrides: Record<string, unknown> = {}) => ({
+    number: 375,
+    title: "chore(release): v3.1.3",
+    state: "MERGED" as const,
+    headRefName: "chore/release-3.1.3",
+    baseRefName: "next",
+    headRefOid: HEAD,
+    mergeCommitOid: MERGE,
+    packageVersion: "3.1.3",
+    ...overrides,
+  });
+
+  describe("assertPinnedMerge", () => {
+    const facts = (overrides: Record<string, unknown> = {}) => ({
+      prNumber: 376,
+      description: "next → main",
+      headRefOid: HEAD,
+      mergeCommitOid: MERGE,
+      parents: [BASE, HEAD] as readonly string[] | null | undefined,
+      ...overrides,
+    });
+
+    it("accepts a merge commit whose second parent is the pull request head", () => {
+      expect(() => assertPinnedMerge(facts())).not.toThrow();
+    });
+
+    it("refuses a squash: the merge commit has one parent", () => {
+      expect(() => assertPinnedMerge(facts({ parents: [BASE] }))).toThrow(
+        /not merged as a merge commit/,
+      );
+      // The refusal names the merge commit and the command that would have pinned it.
+      expect(() => assertPinnedMerge(facts({ parents: [BASE] }))).toThrow(MERGE);
+      expect(() => assertPinnedMerge(facts({ parents: [BASE] }))).toThrow(
+        `gh pr merge 376 --merge --match-head-commit ${HEAD}`,
+      );
+    });
+
+    it("refuses a re-tipped head: the second parent is not the pull request head", () => {
+      expect(() => assertPinnedMerge(facts({ parents: [BASE, OTHER] }))).toThrow(OTHER);
+      expect(() => assertPinnedMerge(facts({ parents: [BASE, OTHER] }))).toThrow(HEAD);
+      expect(() => assertPinnedMerge(facts({ parents: [BASE, OTHER] }))).toThrow(
+        `gh pr merge 376 --merge --match-head-commit ${HEAD}`,
+      );
+    });
+
+    it("refuses when the parents cannot be read: an unverified merge is not certified", () => {
+      for (const parents of [null, undefined]) {
+        expect(() => assertPinnedMerge(facts({ parents }))).toThrow(/could not be read/);
+      }
+    });
+
+    it("refuses a pull request head that moved after the run pushed it", () => {
+      expect(() => assertPinnedMerge(facts({ pushedHead: OTHER }))).toThrow(
+        /different commit than this run pushed/,
+      );
+      expect(() => assertPinnedMerge(facts({ pushedHead: OTHER }))).toThrow(OTHER);
+      expect(() => assertPinnedMerge(facts({ pushedHead: HEAD }))).not.toThrow();
+    });
+
+    it("refuses a merged pull request with no merge commit recorded", () => {
+      expect(() => assertPinnedMerge(facts({ mergeCommitOid: null }))).toThrow(
+        /no merge commit/,
+      );
+    });
+  });
+
+  describe("the printed pin", () => {
+    it("pinMergeCommand names the merge and the head", () => {
+      expect(pinMergeCommand(375, HEAD)).toBe(
+        `gh pr merge 375 --merge --match-head-commit ${HEAD}`,
+      );
+    });
+
+    it("the wait step and the timeout message both carry the pinned command", () => {
+      expect(pinMergeInstruction(375, HEAD)).toContain(
+        `gh pr merge 375 --merge --match-head-commit ${HEAD}`,
+      );
+      const timeout = pinMergeTimeoutMessage(
+        375,
+        "chore/release-3.1.3 → next",
+        "3.1.3",
+        HEAD,
+      );
+      expect(timeout).toContain(`gh pr merge 375 --merge --match-head-commit ${HEAD}`);
+      expect(timeout).toContain("bun run release 3.1.3 --tag");
+      expect(timeout).not.toContain("Merge it manually");
+    });
+
+    it("every plan that waits for a merge prints a pinned merge command", () => {
+      const states = [
+        "create-source-pr",
+        "await-source-pr",
+        "create-main-pr",
+        "await-main-pr",
+      ] as const;
+      for (const state of states) {
+        const steps = planRelease({ targetVersion: "3.1.3", sourceBranch: "next", state });
+        const merges = steps
+          .map((s) => s.command)
+          .filter((c): c is string => !!c && c.startsWith("gh pr merge"));
+        expect(merges.length).toBeGreaterThan(0);
+        for (const cmd of merges) expect(cmd).toContain("--merge --match-head-commit");
+      }
+    });
+
+    it("the plan prints the real head sha when the pull request is known", () => {
+      const waiting = planRelease({
+        targetVersion: "3.1.3",
+        sourceBranch: "next",
+        state: "await-main-pr",
+        mainPr: mergedMainPr({ state: "OPEN", mergeCommitOid: undefined }),
+      });
+      expect(waiting.map((s) => s.command)).toContain(
+        `gh pr merge 376 --merge --match-head-commit ${HEAD}`,
+      );
+
+      const sourcing = planRelease({
+        targetVersion: "3.1.3",
+        sourceBranch: "next",
+        state: "await-source-pr",
+        sourcePr: mergedSourcePr({ state: "OPEN", mergeCommitOid: undefined }),
+      });
+      expect(sourcing.map((s) => s.command)).toContain(
+        `gh pr merge 375 --merge --match-head-commit ${HEAD}`,
+      );
+    });
+  });
+
+  describe("detectReleaseState certifies only a pinned merge", () => {
+    const ctx = (overrides: Record<string, unknown> = {}) => ({
+      currentVersion: "3.1.2",
+      targetVersion: "3.1.3",
+      remoteTagSha: null,
+      localTagSha: null,
+      ...overrides,
+    });
+
+    it("a proper merge commit still certifies: tag-release", () => {
+      expect(
+        detectReleaseState(ctx({ mainPr: mergedMainPr(), mainPrMergeParents: [BASE, HEAD] })),
+      ).toBe("tag-release");
+    });
+
+    it("a squash into main is refused", () => {
+      expect(() =>
+        detectReleaseState(ctx({ mainPr: mergedMainPr(), mainPrMergeParents: [BASE] })),
+      ).toThrow(/not merged as a merge commit/);
+    });
+
+    it("a re-tipped head into main is refused", () => {
+      expect(() =>
+        detectReleaseState(ctx({ mainPr: mergedMainPr(), mainPrMergeParents: [BASE, OTHER] })),
+      ).toThrow(OTHER);
+    });
+
+    it("unreadable parents are refused rather than assumed", () => {
+      expect(() =>
+        detectReleaseState(ctx({ mainPr: mergedMainPr(), mainPrMergeParents: null })),
+      ).toThrow(/could not be read/);
+      expect(() => detectReleaseState(ctx({ mainPr: mergedMainPr() }))).toThrow(
+        /could not be read/,
+      );
+    });
+
+    it("already-tagged is refused for a squash into main", () => {
+      expect(
+        detectReleaseState(
+          ctx({
+            remoteTagSha: MERGE,
+            packageVersionAtMergeSha: "3.1.3",
+            mainPr: mergedMainPr(),
+            mainPrMergeParents: [BASE, HEAD],
+          }),
+        ),
+      ).toBe("already-tagged");
+      expect(() =>
+        detectReleaseState(
+          ctx({
+            remoteTagSha: MERGE,
+            packageVersionAtMergeSha: "3.1.3",
+            mainPr: mergedMainPr(),
+            mainPrMergeParents: [BASE],
+          }),
+        ),
+      ).toThrow(/not merged as a merge commit/);
+    });
+
+    it("a squashed source pull request is refused before create-main-pr", () => {
+      expect(
+        detectReleaseState(
+          ctx({
+            sourcePr: mergedSourcePr(),
+            sourcePrMergeParents: [BASE, HEAD],
+            originSourceVersion: "3.1.3",
+          }),
+        ),
+      ).toBe("create-main-pr");
+      expect(() =>
+        detectReleaseState(
+          ctx({
+            sourcePr: mergedSourcePr(),
+            sourcePrMergeParents: [BASE],
+            originSourceVersion: "3.1.3",
+          }),
+        ),
+      ).toThrow(/not merged as a merge commit/);
+    });
   });
 });
 
@@ -1061,6 +1301,7 @@ describe("tag and branch verification (fail-closed)", () => {
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
           packageVersion: "3.1.3",
         },
+        mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
         packageVersionAtMergeSha: "3.1.3",
       }),
     ).toBe("already-tagged");
@@ -1194,6 +1435,7 @@ describe("tag and branch verification (fail-closed)", () => {
         },
         isMergeCommitAncestor: true,
         packageVersionAtMergeSha: "3.1.3",
+        mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
         checkRuns: [
           { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
           { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
@@ -1221,6 +1463,7 @@ describe("tag and branch verification (fail-closed)", () => {
         },
         isMergeCommitAncestor: true,
         packageVersionAtMergeSha: "3.1.3",
+        mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
         checkRuns: [
           { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
           { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
