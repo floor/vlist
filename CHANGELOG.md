@@ -23,7 +23,9 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   when the item at an index changes. After `setItems()`, a search filter change,
   list mutations (`prepend`, `append`, `insert`, `remove`, `updateItem`), or
   loading data over placeholders (with or without `groups()`), each row renders
-  at its own content height.
+  at its own content height (#372). The measured-height cache no longer keeps
+  entries for items that have left the list, so `getMeasuredCount()` tracks the
+  rows in the list.
 
 ## [3.1.2] - 2026-10-09
 
