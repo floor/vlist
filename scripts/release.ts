@@ -93,6 +93,10 @@ export interface ReleaseContext {
   readonly isMergeCommitAncestor?: boolean | undefined;
   readonly packageVersionAtMergeSha?: string | null | undefined;
   readonly checkRuns?: readonly CheckRunInfo[] | undefined;
+  /** Parents of the main pull request's merge commit; null/absent means unreadable. */
+  readonly mainPrMergeParents?: readonly string[] | null | undefined;
+  /** Parents of the source pull request's merge commit; null/absent means unreadable. */
+  readonly sourcePrMergeParents?: readonly string[] | null | undefined;
   readonly originSourceVersion?: string | null | undefined;
   readonly releaseBranchCommitVersion?: string | null | undefined;
   readonly isReleaseBranchPushed?: boolean | undefined;
@@ -251,9 +255,66 @@ export const assertCurrentBranch = (
 // Merge Pinning
 // =============================================================================
 
+/**
+ * A `--merge` merge commit has exactly two parents: the base branch tip, then the
+ * pull request head. A squash has one; a head re-tipped after the push makes the
+ * second parent some other commit. Both leave the tag certifying a commit the run
+ * never made, so the release refuses them.
+ */
+export const MERGE_PARENT_COUNT = 2;
+
 /** The merge a human (or the operator) must run: merge commits only, pinned to the head. */
 export const pinMergeCommand = (prNumber: number, headRefOid: string): string =>
   `gh pr merge ${prNumber} --merge --match-head-commit ${headRefOid}`;
+
+export interface MergePinFacts {
+  readonly prNumber: number;
+  readonly description: string;
+  readonly headRefOid: string;
+  /** The merged pull request's merge commit; null when GitHub recorded none. */
+  readonly mergeCommitOid: string | null | undefined;
+  /** Parents of the merge commit, or null/undefined when they could not be read. */
+  readonly parents: readonly string[] | null | undefined;
+  /** The commit this run pushed to the pull request's head branch, when it pushed one. */
+  readonly pushedHead?: string | null | undefined;
+}
+
+/**
+ * Refuse to certify a release from anything but a merge commit whose second parent is
+ * the head the run stands behind. Throws with both shas in the message.
+ */
+export const assertPinnedMerge = (facts: MergePinFacts): void => {
+  const { prNumber, description, headRefOid, mergeCommitOid, parents, pushedHead } = facts;
+  const where = `PR #${prNumber} (${description})`;
+  const pin = pinMergeCommand(prNumber, headRefOid);
+
+  if (!mergeCommitOid) {
+    throw new Error(
+      `${where} is merged but GitHub recorded no merge commit; cannot verify it was merged as a merge commit of ${headRefOid}. Merge it pinned: ${pin}`,
+    );
+  }
+  if (parents === null || parents === undefined) {
+    throw new Error(
+      `Cannot verify ${where}: the parents of merge commit ${mergeCommitOid} could not be read (tried 'git show -s --format=%P ${mergeCommitOid}' and the GitHub API). Fetch the commit and retry — an unverified merge is not certified. Merge it pinned: ${pin}`,
+    );
+  }
+  if (pushedHead && headRefOid !== pushedHead) {
+    throw new Error(
+      `${where} merged a different commit than this run pushed: the pull request head is ${headRefOid}, but this run pushed ${pushedHead}. Merge it pinned: ${pin}`,
+    );
+  }
+  if (parents.length !== MERGE_PARENT_COUNT) {
+    throw new Error(
+      `${where} was not merged as a merge commit: ${mergeCommitOid} has ${parents.length} parent(s). Merge commits only — a squash collapses the release commit out of history. Merge it pinned: ${pin}`,
+    );
+  }
+  const mergedHead = parents[parents.length - 1];
+  if (mergedHead !== headRefOid) {
+    throw new Error(
+      `${where} merged a head that moved: merge commit ${mergeCommitOid}'s second parent is ${mergedHead}, but the pull request head is ${headRefOid}. Merge it pinned: ${pin}`,
+    );
+  }
+};
 
 /** The line a wait step prints, so the merge is pinned by hand the same way. */
 export const pinMergeInstruction = (prNumber: number, headRefOid: string): string =>
@@ -483,6 +544,13 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
         `package.json at merge commit ${mergeSha} is v${ctx.packageVersionAtMergeSha}, not target v${ctx.targetVersion}`,
       );
     }
+    assertPinnedMerge({
+      prNumber: ctx.mainPr.number,
+      description: `${ctx.mainPr.headRefName} → ${ctx.mainPr.baseRefName}`,
+      headRefOid: ctx.mainPr.headRefOid,
+      mergeCommitOid: mergeSha,
+      parents: ctx.mainPrMergeParents,
+    });
     return "already-tagged";
   }
 
@@ -538,6 +606,15 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
         );
       }
 
+      // The gate: only a merge commit pinned to the head verifies a release.
+      assertPinnedMerge({
+        prNumber: ctx.mainPr.number,
+        description: `${ctx.mainPr.headRefName} → ${ctx.mainPr.baseRefName}`,
+        headRefOid: ctx.mainPr.headRefOid,
+        mergeCommitOid: mergeSha,
+        parents: ctx.mainPrMergeParents,
+      });
+
       if (ctx.localTagSha !== null && ctx.localTagSha !== undefined) {
         if (ctx.localTagSha !== mergeSha) {
           throw new Error(
@@ -588,6 +665,13 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
           `Pull request #${ctx.sourcePr.number} into ${ctx.sourceBranch ?? "source"} is merged, but origin/${ctx.sourceBranch ?? "source"} package.json is v${ctx.originSourceVersion}, not target v${ctx.targetVersion}`,
         );
       }
+      assertPinnedMerge({
+        prNumber: ctx.sourcePr.number,
+        description: `${ctx.sourcePr.headRefName} → ${ctx.sourcePr.baseRefName}`,
+        headRefOid: ctx.sourcePr.headRefOid,
+        mergeCommitOid: ctx.sourcePr.mergeCommitOid,
+        parents: ctx.sourcePrMergeParents,
+      });
       return "create-main-pr";
     }
 
@@ -1456,6 +1540,63 @@ export const isCommitAncestorOfRemoteMain = (
   return false;
 };
 
+export const parseCommitParents = (raw: string, sha: string): readonly string[] => {
+  const trimmed = raw.trim();
+  if (trimmed === "") return [];
+  const parents = trimmed.split(/\s+/);
+  for (const parent of parents) {
+    if (!/^[0-9a-f]{40}$/.test(parent)) {
+      throw new Error(
+        `Malformed git output for commit ${sha}: expected 40-hex parent SHAs, got ${JSON.stringify(parent)}`,
+      );
+    }
+  }
+  return parents;
+};
+
+export const commitParentsSchema: CustomJsonSchema<readonly string[]> = {
+  kind: "custom-json",
+  name: "commit_parents",
+  parse: (data, cmd) => {
+    const parents = (data as { parents?: unknown })?.parents;
+    if (!Array.isArray(parents)) {
+      throw new Error(`Invalid response from ${cmd}: expected an object with a 'parents' array`);
+    }
+    return parents.map((entry: unknown) => {
+      const sha = (entry as { sha?: unknown })?.sha;
+      if (typeof sha !== "string" || !/^[0-9a-f]{40}$/i.test(sha)) {
+        throw new Error(`Invalid response from ${cmd}: a parent has no 40-hex sha`);
+      }
+      return sha;
+    });
+  },
+};
+
+/**
+ * Parents of a commit: local git first, the GitHub API as the fallback. `null` when
+ * neither can answer — the caller refuses on null rather than certifying a merge it
+ * could not read.
+ */
+export const readCommitParents = (
+  sha: string,
+  owner = "floor",
+  repo = "vlist",
+): readonly string[] | null => {
+  try {
+    return read(`git show -s --format=%P ${sha}`, {
+      kind: "text",
+      name: "commit_parents_local",
+      parse: (raw) => parseCommitParents(raw, sha),
+    });
+  } catch {
+    try {
+      return read(`gh api repos/${owner}/${repo}/commits/${sha}`, commitParentsSchema);
+    } catch {
+      return null;
+    }
+  }
+};
+
 /** Fresh head and merge commit of a pull request — the facts the pin is checked on. */
 export const readPrPin = (
   prNumber: number,
@@ -1549,6 +1690,28 @@ const waitForPrMerge = async (
   throw new Error(pinMergeTimeoutMessage(prNumber, description, targetVersion, pinnedHead));
 };
 
+/**
+ * After a PR into the source branch merges: re-read it and refuse anything but a merge
+ * commit pinned to the head. `pushedHead` is the commit this run pushed, when it pushed
+ * one — the resume path has none, so it checks the shape alone.
+ */
+const verifySourcePrPin = (
+  prNumber: number,
+  description: string,
+  pushedHead: string | null,
+): void => {
+  const fresh = readPrPin(prNumber);
+  assertPinnedMerge({
+    prNumber,
+    description,
+    headRefOid: fresh.headRefOid,
+    mergeCommitOid: fresh.mergeCommitOid,
+    parents: fresh.mergeCommitOid ? readCommitParents(fresh.mergeCommitOid) : null,
+    pushedHead,
+  });
+  console.log(`  ✓ PR #${prNumber} merged as a merge commit pinned to ${fresh.headRefOid}`);
+};
+
 // =============================================================================
 // Main Orchestration
 // =============================================================================
@@ -1621,9 +1784,12 @@ const main = async (): Promise<void> => {
   let packageVersionAtMergeSha: string | null | undefined;
   let checkRuns: CheckRunInfo[] | undefined;
   let checkRunsEvidence = "";
+  let mainPrMergeParents: readonly string[] | null | undefined;
+  let sourcePrMergeParents: readonly string[] | null | undefined;
   const mergeSha = mainPr?.mergeCommitOid;
 
   if (mainPr?.state === "MERGED" && mergeSha) {
+    mainPrMergeParents = readCommitParents(mergeSha);
     isMergeCommitAncestor = isCommitAncestorOfRemoteMain(mergeSha);
     packageVersionAtMergeSha = readPackageVersionAtSha(mergeSha);
     checkRuns = fetchCheckRuns(mergeSha);
@@ -1634,6 +1800,10 @@ const main = async (): Promise<void> => {
       if (args.tag) throw err;
       checkRunsEvidence = checkRuns.map((r) => `${r.name} (${r.conclusion ?? r.status})`).join(", ");
     }
+  }
+
+  if (sourcePr?.state === "MERGED" && sourcePr.mergeCommitOid) {
+    sourcePrMergeParents = readCommitParents(sourcePr.mergeCommitOid);
   }
 
   let state: ReleaseState;
@@ -1652,6 +1822,8 @@ const main = async (): Promise<void> => {
       isMergeCommitAncestor,
       packageVersionAtMergeSha,
       checkRuns,
+      mainPrMergeParents,
+      sourcePrMergeParents,
       originSourceVersion,
       releaseBranchCommitVersion,
       isReleaseBranchPushed,
@@ -1821,6 +1993,7 @@ const main = async (): Promise<void> => {
     console.log(`  ✓ PR #${prNumber} created: ${prUrl}`);
 
     await waitForPrMerge(prNumber, `${releaseBranch} → ${sourceBranch}`, newVersion, pushedHead);
+    verifySourcePrPin(prNumber, `${releaseBranch} → ${sourceBranch}`, pushedHead);
     run(`git checkout ${sourceBranch}`, { silent: true });
     run(`git pull origin ${sourceBranch}`, { silent: true });
   } else if (state === "await-source-pr") {
@@ -1831,6 +2004,7 @@ const main = async (): Promise<void> => {
       newVersion,
       sourcePr!.headRefOid,
     );
+    verifySourcePrPin(prNumber, `${releaseBranch} → ${sourceBranch}`, null);
     run(`git checkout ${sourceBranch}`, { silent: true });
     run(`git pull origin ${sourceBranch}`, { silent: true });
   }
@@ -1865,11 +2039,22 @@ const main = async (): Promise<void> => {
 
   // ── Step 3: Verify and prompt for tag ───────────────────────────────────────
   step(4, `Verifying merge commit and checks on main...`);
-  const { mergeCommit: freshMergeCommit } = read(
-    `gh pr view ${mainPrNumber} --json mergeCommit`,
-    prMergeCommitSchema,
-  );
-  const freshMergeSha = freshMergeCommit.oid;
+  if (mainPrNumber === undefined) {
+    throw new Error(`No pull request ${sourceBranch} → main to verify (state: ${state})`);
+  }
+  const freshMainPin = readPrPin(mainPrNumber);
+  const freshMergeSha = freshMainPin.mergeCommitOid;
+  if (!freshMergeSha) {
+    console.error(`\n  ✗ PR #${mainPrNumber} has no merge commit — it is not merged`);
+    process.exit(1);
+  }
+  assertPinnedMerge({
+    prNumber: mainPrNumber,
+    description: `${sourceBranch} → main`,
+    headRefOid: freshMainPin.headRefOid,
+    mergeCommitOid: freshMergeSha,
+    parents: readCommitParents(freshMergeSha),
+  });
   if (!isCommitAncestorOfRemoteMain(freshMergeSha)) {
     console.error(`\n  ✗ Merge commit ${freshMergeSha} is not an ancestor of origin/main`);
     process.exit(1);
