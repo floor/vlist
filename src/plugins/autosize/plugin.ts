@@ -64,9 +64,9 @@ export function autosize<T extends VListItem = VListItem>(
   let sizeProp: "width" | "height";
   let estimatedSize: number;
 
-  const measuredSizes = new Map<number, number>();
+  const measured = new Map<string | number, [number, unknown]>();
   // Measured items queued for a fresh measurement on the next commit.
-  const pendingRemeasure = new Set<number>();
+  const pendingRemeasure = new Set<string | number>();
   const elementToIndex = new WeakMap<Element, number>();
 
   /**
@@ -78,16 +78,10 @@ export function autosize<T extends VListItem = VListItem>(
    * up after this one (priority 5), so they are not registered yet at setup.
    * Without a layout plugin the spaces coincide and the lookups are identity.
    */
-  const toLayoutIndex = (dataIndex: number): number => {
-    const fn = storedCtx?.hooks.get("_dataToLayoutIndex") as
-      ((i: number) => number) | undefined;
-    return fn ? fn(dataIndex) : dataIndex;
-  };
-  const toDataIndex = (layoutIndex: number): number => {
-    const fn = storedCtx?.hooks.get("_layoutToDataIndex") as
-      ((i: number) => number) | undefined;
-    return fn ? fn(layoutIndex) : layoutIndex;
-  };
+  const toLayoutIndex = (i: number): number =>
+    (storedCtx?.hooks.get("_dataToLayoutIndex") as ((x: number) => number) | undefined)?.(i) ?? i;
+  const toDataIndex = (i: number): number =>
+    (storedCtx?.hooks.get("_layoutToDataIndex") as ((x: number) => number) | undefined)?.(i) ?? i;
 
   let pendingScrollDelta = 0;
   let pendingContentSizeUpdate = false;
@@ -96,12 +90,131 @@ export function autosize<T extends VListItem = VListItem>(
 
   const END_THRESHOLD = 2;
 
+  const getItemId = (index: number): string | number => storedCtx?.items.at(index)?.id ?? index;
+
   function sizeFn(index: number): number {
-    return measuredSizes.get(index) ?? estimatedSize;
+    return measured.get(getItemId(index))?.[0] ?? estimatedSize;
   }
 
   function isMeasured(index: number): boolean {
-    return measuredSizes.has(index) && !pendingRemeasure.has(index);
+    const item = storedCtx?.items.at(index);
+    if (!item) return false;
+    const id = item.id ?? index;
+    if (pendingRemeasure.has(id)) return false;
+    const m = measured.get(id);
+    if (!m) return false;
+    return Boolean((item as Record<string, unknown>)._isPlaceholder) || m[1] === item;
+  }
+
+  /**
+   * Drop the measurements of items the list no longer holds.
+   *
+   * `measured` is keyed by item id, so an item that leaves — a new page under
+   * fresh ids, a filter, a removal, an insert that shifts the rest — would
+   * leave its entry behind. The size function only ever looks up the ids the
+   * list has now, so that entry can never be read again, while the cache grows
+   * with every item ever measured and each entry holds its item, keeping the
+   * departed object alive. `getMeasuredCount()` counts what is in the list.
+   *
+   * Liveness is the list's current ids, read through the same `items.at` the
+   * size function uses: one pass per data change, nothing allocated per item.
+   * An id the list still has keeps its entry even when the item object changed
+   * (updateItem, a page re-delivered under the same ids) — the row keeps its
+   * measured height instead of snapping back to the estimate, and `isMeasured`
+   * still reports false for it, so it is measured again.
+   *
+   * A data() placeholder (`__placeholder_${index}`) needs no case of its own:
+   * the load writes the store before it notifies, so by the time the rebuild
+   * that announces it runs, the placeholder's id has already left the list.
+   */
+  function pruneMeasured(): void {
+    const ctx = storedCtx;
+    if (!ctx || engineState.destroyed || measured.size === 0) return;
+    const total = engineState.totalItems;
+    let live: Set<string | number> | null = null;
+    for (let i = 0; i < total; i++) {
+      const item = ctx.items.at(i);
+      if (!item) continue;
+      const id = item.id ?? i;
+      if (!measured.has(id)) continue;
+      if (live === null) live = new Set();
+      live.add(id);
+    }
+    if (live === null) {
+      // Nothing in the list is measured: every entry is departed work.
+      measured.clear();
+      pendingRemeasure.clear();
+      return;
+    }
+    for (const id of measured.keys()) {
+      if (live.has(id)) continue;
+      measured.delete(id);
+      // A queued re-measure of an item that left has nothing to re-measure.
+      pendingRemeasure.delete(id);
+    }
+  }
+
+  // The sweep has to be run by the engine, and the size cache's rebuild is the
+  // one funnel every data change goes through: the core rebuilds it in
+  // setItems, append, prepend, insert, remove and removeItems, the data plugin
+  // when a page loads or a reload clears one, search when a filter is applied
+  // or cleared. So the rebuild is wrapped here, the way groups and tree wrap
+  // it.
+  //
+  // A later `setConfig` (groups at priority 11, table at 10 — both after this
+  // plugin's 5) replaces the cache's methods wholesale and drops that wrapper:
+  // measured on a groups() list, the wrapper installed in setup was no longer
+  // on the cache once the layout plugin had finished. So `setConfig` is
+  // wrapped too, and the sweep re-installed on whatever cache it leaves —
+  // with the delegate read at that moment, never a stale one (the trap
+  // `_setSizeCacheBase` exists for).
+  //
+  // `sweeping` keeps it to one sweep per rebuild should the chain ever hold
+  // two copies of it: a layout plugin's hook calling through this one, and a
+  // later swap re-installing above it.
+  let sweepInstalled: ((total: number) => void) | null = null;
+  let setConfigPatched: ((sc: number | ((index: number) => number), gap?: number) => void) | null = null;
+  let sweeping = false;
+
+  function installSweep(): void {
+    const cache = storedCtx!.sizes.cache;
+    const rebuild = cache.rebuild;
+    const sweep = (total: number): void => {
+      if (sweeping) {
+        rebuild(total);
+        return;
+      }
+      sweeping = true;
+      try {
+        pruneMeasured();
+        rebuild(total);
+      } finally {
+        sweeping = false;
+      }
+    };
+    sweepInstalled = sweep;
+    cache.rebuild = sweep;
+  }
+
+  function keepSweepInstalled(): void {
+    if (storedCtx!.sizes.cache.rebuild === sweepInstalled) return;
+    installSweep();
+  }
+
+  function patchSetConfig(): void {
+    const ctx = storedCtx!;
+    const sizes = ctx.sizes;
+    if (setConfigPatched !== null && sizes.setConfig === setConfigPatched) return;
+    const base = sizes.setConfig;
+    const patched = (config: number | ((index: number) => number), specGap?: number): void => {
+      base(config, specGap);
+      // The capability outlives the install that patched it (a destroyed list,
+      // a scroll-mode switch, a second install): only the cache of the install
+      // this patch belongs to is kept swept.
+      if (storedCtx === ctx) keepSweepInstalled();
+    };
+    setConfigPatched = patched;
+    sizes.setConfig = patched;
   }
 
   /**
@@ -119,14 +232,15 @@ export function autosize<T extends VListItem = VListItem>(
   function remeasure(index?: number): void {
     if (!storedCtx || engineState.destroyed) return;
     if (index === undefined) {
-      if (measuredSizes.size === 0) return;
-      measuredSizes.clear();
+      if (measured.size === 0) return;
+      measured.clear();
       pendingRemeasure.clear();
       storedCtx.sizes.rebuild();
       updateContentSize();
     } else {
-      if (!measuredSizes.has(index)) return;
-      pendingRemeasure.add(index);
+      const id = getItemId(index);
+      if (!measured.has(id)) return;
+      pendingRemeasure.add(id);
     }
     storedCtx.render.force();
   }
@@ -196,6 +310,11 @@ export function autosize<T extends VListItem = VListItem>(
       // Replace the fixed sizeCache with a variable one backed by measurements
       ctx.sizes.setConfig(sizeFn, gap);
 
+      // A measurement must not outlive the item it measured (see pruneMeasured
+      // and installSweep above).
+      patchSetConfig();
+      keepSweepInstalled();
+
       // ResizeObserver for measuring items
       const own = new ResizeObserver((entries) => {
         if (engineState.destroyed || !storedCtx) return;
@@ -221,6 +340,13 @@ export function autosize<T extends VListItem = VListItem>(
             continue;
           }
 
+          const item = storedCtx.items.at(index);
+          if (!item) {
+            own.unobserve(el);
+            continue;
+          }
+          const id = item.id ?? index;
+
           if (isMeasured(index)) continue;
 
           // borderBoxSize is missing on polyfills and on older WebKit, which
@@ -239,11 +365,11 @@ export function autosize<T extends VListItem = VListItem>(
           const sizeWithGap = newSize + gap;
           // A remeasured item corrects by the delta from its previous
           // measurement, not from the estimate.
-          const wasMeasured = measuredSizes.has(index);
-          const oldSize = measuredSizes.get(index) ?? estimatedSize;
+          const wasMeasured = measured.has(id);
+          const oldSize = measured.get(id)?.[0] ?? estimatedSize;
 
-          measuredSizes.set(index, sizeWithGap);
-          pendingRemeasure.delete(index);
+          measured.set(id, [sizeWithGap, item]);
+          pendingRemeasure.delete(id);
           if (!wasMeasured || sizeWithGap !== oldSize) {
             hasNewMeasurements = true;
             if (changedLow < 0 || index < changedLow) changedLow = index;
@@ -374,11 +500,13 @@ export function autosize<T extends VListItem = VListItem>(
       ctx.hooks.method("remeasure", remeasure);
 
       ctx.hooks.method("setMeasuredSize", (index: number, size: number): void => {
-        measuredSizes.set(index, size);
+        const id = getItemId(index);
+        measured.set(id, [size, storedCtx?.items.at(index)]);
+        pendingRemeasure.delete(id);
         refreshSizes(index, index);
       });
 
-      ctx.hooks.method("getMeasuredCount", (): number => measuredSizes.size);
+      ctx.hooks.method("getMeasuredCount", (): number => measured.size);
 
       // Cleanup: this install's observer only. If a newer install has
       // replaced it, the shared one is that install's and stays.
@@ -433,7 +561,7 @@ export function autosize<T extends VListItem = VListItem>(
         observer.disconnect();
         observer = null;
       }
-      measuredSizes.clear();
+      measured.clear();
       pendingRemeasure.clear();
       pinnedToEnd = false;
       animatingToEnd = false;

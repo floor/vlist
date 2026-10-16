@@ -418,7 +418,8 @@ export function groups<T extends VListItem = VListItem>(
     const itemId = String(item.id);
 
     // Element already shows this item with real content — skip template
-    if (!isPlaceholder && element.getAttribute("data-id") === itemId) {
+    const lastItem = (element as unknown as { _lastItem?: unknown })._lastItem;
+    if (!isPlaceholder && element.getAttribute("data-id") === itemId && lastItem === item) {
       if (interactive) {
         element.id = `${classPrefix}-item-${layoutIndex}`;
         element.setAttribute("aria-posinset", String(dataIndex + 1));
@@ -426,6 +427,7 @@ export function groups<T extends VListItem = VListItem>(
       }
       return true;
     }
+    (element as unknown as { _lastItem?: unknown })._lastItem = item;
 
     element.className = groupItemClass;
     element.setAttribute("role", interactive ? "option" : "listitem");
@@ -608,21 +610,19 @@ export function groups<T extends VListItem = VListItem>(
         if (!fragment) fragment = document.createDocumentFragment();
         fragment.appendChild(element);
 
-      } else if (isForced && placeholderIndices.has(i)) {
-        // ── Existing placeholder — check if real data arrived ──
+      } else if (isForced) {
+        // ── Forced render: check if element content or sizing needs update ──
         const entry = layout.getEntry(i);
-        if (entry.type === "item") {
-          const hasContent = renderItemContent(element, entry, isf, i);
-          if (hasContent) placeholderIndices.delete(i);
-          else placeholderIndices.add(i);
-        }
+        const hasContent = renderItemContent(element, entry, isf, i);
+        if (hasContent) placeholderIndices.delete(i);
+        else placeholderIndices.add(i);
+        isHeader = element.classList.contains(groupHeaderClass);
+        applySizeStyles(element, i);
+        element.style.transform = buildTransform(i, baseOffset);
       } else {
         // ── Existing unchanged element — fast path ──
         isHeader = element.classList.contains(groupHeaderClass);
-        if (isForced) {
-          applySizeStyles(element, i);
-          element.style.transform = buildTransform(i, baseOffset);
-        } else if (baseChanged) {
+        if (baseChanged) {
           // RFC-012: baseOffset moved, so reposition the item
           // at its new offset - baseOffset (native mode never reaches here).
           element.style.transform = buildTransform(i, baseOffset);
