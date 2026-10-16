@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.3] - 2026-10-16
+
 ### Fixed
 
 - With `groups()` and `autosize()` together, a row could be sized to a group
@@ -1814,7 +1816,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.3...HEAD
+[3.1.3]: https://github.com/floor/vlist/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/floor/vlist/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/floor/vlist/compare/v3.1.0...v3.1.1
 [2.0.4]: https://github.com/floor/vlist/compare/v2.0.3...v2.0.4
