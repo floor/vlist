@@ -107,6 +107,113 @@ export function autosize<T extends VListItem = VListItem>(
   }
 
   /**
+   * Drop the measurements of items the list no longer holds.
+   *
+   * `measured` is keyed by item id, so an item that leaves — a new page under
+   * fresh ids, a filter, a removal, an insert that shifts the rest — would
+   * leave its entry behind. The size function only ever looks up the ids the
+   * list has now, so that entry can never be read again, while the cache grows
+   * with every item ever measured and each entry holds its item, keeping the
+   * departed object alive. `getMeasuredCount()` counts what is in the list.
+   *
+   * Liveness is the list's current ids, read through the same `items.at` the
+   * size function uses: one pass per data change, nothing allocated per item.
+   * An id the list still has keeps its entry even when the item object changed
+   * (updateItem, a page re-delivered under the same ids) — the row keeps its
+   * measured height instead of snapping back to the estimate, and `isMeasured`
+   * still reports false for it, so it is measured again.
+   */
+  function pruneMeasured(): void {
+    const ctx = storedCtx;
+    if (!ctx || engineState.destroyed || measured.size === 0) return;
+    const total = engineState.totalItems;
+    let live: Set<string | number> | null = null;
+    for (let i = 0; i < total; i++) {
+      const item = ctx.items.at(i);
+      if (!item) continue;
+      const id = item.id ?? i;
+      if (!measured.has(id)) continue;
+      if (live === null) live = new Set();
+      live.add(id);
+    }
+    if (live === null) {
+      // Nothing in the list is measured: every entry is departed work.
+      measured.clear();
+      pendingRemeasure.clear();
+      return;
+    }
+    for (const id of measured.keys()) {
+      if (live.has(id)) continue;
+      measured.delete(id);
+      // A queued re-measure of an item that left has nothing to re-measure.
+      pendingRemeasure.delete(id);
+    }
+  }
+
+  // The sweep has to be run by the engine, and the size cache's rebuild is the
+  // one funnel every data change goes through: the core rebuilds it in
+  // setItems, append, prepend, insert, remove and removeItems, the data plugin
+  // when a page loads or a reload clears one, search when a filter is applied
+  // or cleared. So the rebuild is wrapped here, the way groups and tree wrap
+  // it.
+  //
+  // A later `setConfig` (groups at priority 11, table at 10 — both after this
+  // plugin's 5) replaces the cache's methods wholesale and drops that wrapper:
+  // measured on a groups() list, the wrapper installed in setup was no longer
+  // on the cache once the layout plugin had finished. So `setConfig` is
+  // wrapped too, and the sweep re-installed on whatever cache it leaves —
+  // with the delegate read at that moment, never a stale one (the trap
+  // `_setSizeCacheBase` exists for).
+  //
+  // `sweeping` keeps it to one sweep per rebuild should the chain ever hold
+  // two copies of it: a layout plugin's hook calling through this one, and a
+  // later swap re-installing above it.
+  let sweepInstalled: ((total: number) => void) | null = null;
+  let setConfigPatched: ((sc: number | ((index: number) => number), gap?: number) => void) | null = null;
+  let sweeping = false;
+
+  function installSweep(): void {
+    const cache = storedCtx!.sizes.cache;
+    const rebuild = cache.rebuild;
+    const sweep = (total: number): void => {
+      if (sweeping) {
+        rebuild(total);
+        return;
+      }
+      sweeping = true;
+      try {
+        pruneMeasured();
+        rebuild(total);
+      } finally {
+        sweeping = false;
+      }
+    };
+    sweepInstalled = sweep;
+    cache.rebuild = sweep;
+  }
+
+  function keepSweepInstalled(): void {
+    if (storedCtx!.sizes.cache.rebuild === sweepInstalled) return;
+    installSweep();
+  }
+
+  function patchSetConfig(): void {
+    const ctx = storedCtx!;
+    const sizes = ctx.sizes;
+    if (setConfigPatched !== null && sizes.setConfig === setConfigPatched) return;
+    const base = sizes.setConfig;
+    const patched = (config: number | ((index: number) => number), specGap?: number): void => {
+      base(config, specGap);
+      // The capability outlives the install that patched it (a destroyed list,
+      // a scroll-mode switch, a second install): only the cache of the install
+      // this patch belongs to is kept swept.
+      if (storedCtx === ctx) keepSweepInstalled();
+    };
+    setConfigPatched = patched;
+    sizes.setConfig = patched;
+  }
+
+  /**
    * Queue a fresh measurement. With an index, the item is re-observed on the
    * next commit and its new size replaces the old one, correcting the scroll
    * position by the real delta. Without an index, every measurement is
@@ -198,6 +305,11 @@ export function autosize<T extends VListItem = VListItem>(
 
       // Replace the fixed sizeCache with a variable one backed by measurements
       ctx.sizes.setConfig(sizeFn, gap);
+
+      // A measurement must not outlive the item it measured (see pruneMeasured
+      // and installSweep above).
+      patchSetConfig();
+      keepSweepInstalled();
 
       // ResizeObserver for measuring items
       const own = new ResizeObserver((entries) => {

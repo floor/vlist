@@ -114,6 +114,13 @@ const itemElements = (container: HTMLElement): HTMLElement[] =>
 const rowHeights = (container: HTMLElement): number[] =>
   itemElements(container).map((el) => Math.round(parseFloat(el.style.height || "0")));
 
+// `WeakRef` and `Bun.gc` are runtime features the ES2020 lib does not declare.
+// Whether a departed item is collectable is the half of a measurement leak a
+// count cannot show, so the cast is worth it.
+const WeakRefCtor = (globalThis as unknown as {
+  WeakRef: new (target: object) => { deref(): unknown };
+}).WeakRef;
+
 // =============================================================================
 // Tests — Plain List + Autosize
 // =============================================================================
@@ -484,6 +491,106 @@ describe("autosize() stale measurement prevention — plain list", () => {
     ro.measureAll();
 
     expect(rowHeights(container)).toEqual([100, 180, 140]);
+  });
+});
+
+// =============================================================================
+// Tests — The measured cache follows the list
+// =============================================================================
+
+describe("autosize() measured cache follows the list", () => {
+  let cleanup: (() => void) | null = null;
+  afterEach(() => {
+    cleanup?.();
+    cleanup = null;
+  });
+
+  // A page of four rows, as a data source re-delivers it: fresh objects under
+  // fresh ids on every round.
+  const churnRound = (round: number): TestRow[] => [
+    { id: `R${round}-0`, name: `Round ${round} item 0`, h: 60 },
+    { id: `R${round}-1`, name: `Round ${round} item 1`, h: 90 },
+    { id: `R${round}-2`, name: `Round ${round} item 2`, h: 120 },
+    { id: `R${round}-3`, name: `Round ${round} item 3`, h: 150 },
+  ];
+
+  it.serial("dropped items leave the cache: the count tracks the list and departed items are collectable", async () => {
+    // serial: owns the global ResizeObserver for the duration of the test.
+    const ro = captureResizeObserver();
+    const container = createContainer();
+    const list = createVList({
+      container,
+      items: churnRound(0),
+      item: { estimatedHeight: 40, template: itemTemplate },
+    }, [autosize()]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(list.getMeasuredCount()).toBe(4);
+
+    // Five refreshes with fresh objects under fresh ids. Every measurement
+    // kept for an item that left is a row the size cache can no longer serve,
+    // an entry nothing will ever read again, and a strong reference that keeps
+    // the departed item object alive.
+    const departed: { deref(): unknown }[] = [];
+    let lastRound: TestRow[] = [];
+    for (let round = 1; round <= 5; round++) {
+      lastRound = churnRound(round);
+      if (round === 1) for (const item of lastRound) departed.push(new WeakRefCtor(item));
+      list.setItems(lastRound);
+      ro.measureAll();
+
+      expect(rowHeights(container)).toEqual([60, 90, 120, 150]);
+      // 4, not the 20 this held before: the list's four items are the four
+      // measurements the cache keeps.
+      expect(list.getMeasuredCount()).toBe(4);
+    }
+
+    // A WeakRef target is kept alive until the job that dereferenced it ends,
+    // so let this round end before collecting.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    Bun.gc(true);
+    expect(departed.filter((ref) => ref.deref() !== undefined).length).toBe(0);
+    expect(list.getMeasuredCount()).toBe(4);
+
+    // Shrinking the list keeps the measurements of the rows that stay: the
+    // items are unchanged, so their rows must not fall back to the estimate.
+    list.setItems(lastRound.slice(0, 2));
+    expect(list.getMeasuredCount()).toBe(2);
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60, 90]);
+  });
+
+  it.serial("groups: dropped items leave the cache through the grouped size cache too", () => {
+    // serial: owns the global ResizeObserver for the duration of the test.
+    // groups() swaps the size cache in its own setup, after this plugin's, so
+    // the bookkeeping has to survive that swap — measured on a grouped list,
+    // the prune was never called before the swap was accounted for.
+    const ro = captureResizeObserver();
+    const container = createContainer();
+    const list = createVList({
+      container,
+      items: churnRound(0),
+      item: { estimatedHeight: 40, template: itemTemplate },
+    }, [
+      autosize(),
+      groups<TestRow>({
+        getGroupForIndex: (i) => (i < 2 ? "A" : "B"),
+        header: { height: 30, template: (g) => `<span>${g}</span>` },
+      }),
+    ]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(list.getMeasuredCount()).toBe(4);
+
+    for (let round = 1; round <= 3; round++) {
+      list.setItems(churnRound(round));
+      ro.measureAll();
+
+      expect(rowHeights(container)).toEqual([60, 90, 120, 150]);
+      expect(list.getMeasuredCount()).toBe(4);
+    }
   });
 });
 
