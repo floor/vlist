@@ -216,6 +216,9 @@ export function autosize<T extends VListItem = VListItem>(
           const index = elementToIndex.get(el);
           if (index === undefined) continue;
 
+          // Verify element wasn't recycled to a different item. The stamp is
+          // in the layout space (groups counts the headers), the key in the
+          // data space — compare in the stamp's space (#363).
           if (el.getAttribute("data-index") !== String(toLayoutIndex(index))) {
             own.unobserve(el);
             continue;
@@ -353,17 +356,33 @@ export function autosize<T extends VListItem = VListItem>(
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
 
+      ctx.hooks.onDestroy((): void => {
+        viewport.removeEventListener("wheel", unpinOnUserScroll);
+        viewport.removeEventListener("touchstart", unpinOnUserScroll);
+      });
+
+      // Late-sizing content: `load`/`error` from images, iframes and the like
+      // do not bubble, but a capture listener on the content element sees
+      // them. One listener pair per list, not per item. Unmeasured items are
+      // still observed and need nothing here.
       const content = ctx.dom.content;
       const onMediaEvent = (event: Event): void => {
         const target = event.target as Element | null;
         if (!target || target === content) return;
         const item = target.closest("[data-index]");
         if (!item || item.parentNode !== content) return;
+        // The stamp is in the layout space; a header translates to -1 and
+        // owns no measurement (#363).
         const index = toDataIndex(Number(item.getAttribute("data-index")));
         if (index >= 0 && isMeasured(index)) remeasure(index);
       };
       content.addEventListener("load", onMediaEvent, true);
       content.addEventListener("error", onMediaEvent, true);
+
+      ctx.hooks.onDestroy((): void => {
+        content.removeEventListener("load", onMediaEvent, true);
+        content.removeEventListener("error", onMediaEvent, true);
+      });
 
       // Public methods
       ctx.hooks.method("isMeasured", isMeasured);
@@ -378,12 +397,9 @@ export function autosize<T extends VListItem = VListItem>(
 
       ctx.hooks.method("getMeasuredCount", (): number => measured.size);
 
-      // Cleanup
+      // Cleanup: this install's observer only. If a newer install has
+      // replaced it, the shared one is that install's and stays.
       ctx.hooks.onDestroy((): void => {
-        viewport.removeEventListener("wheel", unpinOnUserScroll);
-        viewport.removeEventListener("touchstart", unpinOnUserScroll);
-        content.removeEventListener("load", onMediaEvent, true);
-        content.removeEventListener("error", onMediaEvent, true);
         own.disconnect();
         if (observer === own) observer = null;
       });
