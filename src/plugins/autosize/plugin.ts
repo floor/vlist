@@ -122,6 +122,10 @@ export function autosize<T extends VListItem = VListItem>(
    * (updateItem, a page re-delivered under the same ids) — the row keeps its
    * measured height instead of snapping back to the estimate, and `isMeasured`
    * still reports false for it, so it is measured again.
+   *
+   * A data() placeholder (`__placeholder_${index}`) needs no case of its own:
+   * the load writes the store before it notifies, so by the time the rebuild
+   * that announces it runs, the placeholder's id has already left the list.
    */
   function pruneMeasured(): void {
     const ctx = storedCtx;
@@ -366,11 +370,6 @@ export function autosize<T extends VListItem = VListItem>(
 
           measured.set(id, [sizeWithGap, item]);
           pendingRemeasure.delete(id);
-          const pid = `__placeholder_${index}`;
-          if (id !== pid) {
-            measured.delete(pid);
-            pendingRemeasure.delete(pid);
-          }
           if (!wasMeasured || sizeWithGap !== oldSize) {
             hasNewMeasurements = true;
             if (changedLow < 0 || index < changedLow) changedLow = index;
