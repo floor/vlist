@@ -179,7 +179,11 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   page: kb(11.3),
   snapshots: kb(11.5),
   transition: kb(12.4),
-  autosize: kb(11.6),
+  // #372: pruning the measured cache to the list the sweep runs on: +242
+  // bytes gzipped (11935 → 12177), the whole mechanism, no part of it
+  // optional. Rounded up on the 0.1 kB grid (11.9) leaves 8 bytes of room,
+  // so the next tenth.
+  autosize: kb(12.0),
   grid: kb(13.0),
   table: kb(16.4),
   masonry: kb(14.8),
