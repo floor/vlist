@@ -121,7 +121,10 @@ async function build(plugins: VListPlugin<TestItem>[], count = 100): Promise<Fix
 }
 
 describe("a11y — index spaces on a grouped list", () => {
-  it("selects the item the clicked row shows", async () => {
+  // document.activeElement (every click and key press lands focus through
+  // a11y()) and the HTMLElement.prototype geometry getters mocked in beforeAll
+  // are process globals, so the tests run one at a time.
+  it.serial("selects the item the clicked row shows", async () => {
     const f = await build([groupsPlugin(), a11y()]);
     try {
       const row = f.row("Item 3");
@@ -141,7 +144,7 @@ describe("a11y — index spaces on a grouped list", () => {
     }
   });
 
-  it("keeps the focus ring and aria-activedescendant on the item focus:change names", async () => {
+  it.serial("keeps the focus ring and aria-activedescendant on the item focus:change names", async () => {
     const f = await build([groupsPlugin(), a11y()]);
     try {
       f.press("ArrowDown");
@@ -158,7 +161,7 @@ describe("a11y — index spaces on a grouped list", () => {
     }
   });
 
-  it("counts items, not headers, so End reaches the last one", async () => {
+  it.serial("counts items, not headers, so End reaches the last one", async () => {
     const f = await build([groupsPlugin(), a11y()]);
     try {
       f.press("End");
@@ -172,7 +175,7 @@ describe("a11y — index spaces on a grouped list", () => {
     }
   });
 
-  it("counts items, not layout entries, in table mode", async () => {
+  it.serial("counts items, not layout entries, in table mode", async () => {
     // table() paints one row per layout entry, header rows included, so
     // groups() lifts the engine total to the entry count. Navigating by that
     // count puts End past the data, where no item answers and no event fires.
@@ -193,7 +196,7 @@ describe("a11y — index spaces on a grouped list", () => {
     }
   });
 
-  it("does not treat a group header as a click target", async () => {
+  it.serial("does not treat a group header as a click target", async () => {
     const f = await build([groupsPlugin(), a11y()]);
     try {
       const header = f.headerRow();
@@ -211,7 +214,7 @@ describe("a11y — index spaces on a grouped list", () => {
     }
   });
 
-  it("stays a no-op on a list with no layout plugin", async () => {
+  it.serial("stays a no-op on a list with no layout plugin", async () => {
     const f = await build([a11y()]);
     try {
       const row = f.row("Item 3");
