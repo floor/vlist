@@ -8,9 +8,11 @@
  * authorizes `npm publish` alone, so the workflow cannot move `next` itself:
  * after a stable release, `npm install vlist@next` would install an older
  * version than `latest`. publish.yml runs this after a stable publish. It
- * reads the public dist-tags (no auth), waits for `latest` to reach the
- * version just published, and warns with the one command a maintainer runs
- * to fix `next`. A state it cannot determine — the registry unreachable, an
+ * reads the public dist-tags (no auth) once and warns with the one command a
+ * maintainer runs to fix `next`, for the version just published even when the
+ * registry still shows an older `latest` (it lags a fresh publish by a minute
+ * or two; waiting for it gave up before 3.1.3 showed, and printed no command).
+ * A state it cannot determine — the registry unreachable, an
  * unexpected answer — is also a warning: the publish already happened, and
  * this step must not end the release run red by design.
  */
@@ -26,36 +28,32 @@ export interface DistTagCheck {
 export const nextTagCommand = (version: string): string =>
   `npm dist-tag add vlist@${version} next --auth-type=web`;
 
-/** Whether `next` is at or above `latest`; no `next` tag at all is fine. */
-export const checkDistTags = (tags: DistTags): DistTagCheck => {
+/**
+ * Whether `next` is at or above the version that should be on it; no `next`
+ * tag at all is fine. That version is `latest`, or the version just published
+ * when the registry still shows an older `latest` (it lags a fresh publish).
+ */
+export const checkDistTags = (tags: DistTags, published?: string): DistTagCheck => {
   const { latest, next } = tags;
   if (!latest) return { ok: false, message: "npm reports no `latest` dist-tag for vlist" };
   if (!next) return { ok: true, message: `latest ${latest}, no next tag` };
-  if (Bun.semver.order(next, latest) >= 0) return { ok: true, message: `next ${next} ≥ latest ${latest}` };
+  const target = published && Bun.semver.order(published, latest) > 0 ? published : latest;
+  if (Bun.semver.order(next, target) >= 0) return { ok: true, message: `next ${next} ≥ latest ${latest}` };
+  const below =
+    target === latest
+      ? `\`latest\` (${latest})`
+      : `${target}, the version just published (\`latest\` still shows ${latest}: the registry lags a fresh publish)`;
   return {
     ok: false,
     message:
-      `npm \`next\` (${next}) is below \`latest\` (${latest}): \`npm install vlist@next\` installs an older version. ` +
-      `A maintainer runs: ${nextTagCommand(latest)}`,
+      `npm \`next\` (${next}) is below ${below}: \`npm install vlist@next\` installs an older version. ` +
+      `A maintainer runs: ${nextTagCommand(target)}`,
   };
 };
 
-/** The registry can take a minute to show a fresh publish. */
-const DEFAULT_ATTEMPTS = 12;
-
-/** Test seams: another registry to read, and a shorter wait to give it. */
+/** Test seam: another registry to read. */
 const distTagsUrl = (): string =>
   process.env.VLIST_DIST_TAGS_URL ?? "https://registry.npmjs.org/-/package/vlist/dist-tags";
-
-const waitAttempts = (): number => {
-  const raw = process.env.VLIST_DIST_TAGS_ATTEMPTS;
-  if (raw === undefined) return DEFAULT_ATTEMPTS;
-  const attempts = Number(raw);
-  if (!Number.isInteger(attempts) || attempts < 0) {
-    throw new Error("VLIST_DIST_TAGS_ATTEMPTS must be a non-negative integer");
-  }
-  return attempts;
-};
 
 const fetchDistTags = async (): Promise<DistTags> => {
   const res = await fetch(distTagsUrl(), { headers: { "cache-control": "no-cache" } });
@@ -71,25 +69,16 @@ const warn = (title: string, message: string): void => {
 const main = async (): Promise<void> => {
   const version = process.argv[2];
   if (!version) throw new Error("Usage: bun scripts/check-dist-tags.ts <version>");
-  const attempts = waitAttempts();
 
   try {
-    let tags = await fetchDistTags();
-    for (let i = 0; i < attempts && tags.latest && Bun.semver.order(tags.latest, version) < 0; i++) {
-      await Bun.sleep(10_000);
-      tags = await fetchDistTags();
-    }
+    const tags = await fetchDistTags();
 
     if (!tags.latest) {
       warn("next dist-tag unknown", "npm reports no `latest` dist-tag for vlist");
       return;
     }
-    if (Bun.semver.order(tags.latest, version) < 0) {
-      warn("next dist-tag unknown", `npm \`latest\` is ${tags.latest}, not ${version}, after two minutes`);
-      return;
-    }
 
-    const result = checkDistTags(tags);
+    const result = checkDistTags(tags, version);
     if (!result.ok) {
       warn("next dist-tag below latest", result.message);
       return;

@@ -33,6 +33,22 @@ describe("checkDistTags (#334)", () => {
   it("nextTagCommand uses browser auth, no token", () => {
     expect(nextTagCommand("3.1.1")).toBe("npm dist-tag add vlist@3.1.1 next --auth-type=web");
   });
+
+  it("names the published version when latest has not caught up yet", () => {
+    const result = checkDistTags({ latest: "3.1.2", next: "3.1.0-next.3" }, "3.1.3");
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("npm dist-tag add vlist@3.1.3 next --auth-type=web");
+    expect(result.message).not.toContain("vlist@3.1.2 next");
+  });
+
+  it("still names latest when it is above the published version", () => {
+    const result = checkDistTags({ latest: "3.2.0", next: "3.1.0-next.3" }, "3.1.3");
+    expect(result.message).toContain("npm dist-tag add vlist@3.2.0 next --auth-type=web");
+  });
+
+  it("passes when next already is the published version, whatever latest shows", () => {
+    expect(checkDistTags({ latest: "3.1.2", next: "3.1.3" }, "3.1.3").ok).toBe(true);
+  });
 });
 
 /** Serves one dist-tags payload for every request. */
@@ -48,12 +64,11 @@ const serveTags = (tags: unknown) =>
 
 const script = resolve(import.meta.dir, "../../scripts/check-dist-tags.ts");
 
-const runCheck = async (version: string, url: string, attempts?: string) => {
+const runCheck = async (version: string, url: string) => {
   const proc = Bun.spawn(["bun", script, version], {
     env: {
       ...process.env,
       VLIST_DIST_TAGS_URL: url,
-      ...(attempts === undefined ? {} : { VLIST_DIST_TAGS_ATTEMPTS: attempts }),
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -93,12 +108,17 @@ describe("check-dist-tags exit behavior", () => {
     }
   });
 
-  it("warns and exits 0 when latest never reaches the published version", async () => {
+  // The 3.1.3 publish: the registry still showed latest 3.1.2 and next on an
+  // old prerelease when the check ran. The command depends on the version just
+  // published, not on whether `latest` has caught up.
+  it("names the command for the published version while the registry still shows the old latest", async () => {
     const server = serveTags({ latest: "3.1.0", next: "3.1.0-next.3" });
     try {
-      const { exitCode, stdout } = await runCheck("3.1.1", `http://127.0.0.1:${server.port}/`, "0");
+      const { exitCode, stdout } = await runCheck("3.1.1", `http://127.0.0.1:${server.port}/`);
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("::warning title=next dist-tag unknown::");
+      expect(stdout).toContain("::warning title=next dist-tag below latest::");
+      expect(stdout).toContain("npm dist-tag add vlist@3.1.1 next --auth-type=web");
+      expect(stdout).not.toContain("::error");
     } finally {
       server.stop(true);
     }
