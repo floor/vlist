@@ -1668,6 +1668,32 @@ describe("groups — Placeholder → Real Data Transition", () => {
     expect(placeholdersAfter).toBe(0);
     cleanup();
   });
+
+  it("re-renders when the item object at the same data-id is replaced", () => {
+    // The id stays put but the object does not: an item re-delivered under the
+    // same data-id (a refresh that keeps ids) must not keep the markup written
+    // for the previous object.
+    const plugin = groups<TestItem>({
+      getGroupForIndex: (i) => (i < 5 ? "A" : "B"),
+      header: { height: 32, template: (key) => `<h2>${key}</h2>` },
+      sticky: false,
+    });
+    const items = createTestItems(10);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+    ctx.render.force();
+
+    // Layout index 0 is the first group header, so the first data row is 1.
+    const firstRow = () => dom.content.querySelector("[data-index='1']") as HTMLElement;
+    expect(firstRow().textContent).toContain("Item 0");
+
+    items[0] = { ...items[0]!, name: "Renamed 0" };
+    ctx.render.force();
+
+    expect(firstRow().textContent).toContain("Renamed 0");
+    cleanup();
+  });
 });
 
 // =============================================================================
