@@ -54,15 +54,77 @@ export function a11y<T extends VListItem = VListItem>(
       let selId: string | number | undefined;
       let selIdx = -1;
 
-      const getItem = (i: number): T | undefined => ctx.items.at(i);
-      const getTotal = (): number => engineState.totalItems;
+      // ── Index spaces ────────────────────────────────────────────
+      // A layout plugin renders in a space of its own and says so through the
+      // translators it publishes: groups() counts a header entry per group,
+      // carousel() a lap, table() a header row. That space is what the DOM's
+      // `data-index` and the rendered ids carry, and what the renderer hands
+      // to setStateFn. Everything kept here — focusIdx, selIdx, the indices
+      // in focus:change and selection:change, the live-region count, the
+      // items looked up — is the DATA space, which is what `_getFocusedIndex`
+      // promises a plugin that reads it. So translate at every touch of the
+      // other space, as selection() does (selection/plugin.ts `toDataIndex`)
+      // and as the ARIA position pass does (rendering/aria.ts).
+      //
+      // Resolved lazily and once: a plugin can publish after setup — groups()
+      // in table mode publishes _getItemAtLayout from a microtask.
+      let spacesResolved = false;
+      let l2dFn: ((i: number) => number) | null = null;
+      let d2lFn: ((i: number) => number) | null = null;
+      let dataTotalFn: (() => number) | null = null;
+      let dataItemFn: ((i: number) => T | undefined) | null = null;
+      let layoutItemFn: ((i: number) => T | undefined) | null = null;
+
+      const resolveSpaces = (): void => {
+        if (spacesResolved) return;
+        spacesResolved = true;
+        l2dFn = (ctx.hooks.get("_layoutToDataIndex") as typeof l2dFn) ?? null;
+        d2lFn = (ctx.hooks.get("_dataToLayoutIndex") as typeof d2lFn) ?? null;
+        dataTotalFn = (ctx.hooks.get("_getTotal") as (() => number) | undefined) ?? null;
+        dataItemFn = (ctx.hooks.get("_getItem") as typeof dataItemFn) ?? null;
+        layoutItemFn = (ctx.hooks.get("_getItemAtLayout") as typeof layoutItemFn) ?? null;
+      };
+
+      /** A rendered index → the item index it stands for (-1: no item). */
+      const toDataIndex = (layoutIndex: number): number => {
+        resolveSpaces();
+        return l2dFn ? l2dFn(layoutIndex) : layoutIndex;
+      };
+
+      /** An item index → the rendered index it is painted at. */
+      const toLayoutIndex = (dataIndex: number): number => {
+        resolveSpaces();
+        return d2lFn ? d2lFn(dataIndex) : dataIndex;
+      };
+
+      const getItem = (i: number): T | undefined => {
+        resolveSpaces();
+        // data()'s storage accessor, which always takes data indices.
+        if (dataItemFn) return dataItemFn(i);
+        // groups() in table mode re-points ctx.items.at() at the render
+        // entries, headers included; it publishes this one for data lookups.
+        if (layoutItemFn) {
+          const li = toLayoutIndex(i);
+          if (li >= 0) return layoutItemFn(li);
+        }
+        return ctx.items.at(i);
+      };
+      // The count of items, not of rendered entries — carousel inflates the
+      // engine total to its laps and groups counts its headers. Plugins that
+      // know better publish _getTotal; with none, the two spaces coincide.
+      const getTotal = (): number => {
+        resolveSpaces();
+        return dataTotalFn ? dataTotalFn() : engineState.totalItems;
+      };
 
       const _focusEvt = { id: 0 as string | number, index: 0 };
       const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
 
       ctx.render.setStateFn((_i: number, is: ItemState): void => {
-        is.selected = selIdx === _i;
-        is.focused = focusVis && focusIdx === _i;
+        // `_i` is the render index, one header per group under groups().
+        const di = _i >= 0 ? toDataIndex(_i) : -1;
+        is.selected = di >= 0 && selIdx === di;
+        is.focused = di >= 0 && focusVis && focusIdx === di;
       });
 
       // tree() treats a state function as an external focus owner and then
@@ -80,7 +142,7 @@ export function a11y<T extends VListItem = VListItem>(
           if (!it || it.id !== id) continue;
           focusIdx = i;
           if (keyboard !== "preserve") focusVis = keyboard === true;
-          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${i}`);
+          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${toLayoutIndex(i)}`);
           else dom.content.removeAttribute("aria-activedescendant");
           _focusEvt.id = id;
           _focusEvt.index = i;
@@ -118,16 +180,22 @@ export function a11y<T extends VListItem = VListItem>(
         // carousel reveals inside the current lap. A prefix sum leaves the
         // focused cell below the fold and the active descendant unmounted.
         if (nav.reveal) {
+          // carousel's reveal takes the logical item index, as nav.navigate
+          // hands back — the index this plugin carries.
           nav.reveal(idx);
           return;
         }
         const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
         if (reveal) {
+          // groups() publishes this in its layout space (a sticky header is an
+          // entry, and it scrolls to the rendered row). masonry() and page()
+          // publish the item space, where the translation is the identity.
           ctx.scroll.cancel();
-          reveal(idx);
+          reveal(toLayoutIndex(idx));
           return;
         }
-        const ci = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
+        const li = toLayoutIndex(idx);
+        const ci = nav.scrollIndex ? nav.scrollIndex(li) : li;
         const off = sizeCache.getOffset(ci);
         const sz = sizeCache.getSize(ci);
         const sp = ctx.scroll.getPixelEquivalent();
@@ -147,7 +215,12 @@ export function a11y<T extends VListItem = VListItem>(
       };
 
       const commit = (idx: number, scroll: boolean): void => {
-        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${idx}`);
+        // Rows are identified by their render index — groups() derives the id
+        // from the layout index — so the active descendant needs that one back.
+        const li = toLayoutIndex(idx);
+        if (li >= 0) {
+          dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${li}`);
+        }
         if (scroll) scrollIntoView(idx);
         ctx.render.force();
       };
@@ -285,7 +358,11 @@ export function a11y<T extends VListItem = VListItem>(
         if (engineState.destroyed) return;
         const el = (e.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
-        const idx = parseInt(el.dataset.index ?? "-1", 10);
+        const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
+        if (layoutIdx < 0) return;
+        // The attribute is a layout index under groups()/table()/carousel().
+        // A group header row maps to no item (-1), so it is not a target.
+        const idx = toDataIndex(layoutIdx);
         if (idx < 0) return;
         const it = getItem(idx);
         if (!it || (it as Record<string, unknown>).__groupHeader) return;

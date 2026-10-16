@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- With `groups()` loaded, `a11y()` read a row's rendered index as an item index,
+  so the two disagreed wherever the spaces differ: a click on the row showing
+  "Item 3" reported the id of "Item 4" in `selection:change`, the focus ring and
+  `aria-activedescendant` sat one row above the item `focus:change` named (so
+  Enter acted on the other one), a group header row answered a click as if it
+  were an item, and with `table()` the end-of-list keys landed past the last
+  item. The rendered index is now translated at each touch, through the hooks
+  the layout plugin publishes, and the count `a11y()` navigates by comes from
+  `_getTotal`, as `selection()` and `autosize()` already do (#380).
+
 ## [3.1.4] - 2026-10-16
 
 ### Fixed
