@@ -107,11 +107,11 @@ function ringId(container: HTMLElement): number | null {
 }
 
 // =============================================================================
-// FLO-220 — the focus ring through a keyboard sort
+// #270 — the focus ring through a keyboard sort
 // =============================================================================
 
-// FLO-220. sortable moves the focus through selection's `_focusById`, which
-// since FLO-209 takes a `keyboard` flag. Sortable never passed it, so every
+// #270. sortable moves the focus through selection's `_focusById`, which
+// since #267 takes a `keyboard` flag. Sortable never passed it, so every
 // keyboard move was treated like a click: with the default `focusOnClick` the
 // ring vanished at the first arrow — mid-sort, not after the drop —
 // aria-activedescendant stayed on the row the grabbed item had left, and

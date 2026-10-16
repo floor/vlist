@@ -198,7 +198,7 @@ nothing `next` does not, and staging.vlist.io deploys from `next`, not from it.
 - ❌ **NEVER merge, tag, release, deploy, or post publicly without explicit permission**
 - ✅ Feature branches branch off `next` and merge back into `next` through a PR
 - ✅ Committing on your own branch and opening a PR is ordinary work — no need to ask
-- ✅ A PR merges only after the gate in `.agents/agents.yaml` passes on a clean export
+- ✅ A PR merges only after CI is green on its head — **Test & Build** (Typecheck, Test, Test `--concurrent`, Coverage threshold, Build, Bundle size + tree-shaking, Heap growth) and **Browser suites** — and a review has passed
 - ✅ **A PR merges only when `next` is green at its base.** If `next` is red, the first PR is
   the one that makes it green — nothing else merges on top. Ten PRs merged onto a red `next`
   in 2026-09 and hid five layers of failure for three days
@@ -227,7 +227,7 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 2. Publishes to npm (`npm publish`)
 3. Creates a GitHub Release automatically (`gh release create`) with auto-generated notes
 4. On a stable release, its last step warns while npm `next` is below `latest`
-   (`scripts/check-dist-tags.ts`, FLO-245): trusted publishing cannot move `next`,
+   (`scripts/check-dist-tags.ts`, #334): trusted publishing cannot move `next`,
    so a maintainer runs `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. The
    step prints that exact command in a warning and exits 0; when the registry
    cannot be read, it warns that the tags are unknown and still exits 0

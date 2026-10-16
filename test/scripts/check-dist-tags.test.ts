@@ -3,7 +3,7 @@ import { checkDistTags, nextTagCommand } from "../../scripts/check-dist-tags";
 import { NativeResponse } from "../helpers/native";
 import { resolve } from "node:path";
 
-describe("checkDistTags (FLO-245)", () => {
+describe("checkDistTags (#334)", () => {
   it("fails when next is a prerelease of the stable latest, naming the fix", () => {
     const result = checkDistTags({ latest: "3.1.0", next: "3.1.0-next.3" });
     expect(result.ok).toBe(false);

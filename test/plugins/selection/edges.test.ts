@@ -539,7 +539,7 @@ describe("selection + tree — followFocus", () => {
     expect(list.getSelected()).toEqual(["readme"]);
   }));
 
-  // FLO-209. tree() moves focus through selection's _focusById, which treated the
+  // #267. tree() moves focus through selection's _focusById, which treated the
   // move like a click: with the default `focusOnClick: false` the focus ring
   // disappeared, aria-activedescendant stayed on the old row, _getFocusedIndex
   // answered -1, and tree() ignored every further ArrowRight / ArrowLeft until an

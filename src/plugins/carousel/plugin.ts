@@ -88,7 +88,7 @@ export interface CarouselState {
  *
  * A shorter lap — two or three slides in a wide carousel — shows more than one
  * lap at once, so the margin grows to cover the viewport and a slide of
- * overscan (FLO-204); and elements are placed by their virtual index, so a
+ * overscan (#316); and elements are placed by their virtual index, so a
  * slide is painted once per lap on screen. They used to be placed by their
  * data index, which put every copy of a slide on the same spot and left the
  * rest of the viewport blank.

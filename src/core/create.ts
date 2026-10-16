@@ -731,7 +731,7 @@ export function createCore<T extends VListItem = VListItem>(
    *
    * The swap waits for the driver, loaded on first need, and for idle: a scroll
    * in flight is never cut off. Until then the browser clamps a native list,
-   * which the smooth-scroll commit already renders correctly (FLO-247).
+   * which the smooth-scroll commit already renders correctly (#314).
    */
   function checkInput(pixels: number): void {
     const synthetic = !!logicalHandler;

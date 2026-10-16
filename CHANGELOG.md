@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.3] - 2026-10-16
+
+### Fixed
+
+- With `groups()` and `autosize()` together, a row could be sized to a group
+  header's measured height, or to a neighbouring row's: the measurement was
+  keyed and read back in the data index space, but the element it was measured
+  from was looked up in the layout index space, where `groups()` counts the
+  headers. The two index spaces are now translated at each lookup, so a
+  measurement is taken from the element of the data index it belongs to (#363).
+
 ## [3.1.2] - 2026-10-09
 
 ### Fixed
@@ -215,7 +226,7 @@ scrollbar), and the fixes since 3.0.0.
   `dist/synthetic-driver.js`, downloaded the first time a list needs it. A
   swap waits for a scroll in flight to end; a jump the browser clamped lands
   where it was asked. `scroll:mode` reports each swap
-  ([RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff), FLO-247).
+  ([RFC-015](https://vlist.io/docs/rfcs/RFC-015-Overflow-Handoff), #319).
 
 - A synthetic list draws a scrollbar by default: synthetic content is the size
   of its viewport, so the browser draws none. It comes with the lazy driver,
@@ -258,18 +269,18 @@ scrollbar), and the fixes since 3.0.0.
   than the viewport; each slide was placed by its data index, so every copy
   landed on the same spot. Slides are now placed by their virtual index —
   painted once per lap on screen — and the index space grows with the
-  geometry instead of being fixed at three laps (FLO-204).
+  geometry instead of being fixed at three laps (#316).
 
 - Native lists: a smooth `scrollToIndex` past the browser's element-size cap
   no longer leaves the list blank. The browser clamps `scrollTop` at its cap
   (Chrome: 33,554,428 px) and the animation committed the position it wrote,
   not the one applied, so vlist rendered rows below the last reachable one.
   It now commits what the browser applied; a million 40 px rows jump to row
-  838,861 in Chrome, the last one the browser can show (FLO-247).
+  838,861 in Chrome, the last one the browser can show (#314).
 
 - The npm package ships `dist/version.json`, the build stamp (version, commit,
   build time) a site can read to say which vlist it serves. It was built
-  since #305 but left out of the `files` list (FLO-246).
+  since #305 but left out of the `files` list (#315).
 
 ## [3.0.0] - 2026-09-25
 
@@ -1805,7 +1816,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.3...HEAD
+[3.1.3]: https://github.com/floor/vlist/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/floor/vlist/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/floor/vlist/compare/v3.1.0...v3.1.1
 [2.0.4]: https://github.com/floor/vlist/compare/v2.0.3...v2.0.4

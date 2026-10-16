@@ -944,14 +944,14 @@ describe("ScrollHandler.onIdle callback", () => {
 });
 
 // =============================================================================
-// FLO-247 — a smooth scroll past the browser's element-size cap
+// #314 — a smooth scroll past the browser's element-size cap
 // =============================================================================
 
 // Past its cap (Chrome: 33,554,428 px) the browser clamps scrollTop. The
 // smooth-scroll tick committed the position it wrote, not the one applied, so
 // vlist rendered rows the viewport could not reach: a blank list. Happy DOM
 // does not clamp, so the viewport here does, at 1,000 px.
-describe("ScrollHandler.smoothScrollTo() past a clamped scroll range (FLO-247)", () => {
+describe("ScrollHandler.smoothScrollTo() past a clamped scroll range (#314)", () => {
   const clampedViewport = (cap: number): HTMLElement => {
     const viewport = document.createElement("div");
     let top = 0;

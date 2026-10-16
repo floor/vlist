@@ -156,7 +156,7 @@ export function sortable<T extends VListItem = VListItem>(
   // Put the ghost where the pointer is, in whatever space the ghost's
   // containing block lives in, by reading where it landed and correcting by
   // the difference. It used to be `position: fixed` at the pointer's client
-  // coordinates. Measured on an iPhone (FLO-87, 2026-09-25): pinch-zoomed
+  // coordinates. Measured on an iPhone (#303, 2026-09-25): pinch-zoomed
   // 2.21x and panned by (86, 215), the fixed ghost's rect sat exactly (86, 215)
   // from where its inline left/top said -- on WebKit, fixed positioning and
   // the client space disagree by the visual viewport's offset, so the row

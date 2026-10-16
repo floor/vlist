@@ -143,7 +143,7 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // Headroom rule (2026-09-18): each budget is the measured size rounded up on a
 // 0.1 kB grid with at least ~100 bytes of room. A budget exists to catch a
 // regression, not a rounding: with budgets set to the byte, a correct core
-// change (FLO-191) failed this gate three times by 5, 5 and 2 bytes. The sizes
+// change failed this gate three times by 5, 5 and 2 bytes. The sizes
 // quoted in the README still come from `bun run size`, never from this table.
 //
 // Two budgets are not headroom but a promise: the base and native entries stay
@@ -153,7 +153,7 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // gate was dark behind a failing typecheck (#287 alone cost 43 bytes), and
 // Dr Jones chose 10.0 kB over trimming merged fixes. 10.0 kB leaves the base
 // 40 bytes of room, so the next core growth is a decision again, on purpose.
-// 10.3 kB since 2026-09-27: `scroll.mode` (RFC-015, FLO-247) hands a list past
+// 10.3 kB since 2026-09-27: `scroll.mode` (RFC-015, #319) hands a list past
 // the browser's size limit to synthetic input by itself, loading the driver
 // only then. It costs the core 301 bytes, after a trim pass from 405; Dr Jones
 // chose it over keeping the handoff opt-in. The base has 33 bytes of room, so

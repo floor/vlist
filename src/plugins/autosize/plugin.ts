@@ -69,6 +69,26 @@ export function autosize<T extends VListItem = VListItem>(
   const pendingRemeasure = new Set<number>();
   const elementToIndex = new WeakMap<Element, number>();
 
+  /**
+   * Index-space translators (#363). The measurements here are keyed and read
+   * back in the DATA space (a grouped size cache calls sizeFn with
+   * entry.dataIndex), but a layout plugin keys its rendered-element map and
+   * stamps `data-index` in the LAYOUT space — groups() counts the headers.
+   * Resolve the hooks per call: a layout plugin (groups at priority 11) sets
+   * up after this one (priority 5), so they are not registered yet at setup.
+   * Without a layout plugin the spaces coincide and the lookups are identity.
+   */
+  const toLayoutIndex = (dataIndex: number): number => {
+    const fn = storedCtx?.hooks.get("_dataToLayoutIndex") as
+      ((i: number) => number) | undefined;
+    return fn ? fn(dataIndex) : dataIndex;
+  };
+  const toDataIndex = (layoutIndex: number): number => {
+    const fn = storedCtx?.hooks.get("_layoutToDataIndex") as
+      ((i: number) => number) | undefined;
+    return fn ? fn(layoutIndex) : layoutIndex;
+  };
+
   let pendingScrollDelta = 0;
   let pendingContentSizeUpdate = false;
   let pinnedToEnd = false;
@@ -193,8 +213,10 @@ export function autosize<T extends VListItem = VListItem>(
           const index = elementToIndex.get(el);
           if (index === undefined) continue;
 
-          // Verify element wasn't recycled to a different item
-          if (el.getAttribute("data-index") !== String(index)) {
+          // Verify element wasn't recycled to a different item. The stamp is
+          // in the layout space (groups counts the headers), the key in the
+          // data space — compare in the stamp's space (#363).
+          if (el.getAttribute("data-index") !== String(toLayoutIndex(index))) {
             own.unobserve(el);
             continue;
           }
@@ -228,7 +250,9 @@ export function autosize<T extends VListItem = VListItem>(
             if (index > changedHigh) changedHigh = index;
           }
 
-          if (index < firstVisible && sizeWithGap !== oldSize) {
+          // firstVisible comes from the size cache, which a layout plugin
+          // keys by layout index — compare positions in that same space.
+          if (toLayoutIndex(index) < firstVisible && sizeWithGap !== oldSize) {
             pendingScrollDelta += sizeWithGap - oldSize;
           }
 
@@ -332,8 +356,10 @@ export function autosize<T extends VListItem = VListItem>(
         if (!target || target === content) return;
         const item = target.closest("[data-index]");
         if (!item || item.parentNode !== content) return;
-        const index = Number(item.getAttribute("data-index"));
-        if (isMeasured(index)) remeasure(index);
+        // The stamp is in the layout space; a header translates to -1 and
+        // owns no measurement (#363).
+        const index = toDataIndex(Number(item.getAttribute("data-index")));
+        if (index >= 0 && isMeasured(index)) remeasure(index);
       };
       content.addEventListener("load", onMediaEvent, true);
       content.addEventListener("error", onMediaEvent, true);
@@ -370,7 +396,11 @@ export function autosize<T extends VListItem = VListItem>(
           const idx = state.visibleIndices[i]!;
           if (isMeasured(idx)) continue;
 
-          const el = storedCtx.dom.renderedElement(idx);
+          // state.visibleIndices carries DATA indices (groups fills it that
+          // way, headers skipped); a layout plugin's rendered-element map is
+          // keyed by LAYOUT index. Look the element up in its own space, or a
+          // header's measurement lands under the first row of its group (#363).
+          const el = storedCtx.dom.renderedElement(toLayoutIndex(idx));
           if (!el) continue;
 
           // Clear the explicit size set by phase2Commit so

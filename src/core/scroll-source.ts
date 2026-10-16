@@ -71,7 +71,7 @@ export function createScrollSource(config: ScrollHandlerConfig): ScrollHandler &
         // Commit what the browser applied when it did not apply what we wrote.
         // Past an element's size cap (Chrome: 33,554,428 px) it clamps the
         // write; committing the intended position rendered rows below the last
-        // reachable one and the list went blank (FLO-247). Within a pixel the
+        // reachable one and the list went blank (#314). Within a pixel the
         // intended value wins, keeping sub-pixel positions the browser rounds.
         const applied = isX ? viewport.scrollLeft : viewport.scrollTop;
         commitScroll(Math.abs(applied - pos) > 1 ? applied : pos);

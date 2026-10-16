@@ -1,5 +1,5 @@
 /**
- * Three laps and a symmetric fold (FLO-163).
+ * Three laps and a symmetric fold (#263).
  *
  * The position lives in the home lap, `[lap, 2 × lap)`, and leaves it for one
  * frame at most, in either direction. What is asserted here is what a person
