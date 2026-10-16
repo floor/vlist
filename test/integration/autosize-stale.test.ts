@@ -372,6 +372,32 @@ describe("autosize() stale measurement prevention — plain list", () => {
     expect(rowHeights(container)).toEqual([60, 120, 150]);
   });
 
+  it.serial("removeItems: removes several items and shifts the rest without stale sizes", () => {
+    const ro = captureResizeObserver();
+    const container = createContainer();
+    const initialItems: TestRow[] = [
+      { id: "I0", name: "Item 0", h: 60 },
+      { id: "I1", name: "Item 1", h: 90 },
+      { id: "I2", name: "Item 2", h: 120 },
+      { id: "I3", name: "Item 3", h: 150 },
+    ];
+    const list = createVList({
+      container,
+      items: initialItems,
+      item: { estimatedHeight: 40, template: itemTemplate },
+    }, [autosize()]);
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+
+    ro.measureAll();
+    expect(rowHeights(container)).toEqual([60, 90, 120, 150]);
+
+    // Remove I0 and I2: index 0 is now I1 (90), index 1 is now I3 (150)
+    expect(list.removeItems(["I0", "I2"])).toBe(2);
+    ro.measureAll();
+
+    expect(rowHeights(container)).toEqual([90, 150]);
+  });
+
   it.serial("updateItem: remeasures updated item when content changes and id stays", () => {
     const ro = captureResizeObserver();
     const container = createContainer();
