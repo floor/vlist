@@ -170,7 +170,11 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "synthetic + createStats": kb(13.2),
   native: kb(10.3),
   // #339: owner-only focus recovery, including engines without removal focusout.
-  a11y: kb(12.1),
+  // #380/#381: the rendered-index translators and the click focus order:
+  // +164 bytes gzipped (12315 → 12479), the space hooks being the mechanism.
+  // Rounded up on the 0.1 kB grid (12.2) leaves 13 bytes of room, so the next
+  // tenth is a decision again.
+  a11y: kb(12.2),
   selection: kb(13.7),
   data: kb(15.2),
   scrollbar: kb(13.3),
