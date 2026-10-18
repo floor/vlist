@@ -69,20 +69,19 @@ export function a11y<T extends VListItem = VListItem>(
       // Resolved lazily and once: a plugin can publish after setup — groups()
       // in table mode publishes _getItemAtLayout from a microtask.
       let spacesResolved = false;
-      let l2dFn: ((i: number) => number) | null = null;
-      let d2lFn: ((i: number) => number) | null = null;
-      let dataTotalFn: (() => number) | null = null;
-      let dataItemFn: ((i: number) => T | undefined) | null = null;
-      let layoutItemFn: ((i: number) => T | undefined) | null = null;
+      let l2dFn: ((i: number) => number) | undefined;
+      let d2lFn: ((i: number) => number) | undefined;
+      let dataTotalFn: (() => number) | undefined;
+      let tableMode = false;
 
       const resolveSpaces = (): void => {
         if (spacesResolved) return;
         spacesResolved = true;
-        l2dFn = (ctx.hooks.get("_layoutToDataIndex") as typeof l2dFn) ?? null;
-        d2lFn = (ctx.hooks.get("_dataToLayoutIndex") as typeof d2lFn) ?? null;
-        dataTotalFn = (ctx.hooks.get("_getTotal") as (() => number) | undefined) ?? null;
-        dataItemFn = (ctx.hooks.get("_getItem") as typeof dataItemFn) ?? null;
-        layoutItemFn = (ctx.hooks.get("_getItemAtLayout") as typeof layoutItemFn) ?? null;
+        const g = ctx.hooks.get;
+        l2dFn = g("_layoutToDataIndex") as typeof l2dFn;
+        d2lFn = g("_dataToLayoutIndex") as typeof d2lFn;
+        dataTotalFn = g("_getTotal") as () => number;
+        tableMode = !!g("_getItemAtLayout");
       };
 
       /** A rendered index → the item index it stands for (-1: no item). */
@@ -99,15 +98,11 @@ export function a11y<T extends VListItem = VListItem>(
 
       const getItem = (i: number): T | undefined => {
         resolveSpaces();
-        // data()'s storage accessor, which always takes data indices.
-        if (dataItemFn) return dataItemFn(i);
-        // groups() in table mode re-points ctx.items.at() at the render
-        // entries, headers included; it publishes this one for data lookups.
-        if (layoutItemFn) {
-          const li = toLayoutIndex(i);
-          if (li >= 0) return layoutItemFn(li);
-        }
-        return ctx.items.at(i);
+        // ctx.items.at() already routes through data()'s getFn, which takes
+        // data indices. groups() in table mode re-points it at its render
+        // entries, headers included, so there a data index is translated to
+        // the layout row that paints it.
+        return ctx.items.at(tableMode ? toLayoutIndex(i) : i);
       };
       // The count of items, not of rendered entries — carousel inflates the
       // engine total to its laps and groups counts its headers. Plugins that
@@ -157,20 +152,18 @@ export function a11y<T extends VListItem = VListItem>(
         liveRegion.textContent = message;
       }
 
+      /** Whether the item at `i` is a group header (a missing item is not). */
+      const isHeader = (i: number): boolean =>
+        !!(getItem(i) as Record<string, unknown> | undefined)?.__groupHeader;
+
       const skip = (from: number, dir: 1 | -1, total: number): number => {
         let i = from;
-        while (i >= 0 && i < total) {
-          const it = getItem(i);
-          if (!it || !(it as Record<string, unknown>).__groupHeader) return i;
-          i += dir;
+        while (i >= 0 && i < total && isHeader(i)) i += dir;
+        if (i < 0 || i >= total) {
+          i = from - dir;
+          while (i >= 0 && i < total && isHeader(i)) i -= dir;
         }
-        i = from - dir;
-        while (i >= 0 && i < total) {
-          const it = getItem(i);
-          if (!it || !(it as Record<string, unknown>).__groupHeader) return i;
-          i -= dir;
-        }
-        return from;
+        return i >= 0 && i < total ? i : from;
       };
 
       const scrollIntoView = (idx: number): void => {
@@ -217,10 +210,7 @@ export function a11y<T extends VListItem = VListItem>(
       const commit = (idx: number, scroll: boolean): void => {
         // Rows are identified by their render index — groups() derives the id
         // from the layout index — so the active descendant needs that one back.
-        const li = toLayoutIndex(idx);
-        if (li >= 0) {
-          dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${li}`);
-        }
+        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${toLayoutIndex(idx)}`);
         if (scroll) scrollIntoView(idx);
         ctx.render.force();
       };
@@ -358,7 +348,7 @@ export function a11y<T extends VListItem = VListItem>(
         if (engineState.destroyed) return;
         const el = (e.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
-        const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
+        const layoutIdx = +el.dataset.index!;
         if (layoutIdx < 0) return;
         // A click on any rendered row is a click into the list: it takes focus
         // even when the row is not a selection target. The attribute is a
