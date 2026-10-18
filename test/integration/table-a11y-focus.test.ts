@@ -158,7 +158,7 @@ describe("#352 — table() + a11y(): the grid root is the tab stop", () => {
         expect(f.content.hasAttribute("tabindex")).toBe(false);
         clickRow(f.content);
         await tick(0);
-        expect(document.activeElement).toBe(f.root);
+        expect(document.activeElement === f.root).toBe(true);
       } finally {
         f.dispose();
       }
@@ -189,7 +189,7 @@ describe("#352 — keys reach the grid", () => {
     try {
       await tick();
       f.root.focus();
-      expect(document.activeElement).toBe(f.root);
+      expect(document.activeElement === f.root).toBe(true);
       // Landing on the grid rings the first row, as the listbox does.
       expect(activeIndex(f.content)).toBe(0);
       key(f.root, "ArrowDown");
@@ -198,7 +198,7 @@ describe("#352 — keys reach the grid", () => {
       key(f.root, "End");
       await tick(0);
       expect(activeIndex(f.content)).toBe(999);
-      expect(document.activeElement).toBe(f.root);
+      expect(document.activeElement === f.root).toBe(true);
       key(f.root, "Home");
       await tick(0);
       expect(activeIndex(f.content)).toBe(0);
@@ -215,10 +215,10 @@ describe("#352 — keys reach the grid", () => {
       await tick();
       const cell = f.root.querySelector<HTMLElement>(".vlist-table-header-cell")!;
       cell.focus();
-      expect(document.activeElement).toBe(cell);
+      expect(document.activeElement === cell).toBe(true);
       key(cell, "ArrowDown");
       await tick(0);
-      expect(document.activeElement).toBe(f.root);
+      expect(document.activeElement === f.root).toBe(true);
       expect(activeIndex(f.content)).toBe(0);
     } finally {
       f.dispose();
@@ -234,7 +234,7 @@ describe("#352 — keys reach the grid", () => {
         cell.focus();
         key(cell, "ArrowDown");
         await tick(0);
-        expect(document.activeElement).toBe(f.root);
+        expect(document.activeElement === f.root).toBe(true);
         expect(activeIndex(f.content)).toBe(0);
         key(f.root, "End");
         await tick(0);
@@ -283,7 +283,11 @@ for (const layout of ["plain", "grid", "groups", "tree", "masonry", "table"] as 
       expect(target.getAttribute("tabindex")).toBe("0");
       clickRow(f.content);
       await tick(0);
-      expect(document.activeElement).toBe(target);
+      // A boolean compare: a failed identity assert makes Bun's formatter
+      // walk the whole vlist element graph and never print (#381). The click
+      // row is layout index 0 — under groups() that is the first group
+      // header, so this also pins that a header click still focuses the list.
+      expect(document.activeElement === target).toBe(true);
       expect(target.getAttribute("tabindex")).toBe("0");
     } finally {
       f.dispose();

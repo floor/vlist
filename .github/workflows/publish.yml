@@ -41,9 +41,11 @@ jobs:
       - name: Build
         run: bun run build --types
 
-      # Trusted publishing needs npm 11.5.1 or later; setup-node ships 10.x
+      # Trusted publishing needs npm 11.5.1 or later; moving `next` with the
+      # workflow's OIDC identity needs 11.21.0 (npm's trusted-publishing docs,
+      # "Managing dist-tags with trusted publishing"). Pinned, bump on purpose.
       - name: Newer npm
-        run: npm install -g npm@latest
+        run: npm install -g npm@11.21.0
 
       # No NODE_AUTH_TOKEN: the workflow's own OIDC identity is what npm
       # trusts (the package's trusted publisher is floor/vlist publish.yml).
@@ -64,20 +66,43 @@ jobs:
             npm publish --provenance --access public
           fi
 
+      # npm 11.21.0 can move `next` with this workflow's OIDC identity once the
+      # package's trusted publisher allows it: "Allow npm dist-tag" in the
+      # Trusted Publisher settings on npmjs.com (disabled by default). Stable
+      # only: a prerelease already published under `next`. The step is allowed
+      # to fail — with the setting off it does — and check-dist-tags.ts below is
+      # the fallback that still names the command a maintainer runs (#334).
+      - name: Move next to this release
+        if: ${{ !contains(github.ref_name, '-') }}
+        continue-on-error: true
+        run: npm dist-tag add "vlist@${GITHUB_REF_NAME#v}" next
+
+      # The notes are the tag's CHANGELOG.md section and its compare link
+      # (scripts/release-notes.ts), not GitHub's generated notes. A re-run on
+      # the same tag edits the existing release's notes instead of failing.
       - name: Create GitHub Release
         run: |
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --prerelease
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          bun scripts/release-notes.ts "$version" > "$RUNNER_TEMP/notes.md"
+          if [[ "$version" == *-* ]]; then
+            flags=(--prerelease --latest=false)
           else
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+            flags=(--latest)
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${flags[@]}"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
 
-      # A stable publish moves `latest` only, and trusted publishing cannot move
-      # `next` (OIDC authorizes `npm publish` alone), so `next` can fall below
-      # `latest` (#334). Last, so the package and the release are already out:
-      # it reads the public dist-tags and warns with the command a maintainer runs.
+      # The fallback for the move above (#334): a stable publish moves `latest`
+      # only, and the OIDC `next` move fails while "Allow npm dist-tag" is off,
+      # so `next` can still fall below `latest`. Last, so the package and the
+      # release are already out: it reads the public dist-tags and warns with
+      # the command a maintainer runs.
       - name: Check next dist-tag is not below latest
         if: ${{ !contains(github.ref_name, '-') }}
         run: bun scripts/check-dist-tags.ts "${GITHUB_REF_NAME#v}"

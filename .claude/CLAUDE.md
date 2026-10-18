@@ -223,15 +223,21 @@ Runs on push to `next`, `staging` and `main`, and on PRs targeting any of them:
 
 ### Publish (`publish.yml`)
 Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
-1. Checks out main, installs, builds
+1. Checks out the tag, installs, builds
 2. Publishes to npm (`npm publish`)
-3. Creates a GitHub Release automatically (`gh release create`) with auto-generated notes
-4. On a stable release, its last step warns while npm `next` is below the version
-   just published (`scripts/check-dist-tags.ts`, #334), without waiting for the
-   registry's `latest` to catch up: trusted publishing cannot move `next`,
-   so a maintainer runs `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. The
-   step prints that exact command in a warning and exits 0; when the registry
-   cannot be read, it warns that the tags are unknown and still exits 0
+3. On a stable release, moves npm `next` to the version just published with the
+   workflow's OIDC identity (`npm dist-tag add`, npm >= 11.21.0). Needs
+   **Allow npm dist-tag** on the package's trusted publisher on npmjs.com
+   (disabled by default); the step is allowed to fail when that is off
+4. Creates a GitHub Release with the tag's `CHANGELOG.md` section and its
+   compare link (`scripts/release-notes.ts`), `--verify-tag`; a re-run on the
+   same tag edits the existing release's notes instead of failing
+5. Its last step is the fallback for step 3: it warns while npm `next` is below
+   the version just published (`scripts/check-dist-tags.ts`, #334), without
+   waiting for the registry's `latest` to catch up, so a maintainer runs
+   `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. The step prints that
+   exact command in a warning and exits 0; when the registry cannot be read, it
+   warns that the tags are unknown and still exits 0
 
 **Do not manually create GitHub Releases** — the workflow handles it.
 
@@ -252,7 +258,7 @@ cannot send 3.x through `staging`.
 7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
 8. Returns to the source branch
 9. Prints the `npm dist-tag add vlist@X.Y.Z next --auth-type=web` a maintainer
-   runs once the version is on npm (see RELEASING.md)
+   runs if the publish workflow could not move `next` itself (see RELEASING.md)
 
 ### Pre-Release Checklist
 Before tagging a new version, complete ALL of these steps:
