@@ -23,7 +23,9 @@ a11y under `groups()`: each rendered row is read, clicked and announced in the i
   were an item, and with `table()` the end-of-list keys landed past the last
   item. The rendered index is now translated at each touch, through the hooks
   the layout plugin publishes, and the count `a11y()` navigates by comes from
-  `_getTotal`, as `selection()` and `autosize()` already do (#380).
+  `_getTotal`, as `selection()` and `autosize()` already do (#380). A click on
+  a group header row still takes focus on the list — the tab stop — as any
+  click into it does; it just selects nothing (#381).
 
 ## [3.1.5] - 2026-10-18
 

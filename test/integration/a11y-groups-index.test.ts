@@ -206,7 +206,11 @@ describe("a11y — index spaces on a grouped list", () => {
       await tick(0);
       await tick(0);
 
-      // The header maps to no item: no selection, and nothing rings.
+      // The header maps to no item: no selection, and nothing rings. It is
+      // still a click into the list, so focus lands on the content (the tab
+      // stop) — a boolean compare so a failure cannot hang the reporter (#381).
+      const content = f.container.querySelector(".vlist-content") as HTMLElement;
+      expect(document.activeElement === content).toBe(true);
       expect(f.selections).toEqual([]);
       expect(f.marked("selected")).toEqual([]);
     } finally {

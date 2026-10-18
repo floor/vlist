@@ -360,14 +360,18 @@ export function a11y<T extends VListItem = VListItem>(
         if (!el) return;
         const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
         if (layoutIdx < 0) return;
-        // The attribute is a layout index under groups()/table()/carousel().
-        // A group header row maps to no item (-1), so it is not a target.
+        // A click on any rendered row is a click into the list: it takes focus
+        // even when the row is not a selection target. The attribute is a
+        // layout index under groups()/table()/carousel(), where a group header
+        // row maps to no item (-1) — so focus the list before translating, and
+        // the #352 promise (a click in any layout lands focus on the tab stop)
+        // holds without a header ever being selected. #381
+        focusVis = false;
+        focusTarget.focus({ preventScroll: true });
         const idx = toDataIndex(layoutIdx);
         if (idx < 0) return;
         const it = getItem(idx);
         if (!it || (it as Record<string, unknown>).__groupHeader) return;
-        focusVis = false;
-        focusTarget.focus({ preventScroll: true });
         select(idx, false);
       });
 
