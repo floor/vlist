@@ -6,11 +6,12 @@
  *
  *   bun scripts/release-notes.ts 3.1.5 > notes.md
  *
- * A version with no section, or an empty one, fails: a release without notes
- * is a CHANGELOG that was not updated, which is worth stopping for. So does a
- * version with no compare link in the link list at the bottom of the file:
- * the release roll writes `[X.Y.Z]: …/compare/vPREV...vX.Y.Z`, and the footer
- * carries it as "Full diff".
+ * A version with no section, an empty one, or one with a theme line but no
+ * entries, fails: a release without notes is a CHANGELOG that was not updated,
+ * which is worth stopping for. So does a version with no compare link in the
+ * link list at the bottom of the file: the release roll writes
+ * `[X.Y.Z]: …/compare/vPREV...vX.Y.Z`, and the footer carries it as "Full
+ * diff".
  */
 
 const COMPARE_PREFIX = "https://github.com/floor/vlist/compare/";
@@ -24,6 +25,11 @@ export function changelogSection(changelog: string, version: string): string {
   const next = lines.findIndex((line, index) => index > start && line.startsWith("## ["));
   const body = lines.slice(start + 1, next === -1 ? undefined : next).join("\n").trim();
   if (!body) throw new Error(`CHANGELOG.md's section for ${version} is empty`);
+  // A theme line is prose about the release, not an entry. Without a bullet
+  // the release would publish notes that list no change.
+  if (!/^\s*[-*+]\s/m.test(body)) {
+    throw new Error(`CHANGELOG.md's section for ${version} has no entries — a theme line is not an entry`);
+  }
   return body;
 }
 

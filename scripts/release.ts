@@ -831,7 +831,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           { description: `Create and checkout branch ${branch}`, command: `git checkout -b ${branch}` },
           {
             description:
-              "Refuse if CHANGELOG.md [Unreleased] is empty or a multi-change section has no theme line",
+              "Refuse if CHANGELOG.md [Unreleased] is empty or has no entries, or a multi-change section has no theme line",
           },
           {
             description: `Bump version in package.json to ${opts.targetVersion} (keeping its trailing newline)`,
@@ -1033,9 +1033,10 @@ const unreleasedSection = (
 };
 
 /**
- * Fails before any file is written: an empty `[Unreleased]` leaves the release
- * without notes, and more than one change needs the theme line the standard
- * asks for above the first `###` heading.
+ * Fails before any file is written: an empty `[Unreleased]` — or one with a
+ * theme line and no entries — leaves the release without notes, and more than
+ * one change needs the theme line the standard asks for above the first `###`
+ * heading.
  */
 export const assertUnreleasedReady = (changelog: string): void => {
   const { body } = unreleasedSection(changelog);
@@ -1045,6 +1046,11 @@ export const assertUnreleasedReady = (changelog: string): void => {
     );
   }
   const bullets = body.filter((line) => /^\s*[-*+]\s/.test(line)).length;
+  if (bullets === 0) {
+    throw new Error(
+      "CHANGELOG.md: ## [Unreleased] has no entries — a theme line is not an entry; add at least one bullet under a heading before running the release",
+    );
+  }
   const themeLines: string[] = [];
   for (const raw of body) {
     const line = raw.trim();
