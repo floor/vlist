@@ -54,15 +54,72 @@ export function a11y<T extends VListItem = VListItem>(
       let selId: string | number | undefined;
       let selIdx = -1;
 
-      const getItem = (i: number): T | undefined => ctx.items.at(i);
-      const getTotal = (): number => engineState.totalItems;
+      // ── Index spaces ────────────────────────────────────────────
+      // A layout plugin renders in a space of its own and says so through the
+      // translators it publishes: groups() counts a header entry per group,
+      // carousel() a lap, table() a header row. That space is what the DOM's
+      // `data-index` and the rendered ids carry, and what the renderer hands
+      // to setStateFn. Everything kept here — focusIdx, selIdx, the indices
+      // in focus:change and selection:change, the live-region count, the
+      // items looked up — is the DATA space, which is what `_getFocusedIndex`
+      // promises a plugin that reads it. So translate at every touch of the
+      // other space, as selection() does (selection/plugin.ts `toDataIndex`)
+      // and as the ARIA position pass does (rendering/aria.ts).
+      //
+      // Resolved lazily and once: a plugin can publish after setup — groups()
+      // in table mode publishes _getItemAtLayout from a microtask.
+      let spacesResolved = false;
+      let l2dFn: ((i: number) => number) | undefined;
+      let d2lFn: ((i: number) => number) | undefined;
+      let dataTotalFn: (() => number) | undefined;
+      let tableMode = false;
+
+      const resolveSpaces = (): void => {
+        if (spacesResolved) return;
+        spacesResolved = true;
+        const g = ctx.hooks.get;
+        l2dFn = g("_layoutToDataIndex") as typeof l2dFn;
+        d2lFn = g("_dataToLayoutIndex") as typeof d2lFn;
+        dataTotalFn = g("_getTotal") as () => number;
+        tableMode = !!g("_getItemAtLayout");
+      };
+
+      /** A rendered index → the item index it stands for (-1: no item). */
+      const toDataIndex = (layoutIndex: number): number => {
+        resolveSpaces();
+        return l2dFn ? l2dFn(layoutIndex) : layoutIndex;
+      };
+
+      /** An item index → the rendered index it is painted at. */
+      const toLayoutIndex = (dataIndex: number): number => {
+        resolveSpaces();
+        return d2lFn ? d2lFn(dataIndex) : dataIndex;
+      };
+
+      const getItem = (i: number): T | undefined => {
+        resolveSpaces();
+        // ctx.items.at() already routes through data()'s getFn, which takes
+        // data indices. groups() in table mode re-points it at its render
+        // entries, headers included, so there a data index is translated to
+        // the layout row that paints it.
+        return ctx.items.at(tableMode ? toLayoutIndex(i) : i);
+      };
+      // The count of items, not of rendered entries — carousel inflates the
+      // engine total to its laps and groups counts its headers. Plugins that
+      // know better publish _getTotal; with none, the two spaces coincide.
+      const getTotal = (): number => {
+        resolveSpaces();
+        return dataTotalFn ? dataTotalFn() : engineState.totalItems;
+      };
 
       const _focusEvt = { id: 0 as string | number, index: 0 };
       const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
 
       ctx.render.setStateFn((_i: number, is: ItemState): void => {
-        is.selected = selIdx === _i;
-        is.focused = focusVis && focusIdx === _i;
+        // `_i` is the render index, one header per group under groups().
+        const di = _i >= 0 ? toDataIndex(_i) : -1;
+        is.selected = di >= 0 && selIdx === di;
+        is.focused = di >= 0 && focusVis && focusIdx === di;
       });
 
       // tree() treats a state function as an external focus owner and then
@@ -80,7 +137,7 @@ export function a11y<T extends VListItem = VListItem>(
           if (!it || it.id !== id) continue;
           focusIdx = i;
           if (keyboard !== "preserve") focusVis = keyboard === true;
-          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${i}`);
+          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${toLayoutIndex(i)}`);
           else dom.content.removeAttribute("aria-activedescendant");
           _focusEvt.id = id;
           _focusEvt.index = i;
@@ -95,20 +152,18 @@ export function a11y<T extends VListItem = VListItem>(
         liveRegion.textContent = message;
       }
 
+      /** Whether the item at `i` is a group header (a missing item is not). */
+      const isHeader = (i: number): boolean =>
+        !!(getItem(i) as Record<string, unknown> | undefined)?.__groupHeader;
+
       const skip = (from: number, dir: 1 | -1, total: number): number => {
         let i = from;
-        while (i >= 0 && i < total) {
-          const it = getItem(i);
-          if (!it || !(it as Record<string, unknown>).__groupHeader) return i;
-          i += dir;
+        while (i >= 0 && i < total && isHeader(i)) i += dir;
+        if (i < 0 || i >= total) {
+          i = from - dir;
+          while (i >= 0 && i < total && isHeader(i)) i -= dir;
         }
-        i = from - dir;
-        while (i >= 0 && i < total) {
-          const it = getItem(i);
-          if (!it || !(it as Record<string, unknown>).__groupHeader) return i;
-          i -= dir;
-        }
-        return from;
+        return i >= 0 && i < total ? i : from;
       };
 
       const scrollIntoView = (idx: number): void => {
@@ -118,16 +173,22 @@ export function a11y<T extends VListItem = VListItem>(
         // carousel reveals inside the current lap. A prefix sum leaves the
         // focused cell below the fold and the active descendant unmounted.
         if (nav.reveal) {
+          // carousel's reveal takes the logical item index, as nav.navigate
+          // hands back — the index this plugin carries.
           nav.reveal(idx);
           return;
         }
         const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
         if (reveal) {
+          // groups() publishes this in its layout space (a sticky header is an
+          // entry, and it scrolls to the rendered row). masonry() and page()
+          // publish the item space, where the translation is the identity.
           ctx.scroll.cancel();
-          reveal(idx);
+          reveal(toLayoutIndex(idx));
           return;
         }
-        const ci = nav.scrollIndex ? nav.scrollIndex(idx) : idx;
+        const li = toLayoutIndex(idx);
+        const ci = nav.scrollIndex ? nav.scrollIndex(li) : li;
         const off = sizeCache.getOffset(ci);
         const sz = sizeCache.getSize(ci);
         const sp = ctx.scroll.getPixelEquivalent();
@@ -147,7 +208,9 @@ export function a11y<T extends VListItem = VListItem>(
       };
 
       const commit = (idx: number, scroll: boolean): void => {
-        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${idx}`);
+        // Rows are identified by their render index — groups() derives the id
+        // from the layout index — so the active descendant needs that one back.
+        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${toLayoutIndex(idx)}`);
         if (scroll) scrollIntoView(idx);
         ctx.render.force();
       };
@@ -285,12 +348,20 @@ export function a11y<T extends VListItem = VListItem>(
         if (engineState.destroyed) return;
         const el = (e.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return;
-        const idx = parseInt(el.dataset.index ?? "-1", 10);
+        const layoutIdx = +el.dataset.index!;
+        if (layoutIdx < 0) return;
+        // A click on any rendered row is a click into the list: it takes focus
+        // even when the row is not a selection target. The attribute is a
+        // layout index under groups()/table()/carousel(), where a group header
+        // row maps to no item (-1) — so focus the list before translating, and
+        // the #352 promise (a click in any layout lands focus on the tab stop)
+        // holds without a header ever being selected. #381
+        focusVis = false;
+        focusTarget.focus({ preventScroll: true });
+        const idx = toDataIndex(layoutIdx);
         if (idx < 0) return;
         const it = getItem(idx);
         if (!it || (it as Record<string, unknown>).__groupHeader) return;
-        focusVis = false;
-        focusTarget.focus({ preventScroll: true });
         select(idx, false);
       });
 
