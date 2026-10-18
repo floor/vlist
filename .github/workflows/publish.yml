@@ -64,12 +64,23 @@ jobs:
             npm publish --provenance --access public
           fi
 
+      # The notes are the tag's CHANGELOG.md section and its compare link
+      # (scripts/release-notes.ts), not GitHub's generated notes. A re-run on
+      # the same tag edits the existing release's notes instead of failing.
       - name: Create GitHub Release
         run: |
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --prerelease
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          bun scripts/release-notes.ts "$version" > "$RUNNER_TEMP/notes.md"
+          if [[ "$version" == *-* ]]; then
+            flags=(--prerelease --latest=false)
           else
-            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+            flags=(--latest)
+          fi
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+          else
+            gh release create "$tag" --title "$tag" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag "${flags[@]}"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
