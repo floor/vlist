@@ -157,8 +157,8 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // the browser's size limit to synthetic input by itself, loading the driver
 // only then. It costs the core 301 bytes, after a trim pass from 405; Dr Jones
 // chose it over keeping the handoff opt-in. The base has 33 bytes of room, so
-// the next growth is a decision again. Every other budget moved by the
-// headroom rule.
+// the next growth is a decision again. Every other budget has moved by the
+// headroom rule — no budget moves without the owner's word (2026-10-18).
 export const kb = (n: number): number => Math.floor(n * 1024);
 
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
@@ -170,7 +170,11 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "synthetic + createStats": kb(13.2),
   native: kb(10.3),
   // #339: owner-only focus recovery, including engines without removal focusout.
-  a11y: kb(12.1),
+  // #380: the groups index-space translators. Measured 12446 bytes gzipped,
+  // 56 over the 12.1 kB ceiling; the owner granted a one-time exception to
+  // 12.2 kB (12492) on 2026-10-18 instead of trimming the fix's machinery.
+  // No budget moves without the owner's word.
+  a11y: kb(12.2),
   selection: kb(13.7),
   data: kb(15.2),
   scrollbar: kb(13.3),
