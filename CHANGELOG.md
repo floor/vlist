@@ -11,7 +11,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-a11y under `groups()`: each rendered row is read, clicked and announced in the item's own index space.
+a11y under `groups()`: a click selects the item you clicked and the focus ring sits on it.
 
 ### Fixed
 
@@ -26,6 +26,11 @@ a11y under `groups()`: each rendered row is read, clicked and announced in the i
   `_getTotal`, as `selection()` and `autosize()` already do (#380). A click on
   a group header row still takes focus on the list — the tab stop — as any
   click into it does; it just selects nothing (#381).
+
+### Internal
+
+- a11y size budget 12.1 → 12.2 KB for the groups index fix (owner's one-time
+  exception).
 
 ## [3.1.5] - 2026-10-18
 
