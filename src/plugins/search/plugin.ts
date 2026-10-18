@@ -246,8 +246,20 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Counter + state class ──────────────────────────────────────────────────
 
+  /**
+   * The step buttons show exactly when there is something to step. `step()`
+   * returns with no matches, so an empty box and a query with no results both
+   * leave nothing to navigate: hide, as the counter and the clear button
+   * already do (#106).
+   */
+  const updateNav = (): void => {
+    bar?.showNav(mode === "navigate" && matches.length > 0);
+  };
+
   const updateCounter = (): void => {
     if (!bar) return;
+    // Same query/matches state as the counter — refreshed together.
+    updateNav();
     if (query.length < minLength) {
       bar.setCounter("");
     } else if (matches.length === 0) {
@@ -569,7 +581,7 @@ export function search<T extends VListItem = VListItem>(
             onKeydown: onBarKeydown,
           },
         );
-        bar.showNav(mode === "navigate");
+        updateNav();
         if (variant !== "default") {
           bar.root.classList.add(`${classPrefix}-search--${variant}`);
         }

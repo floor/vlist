@@ -32,8 +32,14 @@ import {
   resolveSourceBranch,
   selectPullRequest,
   sourceBranchFor,
-  updateChangelogStats,
+  SIZE_ROW_SCENARIOS,
+  bumpPackageVersion,
+  parseSizeOutput,
+  refreshReadmeSizes,
+  rollChangelog,
   updateReadmeVersion,
+  updateReadmeVersions,
+  utcDateStamp,
   verifyCheckRuns,
   validate,
   validateValue,
@@ -313,19 +319,320 @@ describe("updateReadmeVersion", () => {
   });
 });
 
-describe("updateChangelogStats", () => {
-  it("replaces a header stats line", () => {
-    const changelog = "577 commits · 83 days · Feb 2 – Apr 27, 2026\n\n## [Unreleased]\n";
-    expect(updateChangelogStats(changelog, "600 commits · 90 days · Feb 2 – May 4, 2026")).toBe(
-      "600 commits · 90 days · Feb 2 – May 4, 2026\n\n## [Unreleased]\n",
+const UNRELEASED_FIXTURE = `# Changelog
+
+## [Unreleased]
+
+Search: match arrows wait for a match to step (#106).
+
+### Fixed
+
+- First fix (#106).
+- Second fix (#107).
+
+## [3.1.4] - 2026-10-16
+
+### Fixed
+
+- An older fix (#372).
+
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+[3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
+`;
+
+describe("utcDateStamp", () => {
+  it("stamps the UTC calendar day, not the local one", () => {
+    // 18:30 in New York on the 18th is already the 19th in UTC.
+    expect(utcDateStamp(new Date("2026-10-18T23:30:00-05:00"))).toBe("2026-10-19");
+    expect(utcDateStamp(new Date("2026-10-18T00:30:00+02:00"))).toBe("2026-10-17");
+  });
+});
+
+describe("rollChangelog", () => {
+  it("rolls [Unreleased] into a dated section and leaves an empty [Unreleased] above it", () => {
+    // The theme line and the entries move with the section; the older section
+    // and its compare link stay where they were.
+    expect(rollChangelog(UNRELEASED_FIXTURE, "3.1.5", "2026-10-18")).toBe(`# Changelog
+
+## [Unreleased]
+
+## [3.1.5] - 2026-10-18
+
+Search: match arrows wait for a match to step (#106).
+
+### Fixed
+
+- First fix (#106).
+- Second fix (#107).
+
+## [3.1.4] - 2026-10-16
+
+### Fixed
+
+- An older fix (#372).
+
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.5...HEAD
+[3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
+[3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
+`);
+  });
+
+  it("refuses an empty [Unreleased] section", () => {
+    const empty = `## [Unreleased]
+
+## [3.1.4] - 2026-10-16
+
+- old (#372).
+
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+`;
+    expect(() => rollChangelog(empty, "3.1.5", "2026-10-18")).toThrow(
+      "## [Unreleased] is empty",
     );
   });
 
-  it("leaves the changelog unchanged when there is no stats line", async () => {
-    const changelog = await Bun.file("CHANGELOG.md").text();
-    expect(updateChangelogStats(changelog, "1 commits · 1 days · Jan 1 – Jan 2, 2026")).toBe(
-      changelog,
+  it("requires a theme line when more than one change ships", () => {
+    const twoBullets = `## [Unreleased]
+
+### Fixed
+
+- one (#1)
+- two (#2)
+
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+`;
+    expect(() => rollChangelog(twoBullets, "3.1.5", "2026-10-18")).toThrow("theme line");
+
+    // One change needs no theme.
+    expect(() =>
+      rollChangelog(twoBullets.replace("- two (#2)\n", ""), "3.1.5", "2026-10-18"),
+    ).not.toThrow();
+  });
+
+  it("accepts a theme line above the first ### heading", () => {
+    expect(() => rollChangelog(UNRELEASED_FIXTURE, "3.1.5", "2026-10-18")).not.toThrow();
+  });
+
+  it("refuses when the [Unreleased] heading is missing", () => {
+    expect(() => rollChangelog("## [3.1.4] - 2026-10-16\n", "3.1.5", "2026-10-18")).toThrow(
+      "## [Unreleased] heading not found",
     );
+  });
+
+  it("refuses when the [Unreleased] compare link is missing", () => {
+    const noLink = UNRELEASED_FIXTURE.slice(0, UNRELEASED_FIXTURE.indexOf("[Unreleased]:"));
+    expect(() => rollChangelog(noLink, "3.1.5", "2026-10-18")).toThrow(
+      "[Unreleased] compare link not found",
+    );
+  });
+});
+
+describe("updateReadmeVersions", () => {
+  it("rewrites the version marker in README.md and npm-readme.md", () => {
+    const files = [
+      { name: "README.md", text: "**v3.1.4** — the release theme\n" },
+      { name: "npm-readme.md", text: "**v3.1.4** — the release theme\n" },
+    ];
+    expect(updateReadmeVersions(files, "3.1.5")).toEqual([
+      { name: "README.md", text: "**v3.1.5** — the release theme\n" },
+      { name: "npm-readme.md", text: "**v3.1.5** — the release theme\n" },
+    ]);
+  });
+
+  it("names the file whose marker is missing", () => {
+    expect(() =>
+      updateReadmeVersions(
+        [
+          { name: "README.md", text: "**v3.1.4** — the release theme\n" },
+          { name: "npm-readme.md", text: "# vlist\n" },
+        ],
+        "3.1.5",
+      ),
+    ).toThrow("npm-readme.md version marker not found");
+  });
+});
+
+describe("bumpPackageVersion", () => {
+  const pkg = `{
+  "name": "vlist",
+  "version": "3.1.4",
+  "dependencies": {
+    "vue": "^3.5.28"
+  }
+}
+`;
+
+  it("rewrites the version and keeps the trailing newline", () => {
+    const next = bumpPackageVersion(pkg, "3.1.5");
+    expect(next).toBe(pkg.replace('"version": "3.1.4"', '"version": "3.1.5"'));
+    expect(next.endsWith("}\n")).toBe(true);
+    expect(next.endsWith("}\n\n")).toBe(false);
+  });
+
+  it("restores the trailing newline a previous release dropped", () => {
+    expect(bumpPackageVersion(pkg.slice(0, -1), "3.1.5").endsWith("}\n")).toBe(true);
+  });
+
+  it("refuses a package.json without a version field", () => {
+    expect(() => bumpPackageVersion('{ "name": "vlist" }\n', "3.1.5")).toThrow(
+      "package.json: version field not found",
+    );
+  });
+});
+
+// ── Size rows: a verbatim sample of `bun run size` proves the parser against
+// the real format, and the generated fixture below exercises every README row.
+
+const SIZE_OUTPUT_SAMPLE = `  vlist — Plugin Sizes
+
+  Plugin                    Minified    Gzipped     Brotli         Delta
+  ────────────────────────────────────────────────────────────────────
+  Base (createVList)         27.3 KB    10.3 KB     9.2 KB
+  synthetic                  34.2 KB    12.9 KB    11.6 KB       +2.6 KB
+  native                     27.3 KB    10.3 KB     9.2 KB       -0.0 KB
+  a11y                       32.0 KB    12.0 KB    10.7 KB       +1.7 KB
+
+  ✓ Tree-shaking: all 4 scenarios clean — unused plugins excluded
+
+  ✓ Base (createVList): 10539 bytes gzipped (budget 10547)
+  ✓ synthetic: 13192 bytes gzipped (budget 13312)
+  ✓ native: 10536 bytes gzipped (budget 10547)
+  ✓ a11y: 12315 bytes gzipped (budget 12390)
+`;
+
+const sizeOutputFor = (
+  overrides: Record<string, Partial<{ minified: string; gzipped: string; bytes: number; budget: number }>> = {},
+): string => {
+  const rows = SIZE_ROW_SCENARIOS.map(({ scenario }) => ({
+    scenario,
+    minified: "27.3",
+    gzipped: "10.3",
+    bytes: 10539,
+    budget: 10547,
+    ...overrides[scenario],
+  }));
+  const table = rows
+    .map(
+      (r) =>
+        `  ${r.scenario.padEnd(22)}  ${`${r.minified} KB`.padStart(10)}  ${`${r.gzipped} KB`.padStart(9)}  ${"9.1 KB".padStart(9)}  ${"+0.0 KB".padStart(12)}`,
+    )
+    .join("\n");
+  const budgets = rows
+    .map((r) => `  ✓ ${r.scenario}: ${r.bytes} bytes gzipped (budget ${r.budget})`)
+    .join("\n");
+  return `  vlist — Plugin Sizes
+
+  Plugin                    Minified    Gzipped     Brotli         Delta
+  ${"─".repeat(68)}
+${table}
+
+  ✓ Tree-shaking: all ${rows.length} scenarios clean — unused plugins excluded
+
+${budgets}
+`;
+};
+
+const README_SIZE_FIXTURE = `# vlist
+
+- **10.3 KB gzipped** — composable plugins with perfect tree-shaking (Bundlephobia's badge measures the root entry with every plugin at once)
+
+| Entry / export | Minified | Gzipped |
+|---|---:|---:|
+${SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n")}
+
+Sizes are tree-shaken totals from \`bun run size\`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,539 bytes gzipped**, within the 10.3 KB budget (10,547 bytes). \`bun run size\` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,192 bytes** before plugins; with \`scroll.mode\`, a \`vlist\` list downloads the driver and its scrollbar as \`synthetic-driver.js\` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+
+Bundlephobia's badge measures the package's root entry, which re-exports every plugin, minified and gzipped as one bundle. With a tree-shaking bundler, an app that imports named exports from \`vlist\` bundles the base (**10.3 KB gzipped**) and the features it uses; the table's rows are each a combined size, not amounts to add up.
+`;
+
+describe("parseSizeOutput", () => {
+  it("reads the measured table and the exact byte budget lines", () => {
+    expect(parseSizeOutput(SIZE_OUTPUT_SAMPLE)).toEqual([
+      { scenario: "Base (createVList)", minified: "27.3", gzipped: "10.3", gzipBytes: 10539, budget: 10547 },
+      { scenario: "synthetic", minified: "34.2", gzipped: "12.9", gzipBytes: 13192, budget: 13312 },
+      { scenario: "native", minified: "27.3", gzipped: "10.3", gzipBytes: 10536, budget: 10547 },
+      { scenario: "a11y", minified: "32.0", gzipped: "12.0", gzipBytes: 12315, budget: 12390 },
+    ]);
+  });
+
+  it("refuses output whose table is missing a measured scenario", () => {
+    const partial = SIZE_OUTPUT_SAMPLE.replace(/^  a11y .*\n/m, "");
+    expect(() => parseSizeOutput(partial)).toThrow("table row not found for a11y");
+  });
+});
+
+describe("SIZE_ROW_SCENARIOS", () => {
+  it("maps every README row to the scenario it measures", () => {
+    expect(SIZE_ROW_SCENARIOS).toEqual([
+      { label: "**Base (`vlist`)**", scenario: "Base (createVList)" },
+      { label: "`vlist/synthetic` (deprecated)", scenario: "synthetic" },
+      { label: "`vlist/native` (alias)", scenario: "native" },
+      { label: "`a11y()`", scenario: "a11y" },
+      { label: "`selection()`", scenario: "selection" },
+      { label: "`data()`", scenario: "data" },
+      { label: "`scrollbar()`", scenario: "scrollbar" },
+      { label: "`sortable()`", scenario: "sortable" },
+      { label: "`groups()`", scenario: "groups" },
+      { label: "`page()`", scenario: "page" },
+      { label: "`snapshots()`", scenario: "snapshots" },
+      { label: "`transition()`", scenario: "transition" },
+      { label: "`autosize()`", scenario: "autosize" },
+      { label: "`grid()`", scenario: "grid" },
+      { label: "`table()`", scenario: "table" },
+      { label: "`masonry()`", scenario: "masonry" },
+      { label: "`tree()`", scenario: "tree" },
+      { label: "`search()`", scenario: "search" },
+      { label: "`carousel()`", scenario: "carousel" },
+      { label: "`vlist/synthetic` + `carousel()`", scenario: "synthetic + carousel" },
+      { label: "`vlist/synthetic` + `sortable()`", scenario: "synthetic + sortable" },
+      { label: "`vlist/vue` `useVList`", scenario: "vue" },
+      { label: "`vlist/svelte` `vlist`", scenario: "svelte" },
+      { label: "`vlist/solid` `createVList`", scenario: "solid" },
+      { label: "`vlist/react` `useVList`", scenario: "react" },
+      { label: "`vlist/react` + `grid()`", scenario: "react + grid" },
+    ]);
+  });
+});
+
+describe("refreshReadmeSizes", () => {
+  const measured = sizeOutputFor({
+    "Base (createVList)": { minified: "27.4", gzipped: "10.4", bytes: 10560, budget: 10547 },
+    synthetic: { gzipped: "13.0", bytes: 13200, budget: 13312 },
+    a11y: { minified: "32.1", gzipped: "12.1" },
+  });
+
+  it("rewrites both table columns and the prose figures", () => {
+    const next = refreshReadmeSizes(README_SIZE_FIXTURE, parseSizeOutput(measured), "README.md");
+    expect(next).toContain("| **Base (`vlist`)** | 27.4 KB | 10.4 KB |");
+    expect(next).toContain("| `a11y()` | 32.1 KB | 12.1 KB |");
+    expect(next).toContain("- **10.4 KB gzipped** — composable plugins");
+    expect(next).toContain(
+      "The base is **10,560 bytes gzipped**, within the 10.3 KB budget (10,547 bytes).",
+    );
+    expect(next).toContain("Synthetic input is **13,200 bytes** before plugins");
+    expect(next).toContain("bundles the base (**10.4 KB gzipped**)");
+    // A row whose measurement did not move is left byte-for-byte alone.
+    expect(next).toContain("| `vlist/react` + `grid()` | 27.3 KB | 10.3 KB |");
+  });
+
+  it("refuses a README whose size table lost a row", () => {
+    const missing = README_SIZE_FIXTURE.replace("| `a11y()` | 27.3 KB | 10.3 KB |\n", "");
+    expect(() => refreshReadmeSizes(missing, parseSizeOutput(measured), "npm-readme.md")).toThrow(
+      "npm-readme.md: size table rows missing (25/26 found)",
+    );
+  });
+
+  it("covers exactly the live README and npm-readme tables", async () => {
+    for (const name of ["README.md", "npm-readme.md"]) {
+      const text = await Bun.file(name).text();
+      const rows = text
+        .split("\n")
+        .filter((line) => /^\| .* \| [0-9.]+ KB \| [0-9.]+ KB \|$/.test(line));
+      expect(rows.length).toBe(SIZE_ROW_SCENARIOS.length);
+      for (const { label } of SIZE_ROW_SCENARIOS) {
+        expect(text).toContain(`| ${label} |`);
+      }
+    }
   });
 });
 
@@ -745,9 +1052,25 @@ describe("planRelease", () => {
       state: "create-source-pr",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
+    const descriptions = steps.map((s) => s.description);
 
     // Verifies it cuts chore/release-3.1.3
     expect(commands).toContain("git checkout -b chore/release-3.1.3");
+    // The plan names the changelog roll, both READMEs, the size refresh, and the
+    // refusals, so a dry run shows what the release will do (#383/#384 done by hand).
+    expect(descriptions).toContain(
+      "Refuse if CHANGELOG.md [Unreleased] is empty or a multi-change section has no theme line",
+    );
+    expect(descriptions).toContain(
+      "Roll CHANGELOG.md [Unreleased] into the 3.1.3 section and update compare links",
+    );
+    expect(descriptions).toContain(
+      "Update the version marker in README.md and npm-readme.md to v3.1.3",
+    );
+    expect(descriptions).toContain(
+      "Run bun run size and refresh README size rows (stops if over budget)",
+    );
+    expect(commands).toContain("git add package.json README.md npm-readme.md CHANGELOG.md");
     // Verifies it pushes chore/release-3.1.3
     expect(commands).toContain("git push origin chore/release-3.1.3");
     // CRITICAL: Verifies it NEVER pushes next directly!

@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+a11y under `groups()`: each rendered row is read, clicked and announced in the item's own index space.
+
 ### Fixed
 
 - With `groups()` loaded, `a11y()` read a row's rendered index as an item index,
@@ -22,6 +24,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   item. The rendered index is now translated at each touch, through the hooks
   the layout plugin publishes, and the count `a11y()` navigates by comes from
   `_getTotal`, as `selection()` and `autosize()` already do (#380).
+
+## [3.1.5] - 2026-10-18
+
+Search: a navigate-mode bar shows its match arrows only when there is a match to step (#106).
+
+### Fixed
+
+- In `search()`, the match navigation arrows of a `navigate`-mode bar stay
+  hidden until the query has a match to step, instead of appearing as soon as
+  the mode is `navigate`: an empty box and a query with no results now read as
+  idle, the way the match counter and the clear button already did (#106).
 
 ## [3.1.4] - 2026-10-16
 
@@ -1840,7 +1853,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.5...HEAD
+[3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/floor/vlist/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/floor/vlist/compare/v3.1.1...v3.1.2
