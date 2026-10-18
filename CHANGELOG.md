@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.6] - 2026-10-18
+
 a11y under `groups()`: a click selects the item you clicked and the focus ring sits on it.
 
 Who is affected: lists that use a11y() without selection(). With selection() loaded, a11y() steps aside and selection() already handled clicks and focus correctly.
@@ -1862,7 +1864,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.5...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.6...HEAD
+[3.1.6]: https://github.com/floor/vlist/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/floor/vlist/compare/v3.1.2...v3.1.3
