@@ -4,10 +4,12 @@
  *
  * Usage: bun scripts/check-dist-tags.ts <version>
  *
- * A stable `npm publish` moves `latest` only, and trusted publishing (OIDC)
- * authorizes `npm publish` alone, so the workflow cannot move `next` itself:
- * after a stable release, `npm install vlist@next` would install an older
- * version than `latest`. publish.yml runs this after a stable publish. It
+ * A stable `npm publish` moves `latest` only. publish.yml moves `next` itself
+ * with npm's OIDC dist-tag support (`Allow npm dist-tag` on the package's
+ * trusted publisher, npm >= 11.21.0); while that setting is off the move step
+ * is allowed to fail, and after a stable release `npm install vlist@next`
+ * would install an older version than `latest`. This check is the fallback:
+ * publish.yml runs it after a stable publish. It
  * reads the public dist-tags (no auth) once and warns with the one command a
  * maintainer runs to fix `next`, for the version just published even when the
  * registry still shows an older `latest` (it lags a fresh publish by a minute

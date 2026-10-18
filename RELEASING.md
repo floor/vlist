@@ -71,18 +71,18 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
    Pass `--dry-run` to preview all planned steps and commands without touching files,
    branches, PRs, or tags.
    `--from` confirms the derived branch; it cannot send 3.x through `staging`.
-3. **Point `next` at the release (manual)** — a stable publish moves `latest`
-   only, and trusted publishing cannot move `next` (OIDC authorizes
-   `npm publish` alone), so `next` is left on the last prerelease, below
-   `latest`. Once the version is on npm, a maintainer runs
-   `npm dist-tag add vlist@X.Y.Z next --auth-type=web` (browser 2FA; no token).
-   `bun run release` prints the exact command as its last line, and
-   `publish.yml` warns at its last step, after the package and the GitHub Release
-   are out, while `next` is below the version just published: it prints that
-   exact command in a warning and exits 0, even when the registry still shows
-   the old `latest` (it lags a fresh publish by a minute or two, and the step
-   does not wait for it). When the registry cannot be read, it warns that the
-   tags are unknown and still exits 0.
+3. **Move `next` at the release** — a stable publish moves `latest` only.
+   `publish.yml` moves `next` itself with the workflow's OIDC identity
+   (`npm dist-tag add vlist@X.Y.Z next`), which npm supports from 11.21.0 once
+   **Allow npm dist-tag** is enabled on the package's trusted publisher on
+   npmjs.com (disabled by default). While that setting is off the move is
+   skipped: the step is allowed to fail, and the last step warns with the
+   command a maintainer runs — `npm dist-tag add vlist@X.Y.Z next --auth-type=web`
+   (browser 2FA; no token). `bun run release` also prints that command as its
+   last line. The warning names the version just published even while the
+   registry still shows the old `latest` (it lags a fresh publish by a minute or
+   two, and the step does not wait for it). When the registry cannot be read, it
+   warns that the tags are unknown. In both cases it exits 0.
 
 ### Pre-releases
 
