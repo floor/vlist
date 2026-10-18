@@ -9,8 +9,8 @@
  *       ├── .{p}-search__input-wrapper
  *       │   └── input.{p}-search__input
  *       ├── span.{p}-search__counter              (match count — empty when idle)
- *       ├── button.{p}-search__nav-prev           (navigate mode only)
- *       ├── button.{p}-search__nav-next           (navigate mode only)
+ *       ├── button.{p}-search__nav-prev           (navigate mode, with matches to step)
+ *       ├── button.{p}-search__nav-next           (navigate mode, with matches to step)
  *       └── button.{p}-search__clear-button       (--hidden when empty)
  *
  * Per RFC-010, the bar carries no inline human-language text: all accessible
@@ -59,7 +59,7 @@ export interface SearchBar {
   readonly root: HTMLElement;
   readonly input: HTMLInputElement;
   setCounter(text: string): void;
-  /** Show/hide the prev/next buttons (navigate mode only). */
+  /** Show/hide the prev/next buttons (navigate mode, with matches to step). */
   showNav(show: boolean): void;
   focus(): void;
   setValue(value: string): void;

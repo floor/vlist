@@ -748,14 +748,38 @@ describe("search bar buttons", () => {
     expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("3 of 3");
   });
 
-  it("shows the step buttons in navigate mode and hides them in filter mode", () => {
-    const nav = makeList({ mode: "navigate" }).container;
-    expect(nav.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(false);
-    expect(nav.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(false);
+  it("hides the step buttons until the query has a match to step", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    const navHidden = (c: HTMLElement): boolean[] => [
+      c.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden"),
+      c.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden"),
+    ];
 
-    const filter = makeList({ mode: "filter" }).container;
-    expect(filter.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(true);
-    expect(filter.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(true);
+    // The idle rule the counter and the clear button already follow: an empty
+    // box has nothing to step, so the arrows stay hidden.
+    expect(navHidden(container)).toEqual([true, true]);
+
+    q(list, "setQuery")("ap");
+    expect(navHidden(container)).toEqual([false, false]);
+
+    q(list, "setQuery")("");
+    expect(navHidden(container)).toEqual([true, true]);
+
+    // Filter mode never shows them, with or without a query.
+    const filter = makeList({ mode: "filter" });
+    q(filter.list, "setQuery")("ap");
+    expect(navHidden(filter.container)).toEqual([true, true]);
+  });
+
+  it("keeps the step buttons hidden when the query matches nothing", () => {
+    const { container, list } = makeList({ mode: "navigate" });
+    q(list, "setQuery")("zzz");
+
+    // This state reads as the counter's noResults text, and step() returns
+    // with nothing to step — so no arrows either.
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("No results");
+    expect(container.querySelector(".vlist-search__nav-prev")!.classList.contains("vlist-search__nav-prev--hidden")).toBe(true);
+    expect(container.querySelector(".vlist-search__nav-next")!.classList.contains("vlist-search__nav-next--hidden")).toBe(true);
   });
 
   // Serial: reads document.activeElement, which is one per process.
