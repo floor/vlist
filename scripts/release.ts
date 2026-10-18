@@ -28,6 +28,9 @@ import { nextTagCommand } from "./check-dist-tags";
 // =============================================================================
 
 export const READ_COMMAND_TIMEOUT_MS = 15000;
+
+/** `bun run size` builds every scenario; allow a cold build on a loaded machine. */
+export const SIZE_MEASURE_TIMEOUT_MS = 300000;
 export const PR_QUERY_LIMIT = 30;
 
 /**
@@ -826,10 +829,26 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
       } else {
         steps.push(
           { description: `Create and checkout branch ${branch}`, command: `git checkout -b ${branch}` },
-          { description: `Bump version in package.json to ${opts.targetVersion}` },
-          { description: `Update README.md version badge to v${opts.targetVersion}` },
-          { description: "Update CHANGELOG.md stats" },
-          { description: "Stage modified files", command: "git add package.json README.md CHANGELOG.md" },
+          {
+            description:
+              "Refuse if CHANGELOG.md [Unreleased] is empty or a multi-change section has no theme line",
+          },
+          {
+            description: `Bump version in package.json to ${opts.targetVersion} (keeping its trailing newline)`,
+          },
+          {
+            description: `Roll CHANGELOG.md [Unreleased] into the ${opts.targetVersion} section and update compare links`,
+          },
+          {
+            description: `Update the version marker in README.md and npm-readme.md to v${opts.targetVersion}`,
+          },
+          {
+            description: "Run bun run size and refresh README size rows (stops if over budget)",
+          },
+          {
+            description: "Stage modified files",
+            command: "git add package.json README.md npm-readme.md CHANGELOG.md",
+          },
           { description: "Commit release bump", command: `git commit -m "chore(release): v${opts.targetVersion}"` },
           { description: `Push branch ${branch}`, command: `git push origin ${branch}` },
         );
@@ -956,19 +975,268 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
 const README_VERSION_RE =
   /\*\*v\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?\*\*(?: \(prerelease on the npm `next` tag\))?/;
 
-export const updateReadmeVersion = (readme: string, newVersion: string): string => {
+/** npm publishes `npm-readme.md` as the package README, so both carry the marker. */
+export const README_FILES = ["README.md", "npm-readme.md"] as const;
+
+export const updateReadmeVersion = (
+  readme: string,
+  newVersion: string,
+  fileName = "README.md",
+): string => {
   const next = readme.replace(README_VERSION_RE, `**v${newVersion}**`);
   if (next === readme) {
-    throw new Error("README.md version marker not found");
+    throw new Error(`${fileName} version marker not found`);
   }
   return next;
 };
 
-export const updateChangelogStats = (changelog: string, statsLine: string): string =>
-  changelog.replace(
-    /\d+ commits? · \d+ days? · [A-Za-z]+ \d+ – [A-Za-z]+ \d+, \d{4}/,
-    statsLine,
+export interface ReadmeText {
+  readonly name: string;
+  readonly text: string;
+}
+
+export const updateReadmeVersions = (
+  files: readonly ReadmeText[],
+  newVersion: string,
+): readonly ReadmeText[] =>
+  files.map((file) => ({
+    name: file.name,
+    text: updateReadmeVersion(file.text, newVersion, file.name),
+  }));
+
+const PACKAGE_VERSION_RE = /"version":\s*"[^"]*"/;
+
+/** Rewrites the version in place and keeps exactly one trailing newline (#385 dropped it). */
+export const bumpPackageVersion = (raw: string, newVersion: string): string => {
+  if (!PACKAGE_VERSION_RE.test(raw)) {
+    throw new Error("package.json: version field not found");
+  }
+  return `${raw.replace(PACKAGE_VERSION_RE, `"version": "${newVersion}"`).replace(/\s+$/, "")}\n`;
+};
+
+const UNRELEASED_HEADING = "## [Unreleased]";
+const UNRELEASED_LINK_RE =
+  /^(\[Unreleased\]: )(https:\/\/github\.com\/floor\/vlist\/compare\/)v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)\.\.\.HEAD$/m;
+
+/** Splits CHANGELOG.md around the `## [Unreleased]` section. */
+const unreleasedSection = (
+  changelog: string,
+): { head: string[]; body: string[]; tail: string[] } => {
+  const lines = changelog.split("\n");
+  const start = lines.findIndex((line) => line.trim() === UNRELEASED_HEADING);
+  if (start === -1) {
+    throw new Error("CHANGELOG.md: ## [Unreleased] heading not found");
+  }
+  const next = lines.findIndex((line, i) => i > start && /^##\s/.test(line));
+  const end = next === -1 ? lines.length : next;
+  return { head: lines.slice(0, start), body: lines.slice(start + 1, end), tail: lines.slice(end) };
+};
+
+/**
+ * Fails before any file is written: an empty `[Unreleased]` leaves the release
+ * without notes, and more than one change needs the theme line the standard
+ * asks for above the first `###` heading.
+ */
+export const assertUnreleasedReady = (changelog: string): void => {
+  const { body } = unreleasedSection(changelog);
+  if (body.join("\n").trim() === "") {
+    throw new Error(
+      "CHANGELOG.md: ## [Unreleased] is empty — add the release's entries before running the release",
+    );
+  }
+  const bullets = body.filter((line) => /^\s*[-*+]\s/.test(line)).length;
+  const themeLines: string[] = [];
+  for (const raw of body) {
+    const line = raw.trim();
+    if (line === "") continue;
+    if (/^#{1,6}\s/.test(line) || /^[-*+]\s/.test(line)) break;
+    themeLines.push(line);
+  }
+  if (bullets > 1 && themeLines.length === 0) {
+    throw new Error(
+      "CHANGELOG.md: more than one change ships and ## [Unreleased] has no theme line above its first heading — open the section with a one-sentence theme",
+    );
+  }
+};
+
+export const utcDateStamp = (date: Date): string => date.toISOString().slice(0, 10);
+
+/**
+ * Rolls `## [Unreleased]` into a dated release section, leaves a fresh empty
+ * `## [Unreleased]` above it, and updates the two compare links at the bottom.
+ */
+export const rollChangelog = (changelog: string, newVersion: string, date: string): string => {
+  assertUnreleasedReady(changelog);
+  const { head, body, tail } = unreleasedSection(changelog);
+
+  while (body.length > 0 && body[0]!.trim() === "") body.shift();
+  while (body.length > 0 && body[body.length - 1]!.trim() === "") body.pop();
+
+  const rolled = [
+    ...head,
+    UNRELEASED_HEADING,
+    "",
+    `## [${newVersion}] - ${date}`,
+    "",
+    ...body,
+    "",
+    ...tail,
+  ].join("\n");
+
+  if (!UNRELEASED_LINK_RE.test(rolled)) {
+    throw new Error("CHANGELOG.md: [Unreleased] compare link not found");
+  }
+  return rolled.replace(
+    UNRELEASED_LINK_RE,
+    (_match: string, label: string, prefix: string, previous: string) =>
+      `${label}${prefix}v${newVersion}...HEAD\n[${newVersion}]: ${prefix}v${previous}...v${newVersion}`,
   );
+};
+
+/** One `bun run size` scenario as the README table quotes it. */
+export interface SizeMeasurement {
+  readonly scenario: string;
+  readonly minified: string;
+  readonly gzipped: string;
+  readonly gzipBytes: number;
+  readonly budget: number;
+}
+
+/** Each README size-table row and the `bun run size` scenario it measures. */
+export const SIZE_ROW_SCENARIOS: readonly { readonly label: string; readonly scenario: string }[] = [
+  { label: "**Base (`vlist`)**", scenario: "Base (createVList)" },
+  { label: "`vlist/synthetic` (deprecated)", scenario: "synthetic" },
+  { label: "`vlist/native` (alias)", scenario: "native" },
+  { label: "`a11y()`", scenario: "a11y" },
+  { label: "`selection()`", scenario: "selection" },
+  { label: "`data()`", scenario: "data" },
+  { label: "`scrollbar()`", scenario: "scrollbar" },
+  { label: "`sortable()`", scenario: "sortable" },
+  { label: "`groups()`", scenario: "groups" },
+  { label: "`page()`", scenario: "page" },
+  { label: "`snapshots()`", scenario: "snapshots" },
+  { label: "`transition()`", scenario: "transition" },
+  { label: "`autosize()`", scenario: "autosize" },
+  { label: "`grid()`", scenario: "grid" },
+  { label: "`table()`", scenario: "table" },
+  { label: "`masonry()`", scenario: "masonry" },
+  { label: "`tree()`", scenario: "tree" },
+  { label: "`search()`", scenario: "search" },
+  { label: "`carousel()`", scenario: "carousel" },
+  { label: "`vlist/synthetic` + `carousel()`", scenario: "synthetic + carousel" },
+  { label: "`vlist/synthetic` + `sortable()`", scenario: "synthetic + sortable" },
+  { label: "`vlist/vue` `useVList`", scenario: "vue" },
+  { label: "`vlist/svelte` `vlist`", scenario: "svelte" },
+  { label: "`vlist/solid` `createVList`", scenario: "solid" },
+  { label: "`vlist/react` `useVList`", scenario: "react" },
+  { label: "`vlist/react` + `grid()`", scenario: "react + grid" },
+];
+
+const SIZE_TABLE_RE =
+  /^\s{2}(\S.*?)\s{2,}([0-9]+\.[0-9]) KB\s{2,}([0-9]+\.[0-9]) KB\s{2,}([0-9]+\.[0-9]) KB(?:\s{2,}[+-]?[0-9]+\.[0-9] KB)?\s*$/;
+const SIZE_BUDGET_RE = /^\s*[✓✗]\s+(.+?):\s+(\d+) bytes gzipped \(budget (\d+)\)\s*$/;
+
+/** Reads `bun run size`'s table (minified) and its budget lines (exact gzip bytes). */
+export const parseSizeOutput = (output: string): readonly SizeMeasurement[] => {
+  const rows = new Map<string, { minified: string; gzipped: string }>();
+  for (const line of output.split("\n")) {
+    const match = SIZE_TABLE_RE.exec(line);
+    if (match) {
+      rows.set(match[1]!.trim(), { minified: match[2]!, gzipped: match[3]! });
+    }
+  }
+
+  const measured: SizeMeasurement[] = [];
+  for (const line of output.split("\n")) {
+    const match = SIZE_BUDGET_RE.exec(line);
+    if (!match) continue;
+    const scenario = match[1]!;
+    const row = rows.get(scenario);
+    if (!row) {
+      throw new Error(`bun run size output: table row not found for ${scenario}`);
+    }
+    measured.push({
+      scenario,
+      minified: row.minified,
+      gzipped: row.gzipped,
+      gzipBytes: Number(match[2]!),
+      budget: Number(match[3]!),
+    });
+  }
+  return measured;
+};
+
+const README_SIZE_ROW_RE = /^\| (.*?) \| ([0-9]+\.[0-9]) KB \| ([0-9]+\.[0-9]) KB \|$/;
+const README_SIZE_TAGLINE_RE = /(- \*\*)[0-9]+\.[0-9]( KB gzipped\*\* — composable plugins)/;
+const README_SIZE_BASE_RE =
+  /(The base is \*\*)[\d,]+( bytes gzipped\*\*, within the )[0-9]+\.[0-9]( KB budget \()[\d,]+( bytes\)\.)/;
+const README_SIZE_SYNTHETIC_RE = /(Synthetic input is \*\*)[\d,]+( bytes\*\* before plugins)/;
+const README_SIZE_BASE_SENTENCE_RE = /(bundles the base \(\*\*)[0-9]+\.[0-9]( KB gzipped\*\*\))/;
+
+const withThousands = (value: number): string =>
+  String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+/**
+ * Rewrites the size table rows and the prose figures in one README from a
+ * measurement. The table is strict — a missing row means the file drifted and
+ * the release stops; the prose sentences are refreshed where they still match.
+ */
+export const refreshReadmeSizes = (
+  markdown: string,
+  sizes: readonly SizeMeasurement[],
+  fileName = "README.md",
+): string => {
+  const byScenario = new Map(sizes.map((size) => [size.scenario, size]));
+  const base = byScenario.get("Base (createVList)");
+  const synthetic = byScenario.get("synthetic");
+  if (!base || !synthetic) {
+    throw new Error(`${fileName}: bun run size did not measure the base and synthetic scenarios`);
+  }
+
+  const lines = markdown.split("\n");
+  let found = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const match = README_SIZE_ROW_RE.exec(lines[i]!);
+    if (!match) continue;
+    const row = SIZE_ROW_SCENARIOS.find((candidate) => candidate.label === match[1]);
+    if (!row) continue;
+    const measured = byScenario.get(row.scenario);
+    if (!measured) {
+      throw new Error(`bun run size did not measure ${row.scenario}`);
+    }
+    if (match[2] !== measured.minified || match[3] !== measured.gzipped) {
+      lines[i] = `| ${row.label} | ${measured.minified} KB | ${measured.gzipped} KB |`;
+    }
+    found++;
+  }
+  if (found !== SIZE_ROW_SCENARIOS.length) {
+    throw new Error(
+      `${fileName}: size table rows missing (${found}/${SIZE_ROW_SCENARIOS.length} found)`,
+    );
+  }
+
+  const budgetKB = (base.budget / 1024).toFixed(1);
+  return lines
+    .join("\n")
+    .replace(
+      README_SIZE_TAGLINE_RE,
+      (_match: string, before: string, after: string) => `${before}${base.gzipped}${after}`,
+    )
+    .replace(
+      README_SIZE_BASE_RE,
+      (_match: string, a: string, b: string, c: string, d: string) =>
+        `${a}${withThousands(base.gzipBytes)}${b}${budgetKB}${c}${withThousands(base.budget)}${d}`,
+    )
+    .replace(
+      README_SIZE_SYNTHETIC_RE,
+      (_match: string, before: string, after: string) =>
+        `${before}${withThousands(synthetic.gzipBytes)}${after}`,
+    )
+    .replace(
+      README_SIZE_BASE_SENTENCE_RE,
+      (_match: string, before: string, after: string) => `${before}${base.gzipped}${after}`,
+    );
+};
 
 // =============================================================================
 // Declarative Schema Engine & Unified Reader
@@ -1865,6 +2133,15 @@ const main = async (): Promise<void> => {
   }
 
   if (args.dryRun) {
+    // The dry run refuses what the live run would refuse, before printing a plan.
+    if (state === "create-source-pr" && currentBranch !== releaseBranch) {
+      try {
+        assertUnreleasedReady(await Bun.file("CHANGELOG.md").text());
+      } catch (err: unknown) {
+        console.error(`  ✗ ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+    }
     const plan = planRelease({
       targetVersion: newVersion,
       sourceBranch,
@@ -1951,32 +2228,48 @@ const main = async (): Promise<void> => {
       }
 
       run(`git pull origin ${sourceBranch}`, { silent: true });
+
+      // Refuse before cutting the branch, so a release with no notes never
+      // leaves a half-written release branch behind.
+      const changelog = await Bun.file("CHANGELOG.md").text();
+      assertUnreleasedReady(changelog);
+
       step(2, `Creating release branch ${releaseBranch} and opening PR into ${sourceBranch}...`);
 
       run(`git checkout -b ${releaseBranch}`);
 
       const pkgContent = read("cat package.json", { kind: "text", name: "cat_package_json", parse: (raw) => raw });
-      const updatedPkg = pkgContent.replace(/"version":\s*"[^"]+"/, `"version": "${newVersion}"`);
-      await Bun.write("package.json", updatedPkg);
+      await Bun.write("package.json", bumpPackageVersion(pkgContent, newVersion));
       console.log(`  ✓ package.json: ${oldVersion} → ${newVersion}`);
 
-      const readme = await Bun.file("README.md").text();
-      await Bun.write("README.md", updateReadmeVersion(readme, newVersion));
-      console.log(`  ✓ README.md version badge updated`);
+      await Bun.write("CHANGELOG.md", rollChangelog(changelog, newVersion, utcDateStamp(new Date())));
+      console.log(`  ✓ CHANGELOG.md: [Unreleased] rolled into [${newVersion}]`);
 
-      const commitCount = parseInt(run("git rev-list --count HEAD", { silent: true }), 10);
-      const firstDate = new Date(run("git log --format=%aI --reverse | head -1", { silent: true }));
-      const today = new Date();
-      const days = Math.round((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
-      const firstShort = firstDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      const todayFull = today.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-      const statsLine = `${commitCount} commits · ${days} days · ${firstShort} – ${todayFull}`;
+      console.log("  Running bun run size...");
+      let sizeOutput = "";
+      try {
+        sizeOutput = run("bun run size", { silent: true, timeout: SIZE_MEASURE_TIMEOUT_MS });
+      } catch (err: unknown) {
+        console.error(
+          `  ✗ bun run size failed — a bundle is over its budget or did not build. Never raise a budget; fix the size first.\n    ${execErrorMessage(err)}`,
+        );
+        process.exit(1);
+      }
+      const sizes = parseSizeOutput(sizeOutput);
+      for (const name of README_FILES) {
+        const before = await Bun.file(name).text();
+        const refreshed = refreshReadmeSizes(
+          updateReadmeVersion(before, newVersion, name),
+          sizes,
+          name,
+        );
+        if (refreshed !== before) {
+          await Bun.write(name, refreshed);
+        }
+      }
+      console.log(`  ✓ README.md + npm-readme.md: version v${newVersion}, size rows refreshed`);
 
-      const changelog = await Bun.file("CHANGELOG.md").text();
-      await Bun.write("CHANGELOG.md", updateChangelogStats(changelog, statsLine));
-      console.log(`  ✓ CHANGELOG.md: ${statsLine}`);
-
-      run(`git add package.json README.md CHANGELOG.md`);
+      run(`git add package.json README.md npm-readme.md CHANGELOG.md`);
       run(`git commit -m "chore(release): v${newVersion}"`);
       run(`git push origin ${releaseBranch}`);
       console.log(`  ✓ Pushed to ${releaseBranch}`);
