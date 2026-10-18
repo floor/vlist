@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.5] - 2026-10-18
+
 ### Fixed
 
 - In `search()`, the match navigation arrows of a `navigate`-mode bar stay
@@ -1835,7 +1837,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.5...HEAD
+[3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
 [3.1.3]: https://github.com/floor/vlist/compare/v3.1.2...v3.1.3
 [3.1.2]: https://github.com/floor/vlist/compare/v3.1.1...v3.1.2
