@@ -28,6 +28,43 @@ describe("size gate", () => {
     expect(BUDGET_BYTES.native).toBe(kb(10.3));
   });
 
+  it("pins every budget as a fixed number — a move needs the owner's word", () => {
+    // The routine headroom rule is retired: a budget does not move because a
+    // measurement moved. With the whole table pinned, a deliberate move edits
+    // two files in one commit (`scripts/size.ts` and this table), beside the
+    // measurement the owner approved — never a silent re-measure.
+    expect(BUDGET_BYTES).toEqual({
+      "Base (createVList)": kb(10.3),
+      synthetic: kb(13.0),
+      "synthetic + carousel": kb(18.2),
+      "synthetic + sortable": kb(16.6),
+      createStats: kb(10.6),
+      "synthetic + createStats": kb(13.2),
+      native: kb(10.3),
+      a11y: kb(12.1),
+      selection: kb(13.7),
+      data: kb(15.2),
+      scrollbar: kb(13.3),
+      sortable: kb(14.0),
+      groups: kb(15.8),
+      page: kb(11.3),
+      snapshots: kb(11.5),
+      transition: kb(12.4),
+      autosize: kb(12.0),
+      grid: kb(13.0),
+      table: kb(16.4),
+      masonry: kb(14.8),
+      tree: kb(15.7),
+      search: kb(13.7),
+      carousel: kb(15.8),
+      vue: kb(10.6),
+      svelte: kb(10.5),
+      solid: kb(10.6),
+      react: kb(10.6),
+      "react + grid": kb(13.2),
+    });
+  });
+
   it("fails the command when a scenario fails to build", () => {
     expect(sizeGateFails({
       buildFailures: ["Base (createVList)"],
