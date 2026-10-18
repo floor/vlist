@@ -11,6 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- In `search()`, the match navigation arrows of a `navigate`-mode bar stay
+  hidden until the query has a match to step, instead of appearing as soon as
+  the mode is `navigate`: an empty box and a query with no results now read as
+  idle, the way the match counter and the clear button already did (#106).
+
 ## [3.1.4] - 2026-10-16
 
 ### Fixed
