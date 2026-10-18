@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 a11y under `groups()`: a click selects the item you clicked and the focus ring sits on it.
 
+Who is affected: lists that use a11y() without selection(). With selection() loaded, a11y() steps aside and selection() already handled clicks and focus correctly.
+
 ### Fixed
 
 - With `groups()` loaded, `a11y()` read a row's rendered index as an item index,
