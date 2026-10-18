@@ -55,6 +55,19 @@ describe("changelogSection", () => {
     const empty = "# Changelog\n\n## [3.1.6] - 2026-10-19\n\n## [3.1.5] - 2026-10-18\n\nSomething.\n";
     expect(() => changelogSection(empty, "3.1.6")).toThrow("CHANGELOG.md's section for 3.1.6 is empty");
   });
+
+  it("refuses a section with a theme line and no entries", () => {
+    // A prose-only section has a body, so the empty check lets it through; it
+    // still carries no entry, and a release note that lists nothing is a
+    // CHANGELOG that was not updated.
+    const proseOnly =
+      "# Changelog\n\n## [3.1.6] - 2026-10-19\n\n" +
+      "Groups: the index spaces agree, so a click selects what it shows.\n\n" +
+      "## [3.1.5] - 2026-10-18\n\n- Something.\n";
+    expect(() => changelogSection(proseOnly, "3.1.6")).toThrow(
+      "CHANGELOG.md's section for 3.1.6 has no entries",
+    );
+  });
 });
 
 describe("releaseNotes", () => {

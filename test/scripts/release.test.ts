@@ -391,6 +391,25 @@ Search: match arrows wait for a match to step (#106).
     );
   });
 
+  it("refuses a [Unreleased] with a theme line and no entries", () => {
+    // The theme line is prose about the release, not an entry: a section that
+    // ships nothing is a CHANGELOG that was not updated, and the release would
+    // publish notes with no change in them.
+    const proseOnly = `## [Unreleased]
+
+Groups: the index spaces agree, so a click selects what it shows.
+
+## [3.1.4] - 2026-10-16
+
+- old (#372).
+
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.4...HEAD
+`;
+    expect(() => rollChangelog(proseOnly, "3.1.5", "2026-10-18")).toThrow(
+      "## [Unreleased] has no entries",
+    );
+  });
+
   it("requires a theme line when more than one change ships", () => {
     const twoBullets = `## [Unreleased]
 
@@ -1059,7 +1078,7 @@ describe("planRelease", () => {
     // The plan names the changelog roll, both READMEs, the size refresh, and the
     // refusals, so a dry run shows what the release will do (#383/#384 done by hand).
     expect(descriptions).toContain(
-      "Refuse if CHANGELOG.md [Unreleased] is empty or a multi-change section has no theme line",
+      "Refuse if CHANGELOG.md [Unreleased] is empty or has no entries, or a multi-change section has no theme line",
     );
     expect(descriptions).toContain(
       "Roll CHANGELOG.md [Unreleased] into the 3.1.3 section and update compare links",
