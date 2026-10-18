@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [3.1.5] - 2026-10-18
 
+Search: a navigate-mode bar shows its match arrows only when there is a match to step (#106).
+
 ### Fixed
 
 - In `search()`, the match navigation arrows of a `navigate`-mode bar stay
