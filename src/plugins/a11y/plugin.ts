@@ -66,13 +66,14 @@ export function a11y<T extends VListItem = VListItem>(
       // other space, as selection() does (selection/plugin.ts `toDataIndex`)
       // and as the ARIA position pass does (rendering/aria.ts).
       //
-      // Resolved lazily and once: a plugin can publish after setup — groups()
-      // in table mode publishes _getItemAtLayout from a microtask.
+      // The translators are published before the first render, so they are
+      // resolved lazily and once. The table-mode getter is not: groups() in
+      // table mode re-points ctx.items from a microtask, so getItem() asks for
+      // it at each call (see below, #396).
       let spacesResolved = false;
       let l2dFn: ((i: number) => number) | undefined;
       let d2lFn: ((i: number) => number) | undefined;
       let dataTotalFn: (() => number) | undefined;
-      let tableMode = false;
 
       const resolveSpaces = (): void => {
         if (spacesResolved) return;
@@ -81,7 +82,6 @@ export function a11y<T extends VListItem = VListItem>(
         l2dFn = g("_layoutToDataIndex") as typeof l2dFn;
         d2lFn = g("_dataToLayoutIndex") as typeof d2lFn;
         dataTotalFn = g("_getTotal") as () => number;
-        tableMode = !!g("_getItemAtLayout");
       };
 
       /** A rendered index → the item index it stands for (-1: no item). */
@@ -101,8 +101,11 @@ export function a11y<T extends VListItem = VListItem>(
         // ctx.items.at() already routes through data()'s getFn, which takes
         // data indices. groups() in table mode re-points it at its render
         // entries, headers included, so there a data index is translated to
-        // the layout row that paints it.
-        return ctx.items.at(tableMode ? toLayoutIndex(i) : i);
+        // the layout row that paints it. That re-point lands in a microtask —
+        // a key activation which resolved the spaces before it must not keep
+        // reading the data-space getter afterwards (#396) — so ask at the call.
+        const layoutAware = !!ctx.hooks.get("_getItemAtLayout");
+        return ctx.items.at(layoutAware ? toLayoutIndex(i) : i);
       };
       // The count of items, not of rendered entries — carousel inflates the
       // engine total to its laps and groups counts its headers. Plugins that
