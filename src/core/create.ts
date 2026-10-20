@@ -1077,6 +1077,10 @@ export function createCore<T extends VListItem = VListItem>(
       doForceRender();
     },
 
+    remeasureItem(_index: number): boolean {
+      return false;
+    },
+
     insertItem(item: T, index?: number): void {
       if (insertItemAtFn) {
         insertItemAtFn(item, index ?? state.totalItems);

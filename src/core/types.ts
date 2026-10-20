@@ -327,6 +327,19 @@ export interface VList<T extends VListItem = VListItem> {
   appendItems(items: T[]): void;
   prependItems(items: T[]): void;
   updateItem(id: string | number, updates: Partial<T>): void;
+  /**
+   * Ask whichever per-item size source owns the list to re-read item `index`,
+   * then make the list observe the result: content size, scroll anchor and any
+   * plugin state derived from offsets. The item data is not written, so a
+   * mounted row keeps its DOM — and a focused control inside it.
+   *
+   * @param index Data index, in `[0, total)`. Never throws for an index.
+   * @returns `true` when a size source was asked (the size may be unchanged),
+   *   `false` when the index is not an integer or out of range, the layout's
+   *   size model cannot address one data item (`grid()`, `masonry()`,
+   *   `carousel()`), or the item spec is fixed.
+   */
+  remeasureItem(index: number): boolean;
   insertItem(item: T, index?: number): void;
   removeItem(id: string | number): void;
   removeItems(ids: ReadonlyArray<string | number>): number;
