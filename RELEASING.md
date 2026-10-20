@@ -43,31 +43,41 @@ the integration branch but not yet published.
 ## Process
 
 Work on the integration branch for the line you are releasing (`next` for 3.x,
-`staging` for 2.x).
+`staging` for 2.x), with a clean working tree.
 
-1. **Prep (manual)** — stamp `[Unreleased]` → `[X.Y.Z] - <date>` in
-   `CHANGELOG.md` and add a fresh `[Unreleased]`; run `bun run size` and refresh
-   the README plugin-size table + base-size tagline and `npm-readme.md`. Commit.
+1. **Prep the notes** — keep the release's entries in `CHANGELOG.md` under
+   `[Unreleased]`. When more than one change ships, open the section with a
+   one-sentence theme above its first heading. The script refuses an empty section,
+   a section without entries, or multiple entries without that theme. Commit the
+   notes before starting; leave the section populated for the script to roll.
 2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run] [--tag]`.
    The script derives the source branch from the version being released (`next`
    for 3.x, `staging` for 2.x), requires you to be on that branch, bumps
    `package.json` (a prerelease such as `3.0.0-next.2` is never bumped — its
    stable release is named, `bun run release 3.0.0` — and a version not above the
-   current one is refused unless resuming an already-bumped release), updates the
-   README version badge and CHANGELOG stats line, cuts branch `chore/release-X.Y.Z`
-   from the source branch, commits `chore(release): vX.Y.Z` on that branch, pushes
+   current one is refused unless resuming an already-bumped release), and prepares
+   the release on `chore/release-X.Y.Z`, cut from the source branch. It rolls
+   `[Unreleased]` into `[X.Y.Z] - <UTC date>`, leaves a fresh empty `[Unreleased]`,
+   and updates both compare links. It runs `bun run size`, refreshes the measured
+   plugin-size tables and matching base-size prose in `README.md` and
+   `npm-readme.md`, and updates both files' version markers. A failed size check
+   or a missing size-table row stops preparation.
+   It commits `chore(release): vX.Y.Z` on that branch, pushes
    the release branch (never the source branch directly), opens a PR into the source
    branch, and waits for it to merge. Once merged, it opens a PR from the source
-   branch onto `main` and waits for it to merge.
+   branch onto `main` and waits for it to merge. Both merges must be merge commits
+   pinned to the verified PR head.
    Once the PR onto `main` merges, the script verifies the merge commit is on `main`,
    verifies `package.json` matches the release version, verifies all check runs on that
-   commit are completed and successful, prints the verified SHA and the exact next command,
-   and stops without tagging.
+   commit are completed and successful, prints the verified SHA and the exact next
+   command, and stops without tagging. It waits up to ten minutes for missing or
+   pending checks; a failed check stops it immediately.
    The tag is a separate, deliberate invocation:
    `bun run release X.Y.Z --tag`.
    This re-verifies all preconditions from scratch, creates an annotated tag
    `git tag -a vX.Y.Z <sha> -m vX.Y.Z` on the verified commit, and pushes it.
-   The tag triggers `publish.yml` → `npm publish` + GitHub Release.
+   The tag triggers `publish.yml` → `npm publish` + GitHub Release, whose notes
+   come from the tag's CHANGELOG section and compare link.
    Pass `--dry-run` to preview all planned steps and commands without touching files,
    branches, PRs, or tags.
    `--from` confirms the derived branch; it cannot send 3.x through `staging`.
@@ -75,14 +85,46 @@ Work on the integration branch for the line you are releasing (`next` for 3.x,
    `publish.yml` moves `next` itself with the workflow's OIDC identity
    (`npm dist-tag add vlist@X.Y.Z next`), which npm supports from 11.21.0 once
    **Allow npm dist-tag** is enabled on the package's trusted publisher on
-   npmjs.com (disabled by default). While that setting is off the move is
-   skipped: the step is allowed to fail, and the last step warns with the
-   command a maintainer runs — `npm dist-tag add vlist@X.Y.Z next --auth-type=web`
+   npmjs.com (disabled by default). The move is allowed to fail; if `next` is
+   below the published version, the last step warns with the command a maintainer
+   runs — `npm dist-tag add vlist@X.Y.Z next --auth-type=web`
    (browser 2FA; no token). `bun run release` also prints that command as its
    last line. The warning names the version just published even while the
-   registry still shows the old `latest` (it lags a fresh publish by a minute or
-   two, and the step does not wait for it). When the registry cannot be read, it
-   warns that the tags are unknown. In both cases it exits 0.
+   registry still shows the old `latest` (public registry visibility can lag a
+   fresh publish, and the step does not wait for it). When the registry cannot be
+   read, it warns that the tags are unknown. In both cases it exits 0.
+
+**Manual preparation fallback / resume.** If preparation was completed manually,
+commit the package version, dated changelog section and compare links, and both
+README version markers and measured sizes on `chore/release-X.Y.Z`. From that
+branch, `bun run release X.Y.Z` resumes the committed bump without rolling the
+changelog again. If the branch was already pushed without its source PR, follow
+the script's diagnostic: verify the remote package version and release commit
+subject, open that PR, then rerun. An unfinished release branch without the target
+version committed is refused. This is a resume path, not an automatic fallback
+after a size failure; a fresh run from the integration branch still needs populated
+`[Unreleased]`.
+
+**Publication follow-through.** If npm reports that a version is being processed,
+wait for visibility rather than retrying publication: once npm has accepted a
+version, do not publish it again. Check `npm view vlist@X.Y.Z version` and
+`npm view vlist dist-tags` before moving `next`. A stale registry read alone does
+not establish that publication failed.
+
+If npm has accepted the version but the GitHub Release step failed, recover that
+step alone instead of rerunning the workflow's publish step. From the tag's checkout,
+generate its notes and create the GitHub release:
+
+```bash
+bun scripts/release-notes.ts X.Y.Z > notes.md
+gh release create vX.Y.Z --title vX.Y.Z --notes-file notes.md --verify-tag --latest
+```
+
+If it already exists, update its notes with
+`gh release edit vX.Y.Z --title vX.Y.Z --notes-file notes.md`. For a prerelease,
+creation uses `--prerelease --latest=false` in place of `--latest`, as the workflow
+does. Then check the npm tags and use the maintainer's `next` command above if
+the move is still needed.
 
 ### Pre-releases
 
@@ -98,8 +140,8 @@ with `npm install vlist@next`.
    entries into a `[X.Y.Z-next.N] - <date>` section of `CHANGELOG.md`, and update
    the version line in `README.md` and `npm-readme.md`. Commit
    `chore(release): vX.Y.Z-next.N` and push the branch.
-3. **Verify** — CI does not run on integration branches, so verify the exact
-   commit from a clean export: `bun install --frozen-lockfile`,
+3. **Verify** — CI runs on pushes and PRs to `next`, `staging` and `main`.
+   Verify the exact tag candidate from a clean export: `bun install --frozen-lockfile`,
    `bun run typecheck`, `bun test`, `bun run scripts/coverage.ts --threshold 85`,
    `bun run build --types`, `bun run size`, `npm pack --dry-run`. A local run
    proves macOS only; the publish job reruns the tests on Linux.
