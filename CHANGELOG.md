@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Plugins that cannot work together now say so when the list is created, and name the fixed-size setting to use instead.
+
+Who is affected: lists that combine `autosize()` with `table()`, `masonry()` or `carousel()`. These pairs were silently degraded and now throw at creation; the error names the remedy.
+
 ### Changed
 
 - `table()` with `autosize()` — or with an estimated item size in the config
