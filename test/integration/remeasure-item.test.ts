@@ -14,8 +14,13 @@ import { setupDOM, teardownDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createContainer, createTestItems, simpleTemplate, type TestItem } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
-import type { VList } from "../../src/core/types";
+import type { VList, VListPlugin } from "../../src/core/types";
 import { table } from "../../src/plugins/table/plugin";
+import { autosize } from "../../src/plugins/autosize/plugin";
+import { grid } from "../../src/plugins/grid/plugin";
+import { masonry } from "../../src/plugins/masonry/plugin";
+import { carousel } from "../../src/plugins/carousel/plugin";
+import { groups } from "../../src/plugins/groups/plugin";
 
 // =============================================================================
 // Setup
@@ -94,6 +99,52 @@ function buildTable(count = 30): TableFixture {
   };
 }
 
+interface CoreFixture {
+  readonly list: VList<TestItem>;
+  readonly container: HTMLElement;
+  /** Per-index height overrides read by the item's height function. */
+  readonly heights: number[];
+  /** How many times the height function has been called. */
+  readonly specCalls: () => number;
+  item(index: number): HTMLElement | null;
+  content(): HTMLElement;
+  dispose(): void;
+}
+
+/** A plain core list whose height is a function, 40px until a test writes `heights`. */
+function buildCore(count = 30): CoreFixture {
+  const heights: number[] = [];
+  let calls = 0;
+  const container = createContainer({ width: 300, height: 500 });
+  const list = createVList<TestItem>({
+    container,
+    items: createTestItems(count),
+    item: {
+      height: (index: number) => {
+        calls++;
+        return heights[index] ?? 40;
+      },
+      template: simpleTemplate,
+    },
+  });
+  return {
+    list,
+    container,
+    heights,
+    specCalls: () => calls,
+    item(index: number): HTMLElement | null {
+      return container.querySelector<HTMLElement>(`.vlist-item[data-index="${index}"]`);
+    },
+    content(): HTMLElement {
+      return container.querySelector<HTMLElement>(".vlist-content")!;
+    },
+    dispose(): void {
+      list.destroy();
+      container.remove();
+    },
+  };
+}
+
 // =============================================================================
 // The issue's repro
 // =============================================================================
@@ -130,6 +181,375 @@ describe("remeasureItem — table with a function rowHeight", () => {
 
       // The scroll content grew with it.
       expect(f.content().style.height).toBe("1240px");
+    } finally {
+      f.dispose();
+    }
+  });
+});
+
+// =============================================================================
+// Core list
+// =============================================================================
+
+describe("remeasureItem — core list", () => {
+  it("grows a mounted item in place and moves the item after it", () => {
+    const f = buildCore();
+    try {
+      const item2 = f.item(2);
+      const item3 = f.item(3);
+      expect(item2).not.toBeNull();
+      expect(item3).not.toBeNull();
+      expect(item2!.style.height).toBe("40px");
+      expect(item3!.style.transform).toBe("translateY(120px)");
+      expect(f.content().style.height).toBe("1200px");
+
+      f.heights[2] = 80;
+      expect(f.list.remeasureItem(2)).toBe(true);
+
+      // In place (pipeline.ts:392-402): same element, new height, later
+      // transforms moved by the delta.
+      expect(f.item(2)).toBe(item2);
+      expect(item2!.style.height).toBe("80px");
+      expect(item3!.style.transform).toBe("translateY(160px)");
+      expect(f.content().style.height).toBe("1240px");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("reads the spec once and relayouts nothing when the size did not change", () => {
+    const f = buildCore();
+    try {
+      // Exactly one read is the unchanged-size guard. An invalidation would
+      // re-read the block (30 items here); a force render would read every
+      // visible item again.
+      const before = f.specCalls();
+      expect(f.list.remeasureItem(2)).toBe(true);
+      expect(f.specCalls() - before).toBe(1);
+      expect(f.item(2)!.style.height).toBe("40px");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("keeps the anchored content still when an item above the viewport changes", () => {
+    const f = buildCore();
+    try {
+      f.list.scrollToIndex(5, "start");
+      expect(f.list.getScrollPosition()).toBe(200);
+
+      // Item 1 is above the viewport: the viewport scrolls by the delta, so
+      // item 5 (at the top) keeps its place on screen.
+      f.heights[1] = 80;
+      expect(f.list.remeasureItem(1)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(240);
+      expect(f.item(5)!.style.transform).toBe("translateY(240px)");
+
+      // Item 6 is below the viewport: nothing moves.
+      f.heights[6] = 80;
+      expect(f.list.remeasureItem(6)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(240);
+      expect(f.item(5)!.style.transform).toBe("translateY(240px)");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("returns false for a fixed spec", () => {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList<TestItem>({
+      container,
+      items: createTestItems(10),
+      item: { height: 40, template: simpleTemplate },
+    });
+    try {
+      expect(list.remeasureItem(0)).toBe(false);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("returns false for an index outside the data space, and never throws", () => {
+    const f = buildCore(10);
+    try {
+      expect(f.list.remeasureItem(-1)).toBe(false);
+      expect(f.list.remeasureItem(10)).toBe(false);
+      expect(f.list.remeasureItem(1.5)).toBe(false);
+      expect(f.list.remeasureItem(NaN)).toBe(false);
+      expect(f.list.remeasureItem(Infinity)).toBe(false);
+      expect(f.item(0)!.style.height).toBe("40px");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("returns false on an empty list", () => {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList<TestItem>({
+      container,
+      items: [],
+      item: { height: (index: number) => 40 + index, template: simpleTemplate },
+    });
+    try {
+      expect(list.remeasureItem(0)).toBe(false);
+      expect(list.remeasureItem(-1)).toBe(false);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+});
+
+// =============================================================================
+// Unsupported size models
+// =============================================================================
+
+describe("remeasureItem — unsupported size models", () => {
+  interface Built {
+    readonly list: VList<TestItem>;
+    dispose(): void;
+  }
+
+  /** A list whose item height is a function, over `plugin`. */
+  function buildWith(plugin: VListPlugin<TestItem>): Built {
+    const heights: number[] = [];
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(30),
+        item: {
+          height: (index: number) => heights[index] ?? 40,
+          template: simpleTemplate,
+        },
+      },
+      [plugin],
+    );
+    return {
+      list,
+      dispose(): void {
+        list.destroy();
+        container.remove();
+      },
+    };
+  }
+
+  it("grid(): returns false — the cache is row space, not item space", () => {
+    const b = buildWith(grid({ columns: 2 }));
+    try {
+      expect(b.list.remeasureItem(0)).toBe(false);
+      expect(b.list.remeasureItem(17)).toBe(false);
+    } finally {
+      b.dispose();
+    }
+  });
+
+  it("masonry(): returns false — placements are a snapshot", () => {
+    const b = buildWith(masonry({ columns: 2 }));
+    try {
+      expect(b.list.remeasureItem(0)).toBe(false);
+    } finally {
+      b.dispose();
+    }
+  });
+
+  it("carousel(): returns false — the cache is virtual step space", () => {
+    const b = buildWith(carousel({}));
+    try {
+      expect(b.list.remeasureItem(0)).toBe(false);
+    } finally {
+      b.dispose();
+    }
+  });
+});
+
+// =============================================================================
+// Autosize delegation
+// =============================================================================
+
+describe("remeasureItem — autosize delegation", () => {
+  type AutosizedList = VList<TestItem> & {
+    setMeasuredSize(index: number, size: number): void;
+    isMeasured(index: number): boolean;
+    getMeasuredCount(): number;
+  };
+
+  interface AutosizedFixture {
+    readonly list: AutosizedList;
+    readonly container: HTMLElement;
+  }
+
+  function buildAutosized(): AutosizedFixture {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList(
+      {
+        container,
+        items: createTestItems(30),
+        item: { estimatedHeight: 40, template: simpleTemplate },
+      },
+      [autosize()],
+    );
+    return { list, container };
+  }
+
+  it("delegates a measured item even though the store reports an unchanged size", () => {
+    const f = buildAutosized();
+    try {
+      f.list.setMeasuredSize(2, 60);
+      expect(f.list.isMeasured(2)).toBe(true);
+
+      // The round-2 shape: the store holds a measurement, so a guard that
+      // compared the cache with itself would find 60 === 60 and return
+      // without asking the owner. The owner must be asked: the item is queued
+      // for a fresh measurement, which `isMeasured` reports as false.
+      expect(f.list.remeasureItem(2)).toBe(true);
+      expect(f.list.isMeasured(2)).toBe(false);
+      expect(f.list.getMeasuredCount()).toBe(1);
+    } finally {
+      f.list.destroy();
+      f.container.remove();
+    }
+  });
+
+  it("returns true for an unmeasured in-range item, which the plugin ignores", () => {
+    const f = buildAutosized();
+    try {
+      expect(f.list.remeasureItem(5)).toBe(true);
+      expect(f.list.isMeasured(5)).toBe(false);
+      expect(f.list.getMeasuredCount()).toBe(0);
+    } finally {
+      f.list.destroy();
+      f.container.remove();
+    }
+  });
+
+  it("bounds-checks before delegating", () => {
+    const f = buildAutosized();
+    try {
+      expect(f.list.remeasureItem(-1)).toBe(false);
+      expect(f.list.remeasureItem(30)).toBe(false);
+      expect(f.list.remeasureItem(0.5)).toBe(false);
+    } finally {
+      f.list.destroy();
+      f.container.remove();
+    }
+  });
+
+  it("passes the data index under groups()", () => {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList(
+      {
+        container,
+        items: createTestItems(20),
+        item: { estimatedHeight: 40, template: simpleTemplate },
+      },
+      [
+        autosize(),
+        groups({
+          getGroupForIndex: (index: number) => (index < 10 ? "A" : "B"),
+          header: { height: 20, template: (key: string) => key },
+        }),
+      ],
+    );
+    try {
+      // Data item 11 is layout entry 13 (two headers). Measuring it and
+      // remeasuring it by the data index must queue that item; a layout index
+      // would resolve data item 13 instead, which was never measured.
+      list.setMeasuredSize(11, 60);
+      expect(list.isMeasured(11)).toBe(true);
+      expect(list.remeasureItem(11)).toBe(true);
+      expect(list.isMeasured(11)).toBe(false);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+});
+
+// =============================================================================
+// Groups
+// =============================================================================
+
+describe("remeasureItem — groups()", () => {
+  const HEADER = 20;
+
+  function buildGrouped(
+    height: number | ((index: number) => number),
+  ): { list: VList<TestItem>; container: HTMLElement; dispose(): void } {
+    const container = createContainer({ width: 300, height: 500 });
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(20),
+        item: { height, template: simpleTemplate },
+      },
+      [
+        groups({
+          getGroupForIndex: (index: number) => (index < 10 ? "A" : "B"),
+          header: { height: HEADER, template: (key: string) => key },
+        }),
+      ],
+    );
+    return {
+      list,
+      container,
+      dispose(): void {
+        list.destroy();
+        container.remove();
+      },
+    };
+  }
+
+  it("refreshes the sticky header offsets after an invalidation", () => {
+    const heights: number[] = [];
+    const f = buildGrouped((index: number) => heights[index] ?? 40);
+    try {
+      const slots = (): string[] =>
+        [...f.container.querySelectorAll(".vlist-sticky-header .sticky-group")]
+          .map((slot) => slot.textContent ?? "")
+          .filter((text) => text.length > 0);
+      expect(slots()).toContain("A");
+
+      // At scroll 0, growing item 0 moves every later offset but not its own,
+      // so no scroll correction applies (its layout slot is at the top).
+      heights[0] = 140;
+      expect(f.list.remeasureItem(0)).toBe(true);
+
+      // The grown content is 920px in a 500px viewport, so item 9's start
+      // (460) clamps to 420. Group B's header is now at 500: this position is
+      // still inside group A. With the offsets cached at setup (400), the
+      // same position reads as group B.
+      f.list.scrollToIndex(9, "start");
+      expect(f.list.getScrollPosition()).toBe(420);
+      expect(slots()).toContain("A");
+      expect(slots()).not.toContain("B");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("returns false when the data spec is fixed", () => {
+    // The grouped cache is variable either way (headers are wrapped into the
+    // spec), so `sizeCache.isVariable()` would say yes; the installed data
+    // spec is fixed and has nothing to re-read.
+    const f = buildGrouped(40);
+    try {
+      expect(f.list.remeasureItem(0)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("bounds-checks in the data space, not the header-counted engine total", () => {
+    const heights: number[] = [];
+    const f = buildGrouped((index: number) => heights[index] ?? 40);
+    try {
+      expect(f.list.total).toBe(20);
+      // The engine renders 22 layout entries; data index 20 is past the last
+      // item and must not translate into the second header.
+      expect(f.list.remeasureItem(20)).toBe(false);
+      expect(f.list.remeasureItem(19)).toBe(true);
     } finally {
       f.dispose();
     }
