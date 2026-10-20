@@ -3,7 +3,7 @@
  * Tests for the custom scrollbar component
  */
 
-import { registerDOM, unregisterDOM } from "../../helpers/dom";
+import { registerDOM, unregisterDOM, useFakeTimers } from "../../helpers/dom";
 import {
   describe,
   it,
@@ -67,71 +67,6 @@ const createMockViewport = (): HTMLElement => {
   return viewport;
 };
 
-interface FakeTimerHandle { id: number; fn: () => void; time: number; interval: number }
-
-function useFakeTimers(): { tick: (ms: number) => void; restore: () => void } {
-  const timers: FakeTimerHandle[] = [];
-  let now = 0;
-  let nextId = 1;
-
-  const origSetTimeout = global.setTimeout;
-  const origClearTimeout = global.clearTimeout;
-  const origSetInterval = global.setInterval;
-  const origClearInterval = global.clearInterval;
-
-  global.setTimeout = ((fn: () => void, delay = 0): number => {
-    const id = nextId++;
-    timers.push({ id, fn, time: now + delay, interval: 0 });
-    return id;
-  }) as any;
-
-  global.clearTimeout = ((id: number): void => {
-    const idx = timers.findIndex(t => t.id === id);
-    if (idx !== -1) timers.splice(idx, 1);
-  }) as any;
-
-  global.setInterval = ((fn: () => void, delay: number): number => {
-    const id = nextId++;
-    timers.push({ id, fn, time: now + delay, interval: delay });
-    return id;
-  }) as any;
-
-  global.clearInterval = ((id: number): void => {
-    const idx = timers.findIndex(t => t.id === id);
-    if (idx !== -1) timers.splice(idx, 1);
-  }) as any;
-
-  const tick = (ms: number): void => {
-    const target = now + ms;
-    while (true) {
-      let earliest: FakeTimerHandle | undefined;
-      for (const t of timers) {
-        if (t.time <= target && (!earliest || t.time < earliest.time)) earliest = t;
-      }
-      if (!earliest) break;
-      now = earliest.time;
-      if (earliest.interval > 0) {
-        earliest.time = now + earliest.interval;
-        earliest.fn();
-      } else {
-        const idx = timers.indexOf(earliest);
-        timers.splice(idx, 1);
-        earliest.fn();
-      }
-    }
-    now = target;
-  };
-
-  const restore = (): void => {
-    global.setTimeout = origSetTimeout;
-    global.clearTimeout = origClearTimeout;
-    global.setInterval = origSetInterval;
-    global.clearInterval = origClearInterval;
-  };
-
-  return { tick, restore };
-}
-
 const cleanupViewport = (viewport: HTMLElement): void => {
   if (viewport && viewport.parentNode) {
     viewport.parentNode.removeChild(viewport);
@@ -155,11 +90,16 @@ describe("createScrollbar", () => {
   });
 
   afterEach(() => {
-    if (scrollbar) {
-      scrollbar.destroy();
+    try {
+      if (scrollbar) {
+        scrollbar.destroy();
+      }
+      cleanupViewport(viewport);
+    } finally {
+      // Restore even when a destroy/cleanup throws: a skipped restore leaves
+      // this test's fake clock in the global slots for the rest of the process.
+      fakeTimers.restore();
     }
-    cleanupViewport(viewport);
-    fakeTimers.restore();
   });
 
   describe("initialization", () => {
