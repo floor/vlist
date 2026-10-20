@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-20
+
 An item that changes size after the list is created can be measured again with one call: `remeasureItem(index)`.
 
 Who is affected: lists whose items grow or shrink after render: expandable rows, loaded images, edited text.
@@ -1972,7 +1974,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.2.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/floor/vlist/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/floor/vlist/compare/v3.1.8...v3.2.0
 [3.1.8]: https://github.com/floor/vlist/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/floor/vlist/compare/v3.1.6...v3.1.7
