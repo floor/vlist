@@ -78,6 +78,10 @@ export function table<T extends VListItem = VListItem>(
   let lastOrigin = 0;
   let sizeCache: SizeCache;
   let storedCtx: PluginContext<T> | null = null;
+  // The cross size the layout was last resolved against. Used to tell a
+  // height-only viewport change (a horizontal scrollbar appearing or
+  // disappearing) from a resize that actually changes column space.
+  let resolvedCross = 0;
 
   let selectedIdsGetter: (() => Set<string | number>) | null = null;
   let focusedIndexGetter: (() => number) | null = null;
@@ -341,8 +345,13 @@ export function table<T extends VListItem = VListItem>(
       }
 
       // ── Resolve initial column widths ───────────────────────────
-      const containerWidth = engineState.crossSize;
-      tableLayout.resolve(containerWidth);
+      // Core's ResizeObserver dedupes its first entry against the viewport's
+      // client box and skips the hook, so the layout is resolved here and no
+      // onResize call ever records that width. Record it with the resolve, or
+      // the first height-only change after a drag re-resolves and discards
+      // the dragged width (#31).
+      resolvedCross = engineState.crossSize;
+      tableLayout.resolve(resolvedCross);
 
       // ── Content width ───────────────────────────────────────────
       const updateContentWidth = (): void => {
@@ -439,6 +448,7 @@ export function table<T extends VListItem = VListItem>(
         if (!tableLayout || !tableHeader) return;
         tableLayout.updateColumns(columns);
         tableLayout.resolve(engineState.crossSize);
+        resolvedCross = engineState.crossSize;
         tableHeader.rebuild(tableLayout);
         if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
         updateContentWidth();
@@ -566,15 +576,22 @@ export function table<T extends VListItem = VListItem>(
     },
 
     hooks: {
-      onResize(_width: number, _height: number): void {
+      onResize(width: number, _height: number): void {
         if (!tableLayout || !storedCtx) return;
-        const newCross = engineState.crossSize;
-        tableLayout.resolve(newCross);
+        // Core runs the resize hooks when either viewport axis changes. A
+        // height-only change is what a horizontal scrollbar appearing or
+        // disappearing produces on a classic-scrollbar platform; the column
+        // space is untouched, and resolve() would reassign every
+        // explicit-width column from its definition, discarding a width the
+        // user just dragged (#31). Skip it, and keep the header, renderer and
+        // content width as they are — all three are width-derived. Table
+        // lists are vertical-only, so the hook's width IS the cross size.
+        if (Math.abs(width - resolvedCross) < 1) return;
+        resolvedCross = width;
+        tableLayout.resolve(engineState.crossSize);
         tableHeader?.update(tableLayout);
         tableRenderer?.updateColumnLayout(tableLayout);
-        if (tableLayout) {
-          storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
-        }
+        storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
       },
 
       onAfterScroll(): void {

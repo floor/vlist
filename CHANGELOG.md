@@ -20,6 +20,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   start-aligned, the position browsers settle on for a non-fitting
   `scrollIntoView` target, whether `selection()` or `a11y()` owns the focus
   (#31).
+- A table column the user had just dragged jumped back to its declared width
+  when the list's height changed without its width changing — the shape of a
+  horizontal scrollbar appearing or disappearing on a classic-scrollbar
+  platform, which used to re-resolve every column from its definition. A
+  height-only viewport change now leaves user widths alone; a real width
+  change still re-resolves the layout (#31).
 - The release script now waits up to ten minutes for CI checks on the main
   merge commit to appear and finish, so a release can continue after merging
   without a manual rerun. Failed checks still stop the release immediately.

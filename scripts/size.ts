@@ -194,7 +194,7 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   // an overrun moves the pin to measured + 1% on the recorded decision.
   autosize: kb(12.0),
   grid: kb(13.0),
-  table: kb(16.4),
+  table: kb(16.57),
   masonry: kb(14.8),
   tree: kb(15.7),
   search: kb(13.7),
