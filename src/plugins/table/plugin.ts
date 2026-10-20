@@ -67,6 +67,15 @@ export function table<T extends VListItem = VListItem>(
     throw new Error("[vlist] table: either rowHeight or estimatedRowHeight is required");
   }
 
+  // Once per factory call, not per rendered row or reuse of this plugin instance.
+  if (process.env.NODE_ENV !== "production" && config.estimatedRowHeight !== undefined) {
+    console.warn(
+      "[vlist] table: estimatedRowHeight is deprecated in 3.3.0 and will be removed in 4.0. " +
+        "It does not size or measure rows. Use rowHeight for fixed rows, or a rowHeight " +
+        "function with the remeasureItem(index) API for rows that change size after creation.",
+    );
+  }
+
   let tableLayout: TableLayout<T> | null = null;
   let tableHeader: ReturnType<typeof createTableHeader<T>> | null = null;
   let tableRenderer: TableRendererInstance<T> | null = null;

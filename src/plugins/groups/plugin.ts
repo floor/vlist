@@ -817,6 +817,11 @@ export function groups<T extends VListItem = VListItem>(
               return (headerHeightRaw as Function)(group.key, groupIndex);
             };
 
+      // From here on the cache is variable because the grouped spec wraps
+      // headers and data together, so the fact cannot be read back later.
+      // Capture what the installed data spec was, for remeasureItem().
+      const dataSizeIsVariable = sizeCache.isVariable();
+
       const origGetSize = sizeCache.getSize;
       dataItemSize = origGetSize;
 
@@ -1016,6 +1021,18 @@ export function groups<T extends VListItem = VListItem>(
       ctx.hooks.method("_layoutToDataIndex", (layoutIndex: number): number =>
         layout.layoutToDataIndex(layoutIndex),
       );
+      // The cache is variable because the grouped spec wraps headers in; this
+      // tells the core what the data spec below the wrapper was.
+      ctx.hooks.method("_dataSizeIsVariable", (): boolean => dataSizeIsVariable);
+      // The sticky header snapshots every group header's offset and refreshes
+      // only when something asks it to — an invalidation moves the offsets
+      // underneath it. O(#groups), one getOffset per header, paid only on an
+      // explicit per-item call.
+      ctx.hooks.method("_onItemRemeasure", (_cacheIndex: number): void => {
+        if (!stickyHeader) return;
+        stickyHeader.refresh();
+        stickyHeader.update(scroll.getPixelEquivalent());
+      });
       // table() paints the rows and publishes this hook itself. Registering
       // the groups map here would replace it with one that stays empty.
       if (!tableMode) {

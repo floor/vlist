@@ -11,6 +11,36 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-20
+
+An item that changes size after the list is created can be measured again with one call: `remeasureItem(index)`.
+
+Who is affected: lists whose items grow or shrink after render: expandable rows, loaded images, edited text.
+
+### Added
+
+- `remeasureItem(index): boolean` asks whichever per-item size source owns the list
+  to re-read one item after its content changed — `autosize()` re-observes it, and a
+  function `item.height` or function `table()` `rowHeight` is called again — then
+  updates content size, the scroll anchor and plugin state derived from offsets. The
+  item data is not written, so a mounted row keeps its DOM and a focused control
+  inside it. It returns `false` for a non-integer index or one outside `[0, total)`,
+  never throws, and returns `false` where one item's size is not addressable:
+  a fixed item spec, and `grid()`, `masonry()` and `carousel()` (#347).
+  It is a core method, so it lands in every bundle: the measured cost is
+  +189 to +248 bytes gzipped per size scenario, base measured 10,539 →
+  10,735 (+196) — above
+  the proposal's estimate because the estimate predated review, which added the
+  scroll-anchor shift and the groups/table size-owner wiring.
+
+### Deprecated
+
+- `table()`'s `estimatedRowHeight`, deprecated in 3.3.0 for removal in 4.0
+  (#345). It remains accepted but does not size or measure rows; non-production
+  builds now warn once per `table()` call, never per render or row. Use
+  `rowHeight` for fixed rows, or a `rowHeight` function with the
+  `remeasureItem(index)` API for heights that change after creation (#347).
+
 ## [3.2.0] - 2026-10-20
 
 Plugins that cannot work together now say so when the list is created, and name the fixed-size setting to use instead.
@@ -1944,7 +1974,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.2.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/floor/vlist/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/floor/vlist/compare/v3.1.8...v3.2.0
 [3.1.8]: https://github.com/floor/vlist/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/floor/vlist/compare/v3.1.6...v3.1.7
