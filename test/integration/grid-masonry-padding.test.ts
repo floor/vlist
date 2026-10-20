@@ -164,6 +164,28 @@ describe("grid + padding", () => {
     expect(transforms[0]!.x).toBe(0);
     expect(transforms[0]!.y).toBe(0);
   });
+
+  it("last column never paints past the cross padding", () => {
+    list = createVList({
+      container,
+      item: { height: 100, template: simpleTemplate },
+      items: createTestItems(9),
+      padding: 16,
+    }, [grid({ columns: 3, gap: 5 })]);
+
+    // Container = 400, padding 16 each side → effective = 368
+    // 3 columns, gap 5 → columnWidth = (368 - 10) / 3 = 119.333…
+    // Last column's exact x = 16 + 2 * (119.333… + 5) = 264.666…
+    // Its right edge must stay at or inside 400 - 16 so a focus ring painted
+    // just outside the cell has the full trailing padding to land in. Rounding
+    // that offset up moves the cell past the padded edge, and the scrollport
+    // clips the ring there — most visible with a classic scrollbar sitting at
+    // the edge.
+    const last = container.querySelector('[data-index="2"]') as HTMLElement;
+    const x = parseFloat(/translate\((-?[\d.]+)px/.exec(last.style.transform)![1]!);
+    const width = parseFloat(last.style.width);
+    expect(x + width).toBeLessThanOrEqual(400 - 16);
+  });
 });
 
 // =============================================================================

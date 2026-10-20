@@ -33,6 +33,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   message naming `item.estimatedHeight` and `carousel()`, with a fixed `item.height`
   as the way out.
 
+### Fixed
+
+- Grid: the last column could paint up to 0.5px past the configured cross-axis padding,
+  because its offset was rounded independently of the fractional column width. A focus
+  ring drawn just outside the cell then had less than the padding to land in and was
+  clipped at the scrollport edge — most visible with a classic scrollbar on that edge (#313).
+
 ## [3.1.8] - 2026-10-20
 
 a11y() and table(): focus stops flipping on items taller than the viewport, and dragged column widths survive scrollbar-driven resizes (#31).
