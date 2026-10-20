@@ -24,7 +24,7 @@ afterAll(() => teardownDOM());
 describe("resolveContainer", () => {
   it("should return element directly when passed an HTMLElement", () => {
     const el = document.createElement("div");
-    expect(resolveContainer(el)).toBe(el);
+    expect(resolveContainer(el) === el).toBe(true);
   });
 
   it("should resolve element from string selector", () => {
@@ -32,7 +32,7 @@ describe("resolveContainer", () => {
     el.id = "builder-dom-test";
     document.body.appendChild(el);
 
-    expect(resolveContainer("#builder-dom-test")).toBe(el);
+    expect(resolveContainer("#builder-dom-test") === el).toBe(true);
 
     el.remove();
   });
@@ -70,9 +70,9 @@ describe("createDOMStructure", () => {
       false,
     );
 
-    expect(root.parentElement).toBe(container);
-    expect(viewport.parentElement).toBe(root);
-    expect(content.parentElement).toBe(viewport);
+    expect(root.parentElement === container).toBe(true);
+    expect(viewport.parentElement === root).toBe(true);
+    expect(content.parentElement === viewport).toBe(true);
   });
 
   it("should apply class prefix to all elements", () => {
