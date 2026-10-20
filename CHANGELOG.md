@@ -11,7 +11,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-table() + groups(): the first click or key press names the row it lands on — one index space from the first paint.
+table() + groups(): the first click or key press acts on the row it lands on, from the first paint (#396).
 
 Who is affected: lists that combine `table()` with `groups()` and take an activation before the groups layout microtask has run — code that dispatches a click or key event in the same task that creates the list. A real pointer or keyboard fires after that microtask; the first paint now holds the rows until the layout is ready instead of showing a second index space in between.
 
