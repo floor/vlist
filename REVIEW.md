@@ -18,7 +18,8 @@ A change fails when it breaks one of these, even if every existing test passes:
 - **A size row that lies.** A README size table that disagrees with what
   `bun run size` prints, or a budget in `scripts/size.ts` moved so a change
   fits. The sizes quoted in the READMEs come from a measured run; a budget is a
-  fixed number, and going over it means trimming the change or asking the owner.
+  fixed number. A change that goes over it is trimmed, or the pin moves to
+  measured + 1% on the lead's recorded decision in the pull request.
 - **A scroll position that jumps.** Resizing, prepending items, changing the
   item at an index, or `autosize()` settling must not move the row under the
   reader's eye. #372 was one source: after the item at an index changed, the
