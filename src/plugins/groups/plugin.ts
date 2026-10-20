@@ -941,6 +941,13 @@ export function groups<T extends VListItem = VListItem>(
         // Table paints one row per layout entry, including headers. The engine
         // total is still the data count, so the last group's rows never render.
         engineState.totalItems = layout.totalEntries;
+        // table() reads this to hold its first paint: until the microtask below
+        // publishes the layout-space accessor, a render would stamp data-space
+        // rows with layout-space data-index values and an activation in that
+        // window would land one item off (#396). Nothing is visible before the
+        // task ends, so the force() below is still the first paint.
+        let groupsLayoutPending = true;
+        ctx.hooks.method("_groupsLayoutPending", () => groupsLayoutPending);
         // Deferred: data plugin (priority 20) runs after groups (priority 11)
         // and overwrites getItemFn. Table (priority 10) has already registered
         // _updateTableForGroups and called setSizeConfig; this microtask wires
@@ -985,11 +992,8 @@ export function groups<T extends VListItem = VListItem>(
             );
           }
 
-          // The first render can land before this microtask, leaving rows whose
-          // data-index is a data index and no header rows at all, while core
-          // resolves clicks through the layout index space — so a click on the
-          // first row of a group mapped to -1 and was dropped, permanently,
-          // because nothing re-rendered afterwards.
+          // The accessor is in place, so table() can paint in layout space.
+          groupsLayoutPending = false;
           ctx.render.force();
         });
       } else {

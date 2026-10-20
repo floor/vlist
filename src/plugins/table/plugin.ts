@@ -120,6 +120,18 @@ export function table<T extends VListItem = VListItem>(
       return;
     }
 
+    // groups() paints a header pseudo-entry per group between the data rows,
+    // and publishes the layout-space item accessor from a microtask (data()
+    // claims the item getter at priority 20, after groups() at 11). Until then
+    // `i` below is a LAYOUT index — data-index, the rendered id and every
+    // activator read it that way — while items.at(i) is still the data-space
+    // getter, so painting would stamp data-space rows with layout-space
+    // indices and an activation in that window lands one item off (#396).
+    // Nothing is on screen before the task ends, so hold the first paint until
+    // groups() says its accessor is in place; its force() paints then.
+    const layoutPending = storedCtx.hooks.get?.("_groupsLayoutPending") as (() => boolean) | undefined;
+    if (layoutPending?.()) return;
+
     // Update aria-rowcount when item count changes (+1 for header row)
     const ariaRowCount = totalItems + 1;
     if (ariaRowCount !== lastAriaRowCount) {
