@@ -532,6 +532,7 @@ const list = createVList(config, [plugin1(), plugin2()])
 | `list.removeItems(ids)` | Batch remove (simultaneous animations) |
 | `list.getItemAt(index)` | Get item at index |
 | `list.getIndexById(id)` | Get index by item ID |
+| `list.remeasureItem(index)` | Ask the size source to re-read one item after its content changed; returns `false` when the size model cannot address it |
 
 ### Navigation
 

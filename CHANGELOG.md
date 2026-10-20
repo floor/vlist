@@ -11,6 +11,17 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- `remeasureItem(index): boolean` asks whichever per-item size source owns the list
+  to re-read one item after its content changed — `autosize()` re-observes it, and a
+  function `item.height` or function `table()` `rowHeight` is called again — then
+  updates content size, the scroll anchor and plugin state derived from offsets. The
+  item data is not written, so a mounted row keeps its DOM and a focused control
+  inside it. It returns `false` for a non-integer index or one outside `[0, total)`,
+  never throws, and returns `false` where one item's size is not addressable:
+  a fixed item spec, and `grid()`, `masonry()` and `carousel()` (#347).
+
 ## [3.2.0] - 2026-10-20
 
 Plugins that cannot work together now say so when the list is created, and name the fixed-size setting to use instead.

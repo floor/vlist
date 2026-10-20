@@ -1077,8 +1077,65 @@ export function createCore<T extends VListItem = VListItem>(
       doForceRender();
     },
 
-    remeasureItem(_index: number): boolean {
-      return false;
+    remeasureItem(index: number): boolean {
+      // Bounds first, in the data space: under groups() the engine total
+      // counts headers, and under an adapter the raw array is empty.
+      // `invalidate` rejects NaN on its own but the size read around it does
+      // not, so reject non-integers and NaN here.
+      const total = virtualTotalFn ? virtualTotalFn() : items.length;
+      if (!Number.isInteger(index) || index < 0 || index >= total) return false;
+
+      // A layout plugin whose size model cannot address one data item says so.
+      // A separate name survives groups() wrapping over its cache.
+      const supported = methods.get("_itemRemeasureSupported") as (() => boolean) | undefined;
+      if (supported && !supported()) return false;
+
+      // With autosize() the cache is its measurement store: invalidating
+      // alone would re-read the store and find nothing new. Delegate — before
+      // the unchanged-size guard, or the guard compares the store with itself
+      // and never asks for a measurement. The plugin addresses data indices.
+      const delegate = methods.get("remeasure") as ((i: number) => void) | undefined;
+      if (delegate) {
+        delegate(index);
+        return true;
+      }
+
+      // Groups()' cache is always variable, because the grouped spec wraps
+      // headers and data together; it publishes what the data spec itself was.
+      // Otherwise the cache answers directly — table() installs a variable
+      // cache for a function rowHeight and a fixed one for a number.
+      const dataSizeIsVariable = methods.get("_dataSizeIsVariable") as (() => boolean) | undefined;
+      if (!(dataSizeIsVariable ? dataSizeIsVariable() : sizeCache.isVariable())) return false;
+
+      const toLayout = methods.get("_dataToLayoutIndex") as ((i: number) => number) | undefined;
+      const cacheIndex = toLayout ? toLayout(index) : index;
+
+      // The slot size includes any gap the spec baked in, which is what
+      // getSize returns for a function spec. Equal means there is nothing to
+      // invalidate: one spec read and no relayout.
+      const oldSize = sizeCache.getOffset(cacheIndex + 1) - sizeCache.getOffset(cacheIndex);
+      const newSize = sizeCache.getSize(cacheIndex);
+      if (newSize === oldSize) return true;
+
+      // Read the visible index before invalidating: the prefix sums move.
+      const firstVisible = sizeCache.indexAtOffset(scrollAdapter.getPixelEquivalent());
+      sizeCache.invalidate(cacheIndex, cacheIndex);
+
+      // Some plugins cache offsets of their own (groups' sticky header);
+      // neither invalidate nor a force render refreshes them.
+      const onItemRemeasure = methods.get("_onItemRemeasure") as ((i: number) => void) | undefined;
+      onItemRemeasure?.(cacheIndex);
+
+      // A change above the viewport moves everything below it; keep the
+      // anchored content still by the same delta.
+      if (cacheIndex < firstVisible) {
+        const delta = newSize - oldSize;
+        if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
+        else writeScroll(state.scrollPosition + delta);
+      }
+      updateContentSize(sizeCache.getTotalSize());
+      doForceRender();
+      return true;
     },
 
     insertItem(item: T, index?: number): void {
