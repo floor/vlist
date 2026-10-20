@@ -24,6 +24,7 @@ import { grid } from "../../src/plugins/grid";
 import { autosize } from "../../src/plugins/autosize";
 import { table } from "../../src/plugins/table";
 import { masonry } from "../../src/plugins/masonry";
+import { carousel } from "../../src/plugins/carousel";
 
 beforeAll(() => setupDOM());
 afterAll(() => teardownDOM());
@@ -524,6 +525,49 @@ describe("resolvePlugins — masonry() with an estimated item size (#361)", () =
       }),
     );
     expect(names(resolved)).toEqual(["autosize", "masonry"]);
+  });
+});
+
+describe("resolvePlugins — carousel() with an estimated item size (#364)", () => {
+  const other: VListPlugin<TestItem> = { name: "custom-z", setup: () => {} };
+  const carouselFor = (): VListPlugin<TestItem> => carousel();
+
+  it("names the estimate and carousel(), never autosize, in either plugin order", () => {
+    const messages = [
+      [carouselFor(), other],
+      [other, carouselFor()],
+    ].map((plugins) => configCreationMessage({ plugins }));
+    expect(messages[0]).toBe(messages[1]);
+    for (const message of messages) {
+      expect(message).toContain("item.estimatedHeight");
+      expect(message).toContain("carousel()");
+      expect(message).toContain("item.height");
+      expect(message).not.toContain("autosize");
+    }
+  });
+
+  it("follows the axis: a horizontal estimate names estimatedWidth and item.width", () => {
+    const message = configCreationMessage({
+      orientation: "horizontal",
+      item: { estimatedWidth: 80, template },
+      plugins: [carouselFor()],
+    });
+    expect(message).toContain("item.estimatedWidth");
+    expect(message).toContain("item.width");
+    expect(message).not.toContain("estimatedHeight");
+  });
+
+  it("keeps the plugin-level message when the caller wrote autosize() themselves", () => {
+    const message = configCreationMessage({ plugins: [carouselFor(), autosize()] });
+    expect(message).toBe('[vlist] Plugin "carousel" conflicts with "autosize"');
+  });
+
+  it("builds a carousel when the item size is fixed", () => {
+    const message = configCreationMessage({
+      item: { height: 40, template },
+      plugins: [carouselFor()],
+    });
+    expect(message).toBe("");
   });
 });
 

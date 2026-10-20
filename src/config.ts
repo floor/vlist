@@ -147,7 +147,7 @@ export function resolvePlugins<T extends VListItem = VListItem>(
           "row, autosize measures items. Use item.height (item.width when horizontal).",
       );
     }
-    // table() and masonry() size their items themselves, so a
+    // table(), masonry() and carousel() size their items themselves, so a
     // measured item size cannot apply: this layer wires autosize() for the
     // estimate, and the core conflict would name a plugin the caller never
     // wrote. Name the estimate field and the plugin they did write, with the
@@ -187,6 +187,14 @@ export function resolvePlugins<T extends VListItem = VListItem>(
             (declared === "masonry" ? "masonry()" : 'layout: "masonry"') +
             ": an estimated item size asks for measured items, and masonry() lays " +
             "every item out from the size cache it is handed. Give the items a " +
+            `fixed ${sizeField} and drop the estimate.`,
+        );
+      }
+      if (name === "carousel") {
+        throw new Error(
+          `[vlist] config: ${estimateField} cannot be combined with carousel(): ` +
+            "an estimated item size asks for measured slides, and carousel() builds " +
+            "its slide steps from the item size it is given. Give the slides a " +
             `fixed ${sizeField} and drop the estimate.`,
         );
       }

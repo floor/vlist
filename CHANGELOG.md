@@ -26,6 +26,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `getMeasuredCount()` stayed 0. In the `vlist/config` route an estimated item size wires
   `autosize()` and now throws a message naming `item.estimatedHeight` and the layout field
   or `masonry()`, with a fixed `item.height` as the way out.
+- `carousel()` now declares a conflict with `autosize()` (#364). The pair used to
+  build a carousel whose slide steps came from the item size read at setup, so a
+  measurement arriving later never reached the steps or the virtual window. In the
+  `vlist/config` route an estimated item size wires `autosize()` and now throws a
+  message naming `item.estimatedHeight` and `carousel()`, with a fixed `item.height`
+  as the way out.
 
 ## [3.1.8] - 2026-10-20
 
