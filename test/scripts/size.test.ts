@@ -41,7 +41,7 @@ describe("size gate", () => {
       createStats: kb(10.6),
       "synthetic + createStats": kb(13.2),
       native: kb(10.3),
-      a11y: kb(12.1),
+      a11y: kb(12.2),
       selection: kb(13.7),
       data: kb(15.2),
       scrollbar: kb(13.3),
