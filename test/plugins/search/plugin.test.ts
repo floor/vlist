@@ -534,7 +534,7 @@ describe("highlight invalidation", () => {
 
       const updated = container.querySelector('.vlist-item[data-index="1"]')!;
       // The premise: the template really did hand back the same node object.
-      expect(updated.firstChild).toBe(reused);
+      expect(updated.firstChild === reused).toBe(true);
       expect(updated.textContent).toBe("Item 101");
       expect(updated.querySelectorAll(".vlist-search-match").length).toBe(2);
     } finally {
@@ -708,7 +708,7 @@ describe("search bar buttons", () => {
     // The button hides itself once there is nothing left to clear.
     expect(clear.classList.contains("vlist-search__clear-button--hidden")).toBe(true);
     // The user clicked a button; typing must go on in the field, not the button.
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement === input).toBe(true);
   });
 
   it("the clear button announces the emptied query through search:change", () => {
@@ -786,9 +786,9 @@ describe("search bar buttons", () => {
   it.serial("clicking the magnifier puts the caret in the input", () => {
     const { container } = makeList();
     const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
-    expect(document.activeElement).not.toBe(input);
+    expect(document.activeElement === input).toBe(false);
     click(container.querySelector(".vlist-search__leading-icon")!);
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement === input).toBe(true);
   });
 
   it("typing into a destroyed bar no longer filters the list", () => {
@@ -833,11 +833,11 @@ describe("search bar keys", () => {
   it.serial("Ctrl+F on the list moves the caret into the search field", () => {
     const { container, list } = makeList({ mode: "navigate" });
     const input = container.querySelector(".vlist-search__input") as HTMLInputElement;
-    expect(document.activeElement).not.toBe(input);
+    expect(document.activeElement === input).toBe(false);
 
     expect(pressIn(list.element, "f", { ctrlKey: true })).toBe(true);
 
-    expect(document.activeElement).toBe(input);
+    expect(document.activeElement === input).toBe(true);
     expect(list.element.classList.contains("vlist--search-open")).toBe(true);
   });
 
