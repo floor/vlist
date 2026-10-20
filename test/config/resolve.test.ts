@@ -23,6 +23,7 @@ import type { VListPlugin } from "../../src/core/types";
 import { grid } from "../../src/plugins/grid";
 import { autosize } from "../../src/plugins/autosize";
 import { table } from "../../src/plugins/table";
+import { masonry } from "../../src/plugins/masonry";
 
 beforeAll(() => setupDOM());
 afterAll(() => teardownDOM());
@@ -423,6 +424,106 @@ describe("resolvePlugins — table() with an estimated item size (#346)", () => 
   it("leaves the grid message to the grid case", () => {
     const message = creationMessage({ layout: "grid", grid: { columns: 2 } });
     expect(message).toContain('layout: "grid" needs a fixed item size');
+  });
+});
+
+/** What creating a list from a config throws, or "" when it builds. */
+const configCreationMessage = (config: Partial<VListConfig<TestItem>>): string => {
+  const container = createContainer({ width: 300, height: 500 });
+  let list: { destroy(): void } | undefined;
+  try {
+    list = createVListFromConfig({
+      container,
+      item: { estimatedHeight: 50, template },
+      items: createTestItems(10),
+      ...config,
+    });
+    return "";
+  } catch (error) {
+    return (error as Error).message;
+  } finally {
+    list?.destroy();
+    container.remove();
+  }
+};
+
+describe("resolvePlugins — masonry() with an estimated item size (#361)", () => {
+  const other: VListPlugin<TestItem> = { name: "custom-z", setup: () => {} };
+  const masonryFor = (): VListPlugin<TestItem> => masonry({ columns: 2 });
+
+  it("names the estimate and masonry(), never autosize, in either plugin order", () => {
+    // The config layer wires autosize() for the estimate; the core conflict
+    // would name a plugin the caller never wrote. The message names what they
+    // did write — the estimate field and masonry() — and the way out.
+    const messages = [
+      [masonryFor(), other],
+      [other, masonryFor()],
+    ].map((plugins) => configCreationMessage({ plugins }));
+    expect(messages[0]).toBe(messages[1]);
+    for (const message of messages) {
+      expect(message).toContain("item.estimatedHeight");
+      expect(message).toContain("masonry()");
+      expect(message).toContain("item.height");
+      expect(message).not.toContain("autosize");
+    }
+  });
+
+  it("names layout: \"masonry\" when the layout field wired the plugin", () => {
+    // The caller wrote a layout field, not masonry(); the message says so.
+    const message = configCreationMessage({
+      layout: "masonry",
+      masonry: { columns: 2 },
+    });
+    expect(message).toContain('layout: "masonry"');
+    expect(message).toContain("item.estimatedHeight");
+    expect(message).not.toContain("autosize");
+  });
+
+  it("follows the axis: a horizontal estimate names estimatedWidth and item.width", () => {
+    const message = configCreationMessage({
+      orientation: "horizontal",
+      item: { estimatedWidth: 80, template },
+      plugins: [masonryFor()],
+    });
+    expect(message).toContain("item.estimatedWidth");
+    expect(message).toContain("item.width");
+    expect(message).not.toContain("estimatedHeight");
+  });
+
+  it("keeps the plugin-level message when the caller wrote autosize() themselves", () => {
+    const message = configCreationMessage({ plugins: [masonryFor(), autosize()] });
+    expect(message).toBe('[vlist] Plugin "masonry" conflicts with "autosize"');
+  });
+
+  it("builds masonry when the item size is fixed", () => {
+    const message = configCreationMessage({
+      item: { height: 40, template },
+      plugins: [masonryFor()],
+    });
+    expect(message).toBe("");
+  });
+
+  it("allows a custom plugin named 'masonry' that does not declare the conflict", () => {
+    const customMasonry: VListPlugin<TestItem> = {
+      name: "masonry",
+      setup: () => {},
+    };
+    const message = configCreationMessage({
+      layout: "masonry",
+      masonry: { columns: 2 },
+      plugins: [customMasonry],
+    });
+    expect(message).toBe("");
+
+    const resolved = resolvePlugins(
+      base({
+        item: { estimatedHeight: 50, template },
+        layout: "masonry",
+        masonry: { columns: 2 },
+        plugins: [customMasonry],
+      }),
+    );
+    expect(names(resolved)).toEqual(["autosize", "masonry"]);
   });
 });
 

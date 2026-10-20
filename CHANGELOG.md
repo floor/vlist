@@ -20,6 +20,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   names the fields its caller wrote (`item.estimatedHeight`, `table()`) instead of the
   `autosize()` the config layer wires; the way out is a fixed `rowHeight` on the table
   and a fixed `item.height` in place of the estimate.
+- `masonry()` now declares a conflict with `autosize()` (#361). The pair used to build a
+  list where nothing was measured: masonry places items from the size cache it is handed
+  at layout time, so autosize's measurements never reached the placements and
+  `getMeasuredCount()` stayed 0. In the `vlist/config` route an estimated item size wires
+  `autosize()` and now throws a message naming `item.estimatedHeight` and the layout field
+  or `masonry()`, with a fixed `item.height` as the way out.
 
 ## [3.1.8] - 2026-10-20
 

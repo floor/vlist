@@ -612,6 +612,8 @@ list.remeasure(12); // Re-measure one item after its content changes.
 list.remeasure();   // Invalidate all sizes and measure items as they render.
 ```
 
+A measured item size cannot be combined with `masonry()`: masonry places items from the size cache it is handed at layout time, so an `autosize()` measurement never reaches the placements. The `vlist/config` route wires `autosize()` when only an estimate is given (`item.estimatedHeight`) and throws at creation; give the items a fixed `item.height` instead.
+
 Full configuration reference → **[vlist.io](https://vlist.io)**
 
 ## Base Configuration
