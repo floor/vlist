@@ -201,8 +201,16 @@ export function a11y<T extends VListItem = VListItem>(
         const adjTop = off + sP;
         const adjBot = adjTop + sz;
 
+        // An item whose size plus either padding exceeds the viewport fits
+        // neither alignment: bottom-aligned leaves its top above the viewport,
+        // so the next focus-in takes the top branch; top-aligned leaves its
+        // bottom below, so the one after takes the bottom branch — the two
+        // flip on every focus cycle (#31). Pin such an item to its start,
+        // which is where native scrollIntoView({ block: "start" }) settles
+        // for a target that does not fit.
         let pos = sp;
-        if (adjTop < sp) pos = Math.max(0, off);
+        if (sz + sP > cs && sz + eP > cs) pos = Math.max(0, off);
+        else if (adjTop < sp) pos = Math.max(0, off);
         else if (adjBot > sp + cs) pos = adjBot + eP - cs;
 
         if (pos !== sp) {

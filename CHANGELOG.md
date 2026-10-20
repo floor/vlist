@@ -13,6 +13,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Keyboard focus on an item taller than the list — a full-height row, a card of
+  unknown height — used to alternate between top- and bottom-aligned on every
+  Tab-away / Tab-back: each alignment made the other's condition true, so the
+  row repainted in two positions forever. A non-fitting item now stays
+  start-aligned, the position browsers settle on for a non-fitting
+  `scrollIntoView` target, whether `selection()` or `a11y()` owns the focus
+  (#31).
 - The release script now waits up to ten minutes for CI checks on the main
   merge commit to appear and finish, so a release can continue after merging
   without a manual rerun. Failed checks still stop the release immediately.
