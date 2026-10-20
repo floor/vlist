@@ -295,7 +295,7 @@ describe("autosize onCommit hook", () => {
 
     plugin.hooks!.onCommit!(state);
 
-    expect(observedElements).toContain(el);
+    expect(observedElements.includes(el)).toBe(true);
 
     plugin.destroy!();
   });
@@ -329,7 +329,7 @@ describe("autosize onCommit hook", () => {
     plugin.hooks!.onCommit!(state);
 
     // Already measured — should not observe again
-    expect(observedElements).not.toContain(el);
+    expect(observedElements.includes(el)).toBe(false);
 
     plugin.destroy!();
   });

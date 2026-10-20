@@ -77,9 +77,9 @@ describe("DOM snapshots — base list", () => {
     expect(content.tagName).toBe("DIV");
 
     // Verify the nesting: root is child of container, viewport is child of root, content is child of viewport
-    expect(root.parentElement).toBe(container);
-    expect(viewport.parentElement).toBe(root);
-    expect(content.parentElement).toBe(viewport);
+    expect(root.parentElement === container).toBe(true);
+    expect(viewport.parentElement === root).toBe(true);
+    expect(content.parentElement === viewport).toBe(true);
 
     list.destroy();
     container.remove();
