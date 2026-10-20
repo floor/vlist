@@ -374,6 +374,11 @@ export function grid<T extends VListItem = VListItem>(
       getItem = ctx.items.at.bind(ctx);
       resolveItemState = () => ctx.render.getStateFn();
 
+      // The cache is row space, and a row takes its height from its first
+      // item: refreshing "row 17" for item 17 would touch items 51-53 of a
+      // three-column list. Per-item size is not representable here.
+      ctx.hooks.method("_itemRemeasureSupported", (): boolean => false);
+
       // Hoist class strings — built once, reused every frame
       gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
       selClass = `${classPrefix}-item--selected`;

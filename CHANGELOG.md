@@ -11,12 +11,23 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- `remeasureItem(index): boolean` asks whichever per-item size source owns the list
+  to re-read one item after its content changed — `autosize()` re-observes it, and a
+  function `item.height` or function `table()` `rowHeight` is called again — then
+  updates content size, the scroll anchor and plugin state derived from offsets. The
+  item data is not written, so a mounted row keeps its DOM and a focused control
+  inside it. It returns `false` for a non-integer index or one outside `[0, total)`,
+  never throws, and returns `false` where one item's size is not addressable:
+  a fixed item spec, and `grid()`, `masonry()` and `carousel()` (#347).
+
 ### Deprecated
 
 - `table()`'s `estimatedRowHeight`, deprecated in 3.3.0 for removal in 4.0
   (#345). It remains accepted but does not size or measure rows; non-production
   builds now warn once per `table()` call, never per render or row. Use
-  `rowHeight` for fixed rows, or a `rowHeight` function with the upcoming
+  `rowHeight` for fixed rows, or a `rowHeight` function with the
   `remeasureItem(index)` API for heights that change after creation (#347).
 
 ## [3.2.0] - 2026-10-20

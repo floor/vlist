@@ -72,7 +72,7 @@ export function table<T extends VListItem = VListItem>(
     console.warn(
       "[vlist] table: estimatedRowHeight is deprecated in 3.3.0 and will be removed in 4.0. " +
         "It does not size or measure rows. Use rowHeight for fixed rows, or a rowHeight " +
-        "function with the upcoming remeasureItem(index) API for rows that change size after creation.",
+        "function with the remeasureItem(index) API for rows that change size after creation.",
     );
   }
 

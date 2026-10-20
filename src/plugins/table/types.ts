@@ -129,7 +129,7 @@ export interface TableConfig<T extends VListItem = VListItem> {
    * Satisfies the runtime "rowHeight or estimatedRowHeight is required" check.
    *
    * @deprecated Since 3.3.0; will be removed in 4.0. Use `rowHeight` for fixed
-   * rows, or a `rowHeight` function with the upcoming `remeasureItem(index)` API
+   * rows, or a `rowHeight` function with the `remeasureItem(index)` API
    * for heights that change after creation. Non-production builds warn once per
    * `table()` call when this option is supplied.
    *

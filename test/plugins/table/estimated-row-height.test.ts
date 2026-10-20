@@ -94,7 +94,7 @@ describe("table — estimatedRowHeight deprecation", () => {
         expect(warnings[0]).toContain("removed in 4.0");
         expect(warnings[0]).toContain("does not size or measure rows");
         expect(warnings[0]).toContain("rowHeight");
-        expect(warnings[0]).toContain("upcoming remeasureItem(index)");
+        expect(warnings[0]).toContain("remeasureItem(index)");
         expect(fixture.rows()).toHaveLength(3);
 
         fixture.list.updateColumns(columns);

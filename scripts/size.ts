@@ -150,7 +150,7 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // re-measure. The sizes quoted in the README come from `bun run size`, never
 // from this table.
 //
-// The base and native entries are a promise at 10.3 kB, pinned by
+// The base and native entries are a promise, pinned by
 // test/scripts/size.test.ts; raising either is a product decision, not a
 // chore. It was 9.9 kB until 2026-09-25: the 3.x fix cycle grew the core past
 // it while the gate was dark behind a failing typecheck (#287 alone cost 43
@@ -159,19 +159,23 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // again, on purpose. 10.3 kB since 2026-09-27: `scroll.mode` (RFC-015, #319)
 // hands a list past the browser's size limit to synthetic input by itself,
 // loading the driver only then. It costs the core 301 bytes, after a trim pass
-// from 405; Dr Jones chose it over keeping the handoff opt-in. The base has 33
-// bytes of room, so the next growth is a decision again. Every other budget in
-// the table was set by the retired rule; each moves by the repo's own rule now.
+// from 405; Dr Jones chose it over keeping the handoff opt-in. 10.59 kB since
+// 2026-10-20: `remeasureItem` (#347) adds a core API every bundle includes,
+// +177 to +236 bytes per scenario, so every pin in this table moved by the
+// repo's own rule — measured + 1%, ceiled, the smallest kb-macro value at or
+// above it — in one recorded step, measured by CI on the pull request. Every
+// other budget in the table was set by the retired rule; each moves by the
+// repo's own rule now.
 export const kb = (n: number): number => Math.floor(n * 1024);
 
 export const BUDGET_BYTES: Record<ScenarioName, number> = {
-  "Base (createVList)": kb(10.3),
-  synthetic: kb(13.0),
-  "synthetic + carousel": kb(18.2),
-  "synthetic + sortable": kb(16.6),
-  createStats: kb(10.6),
-  "synthetic + createStats": kb(13.2),
-  native: kb(10.3),
+  "Base (createVList)": kb(10.59),
+  synthetic: kb(13.22),
+  "synthetic + carousel": kb(18.52),
+  "synthetic + sortable": kb(16.86),
+  createStats: kb(10.83),
+  "synthetic + createStats": kb(13.46),
+  native: kb(10.59),
   // #339: owner-only focus recovery, including engines without removal focusout.
   // #380: the groups index-space translators. Measured 12446 bytes gzipped,
   // 56 over the 12.1 kB ceiling; the owner granted a one-time exception to
@@ -179,31 +183,31 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   // A budget moves by the repo's own rule: a measured overrun moves the pin to
   // measured + 1%, decided by the lead/orchestrator and recorded in the pull
   // request.
-  a11y: kb(12.2),
-  selection: kb(13.7),
-  data: kb(15.2),
-  scrollbar: kb(13.3),
-  sortable: kb(14.0),
-  groups: kb(15.8),
-  page: kb(11.3),
-  snapshots: kb(11.5),
-  transition: kb(12.4),
+  a11y: kb(12.51),
+  selection: kb(13.91),
+  data: kb(15.45),
+  scrollbar: kb(13.53),
+  sortable: kb(14.26),
+  groups: kb(16.1),
+  page: kb(11.53),
+  snapshots: kb(11.75),
+  transition: kb(12.61),
   // #372: pruning the measured cache to the list the sweep runs on: +242
   // bytes gzipped (11935 → 12177), the whole mechanism, no part of it
   // optional. Measured 12177, so 12.0 kB (12288) leaves 111 bytes of room;
   // an overrun moves the pin to measured + 1% on the recorded decision.
-  autosize: kb(12.0),
-  grid: kb(13.0),
-  table: kb(16.57),
-  masonry: kb(14.8),
-  tree: kb(15.7),
-  search: kb(13.7),
-  carousel: kb(15.8),
-  vue: kb(10.6),
-  svelte: kb(10.5),
-  solid: kb(10.6),
-  react: kb(10.6),
-  "react + grid": kb(13.2),
+  autosize: kb(12.21),
+  grid: kb(13.24),
+  table: kb(16.77),
+  masonry: kb(15.08),
+  tree: kb(15.94),
+  search: kb(13.94),
+  carousel: kb(16.15),
+  vue: kb(10.77),
+  svelte: kb(10.67),
+  solid: kb(10.73),
+  react: kb(10.78),
+  "react + grid": kb(13.44),
 };
 
 export interface SizeGateInput {
