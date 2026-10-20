@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- The release script now waits up to ten minutes for CI checks on the main
+  merge commit to appear and finish, so a release can continue after merging
+  without a manual rerun. Failed checks still stop the release immediately.
+
 ## [3.1.7] - 2026-10-20
 
 table() + groups(): the first click or key press acts on the row it lands on, from the first paint (#396).
