@@ -161,7 +161,9 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // loading the driver only then. It costs the core 301 bytes, after a trim pass
 // from 405; Dr Jones chose it over keeping the handoff opt-in. 10.59 kB since
 // 2026-10-20: `remeasureItem` (#347) adds a core API every bundle includes,
-// +177 to +236 bytes per scenario, so every pin in this table moved by the
+// +189 to +248 bytes per scenario (the +177 to +236 logged on the pull request
+// was final-minus-stub: its before-table was measured at the RED commit, which
+// already held the stub), so every pin in this table moved by the
 // repo's own rule — measured + 1%, ceiled, the smallest kb-macro value at or
 // above it — in one recorded step, measured by CI on the pull request. Every
 // other budget in the table was set by the retired rule; each moves by the
