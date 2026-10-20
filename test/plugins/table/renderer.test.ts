@@ -1079,7 +1079,7 @@ describe("incremental rendering", () => {
     const el5After = renderer.getElement(5);
 
     // Same element should be reused for index 5
-    expect(el5After).toBe(el5);
+    expect(el5After === el5).toBe(true);
 
     container.remove();
   });
@@ -1586,7 +1586,7 @@ describe("group headers", () => {
       const headerEl2 = renderer.getElement(0)!;
 
       // Same DOM element
-      expect(headerEl2).toBe(headerEl);
+      expect(headerEl2 === headerEl).toBe(true);
       // Content unchanged
       expect(headerEl2.querySelector(".vlist-table-group-header-content")!.innerHTML).toBe(contentHtml);
 
