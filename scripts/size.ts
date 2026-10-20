@@ -144,8 +144,7 @@ const scenarios: Scenario[] = SCENARIO_DEFS.map((s) => ({
 // rounding. When a scenario goes over, the change that grew it is trimmed, or
 // the budget moves by the repo's own rule: a measured overrun moves the pin to
 // measured + 1%, the next step, decided by the lead/orchestrator and recorded
-// in the pull request — never raised quietly, and never blocked on the owner,
-// who is never the blocker in dev mode. The routine headroom rule of
+// in the pull request — never raised quietly. The routine headroom rule of
 // 2026-09-18 — re-measure each budget, round up to the next 0.1 kB — is
 // retired (2026-10-18): a number moves on a recorded decision, not on a
 // re-measure. The sizes quoted in the README come from `bun run size`, never
