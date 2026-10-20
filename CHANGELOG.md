@@ -11,6 +11,29 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.8] - 2026-10-20
+
+a11y() and table(): focus stops flipping on items taller than the viewport, and dragged column widths survive scrollbar-driven resizes (#31).
+
+### Fixed
+
+- Keyboard focus on an item taller than the list — a full-height row, a card of
+  unknown height — used to alternate between top- and bottom-aligned on every
+  Tab-away / Tab-back: each alignment made the other's condition true, so the
+  row repainted in two positions forever. A non-fitting item now stays
+  start-aligned, the position browsers settle on for a non-fitting
+  `scrollIntoView` target, whether `selection()` or `a11y()` owns the focus
+  (#31).
+- A table column the user had just dragged jumped back to its declared width
+  when the list's height changed without its width changing — the shape of a
+  horizontal scrollbar appearing or disappearing on a classic-scrollbar
+  platform, which used to re-resolve every column from its definition. A
+  height-only viewport change now leaves user widths alone; a real width
+  change still re-resolves the layout (#31).
+- The release script now waits up to ten minutes for CI checks on the main
+  merge commit to appear and finish, so a release can continue after merging
+  without a manual rerun. Failed checks still stop the release immediately.
+
 ## [3.1.7] - 2026-10-20
 
 table() + groups(): the first click or key press acts on the row it lands on, from the first paint (#396).
@@ -1886,7 +1909,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.7...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.8...HEAD
+[3.1.8]: https://github.com/floor/vlist/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/floor/vlist/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/floor/vlist/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
