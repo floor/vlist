@@ -516,7 +516,8 @@ predicate line each in grid, masonry and carousel. Those land on the `groups`, `
 `masonry` and `carousel` rows of the size table.
 
 **Post-implementation measurement (3.3.0).** Implemented as reviewed, the true delta is
-+189 to +248 bytes gzipped per size scenario (base 10,547 -> 10,844), above the 110-170
++189 to +248 bytes gzipped per size scenario, base measured 10,539 -> 10,735
+(+196), above the 110-170
 band this section settled on. The gap is the contract the two review rounds added on top
 of what the band covered: the scroll-anchor shift, the `_onItemRemeasure` derived-state
 notification, and the groups/table size-owner wiring — not scope creep, and nothing the
