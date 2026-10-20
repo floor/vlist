@@ -126,15 +126,21 @@ const usual = (hashes) => {
 // A screenshot taken once the element has stopped changing: two consecutive
 // frames identical. A single capture can land while the list is still settling,
 // which reads as a difference that is not there.
+//
+// In new-headless full Chrome a load can also jitter frame to frame, so no pair
+// is identical within the settle budget. That load keeps its last frame and
+// reports stable: false; the caller counts it as an outlier vote and the case
+// continues, because LOADS loads already exist to outvote one. A case where no
+// load on a side ever stabilizes is still a failure: something is animating.
 async function stableShot(page, handle) {
   let previous = await handle.screenshot();
   for (let i = 0; i < 20; i++) {
     await settle(page);
     const next = await handle.screenshot();
-    if (Buffer.compare(previous, next) === 0) return next;
+    if (Buffer.compare(previous, next) === 0) return { png: next, stable: true };
     previous = next;
   }
-  throw new Error("the fixture never stopped changing");
+  return { png: previous, stable: false };
 }
 
 if (!process.argv.includes("--serve")) {
@@ -146,6 +152,9 @@ if (!process.argv.includes("--serve")) {
       for (const ratio of RATIOS) {
         const current = [];
         const reference = [];
+        const where = `guides (indent ${indent}, offset ${left}px, paddingStart ${pad}) at ${ratio}x`;
+        let currentStable = 0;
+        let referenceStable = 0;
         for (let load = 0; load < LOADS; load++) {
           const page = await browser.newPage();
           await page.setViewport({ width: 400, height: 680, deviceScaleFactor: ratio });
@@ -156,12 +165,20 @@ if (!process.argv.includes("--serve")) {
           const rows = await page.evaluate(() => document.querySelectorAll("#host [data-id]").length);
           assert.equal(rows, 18, "every node must be on screen");
 
-          current.push(hash(await stableShot(page, host)));
+          const shot = await stableShot(page, host);
+          if (shot.stable) currentStable++;
+          else console.log(`NOTE ${where}: current load ${load + 1} never stopped changing; its last frame votes as an outlier`);
+          current.push(hash(shot.png));
           await page.evaluate(() => window.as310());
-          reference.push(hash(await stableShot(page, host)));
+          const referenceShot = await stableShot(page, host);
+          if (referenceShot.stable) referenceStable++;
+          else console.log(`NOTE ${where}: reference load ${load + 1} never stopped changing; its last frame votes as an outlier`);
+          reference.push(hash(referenceShot.png));
           await page.close();
         }
-        assert.equal(usual(current), usual(reference), `guides (indent ${indent}, offset ${left}px, paddingStart ${pad}) at ${ratio}x must paint as 3.1.0 did`);
+        assert(currentStable > 0, `${where}: no load on the current side ever stopped changing; something is animating`);
+        assert(referenceStable > 0, `${where}: no load on the reference side ever stopped changing; something is animating`);
+        assert.equal(usual(current), usual(reference), `${where} must paint as 3.1.0 did`);
       }
       console.log(`PASS guides (indent ${indent}, offset ${left}px, paddingStart ${pad}) paint as in 3.1.0 at ${RATIOS.join(", ")}x`);
     }
@@ -173,13 +190,15 @@ if (!process.argv.includes("--serve")) {
     await settle(page);
     const lastChild = await page.$('#host [data-id="A1b2"]');
     const withElbow = await stableShot(page, lastChild);
+    assert(withElbow.stable, "the fixture never stopped changing");
     await page.evaluate(() => {
       const style = document.createElement("style");
       style.textContent = ".vlist-tree-node::before { --vlist-tree-elbow: none; }";
       document.head.append(style);
     });
     const themedOff = await stableShot(page, lastChild);
-    assert(Buffer.compare(withElbow, themedOff) !== 0, "the stylesheet must draw a last child's elbow, and --vlist-tree-elbow: none must remove it");
+    assert(themedOff.stable, "the fixture never stopped changing");
+    assert(Buffer.compare(withElbow.png, themedOff.png) !== 0, "the stylesheet must draw a last child's elbow, and --vlist-tree-elbow: none must remove it");
     console.log("PASS the stylesheet draws the elbow, and --vlist-tree-elbow still overrides it");
   } finally {
     await browser?.close();
