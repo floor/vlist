@@ -591,9 +591,7 @@ export function table<T extends VListItem = VListItem>(
         tableLayout.resolve(engineState.crossSize);
         tableHeader?.update(tableLayout);
         tableRenderer?.updateColumnLayout(tableLayout);
-        if (tableLayout) {
-          storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
-        }
+        storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
       },
 
       onAfterScroll(): void {
