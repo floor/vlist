@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+An item that changes size after the list is created can be measured again with one call: `remeasureItem(index)`.
+
+Who is affected: lists whose items grow or shrink after render: expandable rows, loaded images, edited text.
+
 ### Added
 
 - `remeasureItem(index): boolean` asks whichever per-item size source owns the list
