@@ -474,7 +474,7 @@ What this revision settles, for the round-2 review:
   pretend to offer.
 - **Documented limits.** A fixed-size spec has no per-item size to re-read; the method returns
   `false`, and the docs name the function-spec alternative. A layout plugin that snapshots
-  sizes or placements at setup needs the hook described in section 3.2; the three current ones
+  sizes or placements at setup needs the hook described in Shape B; the three current ones
   opt out for 3.2.0.
 - **Size budget.** The base measured 10,539 bytes gzipped against a 10,547-byte budget when
   this was written (README size table). The first byte of a core method exceeds 8 bytes of
@@ -482,7 +482,7 @@ What this revision settles, for the round-2 review:
   overrun moves the pin to measured + 1%, a recorded decision in that pull request). This
   proposal moves nothing.
 - **Docs.** The `VList` API reference and the README item-update text gain the method and the
-  two `remeasure`-family sentences from section 3.2; the CHANGELOG entry rides the release
+  two `remeasure`-family sentences from Shape B; the CHANGELOG entry rides the release
   that ships it, not this proposal.
 
 ## 6. Size cost estimate
@@ -521,16 +521,16 @@ Each finding from the two round-1 sets, and where this revision answers it.
 
 | Finding | Resolution |
 | --- | --- |
-| Grid keys the cache by row; an item index would invalidate the wrong row (both reviewers, medium) | Section 2.2 names all three index spaces; section 3.2 excludes grid with `_itemRemeasureSupported` and a defined `false`, and qualifies the "data index" sentence to the public APIs |
-| `sizeCache.isVariable()` is always true under `groups()`; `rawSpec` is stale under `table()` (both, medium) | `_dataSizeIsVariable`, captured by groups before its wrapper (`groups/plugin.ts:820-821`), with `sizeCache.isVariable()` as the core default; section 3.2 "Which size source owns the item" |
-| Bounds must precede the groups translation; reject `NaN` and non-integers; use the public total (return contract, medium) | Section 3.2 "Bounds first", against `api.total` (`create.ts:1014`); `create.ts:1146`'s translation path cited with `layout.ts:66-80` |
+| Grid keys the cache by row; an item index would invalidate the wrong row (both reviewers, medium) | Section 2.2 names all three index spaces; Shape B, "Unsupported size models" excludes grid with `_itemRemeasureSupported` and a defined `false`, and qualifies the "data index" sentence to the public APIs |
+| `sizeCache.isVariable()` is always true under `groups()`; `rawSpec` is stale under `table()` (both, medium) | `_dataSizeIsVariable`, captured by groups before its wrapper (`groups/plugin.ts:820-821`), with `sizeCache.isVariable()` as the core default; Shape B, "Which size source owns the item" |
+| Bounds must precede the groups translation; reject `NaN` and non-integers; use the public total (return contract, medium) | Shape B, "Bounds first", against `api.total` (`create.ts:1014`); `create.ts:1146`'s translation path cited with `layout.ts:66-80` |
 | Groups' sticky header offsets go stale after `invalidate` (group index space, medium) | `_onItemRemeasure`; groups runs the `refresh()` + `update()` pattern it already uses (`groups/plugin.ts:704-708`); cost stated |
-| Return contract: out-of-range flipped under autosize; "queued" vs "asked"; unmeasured item (return contract, medium/low) | Section 3.2 "The contract": bounds first, then the meaning of `true` (a source was asked; `isMeasured` is the state), with `plugin.ts:240-243` and `plugin.ts:99-107` |
-| Boolean is new house style; `remeasure` vs `remeasureItem` (low) | Section 3.2 "Signature, house style, naming", including the plugin-method overwrite at `create.ts:1263-1269` |
-| Shape C does not compose with `table()`/`grid()` (shape comparison, medium) | Section 3.1 C: `setConfig` replacement (`table/plugin.ts:310-311`), `rawSpec` read (`grid/plugin.ts:382`), the `setConfig` patch autosize uses, and the budget wording |
-| Shape A's id-keying rejection is a straw man (low) | Section 3.1 A: autosize's O(1) id→item resolution (`plugin.ts:93-97`); the real trade-off is stated |
-| Shape A does not define its size unit (low) | Section 3.1 A "Unit of size": content height in, gap added before any slot store; `gap.test.ts:149-150` |
-| `updateItem` should invalidate (low) | Section 3.2 "Why not invalidate inside `updateItem`" |
+| Return contract: out-of-range flipped under autosize; "queued" vs "asked"; unmeasured item (return contract, medium/low) | Shape B, "The contract": bounds first, then the meaning of `true` (a source was asked; `isMeasured` is the state), with `plugin.ts:240-243` and `plugin.ts:99-107` |
+| Boolean is new house style; `remeasure` vs `remeasureItem` (low) | Shape B, "Signature, house style, naming", including the plugin-method overwrite at `create.ts:1263-1269` |
+| Shape C does not compose with `table()`/`grid()` (shape comparison, medium) | Shape C: `setConfig` replacement (`table/plugin.ts:310-311`), `rawSpec` read (`grid/plugin.ts:382`), the `setConfig` patch autosize uses, and the budget wording |
+| Shape A's id-keying rejection is a straw man (low) | Shape A: autosize's O(1) id→item resolution (`plugin.ts:93-97`); the real trade-off is stated |
+| Shape A does not define its size unit (low) | Shape A, "Unit of size": content height in, gap added before any slot store; `gap.test.ts:149-150` |
+| `updateItem` should invalidate (low) | Shape B, "Why not invalidate inside `updateItem`" |
 | Size wording: "room to spare", Shape C row (low) | Section 4 point 3 and the section 6 table |
 | `#349` list omits `grid()` (low) | Section 1 adds it (`grid/plugin.ts:345`) |
 | "Nothing else stores a per-item size" overlooks carousel (low) | Section 2.2 "The size writers" excepts carousel's step cache |
@@ -541,7 +541,7 @@ Each finding from the two round-1 sets, and where this revision answers it.
 - Header sizes under `groups()`: headers are not data items and have no data index. A header
   size update needs its own API and keying.
 - `grid()`: its cache is row space and a row's height comes from its first item; the method
-  returns `false` (section 3.2).
+  returns `false` (Shape B).
 - `masonry()` (snapshot placements) and `carousel()` (virtual step space): the method returns
   `false`; a future refresh would use `_onItemRemeasure`.
 - An override API for sizes item data cannot express (Shape A as a future proposal, if the
