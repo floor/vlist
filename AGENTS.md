@@ -38,7 +38,9 @@ natively; `vlist/synthetic` owns the input for lists taller than the browser all
   frame: typed arrays, reused objects, no closures or array literals created per scroll event.
 - **A plugin pays for its own bytes.** `bun run size` holds a budget per bundle
   (`scripts/size.ts`). Code added to `src/core/` lands in every bundle; code only one plugin
-  needs lives in that plugin, or behind what the plugin already imports.
+  needs lives in that plugin, or behind what the plugin already imports. A budget is a fixed
+  number: going over it means trimming the change, or moving the pin to measured + 1% on the
+  lead/orchestrator's recorded decision in the pull request — never a silent re-measure.
 - **Public API is small on purpose.** A new option or method needs a reason in the issue.
   Types are derived from the config (`src/config.ts`); no `any`, no `@ts-ignore`.
 
