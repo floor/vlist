@@ -336,6 +336,10 @@ cell, which sorts the column when it is sortable: give the control `tabindex`, o
 Enter and Space emit `column:sort` on a sortable header and never `column:click`, so an action a
 keyboard user must reach should be a `button` supplied in the header label.
 
+A table's rows have a fixed height, so `autosize()` cannot be combined with `table()`;
+the `vlist/config` route wires `autosize()` when only an estimate is given (`item.estimatedHeight`)
+and throws at creation. Give the table a fixed `rowHeight` and the config a fixed `item.height` instead.
+
 ### Grid Layout
 
 ```typescript
@@ -607,6 +611,8 @@ With `autosize()` and `item.estimatedHeight` (or `estimatedWidth` for horizontal
 list.remeasure(12); // Re-measure one item after its content changes.
 list.remeasure();   // Invalidate all sizes and measure items as they render.
 ```
+
+A measured item size cannot be combined with `masonry()`: masonry places items from the size cache it is handed at layout time, so an `autosize()` measurement never reaches the placements. The `vlist/config` route wires `autosize()` when only an estimate is given (`item.estimatedHeight`) and throws at creation; give the items a fixed `item.height` instead. The same holds for `carousel()`, whose slide steps are built from the size read at setup.
 
 Full configuration reference → **[vlist.io](https://vlist.io)**
 

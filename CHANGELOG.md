@@ -11,6 +11,28 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Changed
+
+- `table()` with `autosize()` — or with an estimated item size in the config
+  route when only an estimate is given — now throws at creation (#346). The pair used to build a list whose rows never
+  grew: the table wrote its fixed row height over the measuring size function, and the
+  absolutely positioned cells measured 0. Where a framework adapter's config asked for the estimate, the message now
+  names the fields its caller wrote (`item.estimatedHeight`, `table()`) instead of the
+  `autosize()` the config layer wires; the way out is a fixed `rowHeight` on the table
+  and a fixed `item.height` in place of the estimate.
+- `masonry()` now declares a conflict with `autosize()` (#361). The pair used to build a
+  list where nothing was measured: masonry places items from the size cache it is handed
+  at layout time, so autosize's measurements never reached the placements and
+  `getMeasuredCount()` stayed 0. In the `vlist/config` route an estimated item size wires
+  `autosize()` and now throws a message naming `item.estimatedHeight` and the layout field
+  or `masonry()`, with a fixed `item.height` as the way out.
+- `carousel()` now declares a conflict with `autosize()` (#364). The pair used to
+  build a carousel whose slide steps came from the item size read at setup, so a
+  measurement arriving later never reached the steps or the virtual window. In the
+  `vlist/config` route an estimated item size wires `autosize()` and now throws a
+  message naming `item.estimatedHeight` and `carousel()`, with a fixed `item.height`
+  as the way out.
+
 ## [3.1.8] - 2026-10-20
 
 a11y() and table(): focus stops flipping on items taller than the viewport, and dragged column widths survive scrollbar-driven resizes (#31).
