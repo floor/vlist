@@ -17,6 +17,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { setupDOM, teardownDOM } from "../../helpers/dom";
 import { createTestItems, createContainer } from "../../helpers/factory";
+import { createPluginMockContext } from "../../helpers/plugin-context";
 import type { TestItem } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
 import { table } from "../../../src/plugins/table/plugin";
@@ -266,6 +267,47 @@ describe("table — height-only viewport change", () => {
     expect(s.widths().name).toBe(300);
     expect(s.minWidth()).toBe(afterDragMinWidth);
     s.list.destroy();
+  });
+});
+
+// =============================================================================
+// The initial observation core dedupes
+//
+// In a browser the first ResizeObserver entry normally matches the viewport's
+// client box, so core's dedupe (create.ts) skips the hook entirely. The plugin
+// resolved its layout against the real cross size at setup; that resolve must
+// count as the width the layout was resolved at, or the first height-only
+// change after a drag re-resolves and discards it. The mock context sets the
+// engine's cross size exactly as core does before the observer exists.
+// =============================================================================
+
+describe("table — initial observation deduped by core", () => {
+  it("keeps a dragged width on the first height-only change", () => {
+    const plugin = table<TestItem>({
+      columns: COLUMNS,
+      rowHeight: 28,
+      headerHeight: 28,
+      resizable: true,
+      fillWidth: false,
+    });
+    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(
+      createTestItems(200),
+      { containerWidth: 500, itemSize: 28 },
+    );
+    plugin.setup!(ctx);
+
+    const resizeColumn = methods.get("resizeColumn") as (i: number, w: number) => void;
+    const widths = methods.get("getColumnWidths") as () => Record<string, number>;
+
+    resizeColumn(0, 300);
+    expect(widths().name).toBe(300);
+
+    // No onResize has run: core skipped the entry that matched the viewport.
+    // A horizontal scrollbar appears — the height changes, the width does not.
+    plugin.hooks?.onResize?.(500, 492);
+
+    expect(widths().name).toBe(300);
+    cleanup();
   });
 });
 
