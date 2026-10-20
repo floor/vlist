@@ -50,7 +50,10 @@ function createFixture(config: TablePluginConfig<Row>, itemHeight?: number) {
       {
         container,
         items: items(),
-        item: { height: itemHeight, template: (item) => item.name },
+        item: {
+          ...(itemHeight === undefined ? {} : { height: itemHeight }),
+          template: (item) => item.name,
+        },
       },
       [table<Row>(config)],
     );
@@ -113,7 +116,11 @@ describe("table — estimatedRowHeight deprecation", () => {
   it.serial("does not warn without an estimate and preserves validation failures", () => {
     withWarnings("development", (warnings) => {
       table<Row>({ columns, rowHeight: 41 });
-      table<Row>({ columns, rowHeight: 41, estimatedRowHeight: undefined });
+      // JavaScript callers can explicitly pass undefined; keep the public type
+      // exact while checking that runtime edge separately.
+      table<Row>(
+        { columns, rowHeight: 41, estimatedRowHeight: undefined } as unknown as TablePluginConfig<Row>,
+      );
       expect(() => table<Row>({ columns } as TablePluginConfig<Row>))
         .toThrow("either rowHeight or estimatedRowHeight is required");
       expect(() => table<Row>({ columns: [], rowHeight: 41, estimatedRowHeight: 80 }))
