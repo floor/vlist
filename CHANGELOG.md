@@ -11,6 +11,28 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.7] - 2026-10-20
+
+table() + groups(): the first click or key press acts on the row it lands on, from the first paint (#396).
+
+Who is affected: lists that combine `table()` with `groups()` and take an activation before the groups layout microtask has run — code that dispatches a click or key event in the same task that creates the list. A real pointer or keyboard fires after that microtask; the first paint now holds the rows until the layout is ready instead of showing a second index space in between.
+
+### Fixed
+
+- With `table()` and `groups()`, the synchronous first render painted data
+  rows before `groups()` had wired its layout space: the row showing "Item 2"
+  carried `data-index="1"`, no group header rows existed, and an activation in
+  that window — a click resolved through the stale attribute, Enter or Space
+  on the ringed row — landed one item off. `table()` now holds its first paint
+  until `groups()` publishes its layout-space item accessor, in the same
+  microtask that already laid the list out, so the first paint is the layout
+  space (#396).
+- With `table()` and `groups()`, `a11y()` decided "table mode" once, from the
+  moment it first read an index: a key activation before that microtask left
+  it reading the data-space getter afterwards, one item off for the rest of
+  the list's life. It now asks for the layout-space accessor at each item
+  lookup (#396).
+
 ## [3.1.6] - 2026-10-18
 
 a11y under `groups()`: a click selects the item you clicked and the focus ring sits on it.
@@ -1864,7 +1886,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.6...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.7...HEAD
+[3.1.7]: https://github.com/floor/vlist/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/floor/vlist/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
