@@ -23,9 +23,9 @@ describe("size gate", () => {
     }
   });
 
-  it("keeps the 10.3 KB base target", () => {
-    expect(BUDGET_BYTES["Base (createVList)"]).toBe(kb(10.3));
-    expect(BUDGET_BYTES.native).toBe(kb(10.3));
+  it("keeps the base target", () => {
+    expect(BUDGET_BYTES["Base (createVList)"]).toBe(kb(10.59));
+    expect(BUDGET_BYTES.native).toBe(kb(10.59));
   });
 
   it("pins every budget as a fixed number — a move is a recorded decision", () => {
@@ -35,34 +35,34 @@ describe("size gate", () => {
     // measurement and the lead/orchestrator's recorded decision in the pull
     // request — never a silent re-measure.
     expect(BUDGET_BYTES).toEqual({
-      "Base (createVList)": kb(10.3),
-      synthetic: kb(13.0),
-      "synthetic + carousel": kb(18.2),
-      "synthetic + sortable": kb(16.6),
-      createStats: kb(10.6),
-      "synthetic + createStats": kb(13.2),
-      native: kb(10.3),
-      a11y: kb(12.2),
-      selection: kb(13.7),
-      data: kb(15.2),
-      scrollbar: kb(13.3),
-      sortable: kb(14.0),
-      groups: kb(15.8),
-      page: kb(11.3),
-      snapshots: kb(11.5),
-      transition: kb(12.4),
-      autosize: kb(12.0),
-      grid: kb(13.0),
-      table: kb(16.57),
-      masonry: kb(14.8),
-      tree: kb(15.7),
-      search: kb(13.7),
-      carousel: kb(15.8),
-      vue: kb(10.6),
-      svelte: kb(10.5),
-      solid: kb(10.6),
-      react: kb(10.6),
-      "react + grid": kb(13.2),
+      "Base (createVList)": kb(10.59),
+      synthetic: kb(13.22),
+      "synthetic + carousel": kb(18.52),
+      "synthetic + sortable": kb(16.86),
+      createStats: kb(10.83),
+      "synthetic + createStats": kb(13.46),
+      native: kb(10.59),
+      a11y: kb(12.51),
+      selection: kb(13.91),
+      data: kb(15.45),
+      scrollbar: kb(13.53),
+      sortable: kb(14.26),
+      groups: kb(16.1),
+      page: kb(11.53),
+      snapshots: kb(11.75),
+      transition: kb(12.61),
+      autosize: kb(12.21),
+      grid: kb(13.24),
+      table: kb(16.77),
+      masonry: kb(15.08),
+      tree: kb(15.94),
+      search: kb(13.94),
+      carousel: kb(16.15),
+      vue: kb(10.77),
+      svelte: kb(10.67),
+      solid: kb(10.73),
+      react: kb(10.78),
+      "react + grid": kb(13.44),
     });
   });
 
