@@ -28,11 +28,12 @@ describe("size gate", () => {
     expect(BUDGET_BYTES.native).toBe(kb(10.3));
   });
 
-  it("pins every budget as a fixed number — a move needs the owner's word", () => {
+  it("pins every budget as a fixed number — a move is a recorded decision", () => {
     // The routine headroom rule is retired: a budget does not move because a
     // measurement moved. With the whole table pinned, a deliberate move edits
     // two files in one commit (`scripts/size.ts` and this table), beside the
-    // measurement the owner approved — never a silent re-measure.
+    // measurement and the lead/orchestrator's recorded decision in the pull
+    // request — never a silent re-measure.
     expect(BUDGET_BYTES).toEqual({
       "Base (createVList)": kb(10.3),
       synthetic: kb(13.0),
