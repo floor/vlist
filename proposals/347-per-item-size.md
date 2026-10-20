@@ -515,6 +515,16 @@ capture and predicate, plus the `_onItemRemeasure` handler and its sticky refres
 predicate line each in grid, masonry and carousel. Those land on the `groups`, `grid`,
 `masonry` and `carousel` rows of the size table.
 
+**Post-implementation measurement (3.3.0).** Implemented as reviewed, the true delta is
++189 to +248 bytes gzipped per size scenario, base measured 10,539 -> 10,735
+(+196), above the 110-170
+band this section settled on. The gap is the contract the two review rounds added on top
+of what the band covered: the scroll-anchor shift, the `_onItemRemeasure` derived-state
+notification, and the groups/table size-owner wiring — not scope creep, and nothing the
+reviewers flagged as removable. The lesson for the next estimate: size the contract as it
+stands after review, not the first-draft mechanism, and anchor against a scenario that
+already carries derived-state plumbing (`groups`, not base) when the feature touches it.
+
 The base has 8 bytes of room today (10,539 measured against 10,547, README size table), so
 every shape needs a base-budget decision: measured + 1% by the repository's rule, recorded in
 the implementing pull request. For Shape B that is roughly one 0.1 kB step; for Shape A,
