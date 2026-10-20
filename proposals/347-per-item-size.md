@@ -251,7 +251,8 @@ the grouped size function wraps headers and data (`groups/plugin.ts:820-835`); t
 nothing to change. `rawSpec` has the opposite error: it stays the configuration-time spec
 (`types.ts:172-180`), so a table with a function `rowHeight` over a numeric `item.height` would
 read as fixed. The fact needed is "the item spec installed before the wrapper layers is a
-function". It belongs to the layer that installs the spec:
+function". It is only readable just before a wrapper replaces the cache, so the wrapping layer
+publishes it:
 
 - `groups()` captures `sizeCache.isVariable()` at setup, immediately before it calls
   `ctx.sizes.setConfig(groupedSizeFn, …)` (the same point where it already captures
@@ -259,8 +260,8 @@ function". It belongs to the layer that installs the spec:
   `_dataSizeIsVariable(): boolean`.
 - The core's default when no predicate is registered is `sizeCache.isVariable()`, which is
   correct for a core list, `table()` (numeric `rowHeight` installs a fixed cache, a function
-  installs a variable one, `src/plugins/table/plugin.ts:310-311`), `tree()` (identity index
-  space) and autosize's own spec.
+  installs a variable one, `src/plugins/table/plugin.ts:310-311`) and `tree()` (identity index
+  space).
 - `autosize()` is checked before this predicate: with autosize installed the source is its
   measurement store, which is a function spec by construction, and the delegate path below
   decides.
