@@ -6,7 +6,7 @@
  * Adapted from v1 withSortable feature tests to v2 PluginContext API.
  */
 
-import { registerDOM, unregisterDOM } from "../../helpers/dom";
+import { registerDOM, unregisterDOM, useFakeTimers } from "../../helpers/dom";
 import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
 import { sortable } from "../../../src/plugins/sortable/plugin";
 import type { VListItem } from "../../../src/types";
@@ -16,72 +16,7 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // Fake Timer Utility
 // =============================================================================
 
-interface FakeTimerHandle { id: number; fn: () => void; time: number; interval: number }
-
 let fakeTimers: { tick: (ms: number) => void; restore: () => void };
-
-function useFakeTimers(): { tick: (ms: number) => void; restore: () => void } {
-  const timers: FakeTimerHandle[] = [];
-  let now = 0;
-  let nextId = 1;
-
-  const origSetTimeout = global.setTimeout;
-  const origClearTimeout = global.clearTimeout;
-  const origSetInterval = global.setInterval;
-  const origClearInterval = global.clearInterval;
-
-  global.setTimeout = ((fn: () => void, delay = 0): number => {
-    const id = nextId++;
-    timers.push({ id, fn, time: now + delay, interval: 0 });
-    return id;
-  }) as any;
-
-  global.clearTimeout = ((id: number): void => {
-    const idx = timers.findIndex(t => t.id === id);
-    if (idx !== -1) timers.splice(idx, 1);
-  }) as any;
-
-  global.setInterval = ((fn: () => void, delay: number): number => {
-    const id = nextId++;
-    timers.push({ id, fn, time: now + delay, interval: delay });
-    return id;
-  }) as any;
-
-  global.clearInterval = ((id: number): void => {
-    const idx = timers.findIndex(t => t.id === id);
-    if (idx !== -1) timers.splice(idx, 1);
-  }) as any;
-
-  const tick = (ms: number): void => {
-    const target = now + ms;
-    while (true) {
-      let earliest: FakeTimerHandle | undefined;
-      for (const t of timers) {
-        if (t.time <= target && (!earliest || t.time < earliest.time)) earliest = t;
-      }
-      if (!earliest) break;
-      now = earliest.time;
-      if (earliest.interval > 0) {
-        earliest.time = now + earliest.interval;
-        earliest.fn();
-      } else {
-        const idx = timers.indexOf(earliest);
-        timers.splice(idx, 1);
-        earliest.fn();
-      }
-    }
-    now = target;
-  };
-
-  const restore = (): void => {
-    global.setTimeout = origSetTimeout;
-    global.clearTimeout = origClearTimeout;
-    global.setInterval = origSetInterval;
-    global.clearInterval = origClearInterval;
-  };
-
-  return { tick, restore };
-}
 
 beforeEach(() => { fakeTimers = useFakeTimers(); });
 afterEach(() => { fakeTimers.restore(); });

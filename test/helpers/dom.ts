@@ -97,6 +97,36 @@ interface FakeTimerHandle {
   interval: number;
 }
 
+interface TimerGlobals {
+  setTimeout: typeof global.setTimeout;
+  clearTimeout: typeof global.clearTimeout;
+  setInterval: typeof global.setInterval;
+  clearInterval: typeof global.clearInterval;
+}
+
+const captureTimerGlobals = (): TimerGlobals => ({
+  setTimeout: global.setTimeout,
+  clearTimeout: global.clearTimeout,
+  setInterval: global.setInterval,
+  clearInterval: global.clearInterval,
+});
+
+const applyTimerGlobals = (globals: TimerGlobals): void => {
+  global.setTimeout = globals.setTimeout;
+  global.clearTimeout = globals.clearTimeout;
+  global.setInterval = globals.setInterval;
+  global.clearInterval = globals.clearInterval;
+};
+
+// A clock can be installed while another one is still active: a teardown that
+// throws before restoring, or concurrent tests in one file that yield a
+// macrotask. Each restore therefore drops only its own clock and reinstalls
+// whatever is on top of the stack — so a restore that finishes out of install
+// order neither clobbers a live clock nor resurrects an older fake, and the
+// bottom of the stack is the process's real timers, never another test's fake.
+const timerStack: TimerGlobals[] = [];
+let realTimerGlobals: TimerGlobals | undefined;
+
 export function useFakeTimers(): {
   tick: (ms: number) => void;
   restore: () => void;
@@ -105,32 +135,38 @@ export function useFakeTimers(): {
   let now = 0;
   let nextId = 1;
 
-  const origSetTimeout = global.setTimeout;
-  const origClearTimeout = global.clearTimeout;
-  const origSetInterval = global.setInterval;
-  const origClearInterval = global.clearInterval;
+  if (timerStack.length === 0) realTimerGlobals = captureTimerGlobals();
 
-  global.setTimeout = ((fn: () => void, delay = 0): number => {
+  const fakeSetTimeout = ((fn: () => void, delay = 0): number => {
     const id = nextId++;
     timers.push({ id, fn, time: now + delay, interval: 0 });
     return id;
   }) as any;
 
-  global.clearTimeout = ((id: number): void => {
+  const fakeClearTimeout = ((id: number): void => {
     const idx = timers.findIndex((t) => t.id === id);
     if (idx !== -1) timers.splice(idx, 1);
   }) as any;
 
-  global.setInterval = ((fn: () => void, delay: number): number => {
+  const fakeSetInterval = ((fn: () => void, delay: number): number => {
     const id = nextId++;
     timers.push({ id, fn, time: now + delay, interval: delay });
     return id;
   }) as any;
 
-  global.clearInterval = ((id: number): void => {
+  const fakeClearInterval = ((id: number): void => {
     const idx = timers.findIndex((t) => t.id === id);
     if (idx !== -1) timers.splice(idx, 1);
   }) as any;
+
+  const globals: TimerGlobals = {
+    setTimeout: fakeSetTimeout,
+    clearTimeout: fakeClearTimeout,
+    setInterval: fakeSetInterval,
+    clearInterval: fakeClearInterval,
+  };
+  timerStack.push(globals);
+  applyTimerGlobals(globals);
 
   const tick = (ms: number): void => {
     const target = now + ms;
@@ -155,10 +191,18 @@ export function useFakeTimers(): {
   };
 
   const restore = (): void => {
-    global.setTimeout = origSetTimeout;
-    global.clearTimeout = origClearTimeout;
-    global.setInterval = origSetInterval;
-    global.clearInterval = origClearInterval;
+    const idx = timerStack.indexOf(globals);
+    if (idx === -1) return; // already restored
+    timerStack.splice(idx, 1);
+    // Only the top of the stack was installed; restoring a clock below it
+    // leaves the newer one exactly where it is.
+    if (idx === timerStack.length) {
+      applyTimerGlobals(
+        timerStack.length > 0
+          ? timerStack[timerStack.length - 1]!
+          : realTimerGlobals!,
+      );
+    }
   };
 
   return { tick, restore };
