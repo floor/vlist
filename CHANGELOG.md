@@ -11,15 +11,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- The release script now waits up to ten minutes for CI checks on the main
+  merge commit to appear and finish, so a release can continue after merging
+  without a manual rerun. Failed checks still stop the release immediately.
+
+## [3.1.7] - 2026-10-20
+
 table() + groups(): the first click or key press acts on the row it lands on, from the first paint (#396).
 
 Who is affected: lists that combine `table()` with `groups()` and take an activation before the groups layout microtask has run — code that dispatches a click or key event in the same task that creates the list. A real pointer or keyboard fires after that microtask; the first paint now holds the rows until the layout is ready instead of showing a second index space in between.
 
 ### Fixed
 
-- The release script now waits up to ten minutes for CI checks on the main
-  merge commit to appear and finish, so a release can continue after merging
-  without a manual rerun. Failed checks still stop the release immediately.
 - With `table()` and `groups()`, the synchronous first render painted data
   rows before `groups()` had wired its layout space: the row showing "Item 2"
   carried `data-index="1"`, no group header rows existed, and an activation in
@@ -1887,7 +1892,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.6...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.7...HEAD
+[3.1.7]: https://github.com/floor/vlist/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/floor/vlist/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
