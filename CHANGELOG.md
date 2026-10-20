@@ -21,6 +21,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   inside it. It returns `false` for a non-integer index or one outside `[0, total)`,
   never throws, and returns `false` where one item's size is not addressable:
   a fixed item spec, and `grid()`, `masonry()` and `carousel()` (#347).
+  It is a core method, so it lands in every bundle: the measured cost is
+  +189 to +248 bytes gzipped per size scenario (base 10,547 → 10,844) — above
+  the proposal's estimate because the estimate predated review, which added the
+  scroll-anchor shift and the groups/table size-owner wiring.
 
 ## [3.2.0] - 2026-10-20
 
