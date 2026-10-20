@@ -7,7 +7,7 @@
  * - Each cell is positioned horizontally according to its column definition
  * - A sticky header row displays column labels and resize handles
  * - Columns can be resized by dragging header borders
- * - Variable row heights are supported (Mode A and Mode B)
+ * - Fixed and function-based row heights are supported; rows are not auto-measured
  */
 
 import type { VListItem } from "../../types";
@@ -118,7 +118,7 @@ export interface TableConfig<T extends VListItem = VListItem> {
    * At runtime, either `rowHeight` or `estimatedRowHeight` is required.
    * When supplied, `rowHeight` determines row sizes; rows are not auto-measured.
    *
-   * Each row's height is fixed here and never measured, so `table()` conflicts
+   * Each row's height is configured here and never measured, so `table()` conflicts
    * with `autosize()`. An explicit `autosize()` plugin throws the core conflict
    * error; the `vlist/config` route wires `autosize()` when only an estimate
    * is given (`item.estimatedHeight`) and throws before building.
@@ -128,12 +128,17 @@ export interface TableConfig<T extends VListItem = VListItem> {
   /**
    * Satisfies the runtime "rowHeight or estimatedRowHeight is required" check.
    *
+   * @deprecated Since 3.3.0; will be removed in 4.0. Use `rowHeight` for fixed
+   * rows, or a `rowHeight` function with the upcoming `remeasureItem(index)` API
+   * for heights that change after creation. Non-production builds warn once per
+   * `table()` call when this option is supplied.
+   *
    * The value is not used to size rows. Without `rowHeight`, rows retain the
    * core item size: `item.height`, then `item.estimatedHeight`, then 40 px
    * (the fallback in `src/core/create.ts`, `resolveSizeConfig`). If supplied,
    * `rowHeight` takes precedence, whether a number or a function.
    *
-   * A table's rows have a fixed height, so `table()` conflicts with `autosize()`.
+   * Table rows use configured heights, so `table()` conflicts with `autosize()`.
    * An explicit `autosize()` plugin throws the core conflict error; the
    * `vlist/config` route wires `autosize()` when only an estimate is given
    * (`item.estimatedHeight`) and throws before building.
