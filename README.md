@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.1.8** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
+**v3.2.0** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -277,12 +277,12 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `snapshots()` | 30.6 KB | 11.4 KB |
 | `transition()` | 34.1 KB | 12.3 KB |
 | `autosize()` | 31.7 KB | 11.9 KB |
-| `grid()` | 34.7 KB | 12.9 KB |
+| `grid()` | 34.8 KB | 12.9 KB |
 | `table()` | 46.4 KB | 16.4 KB |
 | `masonry()` | 39.4 KB | 14.7 KB |
 | `tree()` | 43.1 KB | 15.6 KB |
 | `search()` | 36.9 KB | 13.6 KB |
-| `carousel()` | 43.2 KB | 15.8 KB |
+| `carousel()` | 43.3 KB | 15.8 KB |
 | `vlist/synthetic` + `carousel()` | 49.3 KB | 18.1 KB |
 | `vlist/synthetic` + `sortable()` | 46.1 KB | 16.5 KB |
 | `vlist/vue` `useVList` | 27.7 KB | 10.5 KB |
