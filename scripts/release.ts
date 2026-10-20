@@ -32,6 +32,8 @@ export const READ_COMMAND_TIMEOUT_MS = 15000;
 /** `bun run size` builds every scenario; allow a cold build on a loaded machine. */
 export const SIZE_MEASURE_TIMEOUT_MS = 300000;
 export const PR_QUERY_LIMIT = 30;
+export const MAIN_CHECK_WAIT_TIMEOUT_MS = 600_000;
+export const MAIN_CHECK_POLL_INTERVAL_MS = 10_000;
 
 /**
  * Required check runs defined in .github/workflows/ci.yml:
@@ -1783,6 +1785,47 @@ export const fetchCheckRuns = (
   return read(cmd, checkRunsSlurpSchema(commitSha));
 };
 
+interface CheckRunWaitDependencies {
+  readonly readChecks?: (commitSha: string) => readonly CheckRunInfo[];
+  readonly wait?: (ms: number) => Promise<void>;
+  readonly now?: () => number;
+}
+
+/** Wait for CI on the pinned main merge commit without relaxing its check gate. */
+export const waitForCheckRuns = async (
+  commitSha: string,
+  { readChecks = fetchCheckRuns, wait = sleep, now = Date.now }: CheckRunWaitDependencies = {},
+): Promise<readonly CheckRunInfo[]> => {
+  const deadline = now() + MAIN_CHECK_WAIT_TIMEOUT_MS;
+  let lastFailure: unknown;
+  while (true) {
+    if (lastFailure !== undefined && now() >= deadline) {
+      throw new Error(
+        `Timed out after ${MAIN_CHECK_WAIT_TIMEOUT_MS / 1000}s waiting for check runs on commit ${commitSha}. ${execErrorMessage(lastFailure)}. Re-run the same release command to resume.`,
+      );
+    }
+    // Transport and schema errors are unreadable evidence, not pending CI.
+    const runs = readChecks(commitSha);
+    try {
+      verifyCheckRuns(runs, commitSha);
+      return runs;
+    } catch (err: unknown) {
+      // Only registration and unfinished jobs can become passing without intervention.
+      // A terminal failure wins even when another job is still pending.
+      const canWait = runs.every((run) =>
+        run.app?.slug && (
+          run.status === "queued" || run.status === "in_progress" ||
+          (run.status === "completed" && run.conclusion === "success")
+        ),
+      );
+      if (!canWait) throw err;
+      lastFailure = err;
+      const remaining = deadline - now();
+      if (remaining > 0) await wait(Math.min(MAIN_CHECK_POLL_INTERVAL_MS, remaining));
+    }
+  }
+};
+
 export const parseCompareResponse = (
   raw: string,
   cmd: string,
@@ -2056,7 +2099,7 @@ const main = async (): Promise<void> => {
 
   let isMergeCommitAncestor: boolean | undefined;
   let packageVersionAtMergeSha: string | null | undefined;
-  let checkRuns: CheckRunInfo[] | undefined;
+  let checkRuns: readonly CheckRunInfo[] | undefined;
   let checkRunsEvidence = "";
   let mainPrMergeParents: readonly string[] | null | undefined;
   let sourcePrMergeParents: readonly string[] | null | undefined;
@@ -2066,7 +2109,19 @@ const main = async (): Promise<void> => {
     mainPrMergeParents = readCommitParents(mergeSha);
     isMergeCommitAncestor = isCommitAncestorOfRemoteMain(mergeSha);
     packageVersionAtMergeSha = readPackageVersionAtSha(mergeSha);
-    checkRuns = fetchCheckRuns(mergeSha);
+    const canWaitForChecks = !args.dryRun && !remoteTagSha &&
+      isMergeCommitAncestor && packageVersionAtMergeSha === newVersion;
+    if (canWaitForChecks) {
+      assertPinnedMerge({
+        prNumber: mainPr.number,
+        description: `${mainPr.headRefName} → ${mainPr.baseRefName}`,
+        headRefOid: mainPr.headRefOid,
+        mergeCommitOid: mergeSha,
+        parents: mainPrMergeParents,
+      });
+      log(`Waiting up to 10 minutes for check runs on main merge commit ${mergeSha}...`);
+    }
+    checkRuns = canWaitForChecks ? await waitForCheckRuns(mergeSha) : fetchCheckRuns(mergeSha);
     try {
       const verified = verifyCheckRuns(checkRuns, mergeSha);
       checkRunsEvidence = verified.formattedEvidence;
@@ -2363,8 +2418,8 @@ const main = async (): Promise<void> => {
     console.error(`\n  ✗ package.json at merge commit ${freshMergeSha} is v${pkgVer}, not target v${newVersion}`);
     process.exit(1);
   }
-  const freshChecks = fetchCheckRuns(freshMergeSha);
-  verifyCheckRuns(freshChecks, freshMergeSha);
+  log(`Waiting up to 10 minutes for check runs on main merge commit ${freshMergeSha}...`);
+  await waitForCheckRuns(freshMergeSha);
 
   console.log(`  ✓ Merge commit ${freshMergeSha} verified with all passing checks.`);
   console.log(`\nNext step to create and push the tag:\n  bun run release ${newVersion} --tag`);

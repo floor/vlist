@@ -41,6 +41,9 @@ import {
   updateReadmeVersions,
   utcDateStamp,
   verifyCheckRuns,
+  waitForCheckRuns,
+  MAIN_CHECK_WAIT_TIMEOUT_MS,
+  MAIN_CHECK_POLL_INTERVAL_MS,
   validate,
   validateValue,
   read,
@@ -57,6 +60,7 @@ import {
   ghContentSchema,
 } from "../../scripts/release";
 import * as releaseMod from "../../scripts/release";
+import type { CheckRunInfo } from "../../scripts/release";
 
 const parseCheckRunsResponse: any = (releaseMod as any).parseCheckRunsResponse;
 const parseCheckRunItem: any = (releaseMod as any).parseCheckRunItem;
@@ -1489,6 +1493,128 @@ describe("check runs verification (fail-closed)", () => {
         "abc1234",
       ),
     ).toThrow("Precondition failed: commit abc1234 has check runs without app identity: [Test & Build]");
+  });
+});
+
+describe("waiting for main check runs", () => {
+  const successfulRuns: readonly CheckRunInfo[] = [
+    { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+    { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+  ];
+
+  const clock = (): { now: () => number; wait: (ms: number) => Promise<void>; delays: number[] } => {
+    let elapsed = 0;
+    const delays: number[] = [];
+    return {
+      now: () => elapsed,
+      wait: async (ms: number): Promise<void> => { delays.push(ms); elapsed += ms; },
+      delays,
+    };
+  };
+
+  it("waits for registration, both required jobs, and completion on the same merge SHA", async () => {
+    const timer = clock();
+    const snapshots: readonly (readonly CheckRunInfo[])[] = [
+      [],
+      successfulRuns.slice(0, 1),
+      [successfulRuns[0]!, { ...successfulRuns[1]!, status: "queued", conclusion: null }],
+      [successfulRuns[0]!, { ...successfulRuns[1]!, status: "in_progress", conclusion: null }],
+      successfulRuns,
+    ];
+    const queriedShas: string[] = [];
+    const result = await waitForCheckRuns("abc1234", {
+      ...timer,
+      readChecks: (sha: string): readonly CheckRunInfo[] => {
+        queriedShas.push(sha);
+        return snapshots[queriedShas.length - 1]!;
+      },
+    });
+    expect(result).toEqual(successfulRuns);
+    expect(verifyCheckRuns(result, "abc1234").formattedEvidence).toContain("Browser suites (success)");
+    expect(queriedShas).toEqual(Array(5).fill("abc1234"));
+    expect(timer.delays).toEqual(Array(4).fill(MAIN_CHECK_POLL_INTERVAL_MS));
+  });
+
+  it("returns immediately when checks already passed", async () => {
+    const timer = clock();
+    expect(await waitForCheckRuns("abc1234", { ...timer, readChecks: () => successfulRuns })).toEqual(successfulRuns);
+    expect(timer.delays).toEqual([]);
+  });
+
+  for (const conclusion of ["failure", "neutral", "cancelled", "timed_out", "action_required", "skipped"]) {
+    it(`stops immediately for ${conclusion} even while another job is pending`, async () => {
+      const timer = clock();
+      await expect(waitForCheckRuns("abc1234", {
+        ...timer,
+        readChecks: () => [
+          { ...successfulRuns[0]!, status: "in_progress", conclusion: null },
+          { ...successfulRuns[1]!, conclusion },
+        ],
+      })).rejects.toThrow(`Browser suites: completed (${conclusion})`);
+      expect(timer.delays).toEqual([]);
+    });
+  }
+
+  it("does not retry unreadable app identity", async () => {
+    const timer = clock();
+    await expect(waitForCheckRuns("abc1234", {
+      ...timer,
+      readChecks: () => [{ ...successfulRuns[0]!, app: null }, successfulRuns[1]!],
+    })).rejects.toThrow("without app identity");
+    expect(timer.delays).toEqual([]);
+  });
+
+  it("does not retry an API or schema error", async () => {
+    const timer = clock();
+    await expect(waitForCheckRuns("abc1234", {
+      ...timer,
+      readChecks: () => { throw new Error("Incomplete check-runs read"); },
+    })).rejects.toThrow("Incomplete check-runs read");
+    expect(timer.delays).toEqual([]);
+  });
+
+  for (const { name, runs, evidence } of [
+    { name: "unregistered jobs", runs: [], evidence: "has 0 check runs" },
+    {
+      name: "unfinished jobs",
+      runs: [{ ...successfulRuns[0]!, status: "in_progress", conclusion: null }],
+      evidence: "Test & Build: in_progress (none)",
+    },
+    {
+      name: "jobs from another app",
+      runs: successfulRuns.map((run) => ({ ...run, app: { slug: "other-app" } })),
+      evidence: "missing required successful GitHub Actions check runs: [Test & Build, Browser suites]",
+    },
+  ]) {
+    it(`times out with the merge SHA and last evidence for ${name}`, async () => {
+      const timer = clock();
+      let reads = 0;
+      const result = waitForCheckRuns("abc1234", {
+        ...timer,
+        readChecks: () => { reads++; return runs; },
+      });
+      await expect(result).rejects.toThrow("Timed out after 600s waiting for check runs on commit abc1234");
+      await expect(result).rejects.toThrow(evidence);
+      await expect(result).rejects.toThrow("Re-run the same release command to resume.");
+      expect(timer.now()).toBe(MAIN_CHECK_WAIT_TIMEOUT_MS);
+      expect(reads).toBe(MAIN_CHECK_WAIT_TIMEOUT_MS / MAIN_CHECK_POLL_INTERVAL_MS);
+    });
+  }
+
+  it("counts API read time and never starts a retry at the deadline", async () => {
+    const timer = clock();
+    let readTime = 0;
+    await expect(waitForCheckRuns("abc1234", {
+      ...timer,
+      now: () => timer.now() + readTime,
+      readChecks: () => {
+        readTime += MAIN_CHECK_WAIT_TIMEOUT_MS - 5_000;
+        return [];
+      },
+    })).rejects.toThrow("has 0 check runs");
+    expect(timer.delays).toEqual([5_000]);
+    expect(readTime).toBe(MAIN_CHECK_WAIT_TIMEOUT_MS - 5_000);
+    expect(timer.now() + readTime).toBe(MAIN_CHECK_WAIT_TIMEOUT_MS);
   });
 });
 

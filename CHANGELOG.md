@@ -17,6 +17,9 @@ Who is affected: lists that combine `table()` with `groups()` and take an activa
 
 ### Fixed
 
+- The release script now waits up to ten minutes for CI checks on the main
+  merge commit to appear and finish, so a release can continue after merging
+  without a manual rerun. Failed checks still stop the release immediately.
 - With `table()` and `groups()`, the synchronous first render painted data
   rows before `groups()` had wired its layout space: the row showing "Item 2"
   carried `data-index="1"`, no group header rows existed, and an activation in
