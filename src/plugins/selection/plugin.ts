@@ -360,7 +360,14 @@ export function selection<T extends VListItem = VListItem>(
         const sp0 = resolvedConfig.startPadding;
         const sp1 = resolvedConfig.endPadding;
 
-        if (offset < sp) {
+        // An item whose size plus both paddings exceeds the viewport fits
+        // neither alignment: a top write leaves its bottom below the viewport,
+        // so the next focus-in takes the bottom branch; a bottom write leaves
+        // its top above, so the one after takes the top branch — the two flip
+        // on every focus cycle (#31). Pin such an item to its start, where
+        // native scrollIntoView({ block: "start" }) settles for a target that
+        // does not fit.
+        if (offset < sp || size + sp0 + sp1 > cs) {
           scrollTo(offset);
         } else if (sp0 + offset + size + sp1 > sp + cs) {
           scrollTo(sp0 + offset + size + sp1 - cs);

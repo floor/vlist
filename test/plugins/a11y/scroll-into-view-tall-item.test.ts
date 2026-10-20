@@ -19,6 +19,7 @@ import { setupDOM, teardownDOM } from "../../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../../helpers/factory";
 import type { TestItem } from "../../helpers/factory";
 import { createVList } from "../../../src/core/create";
+import type { VListPlugin } from "../../../src/core/types";
 import { a11y } from "../../../src/plugins/a11y";
 import { selection } from "../../../src/plugins/selection";
 
@@ -27,12 +28,18 @@ afterAll(() => teardownDOM());
 
 const flush = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
-function createList(itemHeight: number) {
+function createList(itemHeight: number, withSelection = true) {
   const container = createContainer({ width: 300, height: 500 });
   const items = createTestItems(20);
+  // With selection() seated, a11y's setup sees a state function and defers;
+  // selection owns focus and scrolling. Without it, a11y's own scrollIntoView
+  // is the path. Both carry the alignment decision, so both get tests.
+  const plugins: VListPlugin<TestItem>[] = withSelection
+    ? [selection<TestItem>({ mode: "single" }), a11y<TestItem>()]
+    : [a11y<TestItem>()];
   const vlist = createVList<TestItem>(
     { container, items, item: { height: itemHeight, template: simpleTemplate } },
-    [selection({ mode: "single" }), a11y()],
+    plugins,
   );
   return { vlist, container };
 }
@@ -140,6 +147,66 @@ describe("a11y — scrollIntoView of a non-fitting item (#31)", () => {
     }
 
     // One pixel taller than the viewport: still a single stable position.
+    expect(positions).toEqual([0, 0, 0, 0]);
+
+    vlist.destroy();
+    container.remove();
+  });
+});
+
+describe("a11y — scrollIntoView of a non-fitting item with a11y alone", () => {
+  it("keeps a 600px first item at the viewport start across 4 focus cycles", async () => {
+    const { vlist, container } = createList(600, false);
+    await flush();
+    await clickRow(container, 0);
+
+    const content = contentOf(container);
+    const positions: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await focusCycle(content);
+      positions.push(vlist.getScrollPosition());
+    }
+
+    expect(positions).toEqual([0, 0, 0, 0]);
+
+    vlist.destroy();
+    container.remove();
+  });
+
+  it("keeps a mid-list 600px item's start aligned across 4 focus cycles", async () => {
+    const { vlist, container } = createList(600, false);
+    await flush();
+
+    const content = contentOf(container);
+    content.focus();
+    await flush();
+    for (let i = 0; i < 5; i++) fireKey(content, "ArrowDown");
+    await flush();
+    expect(vlist.getScrollPosition()).toBe(3000);
+
+    const positions: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await focusCycle(content);
+      positions.push(vlist.getScrollPosition());
+    }
+    expect(positions).toEqual([3000, 3000, 3000, 3000]);
+
+    vlist.destroy();
+    container.remove();
+  });
+
+  it("is stable one pixel over the boundary (501px)", async () => {
+    const { vlist, container } = createList(501, false);
+    await flush();
+    await clickRow(container, 0);
+
+    const content = contentOf(container);
+    const positions: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      await focusCycle(content);
+      positions.push(vlist.getScrollPosition());
+    }
+
     expect(positions).toEqual([0, 0, 0, 0]);
 
     vlist.destroy();
