@@ -142,16 +142,28 @@ export function grid<T extends VListItem = VListItem>(
     return layout.getTotalRows(engineState.totalItems);
   }
 
+  /**
+   * Cross-axis offset of a column, snapped to a device pixel. Interior columns
+   * round to the nearest pixel; the last column floors, because rounding it up
+   * can put its right edge up to 0.5px past the padded cross edge. A focus ring
+   * painted just outside the cell uses that padding as its landing strip — the
+   * scrollport clips past its client edge, and a classic scrollbar sits there.
+   */
+  function crossOffset(col: number): number {
+    const x = col * (columnWidth + gap) + crossPadStart;
+    return col === columns - 1 ? Math.floor(x) : Math.round(x);
+  }
+
   function buildTransform(itemIndex: number, origin: number): string {
     const row = (itemIndex / columns) | 0;
     const col = itemIndex - row * columns;
-    const x = col * (columnWidth + gap) + crossPadStart;
+    const x = crossOffset(col);
     // Map logical item offsets into content coordinates using the adapter origin.
     const y = sizeCache.getOffset(row) - origin + mainPadStart;
     if (isX) {
-      return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
+      return `translate(${Math.round(y)}px, ${x}px)`;
     }
-    return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    return `translate(${x}px, ${Math.round(y)}px)`;
   }
 
   function applySizeStyles(element: HTMLElement, row: number): void {
@@ -283,12 +295,12 @@ export function grid<T extends VListItem = VListItem>(
 
       applySizeStyles(tracked.el, row);
 
-      const x = col * (columnWidth + gap) + crossPadStart;
+      const x = crossOffset(col);
       // Map logical item offsets into content coordinates using the adapter origin.
       const y = sizeCache.getOffset(row) - origin + mainPadStart;
       tracked.el.style.transform = isX
-        ? `translate(${Math.round(y)}px, ${Math.round(x)}px)`
-        : `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+        ? `translate(${Math.round(y)}px, ${x}px)`
+        : `translate(${x}px, ${Math.round(y)}px)`;
     }
 
     // Route content sizing through the engine so a logical handler (RFC-012)
