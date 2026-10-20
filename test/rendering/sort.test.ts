@@ -303,9 +303,9 @@ describe("sortRenderedDOM", () => {
     sortRenderedDOM(container, elements.keys(), (i) => elements.get(i));
 
     // Same DOM nodes, not clones
-    expect(container.children[0]).toBe(el0);
-    expect(container.children[1]).toBe(el1);
-    expect(container.children[2]).toBe(el2);
+    expect(container.children[0] === el0).toBe(true);
+    expect(container.children[1] === el1).toBe(true);
+    expect(container.children[2] === el2).toBe(true);
   });
 
   it("should handle the realistic grid scenario (new row appended at end of container)", () => {
