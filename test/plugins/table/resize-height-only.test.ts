@@ -29,7 +29,6 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  observerInstances = [];
   (globalThis as { ResizeObserver: unknown }).ResizeObserver = ControlledResizeObserver;
 });
 
@@ -39,25 +38,45 @@ afterAll(() => {
 
 // =============================================================================
 // Controllable ResizeObserver
+//
+// Keyed by the element it observes, never by construction order: the suite
+// runs with `--concurrent`, so several tests build lists at the same time and
+// a shared "latest instance" list would hand a test another test's observer.
 // =============================================================================
 
-let observerInstances: ControlledResizeObserver[] = [];
-
 class ControlledResizeObserver {
+  static readonly byTarget = new Map<Element, ControlledResizeObserver>();
+
   readonly callback: ResizeObserverCallback;
   target: Element | null = null;
 
   constructor(callback: ResizeObserverCallback) {
     this.callback = callback;
-    observerInstances.push(this);
   }
 
   observe(target: Element): void {
     this.target = target;
+    ControlledResizeObserver.byTarget.set(target, this);
   }
 
-  unobserve(_target: Element): void {}
-  disconnect(): void {}
+  unobserve(target: Element): void {
+    if (ControlledResizeObserver.byTarget.get(target) === this) {
+      ControlledResizeObserver.byTarget.delete(target);
+    }
+  }
+
+  disconnect(): void {
+    if (this.target) this.unobserve(this.target);
+  }
+
+  /** The observer core created for this container's viewport. */
+  static forContainer(container: HTMLElement): ControlledResizeObserver {
+    const viewport = container.querySelector(".vlist-viewport");
+    if (!viewport) throw new Error("vlist viewport not found in container");
+    const observer = ControlledResizeObserver.byTarget.get(viewport);
+    if (!observer) throw new Error("vlist did not observe this container's viewport");
+    return observer;
+  }
 
   /** Deliver a content-box size the way the browser's observer would. */
   fire(width: number, height: number): void {
@@ -157,7 +176,7 @@ async function setup(options: Scenario) {
   );
   await flush();
 
-  const observer = observerInstances[observerInstances.length - 1]!;
+  const observer = ControlledResizeObserver.forContainer(container);
   // The viewport box the browser would report once laid out.
   observer.fire(options.crossWidth, 500);
   await flush();
@@ -274,7 +293,7 @@ describe("table — genuine resizes still re-resolve", () => {
       [table<TestItem>({ columns, rowHeight: 28, headerHeight: 28, fillWidth: false })],
     );
     await flush();
-    const observer = observerInstances[observerInstances.length - 1]!;
+    const observer = ControlledResizeObserver.forContainer(container);
     observer.fire(500, 500);
     await flush();
 
