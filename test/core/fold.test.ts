@@ -32,15 +32,15 @@ describe("rekeyRendered", () => {
 
     rekeyRendered(rendered, 15, "vlist", content);
 
-    expect(rendered.get(25)).toBe(a);
-    expect(rendered.get(26)).toBe(b);
+    expect(rendered.get(25) === a).toBe(true);
+    expect(rendered.get(26) === b).toBe(true);
     expect(rendered.has(40)).toBe(false);
     expect(a.id).toBe("vlist-item-25");
     expect(b.id).toBe("vlist-item-26");
     expect(a.getAttribute("data-index")).toBe("0");
     expect(a.getAttribute("aria-posinset")).toBe("1");
     expect(content.getAttribute("aria-activedescendant")).toBe("vlist-item-26");
-    expect(content.firstChild).toBe(a);
+    expect(content.firstChild === a).toBe(true);
   });
 
   it("shifts keys backward when the fold is negative", () => {
@@ -53,7 +53,7 @@ describe("rekeyRendered", () => {
 
     rekeyRendered(rendered, -15, "vlist", content);
 
-    expect(rendered.get(25)).toBe(el);
+    expect(rendered.get(25) === el).toBe(true);
     expect(el.id).toBe("vlist-item-25");
     expect(content.getAttribute("aria-activedescendant")).toBe("vlist-item-25");
   });
@@ -96,7 +96,7 @@ describe("rekeyRendered", () => {
 
     rekeyRendered(rendered, 10, "my-content", content);
 
-    expect(rendered.get(30)).toBe(el);
+    expect(rendered.get(30) === el).toBe(true);
     expect(el.id).toBe("my-content-item-30");
     expect(content.getAttribute("aria-activedescendant")).toBe("my-content-item-30");
   });
@@ -161,7 +161,7 @@ describe("rekeyRendered", () => {
     rekeyRendered(narrow, 2, "vlist", content);
 
     expect(narrow.size).toBe(1);
-    expect(narrow.get(6)).toBe(only);
+    expect(narrow.get(6) === only).toBe(true);
     expect(only.id).toBe("vlist-item-6");
     expect(wide[0]!.id).toBe("vlist-item--3");
   });
@@ -172,7 +172,7 @@ describe("rekeyRendered", () => {
     el.id = "vlist-item-4";
     const rendered = new Map<number, HTMLElement>([[4, el]]);
     rekeyRendered(rendered, 0, "vlist", content);
-    expect(rendered.get(4)).toBe(el);
+    expect(rendered.get(4) === el).toBe(true);
     expect(el.id).toBe("vlist-item-4");
   });
 });
@@ -238,7 +238,7 @@ describe("applyWrapFold", () => {
 
     applyWrapFold(wrap, 150, state, content, rendered, "vlist");
 
-    expect(rendered.get(10)).toBe(el);
+    expect(rendered.get(10) === el).toBe(true);
     expect(el.id).toBe("vlist-item-10");
     expect(content.getAttribute("aria-activedescendant")).toBe("vlist-item-10");
     expect(state.startIndex).toBe(10);
@@ -260,7 +260,7 @@ describe("applyWrapFold", () => {
 
     applyWrapFold(wrap, 150, state, content, rendered, "my-content");
 
-    expect(rendered.get(10)).toBe(el);
+    expect(rendered.get(10) === el).toBe(true);
     expect(el.id).toBe("my-content-item-10");
     expect(content.getAttribute("aria-activedescendant")).toBe("my-content-item-10");
   });
