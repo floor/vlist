@@ -345,8 +345,13 @@ export function table<T extends VListItem = VListItem>(
       }
 
       // ── Resolve initial column widths ───────────────────────────
-      const containerWidth = engineState.crossSize;
-      tableLayout.resolve(containerWidth);
+      // Core's ResizeObserver dedupes its first entry against the viewport's
+      // client box and skips the hook, so the layout is resolved here and no
+      // onResize call ever records that width. Record it with the resolve, or
+      // the first height-only change after a drag re-resolves and discards
+      // the dragged width (#31).
+      resolvedCross = engineState.crossSize;
+      tableLayout.resolve(resolvedCross);
 
       // ── Content width ───────────────────────────────────────────
       const updateContentWidth = (): void => {
