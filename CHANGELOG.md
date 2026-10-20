@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.1.8] - 2026-10-20
+
 a11y() and table(): focus stops flipping on items taller than the viewport, and dragged column widths survive scrollbar-driven resizes (#31).
 
 ### Fixed
@@ -1907,7 +1909,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.1.7...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.1.8...HEAD
+[3.1.8]: https://github.com/floor/vlist/compare/v3.1.7...v3.1.8
 [3.1.7]: https://github.com/floor/vlist/compare/v3.1.6...v3.1.7
 [3.1.6]: https://github.com/floor/vlist/compare/v3.1.5...v3.1.6
 [3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
