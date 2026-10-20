@@ -657,6 +657,10 @@ export function carousel<T extends VListItem = VListItem>(
       isX = ctx.config.axis.primary === "x";
       prefix = ctx.config.classPrefix;
       realTotal = engineState.totalItems;
+
+      // The cache is virtual step space, not item space, so a data index does
+      // not name the entry a size change would live in.
+      ctx.hooks.method("_itemRemeasureSupported", (): boolean => false);
       const baseItemSize = realTotal > 0 ? sizeCache.getSize(0) : 0;
       const containerSize = engineState.containerSize;
       layoutContainerSize = containerSize;

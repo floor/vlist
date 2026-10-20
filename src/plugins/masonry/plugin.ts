@@ -456,6 +456,10 @@ export function masonry<T extends VListItem = VListItem>(
       storedCtx = ctx;
       engineState = ctx.getState();
       rawSizeSpec = ctx.sizes.rawSpec;
+
+      // Placements are a snapshot: invalidating one size leaves the placement
+      // it was built from stale, so there is no per-item re-read to offer.
+      ctx.hooks.method("_itemRemeasureSupported", (): boolean => false);
       isX = ctx.config.axis.primary === "x";
       classPrefix = ctx.config.classPrefix;
       overscanPx = ctx.config.overscan * OVERSCAN_PX_PER_UNIT;
