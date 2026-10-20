@@ -45,7 +45,7 @@ describe("acquire", () => {
     const el1 = pool.acquire();
     const el2 = pool.acquire();
 
-    expect(el1).not.toBe(el2);
+    expect(el1 === el2).toBe(false);
   });
 
   it("should return a recycled element when pool is not empty", () => {
@@ -56,7 +56,7 @@ describe("acquire", () => {
     pool.release(el1);
 
     const el2 = pool.acquire();
-    expect(el2).toBe(el1);
+    expect(el2 === el1).toBe(true);
     expect(el2.textContent).toBe(""); // Should be cleaned
   });
 
@@ -71,9 +71,9 @@ describe("acquire", () => {
     pool.release(el2);
     pool.release(el3);
 
-    expect(pool.acquire()).toBe(el3);
-    expect(pool.acquire()).toBe(el2);
-    expect(pool.acquire()).toBe(el1);
+    expect(pool.acquire() === el3).toBe(true);
+    expect(pool.acquire() === el2).toBe(true);
+    expect(pool.acquire() === el1).toBe(true);
   });
 });
 
@@ -85,7 +85,7 @@ describe("release", () => {
     pool.release(el);
 
     const el2 = pool.acquire();
-    expect(el2).toBe(el);
+    expect(el2 === el).toBe(true);
   });
 
   it("should reset element className to classPrefix-item before pooling", () => {
@@ -229,8 +229,8 @@ describe("release", () => {
     const el2 = pool.acquire();
 
     // Both acquires will return the same element (it was added twice)
-    expect(el1).toBe(el);
-    expect(el2).toBe(el);
+    expect(el1 === el).toBe(true);
+    expect(el2 === el).toBe(true);
   });
 });
 
@@ -246,8 +246,8 @@ describe("clear", () => {
     pool.clear();
 
     const el3 = pool.acquire();
-    expect(el3).not.toBe(el1);
-    expect(el3).not.toBe(el2);
+    expect(el3 === el1).toBe(false);
+    expect(el3 === el2).toBe(false);
   });
 
   it("should allow new elements to be pooled after clear", () => {
@@ -260,7 +260,7 @@ describe("clear", () => {
     pool.release(el2);
 
     const el3 = pool.acquire();
-    expect(el3).toBe(el2);
+    expect(el3 === el2).toBe(true);
   });
 
   it("should work when called on empty pool", () => {
