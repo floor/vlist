@@ -73,7 +73,7 @@ describe("createTableHeader - DOM setup", () => {
 
     const rowgroup = root.firstChild as HTMLElement;
     expect(rowgroup.getAttribute("role")).toBe("rowgroup");
-    expect(rowgroup.nextSibling).toBe(viewport);
+    expect(rowgroup.nextSibling === viewport).toBe(true);
   });
 
   it("should create header row element with correct ARIA", () => {
@@ -1160,10 +1160,10 @@ describe("createTableHeader - roving index follows focus", () => {
           .toEqual(columnCount === 4 ? ["0", "-1", "-1", "-1"] : ["0", "-1"]);
 
         expect(() => clickCell(cells[1]!)).not.toThrow();
-        expect(document.activeElement).toBe(cells[1]!);
+        expect(document.activeElement === cells[1]!).toBe(true);
         const tabStops = cells.filter((cell) => cell.getAttribute("tabindex") === "0");
         expect(tabStops).toHaveLength(1);
-        expect(document.activeElement).toBe(tabStops[0]!);
+        expect(document.activeElement === tabStops[0]!).toBe(true);
       } finally {
         header.destroy();
         root.remove();
@@ -1221,12 +1221,12 @@ describe("createTableHeader - roving index follows focus", () => {
     // ArrowRight goes to c, b's neighbour. With the index left behind it went
     // to b, the neighbour of the cell the arrows were last on.
     cellB.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
-    expect(document.activeElement).toBe(cellC);
+    expect(document.activeElement === cellC).toBe(true);
     expect(cellC.getAttribute("tabindex")).toBe("0");
     expect(cellB.getAttribute("tabindex")).toBe("-1");
 
     cellC.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
-    expect(document.activeElement).toBe(cellB);
+    expect(document.activeElement === cellB).toBe(true);
     expect(cellB.getAttribute("tabindex")).toBe("0");
   });
 

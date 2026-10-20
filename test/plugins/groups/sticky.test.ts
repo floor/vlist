@@ -681,7 +681,7 @@ describe("createStickyContainer positioning", () => {
     root.appendChild(existing);
 
     const container = createStickyContainer(root, "vlist", true, 32);
-    expect(root.firstChild).toBe(container);
+    expect(root.firstChild === container).toBe(true);
 
     root.remove();
   });

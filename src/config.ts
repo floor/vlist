@@ -147,6 +147,58 @@ export function resolvePlugins<T extends VListItem = VListItem>(
           "row, autosize measures items. Use item.height (item.width when horizontal).",
       );
     }
+    // table(), masonry() and carousel() size their items themselves, so a
+    // measured item size cannot apply: this layer wires autosize() for the
+    // estimate, and the core conflict would name a plugin the caller never
+    // wrote. Name the estimate field and the plugin they did write, with the
+    // way out. A caller who passed autosize() themselves keeps the core
+    // message, which names a plugin they did write. A plugin is recognised by
+    // its declared conflict, as the core check does, so a custom plugin that
+    // reuses one of these names without the declaration still builds. The
+    // layout field wires masonry() unless a user plugin of that name replaces
+    // it, as the escape hatch does below.
+    const userPlugins = config.plugins ?? [];
+    const explicitAutosize = userPlugins.some((p) => p.name === "autosize");
+    if (!explicitAutosize) {
+      const declared = userPlugins.find(
+        (p) => p.name !== "autosize" && p.conflicts?.includes("autosize"),
+      )?.name;
+      const fieldMasonry =
+        config.layout === "masonry" && !userPlugins.some((p) => p.name === "masonry");
+      const name = declared ?? (fieldMasonry ? "masonry" : undefined);
+      const estimateField = isHorizontal ? "item.estimatedWidth" : "item.estimatedHeight";
+      const sizeField = isHorizontal ? "item.width" : "item.height";
+      if (name === "table") {
+        // table() only supports vertical orientation; report that instead of
+        // a sizing remedy that does not exist horizontally.
+        if (isHorizontal) {
+          throw new Error("[vlist] table: cannot be used with horizontal orientation");
+        }
+        throw new Error(
+          "[vlist] config: item.estimatedHeight cannot be combined with table(): " +
+            "an estimated item size asks for measured rows, and table() gives every row " +
+            "a fixed height. Give the table a fixed rowHeight and drop the estimate. " +
+            "Use item.height.",
+        );
+      }
+      if (name === "masonry") {
+        throw new Error(
+          `[vlist] config: ${estimateField} cannot be combined with ` +
+            (declared === "masonry" ? "masonry()" : 'layout: "masonry"') +
+            ": an estimated item size asks for measured items, and masonry() lays " +
+            "every item out from the size cache it is handed. Give the items a " +
+            `fixed ${sizeField} and drop the estimate.`,
+        );
+      }
+      if (name === "carousel") {
+        throw new Error(
+          `[vlist] config: ${estimateField} cannot be combined with carousel(): ` +
+            "an estimated item size asks for measured slides, and carousel() builds " +
+            "its slide steps from the item size it is given. Give the slides a " +
+            `fixed ${sizeField} and drop the estimate.`,
+        );
+      }
+    }
     plugins.push(autosize<T>());
   }
 

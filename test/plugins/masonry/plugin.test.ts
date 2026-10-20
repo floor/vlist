@@ -13,6 +13,8 @@ import { SCROLL_DURATION } from "../../../src/constants";
 import { masonry } from "../../../src/plugins/masonry/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
+import { createVList } from "../../../src/core/create";
+import { autosize } from "../../../src/plugins/autosize/plugin";
 
 // =============================================================================
 // DOM Setup
@@ -1026,14 +1028,63 @@ describe("masonry - Render Consistency", () => {
 // =============================================================================
 
 describe("masonry - Plugin Metadata", () => {
-  it("should declare conflicts with grid and table", () => {
+  it("should declare conflicts with grid, table and autosize", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
-    expect(plugin.conflicts).toEqual(["grid", "table"]);
+    expect(plugin.conflicts).toEqual(["grid", "table", "autosize"]);
   });
 
   it("should have idle hook for DOM sorting", () => {
     const plugin = masonry<TestItem>({ columns: 4 });
     expect(plugin.hooks?.onIdle).toBeInstanceOf(Function);
+  });
+});
+
+// =============================================================================
+// masonry — conflicts with autosize
+// =============================================================================
+
+describe("masonry — conflicts with autosize", () => {
+  it("throws at creation in either plugin order", () => {
+    // autosize measures the items, but masonry places them from the size
+    // cache it indexes by lane: the measurement never reaches the layout and
+    // getMeasuredCount() stays 0. The pair must not build silently.
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(container, "clientWidth", { value: 600, configurable: true });
+    document.body.appendChild(container);
+    const items: TestItem[] = createTestItems(4);
+    const config = {
+      container,
+      items,
+      item: {
+        estimatedHeight: 40,
+        template: (item: TestItem) => item.name,
+      },
+    };
+    const masonryPlugin = () => masonry<TestItem>({ columns: 2 });
+    const orders = [
+      [masonryPlugin(), autosize<TestItem>()],
+      [autosize<TestItem>(), masonryPlugin()],
+    ];
+    const outcomes: string[] = [];
+    try {
+      for (const plugins of orders) {
+        try {
+          const list = createVList<TestItem>(config, plugins);
+          list.destroy();
+          outcomes.push("built a list");
+        } catch (error) {
+          outcomes.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+      expect(outcomes).toEqual([
+        '[vlist] Plugin "masonry" conflicts with "autosize"',
+        '[vlist] Plugin "masonry" conflicts with "autosize"',
+      ]);
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });
 

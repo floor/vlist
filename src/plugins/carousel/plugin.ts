@@ -25,6 +25,9 @@
  * - Cannot be combined with `grid()`, `table()`, `masonry()` or `tree()`:
  *   two plugins owning one list's layout, where this one has also made the
  *   size cache speak virtual indices. Permanent.
+ * - Cannot be combined with `autosize()`: the step table is built from the
+ *   item size read at setup, and a measurement arrives after it, so the
+ *   measured size never reaches the steps or the virtual window.
  * - Cannot yet be combined with `search()` or `sortable()` — see the comments
  *   on their own `conflicts`. Both are fixable and meant to be fixed.
  * - `page()` is rejected by core: document scrolling cannot wrap.
@@ -643,7 +646,7 @@ export function carousel<T extends VListItem = VListItem>(
     // 4 rows of 9, tree drew 3. Written the other way round grid constructs —
     // which is worse, not better, because it makes the hang look like a
     // caller's mistake in ordering rather than a pair that cannot work.
-    conflicts: ["groups", "grid", "table", "masonry", "tree"],
+    conflicts: ["groups", "grid", "table", "masonry", "tree", "autosize"],
 
     setup(ctx: PluginContext<T>): void {
       installs++;

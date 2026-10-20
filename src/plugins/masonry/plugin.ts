@@ -8,7 +8,7 @@
  * Priority 10 — runs before selection (50) so layout is ready.
  *
  * Restrictions:
- * - Cannot be combined with grid or table plugins
+ * - Cannot be combined with grid, table or autosize plugins
  * - Cannot be combined with reverse: true
  */
 
@@ -439,7 +439,10 @@ export function masonry<T extends VListItem = VListItem>(
   return {
     name: "masonry",
     priority: 10,
-    conflicts: ["grid", "table"],
+    // autosize measures items, but this plugin places them from the size
+    // cache it is handed at layout time; the measurement never reaches the
+    // placements, and getMeasuredCount() stays 0.
+    conflicts: ["grid", "table", "autosize"],
 
     validateConfig(config: ResolvedConfig): void {
       if (config.reverse) {

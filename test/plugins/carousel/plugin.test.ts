@@ -21,6 +21,8 @@ import { resolvePreset, registerPreset, getPreset, hasSlots, multi, uncontained 
 import type { SlotConfigResolver } from "../../../src/plugins/carousel/presets";
 
 import { carousel } from "../../../src/plugins/carousel/plugin";
+import { createVList } from "../../../src/core/create";
+import { autosize } from "../../../src/plugins/autosize/plugin";
 
 // =============================================================================
 // DOM Setup
@@ -70,12 +72,66 @@ describe("carousel — Factory", () => {
     }
   });
 
+  it("declares a conflict with autosize", () => {
+    // The carousel builds its step table from the resolved slot preset (or the
+    // raw size spec) and keys its size cache by the virtual lap index; a
+    // measured item size has no stable key and never reaches the steps.
+    const plugin = carousel<TestItem>();
+    expect(plugin.conflicts).toContain("autosize");
+  });
+
   it("declares a conflict with groups", () => {
     // Its only declared conflict used to be with scale(), which 3.0 removed,
     // leaving none at all — while groups silently broke it in both orders.
     const plugin = carousel<TestItem>();
     expect(plugin.conflicts).toContain("groups");
     expect(plugin.conflicts).not.toContain("scale");
+  });
+});
+
+// =============================================================================
+// carousel — conflicts with autosize
+// =============================================================================
+
+describe("carousel — conflicts with autosize", () => {
+  it("throws at creation in either plugin order", () => {
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 400, configurable: true });
+    Object.defineProperty(container, "clientWidth", { value: 600, configurable: true });
+    document.body.appendChild(container);
+    const items = createTestItems(4);
+    const config = {
+      container,
+      items,
+      item: {
+        estimatedHeight: 40,
+        template: (item: TestItem) => item.name,
+      },
+    };
+    const carouselPlugin = () => carousel<TestItem>();
+    const orders = [
+      [carouselPlugin(), autosize<TestItem>()],
+      [autosize<TestItem>(), carouselPlugin()],
+    ];
+    const outcomes: string[] = [];
+    try {
+      for (const plugins of orders) {
+        try {
+          const list = createVList<TestItem>(config, plugins);
+          list.destroy();
+          outcomes.push("built a list");
+        } catch (error) {
+          outcomes.push(error instanceof Error ? error.message : String(error));
+        }
+      }
+      expect(outcomes).toEqual([
+        '[vlist] Plugin "carousel" conflicts with "autosize"',
+        '[vlist] Plugin "carousel" conflicts with "autosize"',
+      ]);
+      expect(container.children.length).toBe(0);
+    } finally {
+      container.remove();
+    }
   });
 });
 
