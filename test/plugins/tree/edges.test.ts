@@ -157,7 +157,7 @@ describe("tree — updateItem", () => {
 
     list.updateItem("core", { name: "engine" });
 
-    expect(container.querySelector('[data-id="core"]')).toBe(row);
+    expect(container.querySelector('[data-id="core"]') === row).toBe(true);
     expect(row.textContent).toBe("engine");
     expect(rowTexts(container)).toEqual(["src", "engine", "plugins", "README.md"]);
     expect(list.isExpanded("src")).toBe(true);
