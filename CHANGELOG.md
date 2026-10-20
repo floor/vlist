@@ -27,6 +27,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   the proposal's estimate because the estimate predated review, which added the
   scroll-anchor shift and the groups/table size-owner wiring.
 
+### Deprecated
+
+- `table()`'s `estimatedRowHeight`, deprecated in 3.3.0 for removal in 4.0
+  (#345). It remains accepted but does not size or measure rows; non-production
+  builds now warn once per `table()` call, never per render or row. Use
+  `rowHeight` for fixed rows, or a `rowHeight` function with the
+  `remeasureItem(index)` API for heights that change after creation (#347).
+
 ## [3.2.0] - 2026-10-20
 
 Plugins that cannot work together now say so when the list is created, and name the fixed-size setting to use instead.

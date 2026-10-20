@@ -336,9 +336,16 @@ cell, which sorts the column when it is sortable: give the control `tabindex`, o
 Enter and Space emit `column:sort` on a sortable header and never `column:click`, so an action a
 keyboard user must reach should be a `button` supplied in the header label.
 
-A table's rows have a fixed height, so `autosize()` cannot be combined with `table()`;
+Table rows use configured heights and are not automatically measured, so
+`autosize()` cannot be combined with `table()`;
 the `vlist/config` route wires `autosize()` when only an estimate is given (`item.estimatedHeight`)
 and throws at creation. Give the table a fixed `rowHeight` and the config a fixed `item.height` instead.
+
+`estimatedRowHeight` is deprecated in 3.3.0 and will be removed in 4.0 (#345).
+It remains accepted but does not size or measure rows; non-production builds warn
+once per `table()` call. Use a numeric `rowHeight` for fixed rows or a `rowHeight`
+function for variable row sizes. For heights that change after creation, the
+`remeasureItem(index)` API in 3.3.0 works with a `rowHeight` function (#347).
 
 ### Grid Layout
 

@@ -162,6 +162,13 @@ Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plu
 
 Bundlephobia's badge measures the package's root entry, which re-exports every plugin, minified and gzipped as one bundle. With a tree-shaking bundler, an app that imports named exports from `vlist` bundles the base (**10.5 KB gzipped**) and the features it uses; the table's rows are each a combined size, not amounts to add up.
 
+`table()`'s `estimatedRowHeight` is deprecated in 3.3.0 and will be removed in 4.0
+(#345). It remains accepted but does not size or measure rows; non-production
+builds warn once per `table()` call. Use `rowHeight` for fixed rows or a `rowHeight`
+function with the `remeasureItem(index)` API in 3.3.0 for heights that
+change after creation (#347). Table rows are not automatically measured and
+`table()` remains incompatible with `autosize()`.
+
 ## Frameworks
 
 Vue, Svelte, Solid and React each have an entry in the `vlist` package itself. Like the vanilla builder, they are feature-first: you pass plugins from `vlist`, so an app only bundles the features it uses. Every entry imports the core from `vlist`, and none carries a copy of its own.
