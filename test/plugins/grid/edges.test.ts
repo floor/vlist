@@ -138,7 +138,7 @@ describe("grid — a template that returns an element", () => {
 
     const after = cell(container, 1);
     // Same cell, one card, new text: a re-render must not append next to the old node.
-    expect(after).toBe(before);
+    expect(after === before).toBe(true);
     expect(after.querySelectorAll(".card").length).toBe(1);
     expect(after.textContent).toBe("Renamed");
   }));
