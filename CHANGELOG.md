@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+a11y() and table(): focus stops flipping on items taller than the viewport, and dragged column widths survive scrollbar-driven resizes (#31).
+
 ### Fixed
 
 - Keyboard focus on an item taller than the list — a full-height row, a card of
