@@ -298,9 +298,12 @@ revision adds only the predicates above.
 which returns the cached measurement (`plugin.ts:93-97`): invalidating alone would re-read the
 same value. So when autosize's public `remeasure` method is registered (`plugin.ts:500`), the
 core calls it with the **data index** (its `getItemId` resolves `items.at(index).id`,
-`plugin.ts:93`) after the bounds check, and returns `true`. Autosize queues a measured item and
-ignores an unmeasured one (`plugin.ts:232-246`); the return says the owner was asked, and
-`isMeasured` says whether a measurement exists. The core passes the data index, not the layout
+`plugin.ts:93`) after the bounds check and before the unchanged-size guard, and returns
+`true`. The order matters: under autosize `getSize` is the measurement store itself, so a
+guard first would compare the store with itself, find it unchanged and return `true` without
+asking the owner to re-measure. Autosize queues a measured item and ignores an unmeasured one
+(`plugin.ts:232-246`); the return says the owner was asked, and `isMeasured` says whether a
+measurement exists. The core passes the data index, not the layout
 index, because `remeasure` addresses items by data index; the translation to layout indices is
 autosize's own (`plugin.ts:80-84`). This keeps one writer: autosize when it is installed, the
 configuration's size function otherwise — the same rule #349 established.
@@ -351,7 +354,7 @@ preferred against for three reasons:
 **Signature, house style, naming.** Returning `boolean` from a mutation is a new style, not a
 matching one: the public mutations return `void` when they can no-op and `removeItems` returns
 a count (`create.ts:1110-1131`); reads use sentinels. It is additive and defensible — the
-return makes the silent no-op detectable — but the text should say "new", not "matching".
+return makes the silent no-op detectable.
 `remeasureItem` is deliberately not named `remeasure`: autosize registers a public `remeasure`
 through `hooks.method` (`plugin.ts:500`), and plugin methods are assigned onto the instance
 after the core's API is built (`create.ts:1263-1269`), while the duplicate check only sees
@@ -466,10 +469,12 @@ What this revision settles, for the round-2 review:
 - **Additive.** One method on `VList` (`src/core/types.ts:321`) and three internal protocol
   names reached through `ctx.hooks.get`. No existing signature or behaviour changes. This is
   3.2.0 material, a minor release.
-- **Coverage.** Core lists, `tree()`, `groups()` and `table()` (numeric or function
-  `rowHeight`); with `autosize()` the method delegates to its owner. `grid()`, `masonry()` and
-  `carousel()` return `false` — the documented return for a size model that cannot address a
-  single item. Their combinations under `groups()` are excluded by the same predicates.
+- **Coverage.** Core lists, `tree()` and `groups()` when the size source is a function spec,
+  and `table()` with a function `rowHeight`; with `autosize()` the method delegates to its
+  owner. A fixed spec — a numeric `height`, a numeric table `rowHeight` — returns `false`
+  (see Documented limits). `grid()`, `masonry()` and `carousel()` return `false` — the
+  documented return for a size model that cannot address a single item. Their combinations
+  under `groups()` are excluded by the same predicates.
 - **No plugin conflicts.** `table()`, `masonry()`, `carousel()` and `grid()` keep their #349
   declarations. The method gives `table()` the per-row update path that `autosize()` used to
   pretend to offer.
