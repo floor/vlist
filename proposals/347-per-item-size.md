@@ -513,8 +513,7 @@ undercounts Shape A once the override layer is included.
 Shape B's plugin-side additions do not touch the base: groups (the `_dataSizeIsVariable`
 capture and predicate, plus the `_onItemRemeasure` handler and its sticky refresh) and one
 predicate line each in grid, masonry and carousel. Those land on the `groups`, `grid`,
-`masonry` and `carousel` rows of the size table; `index.js` had ~627 bytes of headroom
-(23,173 against 23,800) when this was written.
+`masonry` and `carousel` rows of the size table.
 
 The base has 8 bytes of room today (10,539 measured against 10,547, README size table), so
 every shape needs a base-budget decision: measured + 1% by the repository's rule, recorded in
