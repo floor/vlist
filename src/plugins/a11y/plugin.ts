@@ -147,6 +147,11 @@ export function a11y<T extends VListItem = VListItem>(
       // reads these. Without them ArrowLeft, ArrowRight, "*" and type-ahead
       // see no focused row and return.
       ctx.hooks.method("_getFocusedIndex", (): number => (focusVis ? focusIdx : -1));
+      // The same focus in the space the renderer paints in — table() rings a
+      // row by comparing it to the render index, and groups() counts a header
+      // entry per group. A layout reader prefers this; the hook above keeps
+      // its promise (a data index) for tree(), which navigates data space.
+      ctx.hooks.method("_getFocusedLayoutIndex", (): number => (focusVis ? toLayoutIndex(focusIdx) : -1));
       ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
         if (focusIdx < 0) return undefined;
         return getItem(focusIdx)?.id;

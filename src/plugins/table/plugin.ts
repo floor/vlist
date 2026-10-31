@@ -111,7 +111,16 @@ export function table<T extends VListItem = VListItem>(
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
     selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
+    focusedIndexGetter =
+      // The ring compares this to the row's LAYOUT index, the one the
+      // renderer paints. a11y() keeps focus in data space and publishes that
+      // promise as _getFocusedIndex (tree() reads it), plus a layout-space
+      // companion for renderers like this one; prefer the companion when it
+      // is there and fall back to the data-space hook, which is what
+      // selection() and tree() publish and already speak layout here.
+      (storedCtx.hooks.get("_getFocusedLayoutIndex") as (() => number)) ??
+      (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ??
+      null;
   }
 
   // =========================================================================
