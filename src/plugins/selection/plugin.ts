@@ -664,7 +664,11 @@ export function selection<T extends VListItem = VListItem>(
               if (state.focusedIndex >= 0) {
                 const item = getDataItemAtLayout(state.focusedIndex);
                 if (item) {
-                  emitter.emit("focus:change", { id: item.id, index: state.focusedIndex });
+                  // `index` is the data index (types.ts, focus:change): the
+                  // DOM and the ring stay in layout space, but an app reading
+                  // items[event.index] must land on the item the event names.
+                  // a11y() emits data space for the same event.
+                  emitter.emit("focus:change", { id: item.id, index: toDataIndex(state.focusedIndex) });
                 }
               }
             }
@@ -771,7 +775,11 @@ export function selection<T extends VListItem = VListItem>(
       // visibility the list already has, move the ring if it is showing, and
       // do not paint one on a list the user has never focused.
       ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
-        // Layout space: it scans entries for the one holding this id.
+        // Layout space: it scans entries for the one holding this id. The
+        // two spaces differ only when a layout plugin is present, and that
+        // also means resolveOnce() must have read the translators before the
+        // emitted index is translated below.
+        resolveOnce(ctx);
         const total = getTotalFn();
         for (let i = 0; i < total; i++) {
           if (isGHFn?.(i)) continue;
@@ -781,7 +789,7 @@ export function selection<T extends VListItem = VListItem>(
             if (keyboard !== "preserve") state.focusVisible = keyboard === true || focusOnClick;
             if (state.focusVisible) setActiveDescendant(i);
             else dom.content.removeAttribute("aria-activedescendant");
-            emitter.emit("focus:change", { id, index: i });
+            emitter.emit("focus:change", { id, index: toDataIndex(i) });
             forceRender();
             return;
           }
