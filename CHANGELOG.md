@@ -24,12 +24,15 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   reports the item index, as `a11y()` does for the same event.
 - a11y(): after a `setItems` that re-grouped the list, `aria-activedescendant` kept
   naming the row that used to sit at the focus's position — a different item — until
-  the next key press. It is now re-derived with the focus ring.
+  the next key press. It is now re-derived with the focus ring, including when
+  `table()` paints the list.
 - table() with `groups()` and `a11y()`: the focus ring was drawn one row above the
   row `aria-activedescendant` announced (and not at all on the first item), because
   the ring compared a data index against the row's render index.
 - selection(): a `setItems` that inserted or removed a group above the focused item
-  moved the focus onto its neighbour, so the ring and Enter landed on the wrong item.
+  moved the focus onto its neighbour, so the ring and Enter landed on the wrong item,
+  and `aria-activedescendant` kept naming the row the item had left. Both now follow
+  the item, including when `table()` paints the list.
 
 ## [3.3.0] - 2026-10-20
 
