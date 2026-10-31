@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.3.0** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
+**v3.3.1** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -134,8 +134,8 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | **Base (`vlist`)** | 27.9 KB | 10.5 KB |
 | `vlist/synthetic` (deprecated) | 34.8 KB | 13.1 KB |
 | `vlist/native` (alias) | 27.9 KB | 10.5 KB |
-| `a11y()` | 32.9 KB | 12.4 KB |
-| `selection()` | 38.4 KB | 13.8 KB |
+| `a11y()` | 33.3 KB | 12.5 KB |
+| `selection()` | 38.7 KB | 13.9 KB |
 | `data()` | 41.5 KB | 15.3 KB |
 | `scrollbar()` | 36.1 KB | 13.4 KB |
 | `sortable()` | 39.8 KB | 14.1 KB |
@@ -145,7 +145,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `transition()` | 34.6 KB | 12.5 KB |
 | `autosize()` | 32.3 KB | 12.1 KB |
 | `grid()` | 35.4 KB | 13.1 KB |
-| `table()` | 47.0 KB | 16.6 KB |
+| `table()` | 47.1 KB | 16.6 KB |
 | `masonry()` | 40.1 KB | 14.9 KB |
 | `tree()` | 43.7 KB | 15.8 KB |
 | `search()` | 37.5 KB | 13.8 KB |

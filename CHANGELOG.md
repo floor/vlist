@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.1] - 2026-10-31
+
 Under `groups()`, focus, selection and search stay on the item you are on.
 
 Who is affected: lists that combine `groups()` with `a11y()`, `selection()` or `table()`: keyboard paging, `focus:change`, the focus ring, and the row a screen reader announces after `setItems` re-groups the list. And any list, grouped or not, that pairs a navigate-mode `search()` with `selection()` or `a11y()`: one arrow key moved both the focus and the match (#106).
@@ -2003,7 +2005,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.1...HEAD
+[3.3.1]: https://github.com/floor/vlist/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/floor/vlist/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/floor/vlist/compare/v3.1.8...v3.2.0
 [3.1.8]: https://github.com/floor/vlist/compare/v3.1.7...v3.1.8
