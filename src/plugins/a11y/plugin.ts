@@ -53,6 +53,12 @@ export function a11y<T extends VListItem = VListItem>(
       let focusVis = false;
       let selId: string | number | undefined;
       let selIdx = -1;
+      // The layout index `aria-activedescendant` currently names (-1: the
+      // attribute is absent). Every write below keeps it in step, so the
+      // state pass can tell whether a re-derived id is already in the DOM by
+      // comparing two numbers — no string built on a frame that changes
+      // nothing.
+      let activeLayoutIdx = -1;
 
       // ── Index spaces ────────────────────────────────────────────
       // A layout plugin renders in a space of its own and says so through the
@@ -122,7 +128,19 @@ export function a11y<T extends VListItem = VListItem>(
         // `_i` is the render index, one header per group under groups().
         const di = _i >= 0 ? toDataIndex(_i) : -1;
         is.selected = di >= 0 && selIdx === di;
-        is.focused = di >= 0 && focusVis && focusIdx === di;
+        const focused = di >= 0 && focusVis && focusIdx === di;
+        is.focused = focused;
+        // The id is written when focus moves. A layout that re-groups under a
+        // still focus — a setItems that inserts a header above the item — moves
+        // the item to another layout index while the attribute still names the
+        // old one, which now paints its neighbour. This pass already re-derives
+        // the ring from the data index; derive the id from the ring the same
+        // way. One compare against the cached index per row, and the id is
+        // only built on the frame that actually moved.
+        if (focused && _i !== activeLayoutIdx) {
+          activeLayoutIdx = _i;
+          dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${_i}`);
+        }
       });
 
       // tree() treats a state function as an external focus owner and then
@@ -140,8 +158,13 @@ export function a11y<T extends VListItem = VListItem>(
           if (!it || it.id !== id) continue;
           focusIdx = i;
           if (keyboard !== "preserve") focusVis = keyboard === true;
-          if (focusVis) dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${toLayoutIndex(i)}`);
-          else dom.content.removeAttribute("aria-activedescendant");
+          if (focusVis) {
+            activeLayoutIdx = toLayoutIndex(i);
+            dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${activeLayoutIdx}`);
+          } else {
+            activeLayoutIdx = -1;
+            dom.content.removeAttribute("aria-activedescendant");
+          }
           _focusEvt.id = id;
           _focusEvt.index = i;
           emitter.emit("focus:change", _focusEvt);
@@ -221,7 +244,8 @@ export function a11y<T extends VListItem = VListItem>(
       const commit = (idx: number, scroll: boolean): void => {
         // Rows are identified by their render index — groups() derives the id
         // from the layout index — so the active descendant needs that one back.
-        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${toLayoutIndex(idx)}`);
+        activeLayoutIdx = toLayoutIndex(idx);
+        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${activeLayoutIdx}`);
         if (scroll) scrollIntoView(idx);
         ctx.render.force();
       };
@@ -269,6 +293,7 @@ export function a11y<T extends VListItem = VListItem>(
 
       const restoringFocus = retainFocus(ctx, (): void => {
         focusVis = false;
+        activeLayoutIdx = -1;
         dom.content.removeAttribute("aria-activedescendant");
         ctx.render.force();
       });
