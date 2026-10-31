@@ -2196,7 +2196,7 @@ describe("selection — Internal Methods", () => {
       (c) => c[0] === "focus:change",
     );
     expect(focusChange).toBeDefined();
-    const event = focusChange![1] as { id: string | number; index: number };
+    const event = focusChange![1] as { id: number; index: number };
     expect(event.index).toBe(25);
     // The event is a promise about the data space: items[event.index] is the
     // item the event names. A raw layout index (28) lands on another item.

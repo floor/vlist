@@ -117,7 +117,7 @@ describe("selection() — setItems that inserts a group above the focus", () => 
       // follows the item; so must the attribute, or the two disagree.
       const ring = f.marked("focused");
       expect(ring).toEqual(["Item 60"]);
-      expect(f.activeRowText()).toBe(ring[0]);
+      expect(f.activeRowText()).toBe(ring[0]!);
     } finally {
       f.dispose();
     }
