@@ -608,7 +608,7 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Delete requested via keyboard (Delete/Backspace) on selected items */
   "delete": { selected: Array<string | number>; items: T[] };
 
-  /** Focused item changed (keyboard navigation) */
+  /** Focused item changed (keyboard navigation). `index` is the data index, as for `item:click`. */
   "focus:change": { id: string | number; index: number };
 
   /** Scroll position changed */
