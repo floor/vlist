@@ -83,6 +83,15 @@ export function selection<T extends VListItem = VListItem>(
   let engineState: EngineState;
   let scrollTo: (pos: number) => void;
   let lastSelectedIndex = -1;
+  // The pair that lets focus survive a layout change. state.focusedIndex is
+  // LAYOUT space — the ring compares it to the render index — and a layout
+  // index only means an item for the layout it was read in: a setItems that
+  // inserts or removes a group moves the headers, and the same index then
+  // paints the item's neighbour. Remember the data index the layout index
+  // stood for when focus last moved, so the render state pass can put the
+  // ring back on the item the user is on.
+  let focusLayoutIdx = -1;
+  let focusDataIdx = -1;
 
   const selectedItemCache = new Map<string | number, T>();
 
@@ -128,6 +137,39 @@ export function selection<T extends VListItem = VListItem>(
   const getDataItemAtLayout = (layoutIdx: number): T | undefined => {
     const di = toDataIndex(layoutIdx);
     return di >= 0 ? getItemByDataIndex(di) : undefined;
+  };
+
+  /**
+   * Keep state.focusedIndex and the data index it stands for in step.
+   *
+   * Runs in the render state pass, which visits every visible row on every
+   * commit — no new hook, no timer. The common frame is two number compares
+   * (`fi !== focusLayoutIdx`, `di === focusDataIdx`) and allocates nothing;
+   * the translator is a total lookup over the layout. A layout that changed
+   * under a still focus is the only branch that writes: it maps the remembered
+   * data index back to the index that now paints it.
+   */
+  const syncFocusPair = (): void => {
+    const fi = state.focusedIndex;
+    if (fi !== focusLayoutIdx) {
+      // Focus moved since the last pass: the layout index is authoritative.
+      focusLayoutIdx = fi;
+      focusDataIdx = fi >= 0 ? toDataIndex(fi) : -1;
+      return;
+    }
+    if (fi < 0) return;
+    const di = toDataIndex(fi);
+    if (di === focusDataIdx) return;
+    // The item moved: the layout was rebuilt under the focus.
+    const want = d2lFn ? d2lFn(focusDataIdx) : focusDataIdx;
+    if (want >= 0 && want < getTotalFn()) {
+      state.focusedIndex = want;
+      focusLayoutIdx = want;
+      return;
+    }
+    // The item is not in the new layout. Re-anchor on what this index paints
+    // now, so the pass does not remap (or re-derive) on every frame.
+    focusDataIdx = di;
   };
 
   const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
@@ -311,6 +353,9 @@ export function selection<T extends VListItem = VListItem>(
         } else {
           is.selected = false;
         }
+        // A layout change is only visible from inside the pass that walks the
+        // rows: remap before the ring is derived from the index.
+        syncFocusPair();
         is.focused = state.focusVisible && state.focusedIndex === index;
       });
 
