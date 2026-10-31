@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 Under `groups()`, focus, selection and search stay on the item you are on.
 
-Who is affected: lists that combine `groups()` with `a11y()`, `selection()`, `table()` or a navigate-mode `search()`: keyboard paging, `focus:change`, the focus ring, the row a screen reader announces after `setItems` re-groups the list, and arrow keys while searching (#106).
+Who is affected: lists that combine `groups()` with `a11y()`, `selection()` or `table()`: keyboard paging, `focus:change`, the focus ring, and the row a screen reader announces after `setItems` re-groups the list. And any list, grouped or not, that pairs a navigate-mode `search()` with `selection()` or `a11y()`: one arrow key moved both the focus and the match (#106).
 
 ### Fixed
 
