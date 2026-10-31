@@ -330,8 +330,16 @@ export function a11y<T extends VListItem = VListItem>(
             case "ArrowRight": if (!isX && !lr) return; n = lane(isX ? ud : lr); break;
             case "PageUp":
             case "PageDown": {
-              const sz = sizeCache.getSize(Math.max(0, nav.scrollIndex ? nav.scrollIndex(p) : p));
-              const visRows = Math.max(1, Math.floor(engineState.containerSize / sz));
+              // The cache is indexed by the rendered entry — groups() counts a
+              // header per group — while `p` is a data index. Asking for `p`
+              // read the sticky first header's entry, which groups() reports
+              // as size 0 (groups/layout.ts), so the page divided to Infinity
+              // and clamped to the last item. Size the page from the row that
+              // paints the focused item instead. A zero size (an entry that has
+              // not been measured yet) pages one row rather than Infinity.
+              const entry = nav.scrollIndex ? nav.scrollIndex(p) : toLayoutIndex(p);
+              const sz = sizeCache.getSize(Math.max(0, entry));
+              const visRows = sz > 0 ? Math.max(1, Math.floor(engineState.containerSize / sz)) : 1;
               const delta = visRows * ud;
               // Column-preserving clamp so a page move at the top/bottom row
               // stays in the same column rather than jumping to the corner
