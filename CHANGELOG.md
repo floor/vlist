@@ -11,6 +11,26 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Search: with `search({ mode: "navigate" })` and `selection()` (or `a11y()`) on the
+  same list, one key press moved both the selection and the match counter, so Up/Down
+  stepped two things at once and Enter acted on a match no click had set (#106).
+- a11y(): PageDown (or PageUp) at the top of a grouped list jumped to the last item
+  instead of one screenful down — the page size was read from the collapsed sticky
+  group header, which measures zero.
+- selection(): `focus:change` reported the rendered row index on a grouped list, so
+  `items[event.index]` named a different item than the event's own `id`. It now
+  reports the item index, as `a11y()` does for the same event.
+- a11y(): after a `setItems` that re-grouped the list, `aria-activedescendant` kept
+  naming the row that used to sit at the focus's position — a different item — until
+  the next key press. It is now re-derived with the focus ring.
+- table() with `groups()` and `a11y()`: the focus ring was drawn one row above the
+  row `aria-activedescendant` announced (and not at all on the first item), because
+  the ring compared a data index against the row's render index.
+- selection(): a `setItems` that inserted or removed a group above the focused item
+  moved the focus onto its neighbour, so the ring and Enter landed on the wrong item.
+
 ## [3.3.0] - 2026-10-20
 
 An item that changes size after the list is created can be measured again with one call: `remeasureItem(index)`.
