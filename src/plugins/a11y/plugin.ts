@@ -135,8 +135,8 @@ export function a11y<T extends VListItem = VListItem>(
         // the item to another layout index while the attribute still names the
         // old one, which now paints its neighbour. This pass already re-derives
         // the ring from the data index; derive the id from the ring the same
-        // way. One compare against the cached index per row, and the id is
-        // only built on the frame that actually moved.
+        // way. The compare is reached only on the focused row — once a frame —
+        // and the id is only built on the frame that actually moved.
         if (focused && _i !== activeLayoutIdx) {
           activeLayoutIdx = _i;
           dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${_i}`);

@@ -143,11 +143,12 @@ export function selection<T extends VListItem = VListItem>(
    * Keep state.focusedIndex and the data index it stands for in step.
    *
    * Runs in the render state pass, which visits every visible row on every
-   * commit — no new hook, no timer. The common frame is two number compares
-   * (`fi !== focusLayoutIdx`, `di === focusDataIdx`) and allocates nothing;
-   * the translator is a total lookup over the layout. A layout that changed
-   * under a still focus is the only branch that writes: it maps the remembered
-   * data index back to the index that now paints it.
+   * commit — no new hook, no timer. The common frame allocates nothing:
+   * compare the stored pair (`fi !== focusLayoutIdx`), then one binary search
+   * over the group boundaries (`di === focusDataIdx`), with an early return
+   * each. A layout that changed under a still focus is the only branch that
+   * writes: it maps the remembered data index back to the index that now
+   * paints it.
    */
   const syncFocusPair = (): void => {
     const fi = state.focusedIndex;
