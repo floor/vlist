@@ -370,6 +370,18 @@ export function selection<T extends VListItem = VListItem>(
 
       ctx.hooks.method("_getSelectedIds", (): Set<string | number> => state.selected);
       ctx.hooks.method("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
+      // table() replaces the render pipeline and never calls the state
+      // function above, so the per-row remap cannot run there. A renderer
+      // that paints focus itself calls this once per frame, before it reads
+      // _getFocusedIndex: a layout that re-groups under a still focus is
+      // settled here, and the attribute is re-pointed, so the frame it paints
+      // rings and names the item the focus is on.
+      ctx.hooks.method("_syncFocusState", (): void => {
+        if (!state.focusVisible) return;
+        resolveOnce(ctx);
+        const remapped = syncFocusPair();
+        if (remapped >= 0) setActiveDescendant(remapped);
+      });
 
       dom.root.classList.add(`${classPrefix}--selectable`);
 

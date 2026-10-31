@@ -152,6 +152,20 @@ export function a11y<T extends VListItem = VListItem>(
       // entry per group. A layout reader prefers this; the hook above keeps
       // its promise (a data index) for tree(), which navigates data space.
       ctx.hooks.method("_getFocusedLayoutIndex", (): number => (focusVis ? toLayoutIndex(focusIdx) : -1));
+      // table() paints focus itself and never calls the per-row state function
+      // above, so the attribute re-derivation behind it cannot run there. A
+      // renderer that paints focus itself calls this once per frame, before it
+      // reads the layout hook: a layout that re-groups under a still focus
+      // moves the item to another layout index while the attribute still names
+      // the old one. The compare is two numbers; the id is built only on the
+      // frame the index actually moved.
+      ctx.hooks.method("_syncFocusState", (): void => {
+        if (!focusVis) return;
+        const li = toLayoutIndex(focusIdx);
+        if (li === activeLayoutIdx) return;
+        activeLayoutIdx = li;
+        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${li}`);
+      });
       ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
         if (focusIdx < 0) return undefined;
         return getItem(focusIdx)?.id;
