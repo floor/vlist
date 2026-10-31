@@ -2,8 +2,6 @@
 
 High-performance virtual scrolling library. Zero dependencies, plugin architecture, TypeScript strict mode.
 
-- **Staging:** [staging.vlist.io](https://staging.vlist.io) (uses the latest `next` branch code, the 3.0 prerelease line)
-
 **Use `trash` instead of `rm` for all file deletions.** The `rm` command is denied in permissions.
 
 - **Package:** `vlist` on npm
@@ -192,7 +190,7 @@ Conventional Commits: `type(scope): description`
 
 **Working branch is `next`.** The 3.0 line integrates there. `main` is the released
 2.x line and is protected. `staging` is the frozen 2.x maintenance branch: it holds
-nothing `next` does not, and staging.vlist.io deploys from `next`, not from it.
+nothing `next` does not.
 
 - ❌ **NEVER commit or push to `main`** — it is protected and will be rejected
 - ❌ **NEVER merge, tag, release, deploy, or post publicly without explicit permission**
@@ -267,9 +265,6 @@ Before tagging a new version, complete ALL of these steps:
 3. Run `bun run size` to get current bundle sizes
 4. Update `README.md` — version reference, base size in tagline, AND verify every row in the Plugins size table against `bun run size` output
 5. Update `npm-readme.md` — version reference and base size
-
-### Cross-Repo Staging Deploy (`notify-staging.yml`)
-When `next` is pushed, dispatches a `vlist-staging-updated` event to `floor/vlist.io` via `repository_dispatch`. This triggers a redeploy of `staging.vlist.io` with the latest vlist code — no manual intervention needed.
 
 ## Zero Dependencies
 
