@@ -98,6 +98,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      # vlist.io production installs vlist from npm, but nothing redeployed it
+      # on a release, so it fell behind by four (3.1.6 against 3.3.0). Stable
+      # only, and only once the package and the release are out; vlist.io's
+      # deploy installs this exact version and waits for the registry to serve
+      # it. A refused dispatch must not turn a release that is already out red.
+      - name: Redeploy vlist.io
+        if: ${{ !contains(github.ref_name, '-') }}
+        continue-on-error: true
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DISPATCH_TOKEN }}
+          repository: floor/vlist.io
+          event-type: vlist-released
+          client-payload: '{"version": "${{ github.ref_name }}"}'
+
       # The fallback for the move above (#334): a stable publish moves `latest`
       # only, and the OIDC `next` move fails while "Allow npm dist-tag" is off,
       # so `next` can still fall below `latest`. Last, so the package and the
