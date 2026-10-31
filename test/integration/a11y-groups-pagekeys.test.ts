@@ -11,9 +11,10 @@
  * item. The same key one row lower pages normally, so the jump only shows
  * after Home or at the very top.
  *
- * This test pins PageDown at the top to a screenful of movement: rows are
- * 40px in a 400px viewport, so about ten items (a header included in the
- * count keeps it under fifteen), never the end of a hundred-item list.
+ * This test pins PageDown at the top to exactly one screenful: rows are 40px
+ * in a 400px viewport, so ten rows fit and the page target is data index 10
+ * (Item 11) — not the end of a hundred-item list, and not the one-row page a
+ * zero-sized header entry produces.
  */
 
 import { registerDOM, unregisterDOM } from "../helpers/dom";
@@ -96,11 +97,12 @@ describe("a11y() — page keys on a grouped list", () => {
       await tick(0);
 
       const last = f.focuses[f.focuses.length - 1]!;
-      expect(last.index).toBeGreaterThan(0);
-      // 400px of viewport over 40px rows: ten items, twelve if the page is
-      // measured on the 32px header. Anything past fifteen is the collapse of
-      // the sticky first header's zero size into an infinite page.
-      expect(last.index).toBeLessThanOrEqual(15);
+      // Home focuses data index 0 (layout 1, behind the collapsed first
+      // header); ten 40px rows fit in the 400px viewport, so PageDown lands
+      // on data index 10 — Item 11. A page sized from the sticky header's
+      // zero entry lands on index 1 instead.
+      expect(last.index).toBe(10);
+      expect(last.id).toBe(11);
     } finally {
       f.dispose();
     }
