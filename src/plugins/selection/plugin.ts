@@ -83,6 +83,15 @@ export function selection<T extends VListItem = VListItem>(
   let engineState: EngineState;
   let scrollTo: (pos: number) => void;
   let lastSelectedIndex = -1;
+  // The pair that lets focus survive a layout change. state.focusedIndex is
+  // LAYOUT space — the ring compares it to the render index — and a layout
+  // index only means an item for the layout it was read in: a setItems that
+  // inserts or removes a group moves the headers, and the same index then
+  // paints the item's neighbour. Remember the data index the layout index
+  // stood for when focus last moved, so the render state pass can put the
+  // ring back on the item the user is on.
+  let focusLayoutIdx = -1;
+  let focusDataIdx = -1;
 
   const selectedItemCache = new Map<string | number, T>();
 
@@ -128,6 +137,43 @@ export function selection<T extends VListItem = VListItem>(
   const getDataItemAtLayout = (layoutIdx: number): T | undefined => {
     const di = toDataIndex(layoutIdx);
     return di >= 0 ? getItemByDataIndex(di) : undefined;
+  };
+
+  /**
+   * Keep state.focusedIndex and the data index it stands for in step.
+   *
+   * Runs in the render state pass, once per visible row per commit — the pass
+   * that visits every rendered row, so a remap lands before the focused row's
+   * is.focused is derived and the ring is painted from it. No new hook, no
+   * timer. With groups() the translation is a binary search over the group
+   * boundaries, so a commit with a grouped layout costs one search per visible
+   * row; the common frame allocates nothing. A layout that changed under a
+   * still focus is the only branch that writes: it maps the remembered data
+   * index back to the index that now paints it and returns that index, so the
+   * caller can re-point the announced row; every other branch returns -1.
+   */
+  const syncFocusPair = (): number => {
+    const fi = state.focusedIndex;
+    if (fi !== focusLayoutIdx) {
+      // Focus moved since the last pass: the layout index is authoritative.
+      focusLayoutIdx = fi;
+      focusDataIdx = fi >= 0 ? toDataIndex(fi) : -1;
+      return -1;
+    }
+    if (fi < 0) return -1;
+    const di = toDataIndex(fi);
+    if (di === focusDataIdx) return -1;
+    // The item moved: the layout was rebuilt under the focus.
+    const want = d2lFn ? d2lFn(focusDataIdx) : focusDataIdx;
+    if (want >= 0 && want < getTotalFn()) {
+      state.focusedIndex = want;
+      focusLayoutIdx = want;
+      return want;
+    }
+    // The item is not in the new layout. Re-anchor on what this index paints
+    // now, so the pass does not remap (or re-derive) on every frame.
+    focusDataIdx = di;
+    return -1;
   };
 
   const skipHeaders = (from: number, dir: 1 | -1, total: number): number => {
@@ -311,11 +357,31 @@ export function selection<T extends VListItem = VListItem>(
         } else {
           is.selected = false;
         }
+        // A layout change is only visible from inside the pass that walks the
+        // rows: remap before the ring is derived from the index. When the pass
+        // moves the focused row, re-point the announced descendant with the
+        // same writer the focus moves use: the attribute otherwise keeps the
+        // id of the index the item has just left, which now paints the item
+        // beside it.
+        const remapped = syncFocusPair();
+        if (remapped >= 0 && state.focusVisible) setActiveDescendant(remapped);
         is.focused = state.focusVisible && state.focusedIndex === index;
       });
 
       ctx.hooks.method("_getSelectedIds", (): Set<string | number> => state.selected);
       ctx.hooks.method("_getFocusedIndex", (): number => state.focusVisible ? state.focusedIndex : -1);
+      // table() replaces the render pipeline and never calls the state
+      // function above, so the per-row remap cannot run there. A renderer
+      // that paints focus itself calls this once per frame, before it reads
+      // _getFocusedIndex: a layout that re-groups under a still focus is
+      // settled here, and the attribute is re-pointed, so the frame it paints
+      // rings and names the item the focus is on.
+      ctx.hooks.method("_syncFocusState", (): void => {
+        if (!state.focusVisible) return;
+        resolveOnce(ctx);
+        const remapped = syncFocusPair();
+        if (remapped >= 0) setActiveDescendant(remapped);
+      });
 
       dom.root.classList.add(`${classPrefix}--selectable`);
 
@@ -664,7 +730,11 @@ export function selection<T extends VListItem = VListItem>(
               if (state.focusedIndex >= 0) {
                 const item = getDataItemAtLayout(state.focusedIndex);
                 if (item) {
-                  emitter.emit("focus:change", { id: item.id, index: state.focusedIndex });
+                  // `index` is the data index (types.ts, focus:change): the
+                  // DOM and the ring stay in layout space, but an app reading
+                  // items[event.index] must land on the item the event names.
+                  // a11y() emits data space for the same event.
+                  emitter.emit("focus:change", { id: item.id, index: toDataIndex(state.focusedIndex) });
                 }
               }
             }
@@ -771,7 +841,11 @@ export function selection<T extends VListItem = VListItem>(
       // visibility the list already has, move the ring if it is showing, and
       // do not paint one on a list the user has never focused.
       ctx.hooks.method("_focusById", (id: string | number, keyboard?: boolean | "preserve"): void => {
-        // Layout space: it scans entries for the one holding this id.
+        // Layout space: it scans entries for the one holding this id. The
+        // two spaces differ only when a layout plugin is present, and that
+        // also means resolveOnce() must have read the translators before the
+        // emitted index is translated below.
+        resolveOnce(ctx);
         const total = getTotalFn();
         for (let i = 0; i < total; i++) {
           if (isGHFn?.(i)) continue;
@@ -781,7 +855,7 @@ export function selection<T extends VListItem = VListItem>(
             if (keyboard !== "preserve") state.focusVisible = keyboard === true || focusOnClick;
             if (state.focusVisible) setActiveDescendant(i);
             else dom.content.removeAttribute("aria-activedescendant");
-            emitter.emit("focus:change", { id, index: i });
+            emitter.emit("focus:change", { id, index: toDataIndex(i) });
             forceRender();
             return;
           }

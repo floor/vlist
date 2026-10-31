@@ -291,13 +291,13 @@ describe("selection — Method Registration", () => {
     cleanup();
   });
 
-  it("should register all 15 methods in single mode (9 public + 6 internal)", () => {
+  it("should register all 16 methods in single mode (9 public + 7 internal)", () => {
     const plugin = selection<TestItem>();
     const { ctx, methods, cleanup } = createPluginMockContext(createTestItems(10));
 
     plugin.setup!(ctx);
 
-    expect(methods.size).toBe(15);
+    expect(methods.size).toBe(16);
 
     cleanup();
   });
@@ -2156,6 +2156,56 @@ describe("selection — Internal Methods", () => {
     expect(focusChangeCalls[0]![1]).toEqual({ id: 5, index: 5 });
 
     cleanup();
+  });
+
+  it("_focusById should emit a data index on a grouped layout", () => {
+    const items = createTestItems(40);
+    const plugin = selection<TestItem>();
+    const { ctx, methods, cleanup } = createPluginMockContext(items);
+
+    try {
+      // A grouped layout with one header entry per ten items, interleaved.
+      // Layout entry 0 is the sticky first header; data item d sits at
+      // d + floor(d / 10) + 1, so the focused data index 25 is layout 28 —
+      // past the headers at 0, 11 and 22. _focusById scans that layout space;
+      // the event must still name the data index, which is what a caller
+      // indexes its own items with.
+      const GROUP = 10;
+      methods.set("_layoutToDataIndex", (layoutIndex: number): number => {
+        const within = layoutIndex % (GROUP + 1);
+        if (within === 0) return -1; // group header, no item
+        return Math.floor(layoutIndex / (GROUP + 1)) * GROUP + within - 1;
+      });
+      methods.set("_dataToLayoutIndex", (dataIndex: number): number =>
+        dataIndex + Math.floor(dataIndex / GROUP) + 1);
+      methods.set("_isGroupHeader", (layoutIndex: number): boolean =>
+        layoutIndex % (GROUP + 1) === 0);
+      methods.set("_getTotal", (): number => items.length);
+      methods.set("getGroupLayout", () => ({
+        totalEntries: items.length + Math.ceil(items.length / GROUP),
+      }));
+
+      const emitSpy = mock(
+        (event: string, payload: { id: string | number; index: number }): void => {},
+      );
+      // The mock emitter's emit is a no-op; replace it for this test only.
+      (ctx.emitter as unknown as { emit: typeof emitSpy }).emit = emitSpy;
+
+      plugin.setup!(ctx);
+
+      const focusByIdFn = methods.get("_focusById") as (id: string | number) => void;
+      focusByIdFn(25);
+
+      const focusChange = emitSpy.mock.calls.find((c) => c[0] === "focus:change");
+      expect(focusChange).toBeDefined();
+      const event = focusChange![1];
+      expect(event.index).toBe(25);
+      // The event is a promise about the data space: items[event.index] is the
+      // item the event names. A raw layout index (28) lands on another item.
+      expect(items[event.index]!.id === event.id).toBe(true);
+    } finally {
+      cleanup();
+    }
   });
 
   it("_focusById should set focusVisible when focusOnClick is true", () => {

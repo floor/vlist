@@ -460,6 +460,13 @@ export function search<T extends VListItem = VListItem>(
     e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
 
   const onKeydown = (e: KeyboardEvent): void => {
+    // The core runs every plugin's keydown handler for one event and never
+    // stops at defaultPrevented (core/create.ts, onContentKeydown).
+    // selection() and a11y() run first (priority 50/55) and call
+    // preventDefault on the keys they move with; stepping the match as well
+    // would move two things on one key press (#106). A key no other plugin
+    // handled still reaches the switch below unchanged.
+    if (e.defaultPrevented) return;
     // Ctrl/Cmd+F opens regardless of state.
     if ((e.ctrlKey || e.metaKey) && (e.key === "f" || e.key === "F")) {
       e.preventDefault();

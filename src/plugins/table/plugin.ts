@@ -94,6 +94,11 @@ export function table<T extends VListItem = VListItem>(
 
   let selectedIdsGetter: (() => Set<string | number>) | null = null;
   let focusedIndexGetter: (() => number) | null = null;
+  // The focus owner's layout-change sync (selection() or a11y()): table()
+  // replaces the core pipeline, so their per-row state function never runs
+  // here and a re-grouped layout would leave their index — and the announced
+  // row — on the item that moved into the old row.
+  let syncFocusFn: (() => void) | null = null;
   let selectionResolved = false;
 
   let lastAriaRowCount = -1;
@@ -111,7 +116,17 @@ export function table<T extends VListItem = VListItem>(
     if (selectionResolved || !storedCtx) return;
     selectionResolved = true;
     selectedIdsGetter = (storedCtx.hooks.get("_getSelectedIds") as (() => Set<string | number>)) ?? null;
-    focusedIndexGetter = (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ?? null;
+    focusedIndexGetter =
+      // The ring compares this to the row's LAYOUT index, the one the
+      // renderer paints. a11y() keeps focus in data space and publishes that
+      // promise as _getFocusedIndex (tree() reads it), plus a layout-space
+      // companion for renderers like this one; prefer the companion when it
+      // is there and fall back to the data-space hook, which is what
+      // selection() and tree() publish and already speak layout here.
+      (storedCtx.hooks.get("_getFocusedLayoutIndex") as (() => number)) ??
+      (storedCtx.hooks.get("_getFocusedIndex") as (() => number)) ??
+      null;
+    syncFocusFn = (storedCtx.hooks.get("_syncFocusState") as (() => void)) ?? null;
   }
 
   // =========================================================================
@@ -175,6 +190,12 @@ export function table<T extends VListItem = VListItem>(
     }
 
     resolveSelectionMethods();
+    // The focus owner's state pass does not run here: table() replaces the
+    // core pipeline (core/create.ts, render.setFn). A layout that re-groups
+    // under a still focus only shows from inside a render, so let the owner
+    // settle its index and the announced row before the ring is read.
+    // A plain table has no focus owner and no hook: the call is skipped.
+    syncFocusFn?.();
     const selectedIds = selectedIdsGetter?.() ?? EMPTY_ID_SET;
     const focusedIndex = focusedIndexGetter?.() ?? -1;
 
