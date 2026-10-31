@@ -16,6 +16,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 - Search: with `search({ mode: "navigate" })` and `selection()` (or `a11y()`) on the
   same list, one key press moved both the selection and the match counter, so Up/Down
   stepped two things at once and Enter acted on a match no click had set (#106).
+  With `search({ position: "none" })`, a Space or Backspace that `selection()` handles
+  no longer also goes into the query text.
 - a11y(): PageDown (or PageUp) at the top of a grouped list jumped to the last item
   instead of one screenful down — the page size was read from the collapsed sticky
   group header, which measures zero.
