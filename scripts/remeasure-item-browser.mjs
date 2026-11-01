@@ -9,6 +9,7 @@ import { pinPage } from "./browser-page.mjs";
 
 const root = process.env.VLIST_REMEASURE_ROOT ?? resolve(import.meta.dir, "..");
 const captures = process.env.VLIST_REMEASURE_CAPTURES;
+const modes = process.env.VLIST_REMEASURE_MODES?.split(",");
 if (captures) await mkdir(captures, { recursive: true });
 const html = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
@@ -52,11 +53,12 @@ let checks = 0;
 const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
 try {
   browser = await launchBrowser();
-  const page = await browser.newPage();
-  page.on("pageerror", error => console.error(`PAGE ERROR: ${error.message}`));
-  await pinPage(page);
-  await page.setViewport({ width: 720, height: 620, deviceScaleFactor: 1 });
+  let page;
   const open = async mode => {
+    await page?.close();
+    page = await browser.newPage();
+    page.on("pageerror", error => console.error(`PAGE ERROR: ${error.message}`));
+    await pinPage(page, { width: 720, height: 620 });
     console.log(`OPEN ${mode}`);
     await page.goto(`http://localhost:${server.port}/?mode=${mode}`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => window.ready);
@@ -74,6 +76,7 @@ try {
     if (captures) await page.screenshot({ path: resolve(captures, `${name}.png`) });
   };
   for (const mode of ["core", "table", "groups", "table-groups"]) {
+    if (modes && !modes.includes(mode)) continue;
     await open(mode);
     const before = await page.evaluate(() => {
       list.scrollToIndex(99, "end");
@@ -101,6 +104,7 @@ try {
     await capture(`${mode}-smooth-after`);
   }
   for (const mode of ["autosize-vertical", "autosize-horizontal"]) {
+    if (modes && !modes.includes(mode)) continue;
     await open(mode);
     await page.evaluate(() => {
       const max = horizontal ? viewport.scrollWidth-viewport.clientWidth : viewport.scrollHeight-viewport.clientHeight;
