@@ -254,7 +254,7 @@ export function tree<T extends VListItem = VListItem>(
   }
 
   let cachedSelectFn: ((...ids: (string | number)[]) => void) | null | undefined;
-  let cachedFocusFn: ((id: string | number, keyboard?: boolean) => void) | null | undefined;
+  let cachedFocusFn: ((id: string | number, keyboard?: boolean | "preserve") => void) | null | undefined;
   let cachedFollowFn: (() => boolean) | null | undefined;
 
   function resolveSelectionMethods(): void {
@@ -368,7 +368,7 @@ export function tree<T extends VListItem = VListItem>(
     }
   }
 
-  function invalidateTree(): void {
+  function invalidateTree(focusId?: string | number, collapsedId?: string | number): void {
     const index = anchorId === undefined ? undefined : layout.idToIndex.get(anchorId);
     const offset = anchorOffset;
     syncTotals();
@@ -376,6 +376,18 @@ export function tree<T extends VListItem = VListItem>(
     if (index !== undefined) {
       const delta = sizeCache.getOffset(index) + offset - scroll.getPixelEquivalent();
       if (delta) scroll.shiftBy(delta);
+    }
+    if (focusId !== undefined) {
+      const id = layout.idToIndex.has(focusId) ? focusId : collapsedId;
+      if (id !== undefined) {
+        if (hasExternalFocus) {
+          resolveSelectionMethods();
+          cachedFocusFn?.(id, "preserve");
+        } else {
+          focusedIndex = layout.idToIndex.get(id)!;
+          if (focusVisible) contentElement.setAttribute("aria-activedescendant", `${classPrefix}-item-${focusedIndex}`);
+        }
+      }
     }
     doForceRender();
   }
@@ -451,10 +463,11 @@ export function tree<T extends VListItem = VListItem>(
       }
     }
 
+    const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
     const count = layout.expand(id);
     if (count === 0) return;
 
-    invalidateTree();
+    invalidateTree(focusId);
 
     emitter.emit("tree:expand" as TreeEventKey, {
       id, item: node.item, depth: node.depth,
@@ -466,21 +479,11 @@ export function tree<T extends VListItem = VListItem>(
     if (flatIdx === undefined) return;
     const node = layout.flatNodes[flatIdx]!;
 
+    const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
     const count = layout.collapse(id);
     if (count === 0) return;
 
-    if (!hasExternalFocus && focusedIndex > flatIdx) {
-      if (focusedIndex <= flatIdx + count) {
-        focusedIndex = flatIdx;
-      } else {
-        focusedIndex -= count;
-      }
-      if (focusVisible) {
-        contentElement.setAttribute("aria-activedescendant", `${classPrefix}-item-${focusedIndex}`);
-      }
-    }
-
-    invalidateTree();
+    invalidateTree(focusId, id);
 
     emitter.emit("tree:collapse" as TreeEventKey, {
       id, item: node.item, depth: node.depth,
