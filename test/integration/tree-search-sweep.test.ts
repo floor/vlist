@@ -260,3 +260,15 @@ for (const layout of ["groups", "table-groups"] as const) {
     } finally { f.dispose(); }
   });
 }
+
+it("search — minLength zero does not apply a query before search opens", () => {
+  const container = createContainer();
+  const list = createVList({ container, items: [{ id: 1, name: "one" }, { id: 2, name: "two" }],
+    item: { height: 40, template: (item: Row) => item.name },
+  }, [search<Row>({ minLength: 0, position: "none" })]);
+  try {
+    expect(list.total).toBe(2);
+    expect(list.getItemAt(1)?.id).toBe(2);
+    expect(list.getMatches()).toEqual([]);
+  } finally { list.destroy(); container.remove(); }
+});
