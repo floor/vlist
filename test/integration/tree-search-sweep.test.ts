@@ -4,13 +4,15 @@ import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createContainer } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
 import { search, type SearchMethods } from "../../src/plugins/search/plugin";
+import { groups } from "../../src/plugins/groups/plugin";
+import { table } from "../../src/plugins/table/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
 import { a11y } from "../../src/plugins/a11y/plugin";
 import { tree, type TreeMethods } from "../../src/plugins/tree/plugin";
 import type { VListPlugin } from "../../src/core/types";
 import type { VList } from "../../src/core/types";
 
-interface Row { id: number; name: string; }
+interface Row { id: number; name: string; group?: string; }
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 beforeAll(() => {
   setupDOM();
@@ -183,3 +185,48 @@ it("tree — an empty tree forgets its previous sub-item anchor offset", () => {
     expect(f.list.getScrollPosition()).toBe(0);
   } finally { f.dispose(); }
 });
+
+
+function layoutSearch(layout: "groups" | "table" | "table-groups", mode: "filter" | "navigate", rows?: Row[]) {
+  const container = createContainer();
+  const items = rows ?? Array.from({ length: 100 }, (_, index) => ({ id: index + 1,
+    name: index === 70 || index === 90 ? `match ${index}` : `other ${index}`,
+    group: `G${Math.floor(index / 2)}`,
+  }));
+  const plugins: VListPlugin<Row>[] = [];
+  if (layout.includes("table")) plugins.push(table({ columns: [{ key: "name", label: "Name", width: 200 }], rowHeight: 40, headerHeight: 20 }));
+  if (layout.includes("groups")) plugins.push(groups<Row>({ getGroupForIndex: (_index, item) => item?.group ?? "?",
+    header: { height: 40, template: key => `match header ${key}` },
+  }));
+  plugins.push(search<Row>({ mode, position: "none", field: "name" }));
+  const list = createVList({ container, items, item: { height: 40, template: (item: Row) => item.name } }, plugins) as VList<Row> & SearchMethods;
+  const events: Array<{ index: number; id: number | undefined }> = [];
+  list.on("search:match", event => events.push({ index: event.index, id: event.item?.id }));
+  return { container, list, events, dispose(): void { list.destroy(); container.remove(); } };
+}
+for (const layout of ["groups", "table", "table-groups"] as const) {
+  it(`search navigate + ${layout} — the current match is mounted inside the viewport`, async () => {
+    const f = layoutSearch(layout, "navigate");
+    try {
+      await Promise.resolve();
+      f.list.setQuery("match");
+      expect(f.list.getMatches()).toEqual([70, 90]);
+      const row = f.container.querySelector<HTMLElement>('[data-id="71"]');
+      expect(row).not.toBeNull();
+      const numbers = row!.style.transform.match(/-?\d+(?:\.\d+)?px/g)!;
+      const offset = parseFloat(numbers[numbers.length - 1]!);
+      expect(offset - f.list.getScrollPosition()).toBeGreaterThanOrEqual(0);
+      expect(offset + 40 - f.list.getScrollPosition()).toBeLessThanOrEqual(500);
+    } finally { f.dispose(); }
+  });
+  it(`search navigate + ${layout} — match events report the source item at their data index`, async () => {
+    const f = layoutSearch(layout, "navigate");
+    try {
+      await Promise.resolve();
+      f.list.setQuery("match");
+      expect(f.events[0]).toEqual({ index: 70, id: 71 });
+      f.list.nextMatch();
+      expect(f.events[f.events.length - 1]).toEqual({ index: 90, id: 91 });
+    } finally { f.dispose(); }
+  });
+}
