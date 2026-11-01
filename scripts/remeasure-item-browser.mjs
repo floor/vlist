@@ -53,10 +53,12 @@ const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
 try {
   browser = await launchBrowser();
   const page = await browser.newPage();
+  page.on("pageerror", error => console.error(`PAGE ERROR: ${error.message}`));
   await pinPage(page);
   await page.setViewport({ width: 720, height: 620, deviceScaleFactor: 1 });
   const open = async mode => {
-    await page.goto(`http://localhost:${server.port}/?mode=${mode}`);
+    console.log(`OPEN ${mode}`);
+    await page.goto(`http://localhost:${server.port}/?mode=${mode}`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => window.ready);
     await settle(150);
   };
