@@ -571,3 +571,34 @@ describe("remeasureItem — lifecycle", () => {
     }
   });
 });
+
+
+describe("remeasureItem — scroll limits", () => {
+  it("publishes grown content before correcting the anchor at the old scroll limit", () => {
+    const f = buildCore();
+    try {
+      const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!;
+      let applied = 0;
+      // Model a bounded native scroll source: writes cannot exceed the
+      // content size currently published to the viewport.
+      Object.defineProperty(viewport, "scrollTop", {
+        configurable: true,
+        get: () => applied,
+        set: (value: number) => {
+          applied = Math.max(0, Math.min(value, parseFloat(f.content().style.height) - 500));
+        },
+      });
+      f.list.scrollToIndex(29, "end");
+      expect(f.list.getScrollPosition()).toBe(700);
+      const anchor = f.item(18)!;
+      const before = parseFloat(anchor.style.transform.match(/[-\d.]+/)![0]) - 700;
+      f.heights[0] = 140;
+      expect(f.list.remeasureItem(0)).toBe(true);
+      expect(f.content().style.height).toBe("1300px");
+      expect(f.list.getScrollPosition()).toBe(800);
+      expect(parseFloat(anchor.style.transform.match(/[-\d.]+/)![0]) - 800).toBe(before);
+    } finally {
+      f.dispose();
+    }
+  });
+});
