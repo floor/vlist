@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Search: active queries refresh their matches after replacing, appending or removing items; filtered rows no longer retain the previous source array. Appending matches keeps the current navigation position.
+
 ## [3.3.1] - 2026-10-31
 
 Under `groups()`, focus, selection and search stay on the item you are on.

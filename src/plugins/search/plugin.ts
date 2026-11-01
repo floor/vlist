@@ -171,6 +171,8 @@ export function search<T extends VListItem = VListItem>(
   /** Whether a virtual filter is currently applied (filter mode). */
   let filtered = false;
   let cancelTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastItems: readonly T[] | null = null;
+  let lastLength = 0;
 
   // Lazily-resolved cross-plugin methods.
   let resolved = false;
@@ -278,12 +280,12 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Query application ───────────────────────────────────────────────────────
 
-  const applyQuery = (next: string): void => {
+  const applyQuery = (next: string, keepCurrent = false): void => {
     if (next !== query) queryVersion++;
     query = next;
     bar?.setValue(query);
     computeMatches();
-    current = 0;
+    current = keepCurrent ? Math.max(0, Math.min(current, matches.length - 1)) : 0;
 
     if (mode === "filter") {
       if (query.length >= minLength) applyFilter();
@@ -654,6 +656,14 @@ export function search<T extends VListItem = VListItem>(
 
     hooks: {
       onCommit(state: EngineState): void {
+        const items = ctx.items.all();
+        if (items !== lastItems || items.length !== lastLength) {
+          lastItems = items;
+          lastLength = items.length;
+          // Source replacements and structural edits invalidate match indices.
+          // Mark the source first: applying the query commits again.
+          if (query.length >= minLength) { applyQuery(query, true); return; }
+        }
         highlightVisible(state);
       },
     },
