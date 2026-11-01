@@ -602,3 +602,86 @@ describe("remeasureItem — scroll limits", () => {
     }
   });
 });
+
+
+type SizePairing = "core" | "table" | "groups" | "table + groups";
+
+function buildPairing(pairing: SizePairing) {
+  const heights: number[] = [];
+  const container = createContainer({ width: 300, height: 500 });
+  const size = (index: number): number => heights[index] ?? 40;
+  const plugins: VListPlugin<TestItem>[] = [];
+  if (pairing.includes("table")) {
+    plugins.push(table({ columns: COLUMNS, rowHeight: size, headerHeight: 20 }));
+  }
+  if (pairing.includes("groups")) {
+    plugins.push(groups({
+      getGroupForIndex: (index: number) => index < 50 ? "A" : "B",
+      header: { height: 20, template: (key: string) => key },
+    }));
+  }
+  const list = createVList<TestItem>({
+    container,
+    items: createTestItems(100),
+    item: { height: size, template: simpleTemplate },
+  }, plugins);
+  return {
+    list, container, heights,
+    item(index: number): HTMLElement | null {
+      return container.querySelector<HTMLElement>(`.vlist-content [data-id="${index + 1}"]`);
+    },
+    dispose(): void { list.destroy(); container.remove(); },
+  };
+}
+
+/** Serial tests only: owns RAF and performance.now for deterministic animation. */
+function frameClock() {
+  const raf = globalThis.requestAnimationFrame;
+  const caf = globalThis.cancelAnimationFrame;
+  const now = Object.getOwnPropertyDescriptor(performance, "now");
+  const pending = new Map<number, FrameRequestCallback>();
+  let next = 0;
+  let time = performance.now();
+  Object.defineProperty(performance, "now", { configurable: true, value: () => time });
+  globalThis.requestAnimationFrame = (fn) => { pending.set(++next, fn); return next; };
+  globalThis.cancelAnimationFrame = (id) => { pending.delete(id); };
+  return {
+    step(ms: number): void {
+      time += ms;
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const fn of callbacks) fn(time);
+    },
+    restore(): void {
+      pending.clear();
+      globalThis.requestAnimationFrame = raf;
+      globalThis.cancelAnimationFrame = caf;
+      if (now) Object.defineProperty(performance, "now", now);
+      else Reflect.deleteProperty(performance, "now");
+    },
+  };
+}
+
+for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
+  it.serial(`remeasureItem — ${pairing}: a smooth jump lands on the resized target offset`, async () => {
+    const clock = frameClock();
+    const f = buildPairing(pairing);
+    try {
+      await Promise.resolve();
+      clock.step(0);
+      f.list.scrollToIndex(50, { behavior: "smooth", duration: 100, easing: (t) => t });
+      clock.step(25);
+      f.heights[0] = 140;
+      expect(f.list.remeasureItem(0)).toBe(true);
+      clock.step(75);
+      const target = f.item(50)!;
+      expect(target).not.toBeNull();
+      const numbers = target.style.transform.match(/-?\d+(?:\.\d+)?px/g)!;
+      const offset = parseFloat(numbers[target.style.transform.startsWith("translate3d") ? 1 : 0]!);
+      expect(f.list.getScrollPosition()).toBeCloseTo(offset, 5);
+    } finally {
+      f.dispose();
+      clock.restore();
+    }
+  });
+}
