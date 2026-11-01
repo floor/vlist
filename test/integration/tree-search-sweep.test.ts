@@ -272,3 +272,24 @@ it("search — minLength zero does not apply a query before search opens", () =>
     expect(list.getMatches()).toEqual([]);
   } finally { list.destroy(); container.remove(); }
 });
+
+for (const owner of ["standalone", "selection", "a11y"] as const) {
+  for (const action of ["expandAll", "collapseAll", "siblings"] as const) {
+    // Serial: keyboard focus owners read document.activeElement.
+    it.serial(`tree + ${owner} — ${action} retains the focused root identity`, async () => {
+      const plugins: VListPlugin<TreeRow>[] = owner === "standalone" ? [] : [owner === "selection" ? selection() : a11y()];
+      const f = treeList(false, plugins);
+      try {
+        await Promise.resolve();
+        const content = f.container.querySelector<HTMLElement>(".vlist-content")!;
+        if (action === "collapseAll") f.list.expandAll();
+        content.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
+        if (action === "siblings") content.dispatchEvent(new KeyboardEvent("keydown", { key: "*", bubbles: true, cancelable: true }));
+        else f.list[action]();
+        expect(f.container.querySelector<HTMLElement>(".vlist-item--focused")?.dataset.id).toBe("root-59");
+        const focused = f.row("root-59")!;
+        expect(content.getAttribute("aria-activedescendant")).toBe(focused.id);
+      } finally { f.dispose(); }
+    });
+  }
+}
