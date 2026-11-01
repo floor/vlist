@@ -283,9 +283,12 @@ for (const owner of ["standalone", "selection", "a11y"] as const) {
         await Promise.resolve();
         const content = f.container.querySelector<HTMLElement>(".vlist-content")!;
         if (action === "collapseAll") f.list.expandAll();
+        content.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true }));
         content.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true }));
         if (action === "siblings") content.dispatchEvent(new KeyboardEvent("keydown", { key: "*", bubbles: true, cancelable: true }));
         else f.list[action]();
+        // Expanding between the viewport anchor and focus can move the ring offscreen.
+        f.list.scrollToIndex(f.list.getIndexById("root-59"));
         expect(f.container.querySelector<HTMLElement>(".vlist-item--focused")?.dataset.id).toBe("root-59");
         const focused = f.row("root-59")!;
         expect(content.getAttribute("aria-activedescendant")).toBe(focused.id);
