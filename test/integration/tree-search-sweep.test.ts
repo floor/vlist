@@ -229,4 +229,34 @@ for (const layout of ["groups", "table", "table-groups"] as const) {
       expect(f.events[f.events.length - 1]).toEqual({ index: 90, id: 91 });
     } finally { f.dispose(); }
   });
+  it(`search filter + ${layout} — the filtered source is the rendered source`, async () => {
+    const f = layoutSearch(layout, "filter");
+    try {
+      await Promise.resolve();
+      f.list.setQuery("match");
+      expect(f.list.getMatches()).toEqual([70, 90]);
+      expect(f.list.total).toBe(2);
+      expect(f.list.getItemAt(0)?.id).toBe(71);
+      expect(f.list.getItemAt(1)?.id).toBe(91);
+      expect(f.container.querySelector('[data-id="71"]')).not.toBeNull();
+      expect(f.container.querySelector('[data-id="91"]')).not.toBeNull();
+      expect(f.container.querySelectorAll(".vlist-group-header .vlist-search-match, .vlist-table-group-header .vlist-search-match").length).toBe(0);
+    } finally { f.dispose(); }
+  });
+}
+for (const layout of ["groups", "table-groups"] as const) {
+  it(`search filter + ${layout} — a same-count query change rebuilds group keys`, async () => {
+    const f = layoutSearch(layout, "filter", [
+      { id: 1, name: "pear one", group: "A" }, { id: 2, name: "pear two", group: "A" },
+      { id: 3, name: "plum one", group: "B" }, { id: 4, name: "plum two", group: "B" },
+    ]);
+    try {
+      await Promise.resolve();
+      f.list.setQuery("pear");
+      f.list.setQuery("plum");
+      expect(f.list.total).toBe(2);
+      expect(f.container.querySelector(".vlist-sticky-header")?.textContent).toContain("B");
+      expect(f.container.querySelector(".vlist-sticky-header")?.textContent).not.toContain("A");
+    } finally { f.dispose(); }
+  });
 }
