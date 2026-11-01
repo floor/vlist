@@ -1244,11 +1244,12 @@ export function createCore<T extends VListItem = VListItem>(
         return;
       }
 
-      const clamped = Math.max(0, Math.min(index, total - 1));
-
       // Re-read the offset each frame: remeasureItem() can move the target
       // while a smooth jump is in flight.
       const getTarget = (): number => {
+        const total = sizeCache.getTotal();
+        if (total === 0) return 0;
+        const clamped = Math.max(0, Math.min(index, total - 1));
         const offset = sizeCache.getOffset(clamped);
         const itemSize = sizeCache.getSize(clamped);
         const cs = state.containerSize;
