@@ -876,3 +876,18 @@ for (const horizontal of [false, true]) {
     }
   });
 }
+
+it("remeasureItem — snapshots: an older snapshot follows its anchor after resizing", async () => {
+  const f = buildPairing("core", [snapshots()]);
+  const list = f.list as VList<TestItem> & SnapshotsMethods;
+  try {
+    list.scrollToIndex(20, "start");
+    const snapshot = list.getScrollSnapshot();
+    f.heights[3] = 90;
+    list.remeasureItem(3);
+    list.scrollToIndex(0);
+    await list.restoreScroll(snapshot);
+    expect(list.getScrollPosition()).toBe(850);
+    expect(list.getScrollSnapshot().index).toBe(20);
+  } finally { f.dispose(); }
+});
