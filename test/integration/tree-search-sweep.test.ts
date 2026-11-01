@@ -6,7 +6,9 @@ import { createVList } from "../../src/core/create";
 import { search, type SearchMethods } from "../../src/plugins/search/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { table } from "../../src/plugins/table/plugin";
-import { selection } from "../../src/plugins/selection/plugin";
+import { selection, type SelectionMethods } from "../../src/plugins/selection/plugin";
+import { autosize, type AutosizeMethods } from "../../src/plugins/autosize/plugin";
+import { snapshots, type SnapshotsMethods } from "../../src/plugins/snapshots/plugin";
 import { a11y } from "../../src/plugins/a11y/plugin";
 import { tree, type TreeMethods } from "../../src/plugins/tree/plugin";
 import type { VListPlugin } from "../../src/core/types";
@@ -295,4 +297,127 @@ for (const owner of ["standalone", "selection", "a11y"] as const) {
       } finally { f.dispose(); }
     });
   }
+}
+
+for (const kind of ["variable", "autosize"] as const) {
+  it(`tree + ${kind} — measured rows preserve the scrolled anchor through expansion`, () => {
+    const container = createContainer();
+    let current: (VList<TreeRow> & TreeMethods<TreeRow>) | undefined;
+    const rows = treeRows();
+    rows[5]!.height = 90;
+    rows[0]!.children[0]!.height = 75;
+    rows[0]!.children[1]!.height = 95;
+    const list = createVList({ container, items: rows, item: {
+      ...(kind === "variable" ? { height: (index: number): number => (current?.getItemAt(index) ?? rows[index])?.height ?? 40 } : { estimatedHeight: 40 }),
+      template: (item: TreeRow) => item.name,
+    } }, [tree<TreeRow>(), ...(kind === "autosize" ? [autosize<TreeRow>()] : [])]) as VList<TreeRow> & TreeMethods<TreeRow> & AutosizeMethods;
+    current = list;
+    try {
+      if (kind === "autosize") list.setMeasuredSize(5, 90);
+      list.scrollToIndex(list.getIndexById("root-20"));
+      const before = list.getScrollPosition();
+      list.expand("root-0");
+      expect(list.getScrollPosition()).toBe(before + (kind === "variable" ? 170 : 80));
+      list.collapse("root-0");
+      expect(list.getScrollPosition()).toBe(before);
+      if (kind === "autosize") {
+        list.scrollToIndex(list.getIndexById("root-6"));
+        expect(list.getScrollPosition()).toBe(290);
+      }
+    } finally { list.destroy(); container.remove(); }
+  });
+}
+
+it("tree + snapshots — an unchanged expanded layout restores its exact position", async () => {
+  const f = treeList(false, [snapshots()]);
+  const list = f.list as typeof f.list & SnapshotsMethods;
+  try {
+    list.expand("root-0");
+    list.scrollToIndex(list.getIndexById("root-20"));
+    const snapshot = list.getScrollSnapshot();
+    list.scrollToIndex(0);
+    await list.restoreScroll(snapshot);
+    expect(list.getScrollPosition()).toBe(snapshot.scrollTop!);
+    expect(f.row("root-20")).not.toBeNull();
+  } finally { f.dispose(); }
+});
+
+it("tree — replacing an expanded tree removes its previous descendants", () => {
+  const f = treeList();
+  try {
+    f.list.expandAll();
+    f.list.setItems([{ id: "replacement", name: "Replacement", height: 40, children: [] }]);
+    expect(f.list.total).toBe(1);
+    expect(f.list.getItemAt(0)?.id).toBe("replacement");
+    expect(f.list.getIndexById("child-0-0")).toBe(-1);
+    expect(f.container.textContent).not.toContain("Child");
+    expect(() => { f.list.expand("absent"); f.list.collapse("absent"); f.list.toggle("absent"); }).not.toThrow();
+  } finally { f.dispose(); }
+});
+
+it("tree + a11y — deep descendants retain tree ARIA metadata", async () => {
+  const container = createContainer();
+  let node: TreeRow = { id: "deep-63", name: "Deep 63", height: 40, children: [] };
+  for (let depth = 62; depth >= 0; depth--) node = { id: `deep-${depth}`, name: `Deep ${depth}`, height: 40, children: [node] };
+  const list = createVList({ container, items: [node], item: { height: 40, template: (item: TreeRow) => item.name } }, [tree<TreeRow>({ expanded: true }), a11y()]);
+  try {
+    await Promise.resolve();
+    list.scrollToIndex(63);
+    const row = container.querySelector<HTMLElement>('[data-id="deep-63"]')!;
+    expect(row.getAttribute("aria-level")).toBe("64");
+    expect(row.getAttribute("aria-setsize")).toBe("1");
+    expect(row.getAttribute("aria-posinset")).toBe("1");
+    expect(row.hasAttribute("aria-expanded")).toBe(false);
+  } finally { list.destroy(); container.remove(); }
+});
+
+for (const mode of ["filter", "navigate"] as const) {
+  it(`search ${mode} — literal regex text, wrapping, empty query and destroy are safe`, () => {
+    const container = createContainer();
+    const list = createVList({ container, items: [{ id: 1, name: "[a.* first" }, { id: 2, name: "other" }, { id: 3, name: "[a.* last" }],
+      item: { height: 40, template: (item: Row) => item.name },
+    }, [search<Row>({ mode, position: "none", field: "name" })]);
+    const ids: Array<number | undefined> = [];
+    list.on("search:match", event => ids.push(event.item?.id));
+    try {
+      list.setQuery("[a.*");
+      expect(list.getMatches()).toEqual([0, 2]);
+      if (mode === "navigate") {
+        list.prevMatch(); list.nextMatch(); list.nextMatch(); list.nextMatch();
+        expect(ids).toEqual([1, 3, 1, 3, 1]);
+      }
+      list.setQuery("");
+      expect(list.getMatches()).toEqual([]);
+      expect(list.total).toBe(3);
+      expect(container.querySelectorAll(".vlist-search-match").length).toBe(0);
+      list.setQuery("[a.*");
+      list.destroy();
+      expect(container.querySelector(".vlist")).toBeNull();
+    } finally { list.destroy(); container.remove(); }
+  });
+}
+
+it("tree + selection — selection follows IDs across branch layout changes", () => {
+  const f = treeList(false, [selection({ mode: "multiple" })]);
+  const list = f.list as typeof f.list & SelectionMethods<TreeRow>;
+  try {
+    list.select("root-20");
+    list.expand("root-0");
+    expect(list.getSelected()).toEqual(["root-20"]);
+    expect(list.getSelectedItems().map(item => item.id)).toEqual(["root-20"]);
+    list.collapse("root-0");
+    expect(list.getSelectedItems().map(item => item.id)).toEqual(["root-20"]);
+  } finally { f.dispose(); }
+});
+
+for (const reversed of [false, true]) {
+  it(`search + tree — the documented conflict refuses cleanly (${reversed ? "reversed" : "normal"} order)`, () => {
+    const container = createContainer();
+    try {
+      const plugins: VListPlugin<TreeRow>[] = [search<TreeRow>(), tree<TreeRow>()];
+      if (reversed) plugins.reverse();
+      expect(() => createVList({ container, items: treeRows(), item: { height: 40, template: (item: TreeRow) => item.name } }, plugins)).toThrow('Plugin "search" conflicts with "tree"');
+      expect(container.childElementCount).toBe(0);
+    } finally { container.remove(); }
+  });
 }
