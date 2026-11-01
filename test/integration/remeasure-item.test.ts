@@ -820,3 +820,59 @@ it("remeasureItem — async: resizes unloaded placeholders in the adapter data s
     expect(list.remeasureItem(100)).toBe(false);
   } finally { list.destroy(); container.remove(); }
 });
+
+for (const horizontal of [false, true]) {
+  // Serial: supplies ResizeObserver measurements and owns its process global.
+  it.serial(`remeasureItem — autosize ${horizontal ? "horizontal" : "vertical"}: preserves the anchor near the old limit`, () => {
+    const original = globalThis.ResizeObserver;
+    const observers: Array<{ callback: ResizeObserverCallback; elements: Set<Element> }> = [];
+    globalThis.ResizeObserver = class {
+      readonly elements = new Set<Element>();
+      constructor(readonly callback: ResizeObserverCallback) { observers.push(this); }
+      observe(el: Element): void { this.elements.add(el); }
+      unobserve(el: Element): void { this.elements.delete(el); }
+      disconnect(): void { this.elements.clear(); }
+    } as unknown as typeof ResizeObserver;
+    const container = createContainer();
+    const list = createVList({
+      container,
+      orientation: horizontal ? "horizontal" : "vertical",
+      items: createTestItems(100),
+      item: { estimatedHeight: 40, estimatedWidth: 40, template: simpleTemplate },
+    }, [autosize()]);
+    try {
+      const content = container.querySelector<HTMLElement>(".vlist-content")!;
+      const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+      const dimension = horizontal ? "width" : "height";
+      const position = horizontal ? "scrollLeft" : "scrollTop";
+      const viewportSize = horizontal ? 300 : 500;
+      let applied = 0;
+      Object.defineProperty(viewport, position, {
+        configurable: true,
+        get: () => applied,
+        set: (value: number) => { applied = Math.max(0, Math.min(value, parseFloat(content.style[dimension]) - viewportSize)); },
+      });
+      const start = 4000 - viewportSize - 10;
+      viewport[position] = start;
+      viewport.dispatchEvent(new Event("scroll"));
+      const index = Math.floor(start / 40) - 1;
+      const row = container.querySelector<HTMLElement>(`[data-index="${index}"]`)!;
+      expect(row).not.toBeNull();
+      list.setMeasuredSize(index, 40);
+      expect(list.remeasureItem(index)).toBe(true);
+      const owner = observers.find((observer) => observer.elements.has(row))!;
+      expect(owner).toBeDefined();
+      owner.callback([{
+        target: row,
+        borderBoxSize: [{ blockSize: 140, inlineSize: 140 }],
+      } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      expect(content.style[dimension]).toBe("4100px");
+      expect(list.getScrollPosition()).toBe(start + 100);
+      expect(row.style[dimension]).toBe("140px");
+    } finally {
+      list.destroy();
+      container.remove();
+      globalThis.ResizeObserver = original;
+    }
+  });
+}
