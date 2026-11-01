@@ -4,6 +4,8 @@ import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createContainer } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
 import { search, type SearchMethods } from "../../src/plugins/search/plugin";
+import { tree, type TreeMethods } from "../../src/plugins/tree/plugin";
+import type { VListPlugin } from "../../src/core/types";
 import type { VList } from "../../src/core/types";
 
 interface Row { id: number; name: string; }
@@ -42,7 +44,7 @@ for (const mode of ["filter", "navigate"] as const) {
           expect(f.container.textContent).not.toContain("match first");
         } else {
           f.list.nextMatch();
-          expect(f.events.at(-1)).toEqual({ index: 1, id: 5 });
+          expect(f.events[f.events.length - 1]).toEqual({ index: 1, id: 5 });
         }
       } finally { f.dispose(); }
     });
@@ -56,7 +58,7 @@ for (const mode of ["filter", "navigate"] as const) {
           expect(f.list.getItemAt(2)?.id).toBe(4);
         } else {
           f.list.nextMatch(); f.list.nextMatch();
-          expect(f.events.at(-1)).toEqual({ index: 3, id: 4 });
+          expect(f.events[f.events.length - 1]).toEqual({ index: 3, id: 4 });
         }
       } finally { f.dispose(); }
     });
@@ -70,7 +72,7 @@ for (const mode of ["filter", "navigate"] as const) {
           expect(f.list.getItemAt(0)?.id).toBe(3);
         } else {
           f.list.nextMatch();
-          expect(f.events.at(-1)).toEqual({ index: 1, id: 3 });
+          expect(f.events[f.events.length - 1]).toEqual({ index: 1, id: 3 });
         }
       } finally { f.dispose(); }
     });
@@ -90,10 +92,49 @@ it("search navigate — appending matches retains the current match position", (
   const f = searchable("navigate");
   try {
     f.list.nextMatch();
-    expect(f.events.at(-1)?.id).toBe(3);
+    expect(f.events[f.events.length - 1]?.id).toBe(3);
     f.list.appendItems([{ id: 4, name: "match appended" }]);
-    expect(f.events.at(-1)?.id).toBe(3);
+    expect(f.events[f.events.length - 1]?.id).toBe(3);
     f.list.nextMatch();
-    expect(f.events.at(-1)?.id).toBe(4);
+    expect(f.events[f.events.length - 1]?.id).toBe(4);
   } finally { f.dispose(); }
 });
+
+
+interface TreeRow { id: string; name: string; children: TreeRow[]; height: number; }
+function treeRows(count = 60): TreeRow[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `root-${index}`, name: `Root ${index}`, height: 40,
+    children: [0, 1].map(child => ({ id: `child-${index}-${child}`, name: `Child ${index}.${child}`, height: 40, children: [] })),
+  }));
+}
+function treeList(horizontal = false, extra: VListPlugin<TreeRow>[] = []) {
+  const container = createContainer();
+  const list = createVList({ container, items: treeRows(),
+    orientation: horizontal ? "horizontal" : "vertical",
+    item: { height: 40, width: 40, template: (item: TreeRow) => item.name },
+  }, [tree<TreeRow>(), ...extra]) as VList<TreeRow> & TreeMethods<TreeRow>;
+  return { list, container,
+    row(id: string): HTMLElement | null { return container.querySelector<HTMLElement>(`[data-id="${id}"]`); },
+    dispose(): void { list.destroy(); container.remove(); },
+  };
+}
+for (const horizontal of [false, true]) {
+  for (const action of ["expand", "collapse"] as const) {
+    it(`tree ${horizontal ? "horizontal" : "vertical"} — ${action} above the viewport preserves the visible anchor`, () => {
+      const f = treeList(horizontal);
+      try {
+        if (action === "collapse") f.list.expand("root-0");
+        f.list.scrollToIndex(f.list.getIndexById("root-20"));
+        const before = f.list.getScrollPosition();
+        const beforeIndex = f.list.getIndexById("root-20");
+        const screenOffset = beforeIndex * 40 - before;
+        f.list[action]("root-0");
+        const afterIndex = f.list.getIndexById("root-20");
+        expect(afterIndex).toBe(beforeIndex + (action === "expand" ? 2 : -2));
+        expect(afterIndex * 40 - f.list.getScrollPosition()).toBe(screenOffset);
+        expect(f.row("root-20")).not.toBeNull();
+      } finally { f.dispose(); }
+    });
+  }
+}
