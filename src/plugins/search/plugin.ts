@@ -171,6 +171,8 @@ export function search<T extends VListItem = VListItem>(
   /** Whether a virtual filter is currently applied (filter mode). */
   let filtered = false;
   let cancelTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastItems: readonly T[] | null = null;
+  let lastLength = 0;
 
   // Lazily-resolved cross-plugin methods.
   let resolved = false;
@@ -205,24 +207,25 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Filter mode (virtual filter) ──────────────────────────────────────────
 
+  const getItem = (index: number): T | undefined =>
+    ctx.items.all()[filtered ? matches[index]! : index];
+
   const applyFilter = (): void => {
     resolveOnce();
-    const base = ctx.items.all();
-    const idx = matches;
-    ctx.items.setGetFn((i: number): T | undefined => base[idx[i]!]);
-    ctx.items.setTotalFn(() => idx.length);
-    engineState.totalItems = idx.length;
+    filtered = true;
+    ctx.items.setTotalFn(() => matches.length);
+    engineState.totalItems = matches.length;
+    (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
     ctx.sizes.rebuild();
     ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
-    filtered = true;
   };
 
   const restoreItems = (): void => {
     if (!filtered) return;
     filtered = false;
-    ctx.items.setGetFn((i: number): T | undefined => ctx.items.all()[i]);
     ctx.items.setTotalFn(() => ctx.items.all().length);
     engineState.totalItems = ctx.items.all().length;
+    (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
     ctx.sizes.rebuild();
     ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
   };
@@ -233,9 +236,12 @@ export function search<T extends VListItem = VListItem>(
     resolveOnce();
     const original = matches[current];
     if (original === undefined) return;
+    const index = d2lFn ? d2lFn(original) : original;
+    const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
     if (scrollToIndexFn) scrollToIndexFn(original, "center");
-    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(original) - ctx.getState().containerSize / 2));
-    const item = ctx.items.at(original);
+    else if (reveal) reveal(index);
+    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(index) - ctx.getState().containerSize / 2));
+    const item = ctx.items.all()[original];
     ctx.emitter.emit("search:match", {
       index: original,
       item,
@@ -278,12 +284,12 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Query application ───────────────────────────────────────────────────────
 
-  const applyQuery = (next: string): void => {
+  const applyQuery = (next: string, keepCurrent = false): void => {
     if (next !== query) queryVersion++;
     query = next;
     bar?.setValue(query);
     computeMatches();
-    current = 0;
+    current = keepCurrent ? Math.max(0, Math.min(current, matches.length - 1)) : 0;
 
     if (mode === "filter") {
       if (query.length >= minLength) applyFilter();
@@ -515,15 +521,6 @@ export function search<T extends VListItem = VListItem>(
     }
   };
 
-  // ── Bar input callbacks ─────────────────────────────────────────────────────
-
-  const onBarKeydown = (e: KeyboardEvent): void => {
-    // The input is focused; route nav/close keys, let text input through.
-    if (e.key === "Escape" || e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp") {
-      onKeydown(e);
-    }
-  };
-
   return {
     name: "search",
     // Filtering is client-side over the items the list holds. Under data() those
@@ -585,7 +582,7 @@ export function search<T extends VListItem = VListItem>(
             onClear: () => applyQuery(""),
             onPrev: () => step(-1),
             onNext: () => step(1),
-            onKeydown: onBarKeydown,
+            onKeydown,
           },
         );
         updateNav();
@@ -623,7 +620,9 @@ export function search<T extends VListItem = VListItem>(
       // masonry, sortable) resolve rows through this hook; without it they
       // read items.all()[i] and select the unfiltered occupant of a
       // filtered row.
-      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => ctx.items.at(index));
+      ctx.hooks.method("_getItem", getItem);
+      ctx.hooks.method("_getLoadedItem", getItem);
+      if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
       // Public methods.
       ctx.hooks.method("openSearch", openSearch);
@@ -654,6 +653,14 @@ export function search<T extends VListItem = VListItem>(
 
     hooks: {
       onCommit(state: EngineState): void {
+        const items = ctx.items.all();
+        if (items !== lastItems || items.length !== lastLength) {
+          lastItems = items;
+          lastLength = items.length;
+          // Source replacements and structural edits invalidate match indices.
+          // Mark the source first: applying the query commits again.
+          if (open && query.length >= minLength) { applyQuery(query, true); return; }
+        }
         highlightVisible(state);
       },
     },

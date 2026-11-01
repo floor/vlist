@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Search filtering composes with grouped table item access and refreshes group keys when a different query has the same match count. Unopened zero-minimum searches retain the original list.
+
+- Search navigation maps data matches through grouped layouts and asks the layout owner to reveal them. Match events report the source item alongside its data index, including grouped tables.
+
+- Tree: expanding branches, all nodes or siblings retains the focused item; collapsing a focused descendant moves focus to its surviving parent (the root when collapsing all), including with selection or a11y focus ownership. The ring and active descendant are remapped together.
+
+- Tree: expanding or collapsing branches above the viewport keeps a surviving visible node at the same screen position, in both orientations. Empty trees discard the old sub-item anchor.
+
+- Search: active queries refresh their matches after replacing, appending or removing items; filtered rows no longer retain the previous source array. Appending matches keeps the current navigation position.
+
 ## [3.3.1] - 2026-10-31
 
 Under `groups()`, focus, selection and search stay on the item you are on.
