@@ -207,24 +207,25 @@ export function search<T extends VListItem = VListItem>(
 
   // ── Filter mode (virtual filter) ──────────────────────────────────────────
 
+  const getItem = (index: number): T | undefined =>
+    ctx.items.all()[filtered ? matches[index]! : index];
+
   const applyFilter = (): void => {
     resolveOnce();
-    const base = ctx.items.all();
-    const idx = matches;
-    ctx.items.setGetFn((i: number): T | undefined => base[idx[i]!]);
-    ctx.items.setTotalFn(() => idx.length);
-    engineState.totalItems = idx.length;
+    filtered = true;
+    ctx.items.setTotalFn(() => matches.length);
+    engineState.totalItems = matches.length;
+    (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
     ctx.sizes.rebuild();
     ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
-    filtered = true;
   };
 
   const restoreItems = (): void => {
     if (!filtered) return;
     filtered = false;
-    ctx.items.setGetFn((i: number): T | undefined => ctx.items.all()[i]);
     ctx.items.setTotalFn(() => ctx.items.all().length);
     engineState.totalItems = ctx.items.all().length;
+    (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
     ctx.sizes.rebuild();
     ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
   };
@@ -628,7 +629,9 @@ export function search<T extends VListItem = VListItem>(
       // masonry, sortable) resolve rows through this hook; without it they
       // read items.all()[i] and select the unfiltered occupant of a
       // filtered row.
-      ctx.hooks.method("_getLoadedItem", (index: number): T | undefined => ctx.items.at(index));
+      ctx.hooks.method("_getItem", getItem);
+      ctx.hooks.method("_getLoadedItem", getItem);
+      if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
       // Public methods.
       ctx.hooks.method("openSearch", openSearch);
@@ -665,7 +668,7 @@ export function search<T extends VListItem = VListItem>(
           lastLength = items.length;
           // Source replacements and structural edits invalidate match indices.
           // Mark the source first: applying the query commits again.
-          if (query.length >= minLength) { applyQuery(query, true); return; }
+          if (open && query.length >= minLength) { applyQuery(query, true); return; }
         }
         highlightVisible(state);
       },
