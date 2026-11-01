@@ -1006,6 +1006,8 @@ export function groups<T extends VListItem = VListItem>(
       }
 
       ctx.hooks.method("getGroupLayout", () => layout);
+      // A new filtered view can have the same count and different group keys.
+      ctx.hooks.method("_onFilterChange", (): void => { lastDataCount = -1; });
 
       // The engine total counts headers, because that is what the layout
       // renders. Anything asking how many *items* there are needs this
