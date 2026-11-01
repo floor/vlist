@@ -720,7 +720,7 @@ export function tree<T extends VListItem = VListItem>(
     }
     if (!anyAdded) return;
     layout.rebuild(layout.rootItems as T[], true);
-    invalidateTree();
+    invalidateTree(node.id);
   }
 
   // =================================================================
@@ -1017,13 +1017,16 @@ export function tree<T extends VListItem = VListItem>(
       });
 
       ctx.hooks.method("expandAll", (): void => {
+        const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
         layout.expandAll(layout.rootItems as T[]);
-        invalidateTree();
+        invalidateTree(focusId);
       });
 
       ctx.hooks.method("collapseAll", (): void => {
+        let node = layout.flatNodes[getEffectiveFocusedIndex()];
+        while (node?.parentId != null) node = layout.flatNodes[layout.idToIndex.get(node.parentId)!];
         layout.collapseAll();
-        invalidateTree();
+        invalidateTree(node?.id);
       });
 
       ctx.hooks.method("expandTo", (id: string | number): void => {
