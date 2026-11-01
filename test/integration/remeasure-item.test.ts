@@ -21,6 +21,10 @@ import { grid } from "../../src/plugins/grid/plugin";
 import { masonry } from "../../src/plugins/masonry/plugin";
 import { carousel } from "../../src/plugins/carousel/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
+import { selection } from "../../src/plugins/selection/plugin";
+import { a11y } from "../../src/plugins/a11y/plugin";
+import { snapshots, type SnapshotsMethods } from "../../src/plugins/snapshots/plugin";
+import { data } from "../../src/plugins/data/plugin";
 
 // =============================================================================
 // Setup
@@ -606,7 +610,7 @@ describe("remeasureItem — scroll limits", () => {
 
 type SizePairing = "core" | "table" | "groups" | "table + groups";
 
-function buildPairing(pairing: SizePairing) {
+function buildPairing(pairing: SizePairing, extra: VListPlugin<TestItem>[] = []) {
   const heights: number[] = [];
   const container = createContainer({ width: 300, height: 500 });
   const size = (index: number): number => heights[index] ?? 40;
@@ -624,7 +628,7 @@ function buildPairing(pairing: SizePairing) {
     container,
     items: createTestItems(100),
     item: { height: size, template: simpleTemplate },
-  }, plugins);
+  }, [...plugins, ...extra]);
   return {
     list, container, heights,
     item(index: number): HTMLElement | null {
@@ -685,3 +689,134 @@ for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
     }
   });
 }
+
+
+for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
+  it(`remeasureItem — ${pairing}: preserves a scrolled anchor above, at and below it`, async () => {
+    const f = buildPairing(pairing);
+    try {
+      await Promise.resolve();
+      f.list.scrollToIndex(20, "start");
+      const start = f.list.getScrollPosition();
+      f.heights[3] = 90;
+      expect(f.list.remeasureItem(3)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(start + 50);
+      const anchor = f.item(20)!;
+      expect(anchor.style.height).toBe("40px");
+      f.heights[20] = 70;
+      expect(f.list.remeasureItem(20)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(start + 50);
+      expect(f.item(20)).toBe(anchor);
+      expect(anchor.style.height).toBe("70px");
+      f.heights[30] = 15;
+      expect(f.list.remeasureItem(30)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(start + 50);
+      // Later offsets include all three deltas, including a shrink.
+      f.list.scrollToIndex(31, "start");
+      expect(f.list.getScrollPosition()).toBe(31 * 40 + 50 + 30 - 25);
+    } finally { f.dispose(); }
+  });
+
+  for (const owner of ["a11y", "selection"] as const) {
+    // Keyboard navigation owns document.activeElement.
+    it.serial(`remeasureItem — ${pairing} + ${owner}: preserves the focused node, ring and active descendant`, async () => {
+      const f = buildPairing(pairing, [owner === "a11y" ? a11y() : selection()]);
+      try {
+        await Promise.resolve();
+        const root = f.container.querySelector<HTMLElement>(".vlist")!;
+        root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        const focused = f.container.querySelector<HTMLElement>("[class*=item--focused]")!;
+        expect(focused).not.toBeNull();
+        const active = f.container.querySelector("[aria-activedescendant]")!;
+        expect(active.getAttribute("aria-activedescendant")).toBe(focused.id);
+        const identity = focused.getAttribute("data-id");
+        f.heights[0] = 90;
+        f.list.remeasureItem(0);
+        expect(f.container.querySelector("[class*=item--focused]")).toBe(focused);
+        expect(active.getAttribute("aria-activedescendant")).toBe(focused.id);
+        expect(focused.getAttribute("data-id")).toBe(identity);
+      } finally { f.dispose(); }
+    });
+  }
+
+  it(`remeasureItem — ${pairing} + snapshots: captures and restores the new anchor`, async () => {
+    const f = buildPairing(pairing, [snapshots()]);
+    const list = f.list as VList<TestItem> & SnapshotsMethods;
+    try {
+      await Promise.resolve();
+      list.scrollToIndex(20, "start");
+      const before = list.getScrollSnapshot();
+      f.heights[3] = 90;
+      list.remeasureItem(3);
+      const after = list.getScrollSnapshot();
+      expect(after.index).toBe(before.index);
+      expect(after.offsetInItem).toBe(before.offsetInItem);
+      expect(after.scrollTop).toBe(before.scrollTop! + 50);
+      list.scrollToIndex(0);
+      await list.restoreScroll(after);
+      expect(list.getScrollPosition()).toBe(after.scrollTop!);
+    } finally { f.dispose(); }
+  });
+}
+
+it("remeasureItem — horizontal: updates widths and preserves the scrolled anchor", () => {
+  const heights: number[] = [];
+  const container = createContainer();
+  const list = createVList({
+    container,
+    orientation: "horizontal",
+    items: createTestItems(30),
+    item: { width: (i: number) => heights[i] ?? 40, height: 40, template: simpleTemplate },
+  });
+  try {
+    list.scrollToIndex(10);
+    expect(list.getScrollPosition()).toBe(400);
+    heights[2] = 90;
+    expect(list.remeasureItem(2)).toBe(true);
+    expect(list.getScrollPosition()).toBe(450);
+    expect(container.querySelector<HTMLElement>(".vlist-content")!.style.width).toBe("1250px");
+    const row = container.querySelector<HTMLElement>('[data-index="10"]')!;
+    expect(row.style.transform).toBe("translateX(450px)");
+    heights[10] = 70;
+    list.remeasureItem(10);
+    expect(row.style.width).toBe("70px");
+    expect(list.getScrollPosition()).toBe(450);
+  } finally { list.destroy(); container.remove(); }
+});
+
+it("remeasureItem — setItems shrink: rejects the removed data index without a size read", () => {
+  const f = buildCore();
+  try {
+    f.list.setItems(createTestItems(2));
+    const calls = f.specCalls();
+    expect(f.list.remeasureItem(2)).toBe(false);
+    expect(f.list.remeasureItem(29)).toBe(false);
+    expect(f.specCalls()).toBe(calls);
+    expect(f.list.remeasureItem(1)).toBe(true);
+    expect(f.content().style.height).toBe("80px");
+  } finally { f.dispose(); }
+});
+
+it("remeasureItem — async: resizes unloaded placeholders in the adapter data space", async () => {
+  const container = createContainer();
+  const heights: number[] = [];
+  const list = createVList({
+    container,
+    item: { height: (i: number) => heights[i] ?? 40, template: simpleTemplate },
+  }, [data<TestItem>({ total: 100, autoLoad: false, adapter: {
+    read: async () => ({ items: [], total: 100, hasMore: false }),
+  } })]);
+  try {
+    await Promise.resolve();
+    list.setTotal(100);
+    expect(list.getItemAt(50)?._isPlaceholder).toBe(true);
+    list.scrollToIndex(50);
+    expect(list.getScrollPosition()).toBe(2000);
+    heights[3] = 90;
+    expect(list.remeasureItem(3)).toBe(true);
+    expect(list.getScrollPosition()).toBe(2050);
+    expect(container.querySelector<HTMLElement>(".vlist-content")!.style.height).toBe("4050px");
+    expect(list.remeasureItem(100)).toBe(false);
+  } finally { list.destroy(); container.remove(); }
+});
