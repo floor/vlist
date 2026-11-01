@@ -219,6 +219,8 @@ export function tree<T extends VListItem = VListItem>(
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let lastTotalSize = -1;
+  let anchorId: string | number | undefined;
+  let anchorOffset = 0;
   let forceNextRender = true;
   let lastItems: readonly T[] | null = null;
   let roleSet = false;
@@ -367,8 +369,14 @@ export function tree<T extends VListItem = VListItem>(
   }
 
   function invalidateTree(): void {
+    const index = anchorId === undefined ? undefined : layout.idToIndex.get(anchorId);
+    const offset = anchorOffset;
     syncTotals();
     detachAll();
+    if (index !== undefined) {
+      const delta = sizeCache.getOffset(index) + offset - scroll.getPixelEquivalent();
+      if (delta) scroll.shiftBy(delta);
+    }
     doForceRender();
   }
 
@@ -582,6 +590,7 @@ export function tree<T extends VListItem = VListItem>(
 
     const totalItems = layout.totalVisible;
     if (cs <= 0 || totalItems === 0) {
+      anchorId = undefined;
       if (rendered.size > 0) {
         detachAll();
       }
@@ -593,6 +602,9 @@ export function tree<T extends VListItem = VListItem>(
     if (visEnd < totalItems - 1) visEnd++;
     visStart = Math.max(0, visStart);
     visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
+    // Keep the visible item, including its sub-item offset, across mutations.
+    anchorId = layout.flatNodes[visStart]?.id;
+    anchorOffset = scrollPos - sizeCache.getOffset(visStart);
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
