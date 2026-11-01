@@ -555,3 +555,19 @@ describe("remeasureItem — groups()", () => {
     }
   });
 });
+
+
+describe("remeasureItem — lifecycle", () => {
+  it("returns false after destroy without reading the size source", () => {
+    const f = buildCore();
+    try {
+      f.list.destroy();
+      const calls = f.specCalls();
+      f.heights[2] = 80;
+      expect(f.list.remeasureItem(2)).toBe(false);
+      expect(f.specCalls()).toBe(calls);
+    } finally {
+      f.dispose();
+    }
+  });
+});
