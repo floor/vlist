@@ -85,3 +85,15 @@ for (const mode of ["filter", "navigate"] as const) {
     });
   });
 }
+
+it("search navigate — appending matches retains the current match position", () => {
+  const f = searchable("navigate");
+  try {
+    f.list.nextMatch();
+    expect(f.events.at(-1)?.id).toBe(3);
+    f.list.appendItems([{ id: 4, name: "match appended" }]);
+    expect(f.events.at(-1)?.id).toBe(3);
+    f.list.nextMatch();
+    expect(f.events.at(-1)?.id).toBe(4);
+  } finally { f.dispose(); }
+});
