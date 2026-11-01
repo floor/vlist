@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Smooth `scrollToIndex()` jumps follow the current row offset when `remeasureItem()` changes sizes during the animation, including tables and grouped lists.
+
 - Growing an item above the viewport with `remeasureItem()` preserves the visible anchor even at the previous scroll limit.
 
 - `remeasureItem()` returns `false` after destruction without reading the size source or rebuilding detached content.

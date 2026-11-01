@@ -1246,36 +1246,41 @@ export function createCore<T extends VListItem = VListItem>(
 
       const clamped = Math.max(0, Math.min(index, total - 1));
 
-      const offset = sizeCache.getOffset(clamped);
-      const itemSize = sizeCache.getSize(clamped);
-      const cs = state.containerSize;
-      const totalSize = sizeCache.getTotalSize();
-      const mp = config.mainAxisPadding;
-      const maxScroll = Math.max(0, totalSize + mp - cs);
+      // Re-read the offset each frame: remeasureItem() can move the target
+      // while a smooth jump is in flight.
+      const getTarget = (): number => {
+        const offset = sizeCache.getOffset(clamped);
+        const itemSize = sizeCache.getSize(clamped);
+        const cs = state.containerSize;
+        const totalSize = sizeCache.getTotalSize();
+        const mp = config.mainAxisPadding;
+        const maxScroll = Math.max(0, totalSize + mp - cs);
 
-      let pos: number;
-      if (scrollToPosFn) {
-        pos = scrollToPosFn(clamped, sizeCache, cs, total, align);
-      } else {
-        const sp = config.startPadding;
-        switch (align) {
-          case "center":
-            pos = sp + offset - (cs - itemSize) / 2;
-            break;
-          case "end":
-            pos = offset + itemSize + mp - cs;
-            break;
-          default:
-            pos = offset;
+        let pos: number;
+        if (scrollToPosFn) {
+          pos = scrollToPosFn(clamped, sizeCache, cs, total, align);
+        } else {
+          const sp = config.startPadding;
+          switch (align) {
+            case "center":
+              pos = sp + offset - (cs - itemSize) / 2;
+              break;
+            case "end":
+              pos = offset + itemSize + mp - cs;
+              break;
+            default:
+              pos = offset;
+          }
+          pos = Math.max(0, Math.min(pos, maxScroll));
         }
-        pos = Math.max(0, Math.min(pos, maxScroll));
-      }
+        return pos;
+      };
 
       // While a swap is pending, a smooth scroll would stop at the browser's cap.
       if (behavior === "smooth" && !pending) {
-        scrollHandler!.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
+        scrollHandler!.smoothScrollTo(getTarget, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
       } else {
-        writeScroll(pos);
+        writeScroll(getTarget());
       }
     },
 
