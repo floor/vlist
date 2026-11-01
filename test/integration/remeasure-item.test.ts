@@ -894,3 +894,39 @@ it.todo("remeasureItem — snapshots: an older snapshot follows its anchor after
     expect(list.getScrollSnapshot().index).toBe(20);
   } finally { f.dispose(); }
 });
+
+// Serial: owns RAF and performance.now while the list changes length.
+it.serial("remeasureItem — smooth target: stays in bounds after the list shrinks or clears", () => {
+  const clock = frameClock();
+  const container = createContainer();
+  let count = 100;
+  const list = createVList({
+    container,
+    items: createTestItems(count),
+    item: { height: (index: number) => {
+      if (index >= count) throw new Error("Size read outside current items");
+      return 40;
+    }, template: simpleTemplate },
+  });
+  try {
+    clock.step(0);
+    list.scrollToIndex(50, { behavior: "smooth", duration: 100 });
+    clock.step(25);
+    count = 2;
+    list.setItems(createTestItems(count));
+    expect(() => clock.step(75)).not.toThrow();
+    expect(list.getScrollPosition()).toBe(0);
+    count = 100;
+    list.setItems(createTestItems(count));
+    list.scrollToIndex(50, { behavior: "smooth", duration: 100 });
+    clock.step(25);
+    count = 0;
+    list.setItems([]);
+    expect(() => clock.step(75)).not.toThrow();
+    expect(list.getScrollPosition()).toBe(0);
+  } finally {
+    list.destroy();
+    container.remove();
+    clock.restore();
+  }
+});
