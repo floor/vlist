@@ -521,15 +521,6 @@ export function search<T extends VListItem = VListItem>(
     }
   };
 
-  // ── Bar input callbacks ─────────────────────────────────────────────────────
-
-  const onBarKeydown = (e: KeyboardEvent): void => {
-    // The input is focused; route nav/close keys, let text input through.
-    if (e.key === "Escape" || e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp") {
-      onKeydown(e);
-    }
-  };
-
   return {
     name: "search",
     // Filtering is client-side over the items the list holds. Under data() those
@@ -591,7 +582,7 @@ export function search<T extends VListItem = VListItem>(
             onClear: () => applyQuery(""),
             onPrev: () => step(-1),
             onNext: () => step(1),
-            onKeydown: onBarKeydown,
+            onKeydown,
           },
         );
         updateNav();
