@@ -4,6 +4,8 @@ import { capturePrototypeGeometry } from "../helpers/geometry";
 import { createContainer } from "../helpers/factory";
 import { createVList } from "../../src/core/create";
 import { search, type SearchMethods } from "../../src/plugins/search/plugin";
+import { selection } from "../../src/plugins/selection/plugin";
+import { a11y } from "../../src/plugins/a11y/plugin";
 import { tree, type TreeMethods } from "../../src/plugins/tree/plugin";
 import type { VListPlugin } from "../../src/core/types";
 import type { VList } from "../../src/core/types";
@@ -134,6 +136,34 @@ for (const horizontal of [false, true]) {
         expect(afterIndex).toBe(beforeIndex + (action === "expand" ? 2 : -2));
         expect(afterIndex * 40 - f.list.getScrollPosition()).toBe(screenOffset);
         expect(f.row("root-20")).not.toBeNull();
+      } finally { f.dispose(); }
+    });
+  }
+}
+
+
+for (const owner of ["standalone", "selection", "a11y"] as const) {
+  for (const action of ["expand", "collapse", "collapse-focused-child"] as const) {
+    // Serial: the focus owners use document.activeElement during keyboard input.
+    it.serial(`tree + ${owner} — ${action} keeps the focus ring and announcement on the same item`, async () => {
+      const plugins: VListPlugin<TreeRow>[] = owner === "standalone" ? [] : [owner === "selection" ? selection() : a11y()];
+      const f = treeList(false, plugins);
+      try {
+        await Promise.resolve();
+        const content = f.container.querySelector<HTMLElement>(".vlist-content")!;
+        const press = (key: string): void => { content.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); };
+        if (action !== "expand") f.list.expand("root-0");
+        press("Home");
+        if (action === "collapse-focused-child") press("ArrowRight");
+        else press("End");
+        const expected = action === "collapse-focused-child" ? "root-0" : "root-59";
+        const before = f.container.querySelector<HTMLElement>(".vlist-item--focused")!;
+        expect(before?.dataset.id).toBe(action === "collapse-focused-child" ? "child-0-0" : expected);
+        if (action === "expand") f.list.expand("root-0");
+        else f.list.collapse("root-0");
+        const focused = f.container.querySelector<HTMLElement>(".vlist-item--focused")!;
+        expect(focused?.dataset.id).toBe(expected);
+        expect(content.getAttribute("aria-activedescendant")).toBe(focused.id);
       } finally { f.dispose(); }
     });
   }
