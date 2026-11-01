@@ -168,3 +168,18 @@ for (const owner of ["standalone", "selection", "a11y"] as const) {
     });
   }
 }
+
+it("tree — an empty tree forgets its previous sub-item anchor offset", () => {
+  const f = treeList();
+  try {
+    f.list.scrollToIndex(20);
+    const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!;
+    viewport.scrollTop = 805;
+    viewport.dispatchEvent(new Event("scroll"));
+    f.list.setItems([]);
+    viewport.scrollTop = 0;
+    viewport.dispatchEvent(new Event("scroll"));
+    f.list.addChild(null, { id: "root-20", name: "Replacement", height: 40, children: [] });
+    expect(f.list.getScrollPosition()).toBe(0);
+  } finally { f.dispose(); }
+});
