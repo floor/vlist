@@ -19,6 +19,8 @@ Who is affected: lists that resize rows with `remeasureItem()` — directly or t
 
 ### Fixed
 
+- Search: active queries refresh their matches after replacing, appending or removing items; filtered rows no longer retain the previous source array. Appending matches keeps the current navigation position.
+
 - Smooth `scrollToIndex()` jumps follow the current row offset when `remeasureItem()` changes sizes during the animation, including tables and grouped lists.
 
 - Growing an item above the viewport with `remeasureItem()`, including autosized items, preserves the visible anchor even at the previous scroll limit.
