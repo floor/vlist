@@ -17,7 +17,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - Search navigation maps data matches through grouped layouts and asks the layout owner to reveal them. Match events report the source item alongside its data index, including grouped tables.
 
-- Tree: expanding branches retains the focused item; collapsing a focused descendant moves focus to its parent, including with selection or a11y focus ownership. The ring and active descendant are remapped together.
+- Tree: expanding branches, all nodes or siblings retains the focused item; collapsing a focused descendant moves focus to its surviving parent (the root when collapsing all), including with selection or a11y focus ownership. The ring and active descendant are remapped together.
 
 - Tree: expanding or collapsing branches above the viewport keeps a surviving visible node at the same screen position, in both orientations. Empty trees discard the old sub-item anchor.
 
