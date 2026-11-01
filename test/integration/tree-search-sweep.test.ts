@@ -421,3 +421,49 @@ for (const reversed of [false, true]) {
     } finally { container.remove(); }
   });
 }
+
+for (const horizontal of [false, true]) {
+  for (const view of [0, 20, 59]) {
+    for (const branch of [0, 20, 59]) {
+      for (const action of ["expand", "collapse"] as const) {
+        it(`tree ${horizontal ? "horizontal" : "vertical"} — ${action} root ${branch} preserves root ${view} at the top, middle or end`, () => {
+          const f = treeList(horizontal);
+          try {
+            if (action === "collapse") f.list.expand(`root-${branch}`);
+            f.list.scrollToIndex(f.list.getIndexById(`root-${view}`));
+            const before = f.list.getIndexById(`root-${view}`) * 40 - f.list.getScrollPosition();
+            f.list[action](`root-${branch}`);
+            const after = f.list.getIndexById(`root-${view}`) * 40 - f.list.getScrollPosition();
+            expect(after).toBe(before);
+          } finally { f.dispose(); }
+        });
+      }
+    }
+  }
+}
+
+for (const horizontal of [false, true]) {
+  for (const action of ["expand", "collapse"] as const) {
+    // Serial: this test owns the process-wide animation-frame scheduler.
+    it.serial(`tree ${horizontal ? "horizontal" : "vertical"} — ${action} during smooth scrolling finishes at the requested visible index`, () => {
+      const originalRequest = globalThis.requestAnimationFrame;
+      const originalCancel = globalThis.cancelAnimationFrame;
+      const callbacks = new Map<number, FrameRequestCallback>();
+      let nextId = 0;
+      globalThis.requestAnimationFrame = (callback: FrameRequestCallback): number => { callbacks.set(++nextId, callback); return nextId; };
+      globalThis.cancelAnimationFrame = (id: number): void => { callbacks.delete(id); };
+      const f = treeList(horizontal);
+      try {
+        if (action === "collapse") f.list.expand("root-0");
+        const now = performance.now();
+        const frame = (timestamp: number): void => { const pending = [...callbacks.values()]; callbacks.clear(); for (const callback of pending) callback(timestamp); };
+        f.list.scrollToIndex(40, { behavior: "smooth", duration: 10000, easing: value => value });
+        frame(now + 5000);
+        f.list[action]("root-0");
+        frame(now + 20000);
+        expect(f.list.getScrollPosition()).toBe(1600);
+        expect(f.list.getItemAt(40)).toBeDefined();
+      } finally { f.dispose(); globalThis.requestAnimationFrame = originalRequest; globalThis.cancelAnimationFrame = originalCancel; }
+    });
+  }
+}
