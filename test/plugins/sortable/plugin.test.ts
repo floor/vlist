@@ -7,7 +7,7 @@
  */
 
 import { registerDOM, unregisterDOM, useFakeTimers } from "../../helpers/dom";
-import { describe, it, expect, mock, beforeAll, afterAll, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, mock, beforeAll, afterAll } from "bun:test";
 import { sortable } from "../../../src/plugins/sortable/plugin";
 import type { VListItem } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
@@ -16,10 +16,24 @@ import { createPluginMockContext } from "../../helpers/plugin-context";
 // Fake Timer Utility
 // =============================================================================
 
-let fakeTimers: { tick: (ms: number) => void; restore: () => void };
-
-beforeEach(() => { fakeTimers = useFakeTimers(); });
-afterEach(() => { fakeTimers.restore(); });
+// Every test in this file is `it.serial` and installs its own clock through
+// withFakeTimers: a fake clock owns the process-global timer slots
+// (setTimeout / clearTimeout / setInterval / clearInterval), so two tests in
+// one file may never hold clocks at once, and each restores its own in a
+// finally — never a module-level `let` plus beforeEach/afterEach, the shape
+// .claude/CLAUDE.md forbids under `bun test --concurrent`. The parameter is
+// named `fakeTimers` so the test bodies read as they always have.
+type FakeClock = ReturnType<typeof useFakeTimers>;
+const withFakeTimers = async <T>(
+  fn: (fakeTimers: FakeClock) => T | Promise<T>,
+): Promise<T> => {
+  const fakeTimers = useFakeTimers();
+  try {
+    return await fn(fakeTimers);
+  } finally {
+    fakeTimers.restore();
+  }
+};
 
 // =============================================================================
 // DOM Setup
@@ -99,18 +113,18 @@ function createMockContext() {
 // =============================================================================
 
 describe("sortable — factory", () => {
-  it("creates a plugin with correct name and priority", () => {
+  it.serial("creates a plugin with correct name and priority", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     expect(plugin.name).toBe("sortable");
     expect(plugin.priority).toBe(30);
-  });
+  }));
 
-  it("has a setup function", () => {
+  it.serial("has a setup function", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     expect(plugin.setup).toBeInstanceOf(Function);
-  });
+  }));
 
-  it("declares conflicts with grid, masonry, table and tree", () => {
+  it.serial("declares conflicts with grid, masonry, table and tree", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     expect(plugin.conflicts).toContain("grid");
     expect(plugin.conflicts).toContain("masonry");
@@ -118,14 +132,14 @@ describe("sortable — factory", () => {
     expect(plugin.conflicts).toContain("tree");
     // The conflict with scale() outlived the plugin itself, removed in 3.0.
     expect(plugin.conflicts).not.toContain("scale");
-  });
+  }));
 
-  it("accepts config with handle selector", () => {
+  it.serial("accepts config with handle selector", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>({ handle: ".drag-handle" });
     expect(plugin.name).toBe("sortable");
-  });
+  }));
 
-  it("accepts config with all options", () => {
+  it.serial("accepts config with all options", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>({
       handle: ".grip",
       ghostClass: "my-ghost",
@@ -136,7 +150,7 @@ describe("sortable — factory", () => {
       ghostContainer: document.createElement("div"),
     });
     expect(plugin.name).toBe("sortable");
-  });
+  }));
 });
 
 // =============================================================================
@@ -144,7 +158,7 @@ describe("sortable — factory", () => {
 // =============================================================================
 
 describe("sortable — setup", () => {
-  it("registers isSorting method on context", () => {
+  it.serial("registers isSorting method on context", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, methods, cleanup } = createMockContext();
     plugin.setup!(ctx);
@@ -154,18 +168,18 @@ describe("sortable — setup", () => {
     expect(isSorting()).toBe(false);
 
     cleanup();
-  });
+  }));
 
-  it("registers a destroy handler", () => {
+  it.serial("registers a destroy handler", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, destroyHandlers, cleanup } = createMockContext();
     plugin.setup!(ctx);
 
     expect(destroyHandlers.length).toBeGreaterThan(0);
     cleanup();
-  });
+  }));
 
-  it("attaches pointerdown listener to content container", () => {
+  it.serial("attaches pointerdown listener to content container", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, cleanup } = createMockContext();
 
@@ -181,7 +195,7 @@ describe("sortable — setup", () => {
     expect(pointerdownCall).toBeDefined();
 
     cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -189,7 +203,7 @@ describe("sortable — setup", () => {
 // =============================================================================
 
 describe("sortable — handle config", () => {
-  it("without handle: pointerdown on any item part registers for drag", () => {
+  it.serial("without handle: pointerdown on any item part registers for drag", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, cleanup } = createMockContext();
     plugin.setup!(ctx);
@@ -210,9 +224,9 @@ describe("sortable — handle config", () => {
     // The handler should not throw
     itemEl.dispatchEvent(event);
     cleanup();
-  });
+  }));
 
-  it("with handle: pointerdown outside handle does not initiate drag", () => {
+  it.serial("with handle: pointerdown outside handle does not initiate drag", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>({ handle: ".drag-handle" });
     const { ctx, methods, cleanup } = createMockContext();
     plugin.setup!(ctx);
@@ -234,9 +248,9 @@ describe("sortable — handle config", () => {
     const isSorting = methods.get("isSorting") as () => boolean;
     expect(isSorting()).toBe(false);
     cleanup();
-  });
+  }));
 
-  it("with handle: pointerdown on handle element is accepted", () => {
+  it.serial("with handle: pointerdown on handle element is accepted", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>({ handle: ".drag-handle" });
     const { ctx, cleanup } = createMockContext();
     plugin.setup!(ctx);
@@ -259,7 +273,7 @@ describe("sortable — handle config", () => {
     // Should not throw — the handle is present
     handle.dispatchEvent(event);
     cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -267,7 +281,7 @@ describe("sortable — handle config", () => {
 // =============================================================================
 
 describe("sortable — isSorting", () => {
-  it("returns false initially", () => {
+  it.serial("returns false initially", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, methods, cleanup } = createMockContext();
     plugin.setup!(ctx);
@@ -275,9 +289,9 @@ describe("sortable — isSorting", () => {
     const isSorting = methods.get("isSorting") as () => boolean;
     expect(isSorting()).toBe(false);
     cleanup();
-  });
+  }));
 
-  it("returns true during keyboard grab", () => {
+  it.serial("returns true during keyboard grab", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, methods, cleanup } = createMockContext();
     methods.set("_getFocusedIndex", () => 3);
@@ -298,9 +312,9 @@ describe("sortable — isSorting", () => {
 
     expect(isSorting()).toBe(true);
     cleanup();
-  });
+  }));
 
-  it("returns false after keyboard drop", () => {
+  it.serial("returns false after keyboard drop", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, methods, cleanup } = createMockContext();
     methods.set("_getFocusedIndex", () => 3);
@@ -329,9 +343,9 @@ describe("sortable — isSorting", () => {
     );
     expect(isSorting()).toBe(false);
     cleanup();
-  });
+  }));
 
-  it("returns false after keyboard cancel", () => {
+  it.serial("returns false after keyboard cancel", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const { ctx, methods, cleanup } = createMockContext();
     methods.set("_getFocusedIndex", () => 3);
@@ -360,7 +374,7 @@ describe("sortable — isSorting", () => {
     );
     expect(isSorting()).toBe(false);
     cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -420,7 +434,7 @@ describe("sortable — sort events", () => {
     return emitSpy;
   }
 
-  it("computes the drop position from the adapter pixel offset", () => {
+  it.serial("computes the drop position from the adapter pixel offset", () => withFakeTimers((fakeTimers) => {
     const t = createMockContext();
     t.ctx.scroll.getPixelEquivalent = () => 112;
     t.engineState.scrollPosition = 0;
@@ -431,9 +445,9 @@ describe("sortable — sort events", () => {
       const moved = calls.find(c => c[0] === "sort:move");
       expect(moved?.[1]).toEqual({ fromIndex: 2, currentIndex: 4 });
     } finally { for (const destroy of t.destroyHandlers) destroy(); t.cleanup(); }
-  });
+  }));
 
-  it("emits sort:start when drag threshold is crossed", () => {
+  it.serial("emits sort:start when drag threshold is crossed", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -447,9 +461,9 @@ describe("sortable — sort events", () => {
     expect(sortStartCall![1]).toEqual({ index: 2 });
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("does not emit sort:start when move is below threshold", () => {
+  it.serial("does not emit sort:start when move is below threshold", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>({ dragThreshold: 10 });
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -462,9 +476,9 @@ describe("sortable — sort events", () => {
     expect(sortStartCall).toBeUndefined();
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("emits sort:end on pointerup after drag", async () => {
+  it.serial("emits sort:end on pointerup after drag", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -508,7 +522,7 @@ describe("sortable — sort events", () => {
     expect(sortEndCall).toBeUndefined();
 
     mockCtx.cleanup();
-  });
+  }));
 
   // The drop commits its style changes under `vlist--settling` (transition:
   // none). finalize runs from transitionend or a timeout, so the frame
@@ -536,7 +550,7 @@ describe("sortable — sort events", () => {
   };
 
   for (const [name, moveY] of [["a drop back at the origin", 20], ["a drop two rows down", 120]] as const) {
-    it(`forces a style calculation under settling before the frame that removes it: ${name}`, () => {
+    it.serial(`forces a style calculation under settling before the frame that removes it: ${name}`, () => withFakeTimers((fakeTimers) => {
       const plugin = sortable<TestItem>();
       const mockCtx = createMockContext();
       mockCtx.ctx.dom.viewport.getBoundingClientRect = () =>
@@ -552,10 +566,10 @@ describe("sortable — sort events", () => {
       expect(mockCtx.ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
       expect(reads.some((r) => r.settling && !r.sorting && !r.dragSource)).toBe(true);
       mockCtx.cleanup();
-    });
+    }));
   }
 
-  it("emits sort:move when drop position changes during drag", () => {
+  it.serial("emits sort:move when drop position changes during drag", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -591,9 +605,9 @@ describe("sortable — sort events", () => {
     }
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("does not emit sort:move when drop position stays the same", () => {
+  it.serial("does not emit sort:move when drop position stays the same", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -608,9 +622,9 @@ describe("sortable — sort events", () => {
     expect(sortMove).toBeUndefined();
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("emits sort:end with fromIndex and toIndex when position changes", async () => {
+  it.serial("emits sort:end with fromIndex and toIndex when position changes", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -673,7 +687,7 @@ describe("sortable — sort events", () => {
     }
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -717,7 +731,7 @@ describe("sortable — ghost position", () => {
     mockCtx.cleanup();
   };
 
-  it("is absolute and placed the moment the drag starts, under the pointer", () => {
+  it.serial("is absolute and placed the moment the drag starts, under the pointer", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -731,9 +745,9 @@ describe("sortable — ghost position", () => {
     } finally {
       finish(mockCtx);
     }
-  });
+  }));
 
-  it("corrects by whatever its containing block adds: a block at (100, 300)", () => {
+  it.serial("corrects by whatever its containing block adds: a block at (100, 300)", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -750,9 +764,9 @@ describe("sortable — ghost position", () => {
     } finally {
       finish(mockCtx);
     }
-  });
+  }));
 
-  it("animates the drop to the slot through its containing block, not client space", () => {
+  it.serial("animates the drop to the slot through its containing block, not client space", () => withFakeTimers((fakeTimers) => {
     // The drop animation wrote viewport coordinates straight into left/top.
     // With the ghost absolute (#303) that is only right when its containing
     // block sits at the viewport origin -- on a scrolled page the drop flew
@@ -780,9 +794,9 @@ describe("sortable — ghost position", () => {
       document.body.querySelector(".vlist-sort-ghost")?.remove();
       mockCtx.cleanup();
     }
-  });
+  }));
 
-  it("corrects the viewport split the phone measured: rect = inline - (86, 215)", () => {
+  it.serial("corrects the viewport split the phone measured: rect = inline - (86, 215)", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -800,7 +814,7 @@ describe("sortable — ghost position", () => {
     } finally {
       finish(mockCtx);
     }
-  });
+  }));
 });
 
 describe("sortable — ghostContainer", () => {
@@ -847,7 +861,7 @@ describe("sortable — ghostContainer", () => {
     );
   }
 
-  it("appends ghost to document.body by default", () => {
+  it.serial("appends ghost to document.body by default", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -860,9 +874,9 @@ describe("sortable — ghostContainer", () => {
     for (const h of mockCtx.destroyHandlers) h();
     ghost?.remove();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("appends ghost to ghostContainer when specified", () => {
+  it.serial("appends ghost to ghostContainer when specified", () => withFakeTimers((fakeTimers) => {
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -882,9 +896,9 @@ describe("sortable — ghostContainer", () => {
     ghost?.remove();
     container.remove();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("removes ghost from ghostContainer on cleanup", async () => {
+  it.serial("removes ghost from ghostContainer on cleanup", async () => withFakeTimers((fakeTimers) => {
     const container = document.createElement("div");
     document.body.appendChild(container);
 
@@ -926,7 +940,7 @@ describe("sortable — ghostContainer", () => {
 
     container.remove();
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -934,7 +948,7 @@ describe("sortable — ghostContainer", () => {
 // =============================================================================
 
 describe("sortable — destroy", () => {
-  it("removes pointerdown listener from content on destroy", () => {
+  it.serial("removes pointerdown listener from content on destroy", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -955,7 +969,7 @@ describe("sortable — destroy", () => {
     expect(pointerdownCall).toBeDefined();
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -997,7 +1011,7 @@ describe("sortable — keyboard reordering", () => {
   // remembers the row but hides the ring, `_getFocusedIndex` answers -1 while
   // the ring is off, and the first arrow -- which shows the ring -- is what
   // made the second Space find a row.
-  it("Space grabs the clicked row while its ring is hidden (#115)", () => {
+  it.serial("Space grabs the clicked row while its ring is hidden (#115)", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     const focusById = mock(() => {});
@@ -1024,9 +1038,9 @@ describe("sortable — keyboard reordering", () => {
 
     dispatchKey(mockCtx.ctx.dom.content, "Escape");
     mockCtx.cleanup();
-  });
+  }));
 
-  it("Space with no focused row at all still grabs nothing", () => {
+  it.serial("Space with no focused row at all still grabs nothing", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     mockCtx.methods.set("_getFocusedIndex", () => -1);
@@ -1036,9 +1050,9 @@ describe("sortable — keyboard reordering", () => {
     expect(event.defaultPrevented).toBe(false);
     expect(mockCtx.emitSpy.mock.calls.some((c: unknown[]) => c[0] === "sort:start")).toBe(false);
     mockCtx.cleanup();
-  });
+  }));
 
-  it("Space on focused item enters grab mode and emits sort:start", () => {
+  it.serial("Space on focused item enters grab mode and emits sort:start", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1050,9 +1064,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortStart![1]).toEqual({ index: 3 });
 
     setup.cleanup();
-  });
+  }));
 
-  it("Space on focused item adds --sorting class to root", () => {
+  it.serial("Space on focused item adds --sorting class to root", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1060,9 +1074,9 @@ describe("sortable — keyboard reordering", () => {
     expect(setup.ctx.dom.root.classList.contains("vlist--sorting")).toBe(true);
 
     setup.cleanup();
-  });
+  }));
 
-  it("Space on focused item adds --kb-sorting class to grabbed item", () => {
+  it.serial("Space on focused item adds --kb-sorting class to grabbed item", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1071,9 +1085,9 @@ describe("sortable — keyboard reordering", () => {
     expect(el?.classList.contains("vlist-item--kb-sorting")).toBe(true);
 
     setup.cleanup();
-  });
+  }));
 
-  it("ArrowDown in grab mode emits sort:end with adjacent swap", () => {
+  it.serial("ArrowDown in grab mode emits sort:end with adjacent swap", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     // Grab
@@ -1090,9 +1104,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortEnd![1]).toEqual({ fromIndex: 3, toIndex: 4 });
 
     setup.cleanup();
-  });
+  }));
 
-  it("ArrowUp in grab mode emits sort:end with upward swap", () => {
+  it.serial("ArrowUp in grab mode emits sort:end with upward swap", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1107,9 +1121,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortEnd![1]).toEqual({ fromIndex: 3, toIndex: 2 });
 
     setup.cleanup();
-  });
+  }));
 
-  it("multiple ArrowDown moves accumulate position", () => {
+  it.serial("multiple ArrowDown moves accumulate position", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(1);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1126,9 +1140,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortEnds[1]![1]).toEqual({ fromIndex: 2, toIndex: 3 });
 
     setup.cleanup();
-  });
+  }));
 
-  it("ArrowDown at last index does nothing", () => {
+  it.serial("ArrowDown at last index does nothing", () => withFakeTimers((fakeTimers) => {
     // Focus on item 9 (last visible in DOM)
     const setup = setupKeyboard(9);
 
@@ -1145,9 +1159,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortEnd![1]).toEqual({ fromIndex: 9, toIndex: 10 });
 
     setup.cleanup();
-  });
+  }));
 
-  it("ArrowUp at index 0 does nothing", () => {
+  it.serial("ArrowUp at index 0 does nothing", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(0);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1161,9 +1175,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortEnd).toBeUndefined();
 
     setup.cleanup();
-  });
+  }));
 
-  it("Space in grab mode drops the item (no redundant sort:end)", () => {
+  it.serial("Space in grab mode drops the item (no redundant sort:end)", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1182,9 +1196,9 @@ describe("sortable — keyboard reordering", () => {
     expect(setup.ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
 
     setup.cleanup();
-  });
+  }));
 
-  it("Escape cancels grab and removes --sorting class", () => {
+  it.serial("Escape cancels grab and removes --sorting class", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1194,9 +1208,9 @@ describe("sortable — keyboard reordering", () => {
     expect(setup.ctx.dom.root.classList.contains("vlist--sorting")).toBe(false);
 
     setup.cleanup();
-  });
+  }));
 
-  it("Escape after move emits sort:cancel with original items", () => {
+  it.serial("Escape after move emits sort:cancel with original items", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1216,9 +1230,9 @@ describe("sortable — keyboard reordering", () => {
     expect(payload.originalItems.length).toBe(20);
 
     setup.cleanup();
-  });
+  }));
 
-  it("keys are intercepted (stopImmediatePropagation) in grab mode", () => {
+  it.serial("keys are intercepted (stopImmediatePropagation) in grab mode", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1229,9 +1243,9 @@ describe("sortable — keyboard reordering", () => {
     expect(event.defaultPrevented).toBe(true);
 
     setup.cleanup();
-  });
+  }));
 
-  it("Space without focused item does not enter grab mode", () => {
+  it.serial("Space without focused item does not enter grab mode", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(-1); // No focused item
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1242,9 +1256,9 @@ describe("sortable — keyboard reordering", () => {
     expect(sortStart).toBeUndefined();
 
     setup.cleanup();
-  });
+  }));
 
-  it("calls _focusById after keyboard move", () => {
+  it.serial("calls _focusById after keyboard move", () => withFakeTimers((fakeTimers) => {
     const setup = setupKeyboard(3);
     const focusByIdSpy = setup.methods.get("_focusById") as ReturnType<typeof mock>;
 
@@ -1257,7 +1271,7 @@ describe("sortable — keyboard reordering", () => {
     expect(focusByIdSpy.mock.calls[0]![0]).toBe(3);
 
     setup.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1265,7 +1279,7 @@ describe("sortable — keyboard reordering", () => {
 // =============================================================================
 
 describe("sortable — ARIA attributes", () => {
-  it("creates a hidden instructions element in the root", () => {
+  it.serial("creates a hidden instructions element in the root", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -1275,9 +1289,9 @@ describe("sortable — ARIA attributes", () => {
     expect(instructions!.textContent).toContain("Press Space to reorder");
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("applies aria-roledescription via onCommit hook", () => {
+  it.serial("applies aria-roledescription via onCommit hook", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -1295,9 +1309,9 @@ describe("sortable — ARIA attributes", () => {
 
     el.remove();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("removes instructions element on destroy", () => {
+  it.serial("removes instructions element on destroy", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -1314,7 +1328,7 @@ describe("sortable — ARIA attributes", () => {
     expect(mockCtx.ctx.dom.root.children.length).toBeLessThan(childrenBefore);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1347,7 +1361,7 @@ describe("sortable — live region announcements", () => {
     );
   }
 
-  it("announces grab with position info", () => {
+  it.serial("announces grab with position info", () => withFakeTimers((fakeTimers) => {
     const setup = setupWithLiveRegion(2);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1357,9 +1371,9 @@ describe("sortable — live region announcements", () => {
     expect(text).toContain("position 3 of 20");
 
     setup.cleanup();
-  });
+  }));
 
-  it("announces move with new position", () => {
+  it.serial("announces move with new position", () => withFakeTimers((fakeTimers) => {
     const setup = setupWithLiveRegion(2);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1370,9 +1384,9 @@ describe("sortable — live region announcements", () => {
     expect(text).toContain("position 4 of 20");
 
     setup.cleanup();
-  });
+  }));
 
-  it("announces drop with final position", () => {
+  it.serial("announces drop with final position", () => withFakeTimers((fakeTimers) => {
     const setup = setupWithLiveRegion(2);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1384,9 +1398,9 @@ describe("sortable — live region announcements", () => {
     expect(text).toContain("position 4 of 20"); // index 3 → position 4
 
     setup.cleanup();
-  });
+  }));
 
-  it("announces cancel with original position", () => {
+  it.serial("announces cancel with original position", () => withFakeTimers((fakeTimers) => {
     const setup = setupWithLiveRegion(2);
 
     dispatchKey(setup.ctx.dom.root, " ");
@@ -1398,7 +1412,7 @@ describe("sortable — live region announcements", () => {
     expect(text).toContain("position 3 of 20");
 
     setup.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1406,7 +1420,7 @@ describe("sortable — live region announcements", () => {
 // =============================================================================
 
 describe("sortable — pointer up without drag", () => {
-  it("pointerup before threshold cleans up without emitting events", () => {
+  it.serial("pointerup before threshold cleans up without emitting events", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>({ dragThreshold: 10 });
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -1439,7 +1453,7 @@ describe("sortable — pointer up without drag", () => {
     expect(isSorting()).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1456,7 +1470,7 @@ describe("sortable — keyboard key blocking", () => {
     return mockCtx;
   }
 
-  it("blocks unrelated keys during grab mode", () => {
+  it.serial("blocks unrelated keys during grab mode", () => withFakeTimers((fakeTimers) => {
     const mockCtx = setupKeyboard(3);
 
     // Enter grab mode
@@ -1472,9 +1486,9 @@ describe("sortable — keyboard key blocking", () => {
 
     expect(event.defaultPrevented).toBe(true);
     mockCtx.cleanup();
-  });
+  }));
 
-  it("does not block F-keys during grab mode", () => {
+  it.serial("does not block F-keys during grab mode", () => withFakeTimers((fakeTimers) => {
     const mockCtx = setupKeyboard(3);
 
     mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
@@ -1488,9 +1502,9 @@ describe("sortable — keyboard key blocking", () => {
 
     expect(event.defaultPrevented).toBe(false);
     mockCtx.cleanup();
-  });
+  }));
 
-  it("does not block Tab during grab mode", () => {
+  it.serial("does not block Tab during grab mode", () => withFakeTimers((fakeTimers) => {
     const mockCtx = setupKeyboard(3);
 
     mockCtx.ctx.dom.root.dispatchEvent(new KeyboardEvent("keydown", {
@@ -1504,7 +1518,7 @@ describe("sortable — keyboard key blocking", () => {
 
     expect(event.defaultPrevented).toBe(false);
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1512,7 +1526,7 @@ describe("sortable — keyboard key blocking", () => {
 // =============================================================================
 
 describe("sortable — edge scrolling", () => {
-  it("starts edge scroll loop when drag begins", async () => {
+  it.serial("starts edge scroll loop when drag begins", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1550,9 +1564,9 @@ describe("sortable — edge scrolling", () => {
 
     fakeTimers.tick(250);
     mockCtx.cleanup();
-  });
+  }));
 
-  it("clears shifts when pointer leaves viewport during drag", async () => {
+  it.serial("clears shifts when pointer leaves viewport during drag", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1597,7 +1611,7 @@ describe("sortable — edge scrolling", () => {
     expect(isSorting()).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1605,7 +1619,7 @@ describe("sortable — edge scrolling", () => {
 // =============================================================================
 
 describe("sortable — pointer cancel", () => {
-  it("pointercancel during drag cleans up", async () => {
+  it.serial("pointercancel during drag cleans up", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1639,7 +1653,7 @@ describe("sortable — pointer cancel", () => {
     expect(isSorting()).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1647,7 +1661,7 @@ describe("sortable — pointer cancel", () => {
 // =============================================================================
 
 describe("sortable — escape cancels pointer drag", () => {
-  it("Escape during pointer drag emits sort:cancel and cleans up", async () => {
+  it.serial("Escape during pointer drag emits sort:cancel and cleans up", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1689,7 +1703,7 @@ describe("sortable — escape cancels pointer drag", () => {
     expect(cancelCall).toBeDefined();
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1697,7 +1711,7 @@ describe("sortable — escape cancels pointer drag", () => {
 // =============================================================================
 
 describe("sortable — drop at same position", () => {
-  it("emits sort:cancel when item is returned to original position", async () => {
+  it.serial("emits sort:cancel when item is returned to original position", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1738,7 +1752,7 @@ describe("sortable — drop at same position", () => {
     expect(endCall).toBeUndefined();
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1746,7 +1760,7 @@ describe("sortable — drop at same position", () => {
 // =============================================================================
 
 describe("sortable — keyboard grab cancelled by pointer", () => {
-  it("cancels keyboard grab when pointer drag starts", () => {
+  it.serial("cancels keyboard grab when pointer drag starts", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     mockCtx.methods.set("_getFocusedIndex", () => 3);
@@ -1777,7 +1791,7 @@ describe("sortable — keyboard grab cancelled by pointer", () => {
     expect(isSorting()).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1785,7 +1799,7 @@ describe("sortable — keyboard grab cancelled by pointer", () => {
 // =============================================================================
 
 describe("sortable — focus preservation", () => {
-  it("restores focus to originally-focused item after pointer drag reorder", async () => {
+  it.serial("restores focus to originally-focused item after pointer drag reorder", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1830,9 +1844,9 @@ describe("sortable — focus preservation", () => {
     }
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("does not call focusById when no item was focused before drag", async () => {
+  it.serial("does not call focusById when no item was focused before drag", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -1869,7 +1883,7 @@ describe("sortable — focus preservation", () => {
     expect(focusByIdSpy.mock.calls.length).toBe(0);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -1969,7 +1983,7 @@ describe("sortable — drop index calculation", () => {
     return { moveTo, getDropIndices: () => dropIndices, cleanup };
   }
 
-  it("shifts one item at a time when dragging down", () => {
+  it.serial("shifts one item at a time when dragging down", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -1995,9 +2009,9 @@ describe("sortable — drop index calculation", () => {
 
     session.cleanup();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("shifts one item at a time when dragging up", () => {
+  it.serial("shifts one item at a time when dragging up", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -2025,9 +2039,9 @@ describe("sortable — drop index calculation", () => {
 
     session.cleanup();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("does not oscillate when reversing drag direction", () => {
+  it.serial("does not oscillate when reversing drag direction", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -2062,9 +2076,9 @@ describe("sortable — drop index calculation", () => {
 
     session.cleanup();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("handles large displacement correctly (e.g. after auto-scroll)", () => {
+  it.serial("handles large displacement correctly (e.g. after auto-scroll)", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -2082,9 +2096,9 @@ describe("sortable — drop index calculation", () => {
 
     session.cleanup();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("returns dragIndex when ghost is within the drag slot", () => {
+  it.serial("returns dragIndex when ghost is within the drag slot", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -2098,9 +2112,9 @@ describe("sortable — drop index calculation", () => {
 
     session.cleanup();
     mockCtx.cleanup();
-  });
+  }));
 
-  it("each step shifts exactly one item when moving down then back up", () => {
+  it.serial("each step shifts exactly one item when moving down then back up", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
     plugin.setup!(mockCtx.ctx);
@@ -2136,7 +2150,7 @@ describe("sortable — drop index calculation", () => {
 
     session.cleanup();
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -2144,7 +2158,7 @@ describe("sortable — drop index calculation", () => {
 // =============================================================================
 
 describe("sortable — settling class", () => {
-  it("adds --settling class during finalize when position changed", async () => {
+  it.serial("adds --settling class during finalize when position changed", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -2177,9 +2191,9 @@ describe("sortable — settling class", () => {
     expect(mockCtx.ctx.dom.root.classList.contains("vlist--settling")).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("adds --settling class during finalize when dropped at same position", async () => {
+  it.serial("adds --settling class during finalize when dropped at same position", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -2212,7 +2226,7 @@ describe("sortable — settling class", () => {
     expect(mockCtx.ctx.dom.root.classList.contains("vlist--settling")).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -2220,7 +2234,7 @@ describe("sortable — settling class", () => {
 // =============================================================================
 
 describe("sortable — drag-source class", () => {
-  it("adds drag-source class to dragged item instead of inline opacity", () => {
+  it.serial("adds drag-source class to dragged item instead of inline opacity", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -2247,9 +2261,9 @@ describe("sortable — drag-source class", () => {
     expect(itemEl.style.opacity).toBe("");
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("removes drag-source class on cleanup", async () => {
+  it.serial("removes drag-source class on cleanup", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -2279,9 +2293,9 @@ describe("sortable — drag-source class", () => {
     expect(itemEl.classList.contains("vlist-item--drag-source")).toBe(false);
 
     mockCtx.cleanup();
-  });
+  }));
 
-  it("re-applies drag-source class via onCommit hook when element is recycled", () => {
+  it.serial("re-applies drag-source class via onCommit hook when element is recycled", () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -2316,7 +2330,7 @@ describe("sortable — drag-source class", () => {
     expect(newEl.classList.contains("vlist-item--drag-source")).toBe(true);
 
     mockCtx.cleanup();
-  });
+  }));
 });
 
 // =============================================================================
@@ -2324,7 +2338,7 @@ describe("sortable — drag-source class", () => {
 // =============================================================================
 
 describe("sortable — escape animates ghost return", () => {
-  it("Escape during pointer drag goes through animateDrop to animate ghost back", async () => {
+  it.serial("Escape during pointer drag goes through animateDrop to animate ghost back", async () => withFakeTimers((fakeTimers) => {
     const plugin = sortable<TestItem>();
     const mockCtx = createMockContext();
 
@@ -2375,5 +2389,5 @@ describe("sortable — escape animates ghost return", () => {
     expect(cancelCall).toBeDefined();
 
     mockCtx.cleanup();
-  });
+  }));
 });
