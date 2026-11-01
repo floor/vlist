@@ -720,7 +720,6 @@ The instance API (`setItems`, `scrollToIndex`, `on`, `destroy`) is unchanged.
 ## Links
 
 - **Docs & Examples:** [vlist.io](https://vlist.io)
-- **Staging:** [staging.vlist.io](https://staging.vlist.io)
 - **GitHub:** [github.com/floor/vlist](https://github.com/floor/vlist)
 - **NPM:** [vlist](https://www.npmjs.com/package/vlist)
 - **Issues:** [GitHub Issues](https://github.com/floor/vlist/issues)
