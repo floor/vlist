@@ -4,8 +4,8 @@ Status: proposal — not implemented. Owner decision requested: keep the current
 restore policy, offer an opt-in anchor policy, or change the default. Recommendation:
 **Option B, an opt-in policy in a minor release**. No release or public contract change is
 approved by this document. Based on `next` at `c73cdef75cbd55d2b0d1861ca2b59b9e016e5f1f`
-(3.3.1); the same basic reproduction was run against the `v3.3.0` source tag. This is the
-next proposal document number after 347, not a reference to issue #348.
+(3.3.1); the same basic reproduction was run against the `v3.3.0` source tag. This issue-less proposal is tracked by
+[draft PR #431](https://github.com/floor/vlist/pull/431); its filename uses that PR number.
 
 ## 1. Problem
 
