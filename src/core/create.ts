@@ -1078,6 +1078,7 @@ export function createCore<T extends VListItem = VListItem>(
     },
 
     remeasureItem(index: number): boolean {
+      if (state.destroyed) return false;
       // Bounds first, in the data space: under groups() the engine total
       // counts headers, and under an adapter the raw array is empty.
       // `invalidate` rejects NaN on its own but the size read around it does

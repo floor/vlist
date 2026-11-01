@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- `remeasureItem()` returns `false` after destruction without reading the size source or rebuilding detached content.
+
 ## [3.3.1] - 2026-10-31
 
 Under `groups()`, focus, selection and search stay on the item you are on.
