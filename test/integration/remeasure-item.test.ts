@@ -21,6 +21,10 @@ import { grid } from "../../src/plugins/grid/plugin";
 import { masonry } from "../../src/plugins/masonry/plugin";
 import { carousel } from "../../src/plugins/carousel/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
+import { selection } from "../../src/plugins/selection/plugin";
+import { a11y } from "../../src/plugins/a11y/plugin";
+import { snapshots, type SnapshotsMethods } from "../../src/plugins/snapshots/plugin";
+import { data } from "../../src/plugins/data/plugin";
 
 // =============================================================================
 // Setup
@@ -554,4 +558,375 @@ describe("remeasureItem — groups()", () => {
       f.dispose();
     }
   });
+});
+
+
+describe("remeasureItem — lifecycle", () => {
+  it("returns false after destroy without reading the size source", () => {
+    const f = buildCore();
+    try {
+      f.list.destroy();
+      const calls = f.specCalls();
+      f.heights[2] = 80;
+      expect(f.list.remeasureItem(2)).toBe(false);
+      expect(f.specCalls()).toBe(calls);
+    } finally {
+      f.dispose();
+    }
+  });
+});
+
+
+describe("remeasureItem — scroll limits", () => {
+  it("publishes grown content before correcting the anchor at the old scroll limit", () => {
+    const f = buildCore();
+    try {
+      const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!;
+      let applied = 0;
+      // Model a bounded native scroll source: writes cannot exceed the
+      // content size currently published to the viewport.
+      Object.defineProperty(viewport, "scrollTop", {
+        configurable: true,
+        get: () => applied,
+        set: (value: number) => {
+          applied = Math.max(0, Math.min(value, parseFloat(f.content().style.height) - 500));
+        },
+      });
+      f.list.scrollToIndex(29, "end");
+      expect(f.list.getScrollPosition()).toBe(700);
+      const anchor = f.item(18)!;
+      const before = parseFloat(anchor.style.transform.match(/[-\d.]+/)![0]) - 700;
+      f.heights[0] = 140;
+      expect(f.list.remeasureItem(0)).toBe(true);
+      expect(f.content().style.height).toBe("1300px");
+      expect(f.list.getScrollPosition()).toBe(800);
+      expect(parseFloat(anchor.style.transform.match(/[-\d.]+/)![0]) - 800).toBe(before);
+    } finally {
+      f.dispose();
+    }
+  });
+});
+
+
+type SizePairing = "core" | "table" | "groups" | "table + groups";
+
+function buildPairing(pairing: SizePairing, extra: VListPlugin<TestItem>[] = []) {
+  const heights: number[] = [];
+  const container = createContainer({ width: 300, height: 500 });
+  const size = (index: number): number => heights[index] ?? 40;
+  const plugins: VListPlugin<TestItem>[] = [];
+  if (pairing.includes("table")) {
+    plugins.push(table({ columns: COLUMNS, rowHeight: size, headerHeight: 20 }));
+  }
+  if (pairing.includes("groups")) {
+    plugins.push(groups({
+      getGroupForIndex: (index: number) => index < 50 ? "A" : "B",
+      header: { height: 20, template: (key: string) => key },
+    }));
+  }
+  const list = createVList<TestItem>({
+    container,
+    items: createTestItems(100),
+    item: { height: size, template: simpleTemplate },
+  }, [...plugins, ...extra]);
+  return {
+    list, container, heights,
+    item(index: number): HTMLElement | null {
+      return container.querySelector<HTMLElement>(`.vlist-content [data-id="${index + 1}"]`);
+    },
+    dispose(): void { list.destroy(); container.remove(); },
+  };
+}
+
+/** Serial tests only: owns RAF and performance.now for deterministic animation. */
+function frameClock() {
+  const raf = globalThis.requestAnimationFrame;
+  const caf = globalThis.cancelAnimationFrame;
+  const now = Object.getOwnPropertyDescriptor(performance, "now");
+  const pending = new Map<number, FrameRequestCallback>();
+  let next = 0;
+  let time = performance.now();
+  Object.defineProperty(performance, "now", { configurable: true, value: () => time });
+  globalThis.requestAnimationFrame = (fn) => { pending.set(++next, fn); return next; };
+  globalThis.cancelAnimationFrame = (id) => { pending.delete(id); };
+  return {
+    step(ms: number): void {
+      time += ms;
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const fn of callbacks) fn(time);
+    },
+    restore(): void {
+      pending.clear();
+      globalThis.requestAnimationFrame = raf;
+      globalThis.cancelAnimationFrame = caf;
+      if (now) Object.defineProperty(performance, "now", now);
+      else Reflect.deleteProperty(performance, "now");
+    },
+  };
+}
+
+for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
+  it.serial(`remeasureItem — ${pairing}: a smooth jump lands on the resized target offset`, async () => {
+    const clock = frameClock();
+    const f = buildPairing(pairing);
+    try {
+      await Promise.resolve();
+      clock.step(0);
+      f.list.scrollToIndex(50, { behavior: "smooth", duration: 100, easing: (t) => t });
+      clock.step(25);
+      f.heights[0] = 140;
+      expect(f.list.remeasureItem(0)).toBe(true);
+      clock.step(75);
+      const target = f.item(50)!;
+      expect(target).not.toBeNull();
+      const numbers = target.style.transform.match(/-?\d+(?:\.\d+)?px/g)!;
+      const offset = parseFloat(numbers[target.style.transform.startsWith("translate3d") ? 1 : 0]!);
+      expect(f.list.getScrollPosition()).toBeCloseTo(offset, 5);
+    } finally {
+      f.dispose();
+      clock.restore();
+    }
+  });
+}
+
+
+for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
+  it(`remeasureItem — ${pairing}: preserves a scrolled anchor above, at and below it`, async () => {
+    const f = buildPairing(pairing);
+    try {
+      await Promise.resolve();
+      f.list.scrollToIndex(20, "start");
+      const start = f.list.getScrollPosition();
+      f.heights[3] = 90;
+      expect(f.list.remeasureItem(3)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(start + 50);
+      const anchor = f.item(20)!;
+      expect(anchor.style.height).toBe("40px");
+      f.heights[20] = 70;
+      expect(f.list.remeasureItem(20)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(start + 50);
+      expect(f.item(20)).toBe(anchor);
+      expect(anchor.style.height).toBe("70px");
+      f.heights[30] = 15;
+      expect(f.list.remeasureItem(30)).toBe(true);
+      expect(f.list.getScrollPosition()).toBe(start + 50);
+      // Later offsets include all three deltas, including a shrink.
+      f.list.scrollToIndex(31, "start");
+      expect(f.list.getScrollPosition()).toBe(31 * 40 + 50 + 30 - 25);
+    } finally { f.dispose(); }
+  });
+
+  for (const owner of ["a11y", "selection"] as const) {
+    // Keyboard navigation owns document.activeElement.
+    it.serial(`remeasureItem — ${pairing} + ${owner}: preserves the focused node, ring and active descendant`, async () => {
+      const f = buildPairing(pairing, [owner === "a11y" ? a11y() : selection()]);
+      try {
+        await Promise.resolve();
+        const root = f.container.querySelector<HTMLElement>(".vlist")!;
+        root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+        const focused = f.container.querySelector<HTMLElement>("[class*=item--focused]")!;
+        expect(focused).not.toBeNull();
+        const active = f.container.querySelector("[aria-activedescendant]")!;
+        expect(active.getAttribute("aria-activedescendant")).toBe(focused.id);
+        const identity = focused.getAttribute("data-id");
+        f.heights[0] = 90;
+        f.list.remeasureItem(0);
+        expect(f.container.querySelector("[class*=item--focused]")).toBe(focused);
+        expect(active.getAttribute("aria-activedescendant")).toBe(focused.id);
+        expect(focused.getAttribute("data-id")).toBe(identity);
+      } finally { f.dispose(); }
+    });
+  }
+
+  it(`remeasureItem — ${pairing} + snapshots: captures and restores the new anchor`, async () => {
+    const f = buildPairing(pairing, [snapshots()]);
+    const list = f.list as VList<TestItem> & SnapshotsMethods;
+    try {
+      await Promise.resolve();
+      list.scrollToIndex(20, "start");
+      const before = list.getScrollSnapshot();
+      f.heights[3] = 90;
+      list.remeasureItem(3);
+      const after = list.getScrollSnapshot();
+      expect(after.index).toBe(before.index);
+      expect(after.offsetInItem).toBe(before.offsetInItem);
+      expect(after.scrollTop).toBe(before.scrollTop! + 50);
+      list.scrollToIndex(0);
+      await list.restoreScroll(after);
+      expect(list.getScrollPosition()).toBe(after.scrollTop!);
+    } finally { f.dispose(); }
+  });
+}
+
+it("remeasureItem — horizontal: updates widths and preserves the scrolled anchor", () => {
+  const heights: number[] = [];
+  const container = createContainer();
+  const list = createVList({
+    container,
+    orientation: "horizontal",
+    items: createTestItems(30),
+    item: { width: (i: number) => heights[i] ?? 40, height: 40, template: simpleTemplate },
+  });
+  try {
+    list.scrollToIndex(10);
+    expect(list.getScrollPosition()).toBe(400);
+    heights[2] = 90;
+    expect(list.remeasureItem(2)).toBe(true);
+    expect(list.getScrollPosition()).toBe(450);
+    expect(container.querySelector<HTMLElement>(".vlist-content")!.style.width).toBe("1250px");
+    const row = container.querySelector<HTMLElement>('[data-index="10"]')!;
+    expect(row.style.transform).toBe("translateX(450px)");
+    heights[10] = 70;
+    list.remeasureItem(10);
+    expect(row.style.width).toBe("70px");
+    expect(list.getScrollPosition()).toBe(450);
+  } finally { list.destroy(); container.remove(); }
+});
+
+it("remeasureItem — setItems shrink: rejects the removed data index without a size read", () => {
+  const f = buildCore();
+  try {
+    f.list.setItems(createTestItems(2));
+    const calls = f.specCalls();
+    expect(f.list.remeasureItem(2)).toBe(false);
+    expect(f.list.remeasureItem(29)).toBe(false);
+    expect(f.specCalls()).toBe(calls);
+    expect(f.list.remeasureItem(1)).toBe(true);
+    expect(f.content().style.height).toBe("80px");
+  } finally { f.dispose(); }
+});
+
+it("remeasureItem — async: resizes unloaded placeholders in the adapter data space", async () => {
+  const container = createContainer();
+  const heights: number[] = [];
+  const list = createVList({
+    container,
+    item: { height: (i: number) => heights[i] ?? 40, template: simpleTemplate },
+  }, [data<TestItem>({ total: 100, autoLoad: false, adapter: {
+    read: async () => ({ items: [], total: 100, hasMore: false }),
+  } })]);
+  try {
+    await Promise.resolve();
+    list.setTotal(100);
+    expect(list.getItemAt(50)?._isPlaceholder).toBe(true);
+    list.scrollToIndex(50);
+    expect(list.getScrollPosition()).toBe(2000);
+    heights[3] = 90;
+    expect(list.remeasureItem(3)).toBe(true);
+    expect(list.getScrollPosition()).toBe(2050);
+    expect(container.querySelector<HTMLElement>(".vlist-content")!.style.height).toBe("4050px");
+    expect(list.remeasureItem(100)).toBe(false);
+  } finally { list.destroy(); container.remove(); }
+});
+
+for (const horizontal of [false, true]) {
+  // Serial: supplies ResizeObserver measurements and owns its process global.
+  it.serial(`remeasureItem — autosize ${horizontal ? "horizontal" : "vertical"}: preserves the anchor near the old limit`, () => {
+    const original = globalThis.ResizeObserver;
+    const observers: Array<{ callback: ResizeObserverCallback; elements: Set<Element> }> = [];
+    globalThis.ResizeObserver = class {
+      readonly elements = new Set<Element>();
+      constructor(readonly callback: ResizeObserverCallback) { observers.push(this); }
+      observe(el: Element): void { this.elements.add(el); }
+      unobserve(el: Element): void { this.elements.delete(el); }
+      disconnect(): void { this.elements.clear(); }
+    } as unknown as typeof ResizeObserver;
+    const container = createContainer();
+    const list = createVList({
+      container,
+      orientation: horizontal ? "horizontal" : "vertical",
+      items: createTestItems(100),
+      item: { estimatedHeight: 40, estimatedWidth: 40, template: simpleTemplate },
+    }, [autosize()]);
+    try {
+      const content = container.querySelector<HTMLElement>(".vlist-content")!;
+      const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+      const dimension = horizontal ? "width" : "height";
+      const position = horizontal ? "scrollLeft" : "scrollTop";
+      const viewportSize = horizontal ? 300 : 500;
+      let applied = 0;
+      Object.defineProperty(viewport, position, {
+        configurable: true,
+        get: () => applied,
+        set: (value: number) => { applied = Math.max(0, Math.min(value, parseFloat(content.style[dimension]) - viewportSize)); },
+      });
+      const start = 4000 - viewportSize - 10;
+      viewport[position] = start;
+      viewport.dispatchEvent(new Event("scroll"));
+      const index = Math.floor(start / 40) - 1;
+      const row = container.querySelector<HTMLElement>(`[data-index="${index}"]`)!;
+      expect(row).not.toBeNull();
+      list.setMeasuredSize(index, 40);
+      expect(list.remeasureItem(index)).toBe(true);
+      const owner = observers.find((observer) => observer.elements.has(row))!;
+      expect(owner).toBeDefined();
+      owner.callback([{
+        target: row,
+        borderBoxSize: [{ blockSize: 140, inlineSize: 140 }],
+      } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+      expect(content.style[dimension]).toBe("4100px");
+      expect(list.getScrollPosition()).toBe(start + 100);
+      expect(row.style[dimension]).toBe("140px");
+    } finally {
+      list.destroy();
+      container.remove();
+      globalThis.ResizeObserver = original;
+    }
+  });
+}
+
+// Minor: restore currently prefers saved pixels when the item count matches.
+// Choosing anchor-first restore changes that contract; detecting stale geometry
+// across saved/recreated lists needs additional snapshot metadata.
+it.todo("remeasureItem — snapshots: an older snapshot follows its anchor after resizing", async () => {
+  const f = buildPairing("core", [snapshots()]);
+  const list = f.list as VList<TestItem> & SnapshotsMethods;
+  try {
+    list.scrollToIndex(20, "start");
+    const snapshot = list.getScrollSnapshot();
+    f.heights[3] = 90;
+    list.remeasureItem(3);
+    list.scrollToIndex(0);
+    await list.restoreScroll(snapshot);
+    expect(list.getScrollPosition()).toBe(850);
+    expect(list.getScrollSnapshot().index).toBe(20);
+  } finally { f.dispose(); }
+});
+
+// Serial: owns RAF and performance.now while the list changes length.
+it.serial("remeasureItem — smooth target: stays in bounds after the list shrinks or clears", () => {
+  const clock = frameClock();
+  const container = createContainer();
+  let count = 100;
+  const list = createVList({
+    container,
+    items: createTestItems(count),
+    item: { height: (index: number) => {
+      if (index >= count) throw new Error("Size read outside current items");
+      return 40;
+    }, template: simpleTemplate },
+  });
+  try {
+    clock.step(0);
+    list.scrollToIndex(50, { behavior: "smooth", duration: 100 });
+    clock.step(25);
+    count = 2;
+    list.setItems(createTestItems(count));
+    expect(() => clock.step(75)).not.toThrow();
+    expect(list.getScrollPosition()).toBe(0);
+    count = 100;
+    list.setItems(createTestItems(count));
+    list.scrollToIndex(50, { behavior: "smooth", duration: 100 });
+    clock.step(25);
+    count = 0;
+    list.setItems([]);
+    expect(() => clock.step(75)).not.toThrow();
+    expect(list.getScrollPosition()).toBe(0);
+  } finally {
+    list.destroy();
+    container.remove();
+    clock.restore();
+  }
 });

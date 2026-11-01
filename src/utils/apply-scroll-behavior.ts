@@ -11,12 +11,12 @@ import { SCROLL_DURATION } from "../constants";
 
 type ScrollTarget = {
   to(position: number): void;
-  smoothTo(target: number, duration: number, easing?: (t: number) => number): void;
+  smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number): void;
 };
 
 export function applyScrollBehavior(
   scroll: ScrollTarget,
-  position: number,
+  position: number | (() => number),
   behavior?: string,
   duration?: number,
   easing?: (t: number) => number,
@@ -24,6 +24,6 @@ export function applyScrollBehavior(
   if (behavior === "smooth") {
     scroll.smoothTo(position, duration ?? SCROLL_DURATION, easing);
   } else {
-    scroll.to(position);
+    scroll.to(typeof position === "function" ? position() : position);
   }
 }

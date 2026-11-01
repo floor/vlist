@@ -1078,6 +1078,7 @@ export function createCore<T extends VListItem = VListItem>(
     },
 
     remeasureItem(index: number): boolean {
+      if (state.destroyed) return false;
       // Bounds first, in the data space: under groups() the engine total
       // counts headers, and under an adapter the raw array is empty.
       // `invalidate` rejects NaN on its own but the size read around it does
@@ -1126,6 +1127,10 @@ export function createCore<T extends VListItem = VListItem>(
       const onItemRemeasure = methods.get("_onItemRemeasure") as ((i: number) => void) | undefined;
       onItemRemeasure?.(cacheIndex);
 
+      // Publish the new limit before writing the anchor correction, or a
+      // native source at the old end clamps away the growth delta.
+      updateContentSize(sizeCache.getTotalSize());
+
       // A change above the viewport moves everything below it; keep the
       // anchored content still by the same delta.
       if (cacheIndex < firstVisible) {
@@ -1133,7 +1138,6 @@ export function createCore<T extends VListItem = VListItem>(
         if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
         else writeScroll(state.scrollPosition + delta);
       }
-      updateContentSize(sizeCache.getTotalSize());
       doForceRender();
       return true;
     },
@@ -1240,38 +1244,44 @@ export function createCore<T extends VListItem = VListItem>(
         return;
       }
 
-      const clamped = Math.max(0, Math.min(index, total - 1));
+      // Re-read the offset each frame: remeasureItem() can move the target
+      // while a smooth jump is in flight.
+      const getTarget = (): number => {
+        const total = sizeCache.getTotal();
+        if (total === 0) return 0;
+        const clamped = Math.max(0, Math.min(index, total - 1));
+        const offset = sizeCache.getOffset(clamped);
+        const itemSize = sizeCache.getSize(clamped);
+        const cs = state.containerSize;
+        const totalSize = sizeCache.getTotalSize();
+        const mp = config.mainAxisPadding;
+        const maxScroll = Math.max(0, totalSize + mp - cs);
 
-      const offset = sizeCache.getOffset(clamped);
-      const itemSize = sizeCache.getSize(clamped);
-      const cs = state.containerSize;
-      const totalSize = sizeCache.getTotalSize();
-      const mp = config.mainAxisPadding;
-      const maxScroll = Math.max(0, totalSize + mp - cs);
-
-      let pos: number;
-      if (scrollToPosFn) {
-        pos = scrollToPosFn(clamped, sizeCache, cs, total, align);
-      } else {
-        const sp = config.startPadding;
-        switch (align) {
-          case "center":
-            pos = sp + offset - (cs - itemSize) / 2;
-            break;
-          case "end":
-            pos = offset + itemSize + mp - cs;
-            break;
-          default:
-            pos = offset;
+        let pos: number;
+        if (scrollToPosFn) {
+          pos = scrollToPosFn(clamped, sizeCache, cs, total, align);
+        } else {
+          const sp = config.startPadding;
+          switch (align) {
+            case "center":
+              pos = sp + offset - (cs - itemSize) / 2;
+              break;
+            case "end":
+              pos = offset + itemSize + mp - cs;
+              break;
+            default:
+              pos = offset;
+          }
+          pos = Math.max(0, Math.min(pos, maxScroll));
         }
-        pos = Math.max(0, Math.min(pos, maxScroll));
-      }
+        return pos;
+      };
 
       // While a swap is pending, a smooth scroll would stop at the browser's cap.
       if (behavior === "smooth" && !pending) {
-        scrollHandler!.smoothScrollTo(pos, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
+        scrollHandler!.smoothScrollTo(getTarget, duration ?? SCROLL_DURATION, scrollSetFn ?? undefined, easing);
       } else {
-        writeScroll(pos);
+        writeScroll(getTarget());
       }
     },
 
