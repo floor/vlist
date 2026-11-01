@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Growing an item above the viewport with `remeasureItem()` preserves the visible anchor even at the previous scroll limit.
+
 - `remeasureItem()` returns `false` after destruction without reading the size source or rebuilding detached content.
 
 ## [3.3.1] - 2026-10-31

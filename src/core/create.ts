@@ -1127,6 +1127,10 @@ export function createCore<T extends VListItem = VListItem>(
       const onItemRemeasure = methods.get("_onItemRemeasure") as ((i: number) => void) | undefined;
       onItemRemeasure?.(cacheIndex);
 
+      // Publish the new limit before writing the anchor correction, or a
+      // native source at the old end clamps away the growth delta.
+      updateContentSize(sizeCache.getTotalSize());
+
       // A change above the viewport moves everything below it; keep the
       // anchored content still by the same delta.
       if (cacheIndex < firstVisible) {
@@ -1134,7 +1138,6 @@ export function createCore<T extends VListItem = VListItem>(
         if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
         else writeScroll(state.scrollPosition + delta);
       }
-      updateContentSize(sizeCache.getTotalSize());
       doForceRender();
       return true;
     },
