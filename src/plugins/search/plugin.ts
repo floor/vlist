@@ -235,9 +235,12 @@ export function search<T extends VListItem = VListItem>(
     resolveOnce();
     const original = matches[current];
     if (original === undefined) return;
+    const index = d2lFn ? d2lFn(original) : original;
+    const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
     if (scrollToIndexFn) scrollToIndexFn(original, "center");
-    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(original) - ctx.getState().containerSize / 2));
-    const item = ctx.items.at(original);
+    else if (reveal) reveal(index);
+    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(index) - ctx.getState().containerSize / 2));
+    const item = ctx.items.all()[original];
     ctx.emitter.emit("search:match", {
       index: original,
       item,
