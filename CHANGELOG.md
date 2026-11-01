@@ -19,6 +19,8 @@ Who is affected: lists that resize rows with `remeasureItem()` — directly or t
 
 ### Fixed
 
+- Search filtering composes with grouped table item access and refreshes group keys when a different query has the same match count. Unopened zero-minimum searches retain the original list.
+
 - Search navigation maps data matches through grouped layouts and asks the layout owner to reveal them. Match events report the source item alongside its data index, including grouped tables.
 
 - Tree: expanding branches retains the focused item; collapsing a focused descendant moves focus to its parent, including with selection or a11y focus ownership. The ring and active descendant are remapped together.
