@@ -19,6 +19,8 @@ Who is affected: lists that resize rows with `remeasureItem()` — directly or t
 
 ### Fixed
 
+- Tree: expanding or collapsing branches above the viewport keeps a surviving visible node at the same screen position, in both orientations. Empty trees discard the old sub-item anchor.
+
 - Search: active queries refresh their matches after replacing, appending or removing items; filtered rows no longer retain the previous source array. Appending matches keeps the current navigation position.
 
 - Smooth `scrollToIndex()` jumps follow the current row offset when `remeasureItem()` changes sizes during the animation, including tables and grouped lists.
