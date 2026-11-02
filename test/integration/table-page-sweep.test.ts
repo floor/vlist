@@ -226,5 +226,5 @@ it.serial("page: immediate destroy cancels deferred initial synchronization", sc
 // Browser geometry (paired published 3.3.2 and candidate) confirms both
 // headers currently leave the window. A minor follow-up must define the
 // shared table/group header stack and dynamic page scroll-padding offsets.
-it.todo("minor: page groups sticky header remains at the window edge");
-it.todo("minor: page table header remains at the window edge");
+it.todo("minor: page groups sticky header remains at the window edge", () => {});
+it.todo("minor: page table header remains at the window edge", () => {});
