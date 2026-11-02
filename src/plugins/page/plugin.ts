@@ -134,9 +134,7 @@ export function page<T extends VListItem = VListItem>(
       const onWindowResize = (): void => {
         const w = win.innerWidth;
         const h = win.innerHeight;
-        const sizeDelta = isX ? Math.abs(w - prevW) : Math.abs(h - prevH);
-
-        if (sizeDelta < 1) return;
+        if (Math.abs(w - prevW) < 1 && Math.abs(h - prevH) < 1) return;
 
         prevW = w;
         prevH = h;
