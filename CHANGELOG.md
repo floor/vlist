@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Scroll position and search stay right when a list's data or layout changes, and tree focus follows its node through expand and collapse: filtered and grouped search, replaced table data, tree collapse, and page scrolling.
+
+Who is affected: lists using `tree()`, `search()`, `table()` or `page()` when data changes, branches expand or collapse, search filters regroup items, or the document scrolls and resizes.
+
 ### Fixed
 
 - Table columns respond to page-mode window resize events; height-only changes continue to preserve dragged column widths.
