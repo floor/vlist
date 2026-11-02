@@ -271,12 +271,20 @@ export function table<T extends VListItem = VListItem>(
 
   function tableForceRender(): void {
     if (engineState.destroyed) return;
+    const totalSize = sizeCache.getTotalSize();
+    const shrank = totalSize < lastContentTotalSize;
     lastContentTotalSize = -1;
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
+    if (shrank) {
+      // Resize first, then read back a source clamped by the shorter content.
+      storedCtx!.render.contentSize(totalSize);
+      scroll.to(scroll.getPixelEquivalent());
+    }
     tableRenderIfNeeded();
   }
+
 
   // =========================================================================
   // Plugin

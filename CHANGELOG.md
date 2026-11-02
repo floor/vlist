@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Tables resize shorter content before synchronizing the native scroll source, so replacement rows render immediately at the reachable position.
+
 - Tables remove old rendered rows and reset the accessible row count when their items become empty, including grouped tables.
 
 - Page mode updates window dimensions and emits resize events when either axis changes, including width-only changes on vertical lists.
