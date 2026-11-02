@@ -162,6 +162,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   let currentIndex = initialIndex;
   let realTotal = 0;
+  let currentItems: readonly T[] | null = null;
   /**
    * Under data(), the total is 0 when this plugin sets up: it sits at priority
    * 10 and the adapter at 20, and items arrive later still. So the virtual
@@ -184,6 +185,7 @@ export function carousel<T extends VListItem = VListItem>(
 
   let initialScrollPending = false;
   let prefix = "vlist";
+  let focusedClass = "";
   let intendedVi: number | null = null;
   /**
    * When the current programmatic snap is due to finish.
@@ -426,9 +428,13 @@ export function carousel<T extends VListItem = VListItem>(
     if (!storedCtx) return;
     resolveUpstream();
     const total = currentTotal();
-    if (total === realTotal) return;
+    const items = storedCtx.items.all();
+    if (total === realTotal && items === currentItems) return;
+    currentItems = items;
     const savedIndex = currentIndex;
+    intendedVi = null;
     realTotal = total;
+    currentIndex = savedIndex < realTotal ? savedIndex : 0;
     // With no items at setup there was no size to measure; a fixed spec still
     // says what one is, and a slot preset already knows its step.
     if (stepSize <= 0 && !isVariableWidth) {
@@ -456,10 +462,15 @@ export function carousel<T extends VListItem = VListItem>(
       return;
     }
     engineState.totalItems = virtualTotal;
-    if (realTotal > 1) {
-      const safeIndex = savedIndex < realTotal ? savedIndex : 0;
-      currentIndex = safeIndex;
-      storedCtx.scroll.to(scrollPositionForVirtual(margin * realTotal + safeIndex));
+    storedCtx.scroll.to(scrollPositionForVirtual(margin * realTotal + currentIndex));
+  }
+
+  function syncVisibleFocus(el: HTMLElement, offset: number, size: number, start: number): void {
+    if (size <= 0 || offset + size <= start || offset >= start + engineState.containerSize
+      || !el.classList.contains(focusedClass)) return;
+    const content = storedCtx!.dom.content;
+    if (content.getAttribute("aria-activedescendant") !== el.id) {
+      content.setAttribute("aria-activedescendant", el.id);
     }
   }
 
@@ -491,8 +502,7 @@ export function carousel<T extends VListItem = VListItem>(
 
         if (roundedSize <= 0) {
           el.style.display = "none";
-          el.classList.remove(`${prefix}-item--focused`, `${prefix}-item--selected`);
-          el.removeAttribute("aria-selected");
+          // Keep the renderer's cached state intact while display hides this copy.
         } else {
           el.style.display = "";
           el.style[prop] = roundedSize + "px";
@@ -500,6 +510,8 @@ export function carousel<T extends VListItem = VListItem>(
             ? `translateX(${roundedOffset}px)`
             : `translateY(${roundedOffset}px)`;
         }
+
+        syncVisibleFocus(el, roundedOffset, roundedSize, scrollTop);
 
         let roleWeight: number;
         if (textFade === "size") {
@@ -543,6 +555,8 @@ export function carousel<T extends VListItem = VListItem>(
             ? `translateX(${roundedOffset}px)`
             : `translateY(${roundedOffset}px)`;
         }
+
+        syncVisibleFocus(el, roundedOffset, itemSize, scrollTop);
 
         const relOffset = vi - focalVi;
         const progress = Math.min(1, Math.abs(relOffset) + (relOffset === 0 ? frac : 0));
@@ -656,7 +670,9 @@ export function carousel<T extends VListItem = VListItem>(
       storedCtx = ctx;
       isX = ctx.config.axis.primary === "x";
       prefix = ctx.config.classPrefix;
+      focusedClass = `${prefix}-item--focused`;
       realTotal = engineState.totalItems;
+      currentItems = ctx.items.all();
 
       // The cache is virtual step space, not item space, so a data index does
       // not name the entry a size change would live in.
@@ -901,6 +917,7 @@ export function carousel<T extends VListItem = VListItem>(
       if (installs > 0) return;
       storedCtx?.scroll.cancel();
       storedCtx = null;
+      currentItems = null;
     },
 
     hooks: {
@@ -959,6 +976,11 @@ export function carousel<T extends VListItem = VListItem>(
 
         if (engineState.scrollDirection !== 0) lastDirection = engineState.scrollDirection;
 
+        // A completed command no longer owns the position. A later restore
+        // or external write must be allowed to select its actual slide.
+        if (intendedVi !== null && Math.abs(scroll.getPixelEquivalent() - scrollPositionForVirtual(intendedVi)) < 0.5) {
+          intendedVi = null;
+        }
         if (intendedVi === null) {
           const pos = scroll.getPixelEquivalent();
           const vi = virtualIndexAtScroll(pos);

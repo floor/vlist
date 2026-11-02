@@ -142,7 +142,61 @@ it("masonry data: resolved async rows replace placeholders at their layout posit
   list.scrollToIndex(60); await waitFor(() => !!container.querySelector('[data-id="60"]'), "masonry async target"); expect(container.textContent).toContain("Item 60");
 }));
 
-for (const kind of ["grid", "masonry"] as const) {
+function animationClock(scope: TestScope) {
+  const raf = globalThis.requestAnimationFrame, caf = globalThis.cancelAnimationFrame;
+  const frames = new Map<number, FrameRequestCallback>(); let next = 0; let now = performance.now();
+  globalThis.requestAnimationFrame = callback => { frames.set(++next, callback); return next; };
+  globalThis.cancelAnimationFrame = id => { frames.delete(id); };
+  scope.defer(() => { globalThis.requestAnimationFrame = raf; globalThis.cancelAnimationFrame = caf; });
+  return { step(ms = 1000): void { now += ms; const pending = [...frames.values()]; frames.clear(); for (const fn of pending) fn(now); }, pending: () => frames.size };
+}
+function carouselList(scope: TestScope, horizontal: boolean, variant: "full" | "hero" | "multi" | "free" = "full", extra: VListPlugin<Row>[] = []) {
+  const container = createContainer();
+  const list = createVList({ container, items: rows(10), orientation: horizontal ? "horizontal" : "vertical", item: { height: 100, width: 100, template: (row: Row) => row.label } }, [carousel<Row>({ variant, initialIndex: 2, peek: "20%" }), ...extra]) as VList<Row> & CarouselMethods & SnapshotsMethods;
+  scope.own(list, container); return { list, container };
+}
+
+for (const horizontal of [false, true]) for (const variant of ["full", "hero", "multi"] as const) {
+  // Own the process-wide rAF queue while inspecting interrupted transitions.
+  it.serial(`carousel ${variant} ${horizontal ? "horizontal" : "vertical"}: replacement during transition cancels the old slide target`, scoped(scope => {
+    const clock = animationClock(scope); const f = carouselList(scope, horizontal, variant); clock.step();
+    f.list.goTo(8, { behavior: "smooth", duration: 100 }); clock.step(20); f.list.setItems(rows(1, 1000)); clock.step();
+    expect(f.list.total).toBe(1); expect(f.list.getCarouselState().index).toBe(0); expect(f.container.textContent).toContain("Item 1000");
+  }));
+  // Own rAF: replacing items must preserve a valid destination even at the same count.
+  it.serial(`carousel ${variant} ${horizontal ? "horizontal" : "vertical"}: same-count replacement keeps the active window rendered`, scoped(scope => {
+    const clock = animationClock(scope); const f = carouselList(scope, horizontal, variant); clock.step();
+    f.list.goTo(6); f.list.setItems(rows(10, 1000));
+    expect(f.list.total).toBe(10); expect(f.list.getCarouselState().index).toBe(6);
+    expect(f.container.textContent).toContain("Item 1006");
+    f.list.setItems(rows(2, 2000)); expect(f.list.getCarouselState().index).toBe(0); expect(f.container.textContent).toContain("Item 2000");
+  }));
+  // Own the rAF queue and per-viewport ResizeObserver callback.
+  it.serial(`carousel ${variant} ${horizontal ? "horizontal" : "vertical"}: resize during transition retains the intended slide`, scoped(async scope => {
+    const clock = animationClock(scope); const f = carouselList(scope, horizontal, variant); clock.step();
+    const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!; await waitFor(() => observers.has(viewport), "carousel observer");
+    f.list.goTo(8, { behavior: "smooth", duration: 100 }); clock.step(20);
+    observers.get(viewport)!([{ target: viewport, contentRect: new DOMRect(0, 0, horizontal ? 900 : 600, horizontal ? 400 : 800), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] } as ResizeObserverEntry], {} as ResizeObserver);
+    clock.step(); expect(f.list.getCarouselState().index).toBe(8);
+  }));
+}
+
+for (const horizontal of [false, true]) {
+  it(`carousel ${horizontal ? "horizontal" : "vertical"}: next/previous wrap and negative goTo normalizes`, scoped(scope => {
+    const f = carouselList(scope, horizontal); f.list.goTo(9); f.list.next(1, { behavior: "auto" }); expect(f.list.getCarouselState().index).toBe(0);
+    f.list.prev(1, { behavior: "auto" }); expect(f.list.getCarouselState().index).toBe(9); f.list.goTo(-1); expect(f.list.getCarouselState().index).toBe(9);
+  }));
+  it(`carousel ${horizontal ? "horizontal" : "vertical"}: empty replacement is safe and refill is navigable`, scoped(scope => {
+    const f = carouselList(scope, horizontal); f.list.goTo(7); f.list.setItems([]); expect(f.list.total).toBe(0); expect(f.list.getCarouselState().index).toBe(0);
+    f.list.setItems(rows(3, 1000)); f.list.goTo(2); expect(f.list.getCarouselState().index).toBe(2); expect(f.container.textContent).toContain("Item 1002");
+  }));
+  it(`carousel ${horizontal ? "horizontal" : "vertical"}: unchanged layout snapshot restores the same slide`, scoped(async scope => {
+    const f = carouselList(scope, horizontal, "full", [snapshots<Row>()]); f.list.goTo(6); const snap = f.list.getScrollSnapshot();
+    f.list.goTo(1); await f.list.restoreScroll(snap); expect(f.list.getCarouselState().index).toBe(6);
+  }));
+}
+
+for (const kind of ["grid", "masonry", "carousel"] as const) {
   it(`${kind}: autosize conflict is clear in either order`, scoped(scope => {
     const container = createContainer(); scope.defer(() => container.remove());
     for (const reverse of [false, true]) {
@@ -151,10 +205,30 @@ for (const kind of ["grid", "masonry"] as const) {
       expect(() => createVList({ container, items: rows(), item: { height: 40, template: (row: Row) => row.label } }, reverse ? plugins.reverse() : plugins)).toThrow(`Plugin "${kind}" conflicts with "autosize"`);
     }
   }));
-}for (const horizontal of [false, true]) {
+}
+
+
+for (const horizontal of [false, true]) {
   it(`masonry ${horizontal ? "horizontal" : "vertical"}: column update preserves a visible item`, scoped(scope => {
     const f = fixture(scope, "masonry", horizontal); f.list.scrollToIndex(60); f.list.updateMasonry({ columns: 2 });
     expect(f.row(60)).not.toBeNull(); expect(f.list.getScrollPosition()).toBe(30 * 48);
+  }));
+  it(`carousel free ${horizontal ? "horizontal" : "vertical"}: same-count replacement refreshes variable step sizes`, scoped(scope => {
+    let sizes = [100, 200, 150]; const container = createContainer();
+    const list = createVList({ container, items: rows(3), orientation: horizontal ? "horizontal" : "vertical", item: { height: i => sizes[i]!, width: i => sizes[i]!, template: (row: Row) => row.label } }, [carousel<Row>({ variant: "free" })]) as VList<Row> & CarouselMethods;
+    scope.own(list, container); list.goTo(1); expect(list.getCarouselState().scrollPosition).toBe(100);
+    sizes = [200, 150, 75]; list.setItems(rows(3, 1000)); expect(list.getCarouselState().scrollPosition).toBe(200); expect(container.textContent).toContain("Item 1001");
+  }));
+}
+
+for (const owner of ["a11y", "selection"] as const) for (const variant of ["full", "free"] as const) {
+  // Own document.activeElement and the rAF queue for keyboard wrap assertions.
+  it.serial(`carousel ${variant} ${owner}: keyboard wrap keeps logical focus and active descendant`, scoped(async scope => {
+    const clock = animationClock(scope); const f = carouselList(scope, true, variant, [owner === "selection" ? selection<Row>({ mode: "single" }) : a11y<Row>()]); clock.step();
+    const content = f.container.querySelector<HTMLElement>(".vlist-content")!;
+    const press = async (key: string): Promise<void> => { content.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })); clock.step(); await Promise.resolve(); };
+    await press("End"); expect(f.list.getCarouselState().index).toBe(9); await press("ArrowRight"); expect(f.list.getCarouselState().index).toBe(0);
+    const focus = [...content.querySelectorAll<HTMLElement>(".vlist-item--focused")].find(el => el.style.display !== "none"); expect(focus?.dataset.id).toBe("0"); expect(content.getAttribute("aria-activedescendant")).toBe(focus!.id);
   }));
 }
 
