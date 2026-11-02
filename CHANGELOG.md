@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.3] - 2026-11-02
+
 Scroll position and search stay right when a list's data or layout changes, and tree focus follows its node through expand and collapse: filtered and grouped search, replaced table data, tree collapse, and page scrolling.
 
 Who is affected: lists using `tree()`, `search()`, `table()` or `page()` when data changes, branches expand or collapse, search filters regroup items, or the document scrolls and resizes.
@@ -2047,7 +2049,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.3...HEAD
+[3.3.3]: https://github.com/floor/vlist/compare/v3.3.2...v3.3.3
 [3.3.2]: https://github.com/floor/vlist/compare/v3.3.1...v3.3.2
 [3.3.1]: https://github.com/floor/vlist/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/floor/vlist/compare/v3.2.0...v3.3.0
