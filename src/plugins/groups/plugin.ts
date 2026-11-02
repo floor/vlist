@@ -1096,54 +1096,58 @@ export function groups<T extends VListItem = VListItem>(
         duration?: number,
         easing?: (t: number) => number,
       ): void | false => {
-        const layoutIndex = layout.dataToLayoutIndex(index);
-        const totalLayout = layout.totalEntries;
-        if (totalLayout === 0) return false;
-        const clamped = Math.max(0, Math.min(layoutIndex, totalLayout - 1));
-        const cs = engineState.containerSize;
+        if (layout.totalEntries === 0) return false;
+        const getTarget = (): number => {
+          const layoutIndex = layout.dataToLayoutIndex(index);
+          const totalLayout = layout.totalEntries;
+          if (totalLayout === 0) return 0;
+          const clamped = Math.max(0, Math.min(layoutIndex, totalLayout - 1));
+          const cs = engineState.containerSize;
 
-        // Grid/masonry: use grid-aware Y positions and content size.
-        // sizeCache offsets are per-item (wrong for column layouts).
-        const gridPos = gridItemPositions?.get(clamped);
-        const offset = gridPos ? gridPos.rowY : sizeCache.getOffset(clamped);
-        const itemSize = gridPos
-          ? (gridPos.h ?? sizeCache.getSize(clamped))
-          : sizeCache.getSize(clamped);
-        const totalSize = gridItemPositions
-          ? getGridContentSize() + mainAxisPadding
-          : sizeCache.getTotalSize();
-        const maxScroll = Math.max(0, totalSize - cs);
+          // Grid/masonry: use grid-aware Y positions and content size.
+          // sizeCache offsets are per-item (wrong for column layouts).
+          const gridPos = gridItemPositions?.get(clamped);
+          const offset = gridPos ? gridPos.rowY : sizeCache.getOffset(clamped);
+          const itemSize = gridPos
+            ? (gridPos.h ?? sizeCache.getSize(clamped))
+            : sizeCache.getSize(clamped);
+          const totalSize = gridItemPositions
+            ? getGridContentSize() + mainAxisPadding
+            : sizeCache.getTotalSize();
+          const maxScroll = Math.max(0, totalSize - cs);
 
 
-        // Bottom padding to keep clear when aligning the last item to the end.
-        const pagePad = readScrollPadding();
-        const endPad = (gridItemPositions ? mainAxisPadding : 0) + pagePad.end;
+          // Bottom padding to keep clear when aligning the last item to the end.
+          const pagePad = readScrollPadding();
+          const endPad = (gridItemPositions ? mainAxisPadding : 0) + pagePad.end;
 
-        // Masonry: align:end targets the group's tallest-lane bottom, not the
-        // target item's own bottom (which may be in a shorter lane). This lets
-        // "scroll to last" reach the true content bottom.
-        let endBottom = offset + itemSize;
-        if (isMasonry && masonryGroupBottoms) {
-          const gi = layout.getEntry(clamped).group.groupIndex;
-          const gb = masonryGroupBottoms[gi];
-          if (gb !== undefined) endBottom = gb;
-        }
+          // Masonry: align:end targets the group's tallest-lane bottom, not the
+          // target item's own bottom (which may be in a shorter lane). This lets
+          // "scroll to last" reach the true content bottom.
+          let endBottom = offset + itemSize;
+          if (isMasonry && masonryGroupBottoms) {
+            const gi = layout.getEntry(clamped).group.groupIndex;
+            const gb = masonryGroupBottoms[gi];
+            if (gb !== undefined) endBottom = gb;
+          }
 
-        let pos: number;
-        switch (align) {
-          case "center":
-            pos = offset - pagePad.start - (cs - pagePad.start - pagePad.end - itemSize) / 2;
-            break;
-          case "end":
-            pos = endBottom - cs + endPad;
-            break;
-          default:
-            pos = offset - pagePad.start;
-        }
-        const minPos = pagePad.start > 0 ? -pagePad.start : 0;
-        pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
+          let pos: number;
+          switch (align) {
+            case "center":
+              pos = offset - pagePad.start - (cs - pagePad.start - pagePad.end - itemSize) / 2;
+              break;
+            case "end":
+              pos = endBottom - cs + endPad;
+              break;
+            default:
+              pos = offset - pagePad.start;
+          }
+          const minPos = pagePad.start > 0 ? -pagePad.start : 0;
+          pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
+          return pos;
+        };
 
-        applyScrollBehavior(ctx.scroll, pos, behavior, duration, easing);
+        applyScrollBehavior(ctx.scroll, getTarget, behavior, duration, easing);
       });
 
       ctx.hooks.onDestroy(() => {
