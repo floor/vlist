@@ -349,8 +349,9 @@ export function tree<T extends VListItem = VListItem>(
     } else {
       layout.rebuild(currentItems, true);
     }
-    syncTotals();
+    // Native read-back can render immediately; release old rows first.
     detachAll();
+    syncTotals();
   }
 
   // ── Sync totals after layout changes ─────────────────────────────
@@ -360,6 +361,8 @@ export function tree<T extends VListItem = VListItem>(
     origSizeCacheRebuild(layout.totalVisible);
     const totalSize = sizeCache.getTotalSize();
     applyContentSize(totalSize);
+    // Read back the native source after the DOM clamps a shorter tree.
+    scrollTo(scroll.getPixelEquivalent());
 
     const getSb = getMethod("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
     if (getSb) {

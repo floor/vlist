@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Tree: collapsing branches, collapsing all nodes, or replacing the tree with shorter data synchronizes the cached scroll position with the native scrollbar, so rendered rows stay in the viewport.
+
 - Search filtering composes with grouped table item access and refreshes group keys when a different query has the same match count. Unopened zero-minimum searches retain the original list.
 
 - Search navigation maps data matches through grouped layouts and asks the layout owner to reveal them. Match events report the source item alongside its data index, including grouped tables.
