@@ -34,6 +34,9 @@ const BOTTOM_PAD = 40;
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 let originalScrollTo: typeof window.scrollTo;
+let originalScrollX: PropertyDescriptor | undefined;
+let originalScrollY: PropertyDescriptor | undefined;
+let nativeScrollY = 200;
 // `| undefined` on both, not optional: exactOptionalPropertyTypes is on, and
 // getOwnPropertyDescriptor returns undefined when the property is absent.
 let originalInner: { height: PropertyDescriptor | undefined; width: PropertyDescriptor | undefined } = { height: undefined, width: undefined };
@@ -57,10 +60,16 @@ beforeAll(() => {
   };
   Object.defineProperty(window, "innerHeight", { value: WINDOW_HEIGHT, configurable: true });
   Object.defineProperty(window, "innerWidth", { value: 300, configurable: true });
-  // page() writes through window.scrollTo. Swallow it: happy-dom would echo a
-  // scroll event whose rect is all zeroes, committing 0 over what page wrote.
+  // Model native writes and geometry together. Content above the lists lets
+  // their relative positions be negative while window.scrollY remains >= 0.
   originalScrollTo = window.scrollTo;
-  window.scrollTo = (() => {}) as typeof window.scrollTo;
+  originalScrollX = Object.getOwnPropertyDescriptor(window, "scrollX");
+  originalScrollY = Object.getOwnPropertyDescriptor(window, "scrollY");
+  Object.defineProperty(window, "scrollX", { configurable: true, get: () => 0 });
+  Object.defineProperty(window, "scrollY", { configurable: true, get: () => nativeScrollY });
+  window.scrollTo = (options?: ScrollToOptions | number, top?: number): void => {
+    nativeScrollY = Math.max(0, typeof options === "number" ? top ?? nativeScrollY : options?.top ?? nativeScrollY);
+  };
 });
 
 afterAll(() => {
@@ -69,6 +78,10 @@ afterAll(() => {
     else delete (window as unknown as Record<string, unknown>)[name];
   }
   window.scrollTo = originalScrollTo;
+  for (const [key, descriptor] of [["scrollX", originalScrollX], ["scrollY", originalScrollY]] as const) {
+    if (descriptor) Object.defineProperty(window, key, descriptor);
+    else Reflect.deleteProperty(window, key);
+  }
   geometry.restore();
   unregisterDOM();
 });
@@ -82,6 +95,7 @@ afterEach(() => {
     host.remove();
   }
   built = [];
+  nativeScrollY = 200;
 });
 
 // =============================================================================
@@ -117,6 +131,8 @@ function build(layout: Layout, padded: boolean): VList<TestItem> {
     [pagePlugin, layoutPlugin(layout), selection<TestItem>({ mode: "single" })],
   );
 
+  const viewport = host.querySelector<HTMLElement>(".vlist-viewport")!;
+  viewport.getBoundingClientRect = () => new DOMRect(0, 200 - nativeScrollY, 300, WINDOW_HEIGHT);
   built.push({ list, host });
   return list;
 }
@@ -150,7 +166,7 @@ function press(list: VList<TestItem>, key: "ArrowDown" | "ArrowUp", times: numbe
 
 describe("page + layout plugins — focus keeps the configured scrollPadding", () => {
   for (const layout of ["groups", "masonry"] as const) {
-    it(`${layout}: focus past the viewport bottom clears the bottom band`, () => {
+    it.serial(`${layout}: focus past the viewport bottom clears the bottom band`, () => {
       const plain = build(layout, false);
       const padded = build(layout, true);
       seedFocus(plain, layout);
@@ -164,7 +180,7 @@ describe("page + layout plugins — focus keeps the configured scrollPadding", (
       expect(padded.getScrollPosition() - plain.getScrollPosition()).toBe(BOTTOM_PAD);
     });
 
-    it(`${layout}: focus back to the first item clears the top band`, () => {
+    it.serial(`${layout}: focus back to the first item clears the top band`, () => {
       const plain = build(layout, false);
       const padded = build(layout, true);
       seedFocus(plain, layout);
@@ -176,9 +192,9 @@ describe("page + layout plugins — focus keeps the configured scrollPadding", (
       press(padded, "ArrowDown", 15);
       press(padded, "ArrowUp", 15);
 
-      // The list sits at the document top, so keeping a sticky header off the
-      // first item means a scroll position the padded band's width lower —
-      // negative, since page() scrolls the window, not the viewport.
+      // With 200 px of document content above the list, the native source can
+      // put the first item below the band using a negative list-relative
+      // position, without asking for a negative window.scrollY.
       expect(padded.getScrollPosition() - plain.getScrollPosition()).toBe(-TOP_PAD);
       expect(padded.getScrollPosition()).toBeLessThan(0);
     });
@@ -191,7 +207,7 @@ describe("page + layout plugins — focus keeps the configured scrollPadding", (
 
 describe("page + layout plugins — scrollToIndex keeps the configured scrollPadding", () => {
   for (const layout of ["groups", "masonry"] as const) {
-    it(`${layout}: align start subtracts the top band`, () => {
+    it.serial(`${layout}: align start subtracts the top band`, () => {
       const plain = build(layout, false);
       const padded = build(layout, true);
 
@@ -201,7 +217,7 @@ describe("page + layout plugins — scrollToIndex keeps the configured scrollPad
       expect(padded.getScrollPosition() - plain.getScrollPosition()).toBe(-TOP_PAD);
     });
 
-    it(`${layout}: align end adds the bottom band`, () => {
+    it.serial(`${layout}: align end adds the bottom band`, () => {
       const plain = build(layout, false);
       const padded = build(layout, true);
 
@@ -211,7 +227,7 @@ describe("page + layout plugins — scrollToIndex keeps the configured scrollPad
       expect(padded.getScrollPosition() - plain.getScrollPosition()).toBe(BOTTOM_PAD);
     });
 
-    it(`${layout}: align center keeps both bands out of the centred space`, () => {
+    it.serial(`${layout}: align center keeps both bands out of the centred space`, () => {
       const plain = build(layout, false);
       const padded = build(layout, true);
 
@@ -231,7 +247,7 @@ describe("page + layout plugins — scrollToIndex keeps the configured scrollPad
 // =============================================================================
 
 describe("page — _getScrollPadding", () => {
-  it("is not published when no scrollPadding is configured", () => {
+  it.serial("is not published when no scrollPadding is configured", () => {
     let read: Function | undefined;
     const host = createContainer({ width: 300, height: WINDOW_HEIGHT });
     const list = createVList<TestItem>(
@@ -243,7 +259,7 @@ describe("page — _getScrollPadding", () => {
     expect(read).toBeUndefined();
   });
 
-  it("resolves function padding on every read", () => {
+  it.serial("resolves function padding on every read", () => {
     let top = 10;
     let read!: () => { start: number; end: number };
     const host = createContainer({ width: 300, height: WINDOW_HEIGHT });

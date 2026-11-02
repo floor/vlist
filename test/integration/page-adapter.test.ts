@@ -19,19 +19,35 @@ function setup() {
     hooks: { onAfterScroll: afterScroll },
   };
   const scrollTo = window.scrollTo;
-  window.scrollTo = mock(() => {});
+  const scrollX = Object.getOwnPropertyDescriptor(window, "scrollX");
+  const scrollY = Object.getOwnPropertyDescriptor(window, "scrollY");
+  let nativeX = 0;
+  let nativeY = 200;
+  Object.defineProperty(window, "scrollX", { configurable: true, get: () => nativeX });
+  Object.defineProperty(window, "scrollY", { configurable: true, get: () => nativeY });
+  // A write changes native geometry before its asynchronous scroll event.
+  window.scrollTo = mock((options?: ScrollToOptions | number, top?: number) => {
+    nativeX = Math.max(0, typeof options === "number" ? options : options?.left ?? nativeX);
+    nativeY = Math.max(0, typeof options === "number" ? top ?? nativeY : options?.top ?? nativeY);
+  });
   const list = createVList({ container: host,
     items: Array.from({ length: 1000 }, (_, id) => ({ id })),
     item: { height: 40, template: item => String(item.id) },
     scroll: { idleTimeout: 10 },
   }, [page(), grid({ columns: 2 }), inspect]);
-  const rect = mock(() => ({ top: -200, left: 0, width: 400, height: 600,
-    right: 400, bottom: 400, x: 0, y: -200, toJSON() {} } as DOMRect));
+  const rect = mock(() => ({ top: -nativeY, left: -nativeX, width: 400, height: 600,
+    right: 400 - nativeX, bottom: 600 - nativeY, x: -nativeX, y: -nativeY, toJSON() {} } as DOMRect));
   ctx.dom.viewport.getBoundingClientRect = rect;
-  return { ctx, list, rect, afterScroll, cleanup() { list.destroy(); host.remove(); window.scrollTo = scrollTo; } };
+  return { ctx, list, rect, afterScroll, cleanup() {
+    list.destroy(); host.remove(); window.scrollTo = scrollTo;
+    for (const [key, descriptor] of [["scrollX", scrollX], ["scrollY", scrollY]] as const) {
+      if (descriptor) Object.defineProperty(window, key, descriptor);
+      else Reflect.deleteProperty(window, key);
+    }
+  } };
 }
 
-it("page + grid uses only the listener's rect read for rendering and scroll events", () => {
+it.serial("page + grid uses only the listener's rect read for rendering and scroll events", () => {
   const t = setup();
   try {
     let position = -1;
@@ -46,7 +62,7 @@ it("page + grid uses only the listener's rect read for rendering and scroll even
   } finally { t.cleanup(); }
 });
 
-it("page scroll writes are synchronously readable before a window scroll event", () => {
+it.serial("page scroll writes are synchronously readable before a window scroll event", () => {
   const t = setup();
   try {
     t.ctx.scroll.to(480);
@@ -58,7 +74,7 @@ it("page scroll writes are synchronously readable before a window scroll event",
   } finally { t.cleanup(); }
 });
 
-it("page writes commit direction, frame and configured idle once, then dedupe window events", async () => {
+it.serial("page writes commit direction, frame and configured idle once, then dedupe window events", async () => {
   const t = setup();
   try {
     const frames = mock(() => {});
@@ -83,7 +99,7 @@ it("page writes commit direction, frame and configured idle once, then dedupe wi
   } finally { t.cleanup(); }
 });
 
-it("page smooth navigation renders once per animation frame", () => {
+it.serial("page smooth navigation renders once per animation frame", () => {
   const t = setup();
   const raf = globalThis.requestAnimationFrame;
   let frame!: FrameRequestCallback;

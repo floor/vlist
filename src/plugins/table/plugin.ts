@@ -144,7 +144,7 @@ export function table<T extends VListItem = VListItem>(
 
     const containerSize = engineState.containerSize;
     const totalItems = engineState.totalItems;
-    if (containerSize <= 0 || totalItems === 0) {
+    if (containerSize <= 0) {
       return;
     }
 
@@ -165,6 +165,11 @@ export function table<T extends VListItem = VListItem>(
     if (ariaRowCount !== lastAriaRowCount) {
       lastAriaRowCount = ariaRowCount;
       storedCtx.dom.root.setAttribute("aria-rowcount", `${ariaRowCount}`);
+    }
+
+    if (totalItems === 0) {
+      tableRenderer.clear();
+      return;
     }
 
     // Calculate visible range
@@ -266,11 +271,36 @@ export function table<T extends VListItem = VListItem>(
 
   function tableForceRender(): void {
     if (engineState.destroyed) return;
+    const totalSize = sizeCache.getTotalSize();
+    const shrank = totalSize < lastContentTotalSize;
     lastContentTotalSize = -1;
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
+    if (shrank) {
+      // Resize first, then read back a source clamped by the shorter content.
+      storedCtx!.render.contentSize(totalSize);
+      scroll.to(scroll.getPixelEquivalent());
+    }
     tableRenderIfNeeded();
+  }
+
+  function resizeColumns(width: number): void {
+    if (!tableLayout || !storedCtx) return;
+    // Core runs the resize hooks when either viewport axis changes. A
+    // height-only change is what a horizontal scrollbar appearing or
+    // disappearing produces on a classic-scrollbar platform; the column
+    // space is untouched, and resolve() would reassign every
+    // explicit-width column from its definition, discarding a width the
+    // user just dragged (#31). Skip it, and keep the header, renderer and
+    // content width as they are — all three are width-derived. Table
+    // lists are vertical-only, so the hook's width IS the cross size.
+    if (Math.abs(width - resolvedCross) < 1) return;
+    resolvedCross = width;
+    tableLayout.resolve(engineState.crossSize);
+    tableHeader?.update(tableLayout);
+    tableRenderer?.updateColumnLayout(tableLayout);
+    storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
   }
 
   // =========================================================================
@@ -582,10 +612,14 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // ── Cleanup ─────────────────────────────────────────────────
+      // page() owns window resize and emits the same public event without
+      // core's ResizeObserver hooks. The width guard deduplicates core resizes.
+      const offResize = emitter.on("resize", ({ width }) => resizeColumns(width));
       const localHeader = tableHeader;
       const localRenderer = tableRenderer;
       ctx.hooks.onDestroy((): void => {
         installs = Math.max(0, installs - 1);
+        offResize();
         dom.viewport.removeEventListener("scroll", syncHeaderScroll);
         localHeader?.destroy();
         if (tableHeader === localHeader) tableHeader = null;
@@ -610,23 +644,7 @@ export function table<T extends VListItem = VListItem>(
     },
 
     hooks: {
-      onResize(width: number, _height: number): void {
-        if (!tableLayout || !storedCtx) return;
-        // Core runs the resize hooks when either viewport axis changes. A
-        // height-only change is what a horizontal scrollbar appearing or
-        // disappearing produces on a classic-scrollbar platform; the column
-        // space is untouched, and resolve() would reassign every
-        // explicit-width column from its definition, discarding a width the
-        // user just dragged (#31). Skip it, and keep the header, renderer and
-        // content width as they are — all three are width-derived. Table
-        // lists are vertical-only, so the hook's width IS the cross size.
-        if (Math.abs(width - resolvedCross) < 1) return;
-        resolvedCross = width;
-        tableLayout.resolve(engineState.crossSize);
-        tableHeader?.update(tableLayout);
-        tableRenderer?.updateColumnLayout(tableLayout);
-        storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
-      },
+      onResize: resizeColumns,
 
       onAfterScroll(): void {
         if (!storedCtx || !tableHeader) return;
