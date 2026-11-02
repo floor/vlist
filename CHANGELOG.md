@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Tables remove old rendered rows and reset the accessible row count when their items become empty, including grouped tables.
+
 - Page mode updates window dimensions and emits resize events when either axis changes, including width-only changes on vertical lists.
 
 - Page mode reads the current document position on initialization and after scroll writes, retaining scroll padding through native window events and document-edge clamping.

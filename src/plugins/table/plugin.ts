@@ -144,7 +144,7 @@ export function table<T extends VListItem = VListItem>(
 
     const containerSize = engineState.containerSize;
     const totalItems = engineState.totalItems;
-    if (containerSize <= 0 || totalItems === 0) {
+    if (containerSize <= 0) {
       return;
     }
 
@@ -165,6 +165,11 @@ export function table<T extends VListItem = VListItem>(
     if (ariaRowCount !== lastAriaRowCount) {
       lastAriaRowCount = ariaRowCount;
       storedCtx.dom.root.setAttribute("aria-rowcount", `${ariaRowCount}`);
+    }
+
+    if (totalItems === 0) {
+      tableRenderer.clear();
+      return;
     }
 
     // Calculate visible range
