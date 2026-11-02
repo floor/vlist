@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Resizing rows with `remeasureItem()` keeps the list on the row you are looking at.
+
+Who is affected: lists that resize rows with `remeasureItem()` — directly or through `autosize()` — while the user is scrolled or a smooth scroll is in flight, and any list destroyed while a remeasure may still arrive.
+
 ### Fixed
 
 - Smooth `scrollToIndex()` jumps follow the current row offset when `remeasureItem()` changes sizes during the animation, including tables and grouped lists.
