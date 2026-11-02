@@ -222,3 +222,9 @@ it.serial("page: immediate destroy cancels deferred initial synchronization", sc
   const doc = documentModel(scope, false, 1000); const f = doc.make(); f.list.destroy(); await Promise.resolve();
   expect(f.list.element.isConnected).toBe(false); expect(f.list.getScrollPosition()).toBe(0);
 }));
+
+// Browser geometry (paired published 3.3.2 and candidate) confirms both
+// headers currently leave the window. A minor follow-up must define the
+// shared table/group header stack and dynamic page scroll-padding offsets.
+it.todo("minor: page groups sticky header remains at the window edge");
+it.todo("minor: page table header remains at the window edge");
