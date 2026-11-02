@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Page mode reads the current document position on initialization and after scroll writes, retaining scroll padding through native window events and document-edge clamping.
+
 - Tree: collapsing branches, collapsing all nodes, or replacing the tree with shorter data synchronizes the cached scroll position with the native scrollbar, so rendered rows stay in the viewport.
 
 - Search filtering composes with grouped table item access and refreshes group keys when a different query has the same match count. Unopened zero-minimum searches retain the original list.

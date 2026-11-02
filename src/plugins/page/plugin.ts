@@ -72,6 +72,13 @@ export function page<T extends VListItem = VListItem>(
 
       dom.viewport.classList.remove(`${cfg.classPrefix}-viewport--custom-scrollbar`);
 
+      // Use the same native geometry for explicit writes and window events.
+      // The start padding permits a negative list-relative document position.
+      const readPosition = (): number => {
+        const rect = dom.viewport.getBoundingClientRect();
+        return Math.max(-resolvePad(isX ? scrollPadding?.left : scrollPadding?.top), isX ? -rect.left : -rect.top);
+      };
+
       // ── 3. Install the external scroll writer ─────────────────────
       let sized = false;
       let warned = false;
@@ -99,7 +106,7 @@ export function page<T extends VListItem = VListItem>(
             win.scrollTo({ left: win.scrollX, top: target, behavior: "instant" });
           }
           // Read-after-write must not wait for the asynchronous window event.
-          ctx.scroll.commit(pos);
+          ctx.scroll.commit(readPosition());
         },
       });
 
@@ -109,8 +116,7 @@ export function page<T extends VListItem = VListItem>(
 
       // ── 5. Window scroll listener ──────────────────────────────
       const onWindowScroll = (): void => {
-        const rect = dom.viewport.getBoundingClientRect();
-        const pos = Math.max(0, isX ? -rect.left : -rect.top);
+        const pos = readPosition();
 
         if (Math.abs(pos - ctx.scroll.getPixelEquivalent()) < 0.5) return;
         ctx.scroll.commit(pos);
@@ -118,6 +124,8 @@ export function page<T extends VListItem = VListItem>(
 
       win.addEventListener("scroll", onWindowScroll, { passive: true });
       cleanupScroll = () => win.removeEventListener("scroll", onWindowScroll);
+      // The source handler is ready only after plugin setup has completed.
+      queueMicrotask(() => { if (!state.destroyed) onWindowScroll(); });
 
       // ── 6. Window resize listener ──────────────────────────────
       let prevW = win.innerWidth;
