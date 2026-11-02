@@ -285,6 +285,23 @@ export function table<T extends VListItem = VListItem>(
     tableRenderIfNeeded();
   }
 
+  function resizeColumns(width: number): void {
+    if (!tableLayout || !storedCtx) return;
+    // Core runs the resize hooks when either viewport axis changes. A
+    // height-only change is what a horizontal scrollbar appearing or
+    // disappearing produces on a classic-scrollbar platform; the column
+    // space is untouched, and resolve() would reassign every
+    // explicit-width column from its definition, discarding a width the
+    // user just dragged (#31). Skip it, and keep the header, renderer and
+    // content width as they are — all three are width-derived. Table
+    // lists are vertical-only, so the hook's width IS the cross size.
+    if (Math.abs(width - resolvedCross) < 1) return;
+    resolvedCross = width;
+    tableLayout.resolve(engineState.crossSize);
+    tableHeader?.update(tableLayout);
+    tableRenderer?.updateColumnLayout(tableLayout);
+    storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
+  }
 
   // =========================================================================
   // Plugin
@@ -595,10 +612,14 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // ── Cleanup ─────────────────────────────────────────────────
+      // page() owns window resize and emits the same public event without
+      // core's ResizeObserver hooks. The width guard deduplicates core resizes.
+      const offResize = emitter.on("resize", ({ width }) => resizeColumns(width));
       const localHeader = tableHeader;
       const localRenderer = tableRenderer;
       ctx.hooks.onDestroy((): void => {
         installs = Math.max(0, installs - 1);
+        offResize();
         dom.viewport.removeEventListener("scroll", syncHeaderScroll);
         localHeader?.destroy();
         if (tableHeader === localHeader) tableHeader = null;
@@ -623,23 +644,7 @@ export function table<T extends VListItem = VListItem>(
     },
 
     hooks: {
-      onResize(width: number, _height: number): void {
-        if (!tableLayout || !storedCtx) return;
-        // Core runs the resize hooks when either viewport axis changes. A
-        // height-only change is what a horizontal scrollbar appearing or
-        // disappearing produces on a classic-scrollbar platform; the column
-        // space is untouched, and resolve() would reassign every
-        // explicit-width column from its definition, discarding a width the
-        // user just dragged (#31). Skip it, and keep the header, renderer and
-        // content width as they are — all three are width-derived. Table
-        // lists are vertical-only, so the hook's width IS the cross size.
-        if (Math.abs(width - resolvedCross) < 1) return;
-        resolvedCross = width;
-        tableLayout.resolve(engineState.crossSize);
-        tableHeader?.update(tableLayout);
-        tableRenderer?.updateColumnLayout(tableLayout);
-        storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
-      },
+      onResize: resizeColumns,
 
       onAfterScroll(): void {
         if (!storedCtx || !tableHeader) return;
