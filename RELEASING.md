@@ -21,7 +21,7 @@ API must never ship in a patch — that's exactly the surprise SemVer prevents.
   then the tag from `main`.
 - **2.x** lives on `staging`. A 2.8.x patch is `staging → main`, then the tag
   from `main`. `staging` is frozen maintenance: it holds nothing `next` does
-  not, and staging.vlist.io deploys from `next`.
+  not.
 
 Within a line, a patch is `fix` / `perf` / `docs` only. The moment a `feat`
 lands, the next release on that line is a minor.

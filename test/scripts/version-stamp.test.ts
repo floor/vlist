@@ -19,8 +19,8 @@ describe("scripts/version-stamp", () => {
     expect(stamp.commit).toMatch(/^[0-9a-f]{7,}$/);
   });
 
-  // Staging builds next, which carries the last released version until the
-  // release bump: its badge said v3.0.0 on 3.0.1 work.
+  // A build of `next` carries the last released version until the release
+  // bump: its badge said v3.0.0 on 3.0.1 work.
   describe("released", () => {
     const git = (cwd: string, ...args: string[]): void => {
       Bun.spawnSync(["git", ...args], { cwd, env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@t", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@t" } });

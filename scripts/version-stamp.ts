@@ -18,8 +18,8 @@ export interface VersionStamp {
   /**
    * Whether this build is the release `version` names: built from the tag
    * `v<version>`. False for a build of `next` between releases, which still
-   * carries the last released version: staging's badge said v3.0.0 on 3.0.1
-   * work. A site shows the commit for those.
+   * carries the last released version: the badge on 3.0.1 work said v3.0.0.
+   * A site shows the commit for those.
    */
   readonly released: boolean;
 }

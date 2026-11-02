@@ -55,6 +55,31 @@ afterAll(() => {
 });
 
 // =============================================================================
+// Fake Timer Utility
+// =============================================================================
+
+// Every test in this file is `it.serial`: the tests share process globals —
+// the fake clock's timer slots (setTimeout / clearTimeout / setInterval /
+// clearInterval), the HTMLElement.prototype pointer-capture stubs above, and
+// the document itself — so no two tests in this file may run at once. Each
+// test that needs a clock installs its own through withFakeTimers and
+// restores it in a finally — never a module-level `let` plus
+// beforeEach/afterEach, the shape .claude/CLAUDE.md forbids under
+// `bun test --concurrent`. The parameter is named `fakeTimers` so the test
+// bodies read as they always have.
+type FakeClock = ReturnType<typeof useFakeTimers>;
+const withFakeTimers = async <T>(
+  fn: (fakeTimers: FakeClock) => T | Promise<T>,
+): Promise<T> => {
+  const fakeTimers = useFakeTimers();
+  try {
+    return await fn(fakeTimers);
+  } finally {
+    fakeTimers.restore();
+  }
+};
+
+// =============================================================================
 // Test Utilities
 // =============================================================================
 
@@ -81,29 +106,21 @@ describe("createScrollbar", () => {
   let viewport: HTMLElement;
   let scrollbar: Scrollbar;
   let onScrollMock: ReturnType<typeof mock>;
-  let fakeTimers: { tick: (ms: number) => void; restore: () => void };
 
   beforeEach(() => {
-    fakeTimers = useFakeTimers();
     viewport = createMockViewport();
     onScrollMock = mock(() => {});
   });
 
   afterEach(() => {
-    try {
-      if (scrollbar) {
-        scrollbar.destroy();
-      }
-      cleanupViewport(viewport);
-    } finally {
-      // Restore even when a destroy/cleanup throws: a skipped restore leaves
-      // this test's fake clock in the global slots for the rest of the process.
-      fakeTimers.restore();
+    if (scrollbar) {
+      scrollbar.destroy();
     }
+    cleanupViewport(viewport);
   });
 
   describe("initialization", () => {
-    it("should create scrollbar elements", () => {
+    it.serial("should create scrollbar elements", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
 
       const track = viewport.querySelector(".vlist-scrollbar");
@@ -111,9 +128,9 @@ describe("createScrollbar", () => {
 
       expect(track).not.toBeNull();
       expect(thumb).not.toBeNull();
-    });
+    }));
 
-    it("should use custom class prefix", () => {
+    it.serial("should use custom class prefix", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "custom");
 
       const track = viewport.querySelector(".custom-scrollbar");
@@ -121,33 +138,33 @@ describe("createScrollbar", () => {
 
       expect(track).not.toBeNull();
       expect(thumb).not.toBeNull();
-    });
+    }));
 
-    it("should hide scrollbar initially", () => {
+    it.serial("should hide scrollbar initially", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
   });
 
   describe("updateBounds", () => {
-    it("should hide scrollbar when content fits", () => {
+    it.serial("should hide scrollbar when content fits", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(300, 400); // Content smaller than container
 
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       expect(track.style.display).toBe("none");
-    });
+    }));
 
-    it("should show track when content exceeds container", () => {
+    it.serial("should show track when content exceeds container", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
 
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       expect(track.style.display).not.toBe("none");
-    });
+    }));
 
-    it("should calculate thumb height proportionally", () => {
+    it.serial("should calculate thumb height proportionally", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400); // 40% visible
 
@@ -158,9 +175,9 @@ describe("createScrollbar", () => {
 
       // 40% of trackLength (400 - 2×defaultPadding = 396) ≈ 159.2px
       expect(thumbHeight).toBeCloseTo(396 * (400 / 1000), 0);
-    });
+    }));
 
-    it("should respect minimum thumb size", () => {
+    it.serial("should respect minimum thumb size", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { minThumbSize: 50 });
       scrollbar.updateBounds(100000, 400); // Very small visible ratio
 
@@ -170,23 +187,23 @@ describe("createScrollbar", () => {
       const thumbHeight = parseFloat(thumb.style.height);
 
       expect(thumbHeight).toBeGreaterThanOrEqual(50);
-    });
+    }));
 
-    it("should auto-show scrollbar when autoHide is false", () => {
+    it.serial("should auto-show scrollbar when autoHide is false", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(1000, 400);
 
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
 
-    it("should not auto-show scrollbar when autoHide is true", () => {
+    it.serial("should not auto-show scrollbar when autoHide is true", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: true });
       scrollbar.updateBounds(1000, 400);
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should remain visible after successive updateBounds calls when autoHide is false", () => {
+    it.serial("should remain visible after successive updateBounds calls when autoHide is false", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(1000, 400);
 
@@ -195,9 +212,9 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(2000, 400);
 
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
 
-    it("should hide then re-show on updateBounds when content toggles overflow with autoHide false", () => {
+    it.serial("should hide then re-show on updateBounds when content toggles overflow with autoHide false", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(1000, 400);
 
@@ -210,11 +227,11 @@ describe("createScrollbar", () => {
       scrollbar.updateBounds(1000, 400); // Overflow again
 
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
   });
 
   describe("updatePosition", () => {
-    it("should position thumb at top when scrolled to top", () => {
+    it.serial("should position thumb at top when scrolled to top", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.updatePosition(0);
@@ -223,9 +240,9 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       expect(thumb.style.transform).toBe("translateY(0px)");
-    });
+    }));
 
-    it("should position thumb at bottom when scrolled to bottom", () => {
+    it.serial("should position thumb at bottom when scrolled to bottom", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
 
@@ -240,9 +257,9 @@ describe("createScrollbar", () => {
 
       // Thumb should be at max travel position
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
-    });
+    }));
 
-    it("should position thumb correctly in the middle", () => {
+    it.serial("should position thumb correctly in the middle", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
 
@@ -257,11 +274,11 @@ describe("createScrollbar", () => {
       const expectedPosition = 0.5 * maxThumbTravel;
 
       expect(thumb.style.transform).toBe(`translateY(${expectedPosition}px)`);
-    });
+    }));
   });
 
   describe("show / hide", () => {
-    it("should show scrollbar", () => {
+    it.serial("should show scrollbar", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -270,28 +287,28 @@ describe("createScrollbar", () => {
 
       const track = viewport.querySelector(".vlist-scrollbar");
       expect(track?.classList.contains("vlist-scrollbar--visible")).toBe(true);
-    });
+    }));
 
-    it("should hide scrollbar", () => {
+    it.serial("should hide scrollbar", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
       scrollbar.hide();
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should not show when content fits in container", () => {
+    it.serial("should not show when content fits in container", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(300, 400);
       scrollbar.show();
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
   });
 
   describe("track click", () => {
-    it("should call onScroll when track is clicked", () => {
+    it.serial("should call onScroll when track is clicked", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -308,11 +325,11 @@ describe("createScrollbar", () => {
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
-    });
+    }));
   });
 
   describe("clickBehavior", () => {
-    it("'jump' — centers thumb at click position", () => {
+    it.serial("'jump' — centers thumb at click position", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false, clickBehavior: 'jump' });
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -329,9 +346,9 @@ describe("createScrollbar", () => {
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBeGreaterThanOrEqual(0);
       expect(position).toBeLessThan(200); // should be near the start
-    });
+    }));
 
-    it("'jump' — does not call onScroll when thumb fills the track (maxThumbTravel ≤ 0)", () => {
+    it.serial("'jump' — does not call onScroll when thumb fills the track (maxThumbTravel ≤ 0)", () => withFakeTimers((fakeTimers) => {
       // minThumbSize (500) > trackLength (396) — maxThumbTravel is negative
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
@@ -350,9 +367,9 @@ describe("createScrollbar", () => {
       track.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 200, bubbles: true }));
 
       expect(onScrollMock).not.toHaveBeenCalled();
-    });
+    }));
 
-    it("'page' is accepted as a backwards-compatible alias for 'scroll'", () => {
+    it.serial("'page' is accepted as a backwards-compatible alias for 'scroll'", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'page',
@@ -371,9 +388,9 @@ describe("createScrollbar", () => {
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(400);
-    });
+    }));
 
-    it("'scroll' — scrolls forward by containerSize when pressing below thumb", () => {
+    it.serial("'scroll' — scrolls forward by containerSize when pressing below thumb", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -392,9 +409,9 @@ describe("createScrollbar", () => {
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(400);
-    });
+    }));
 
-    it("'scroll' — scrolls backward by containerSize when pressing above thumb", () => {
+    it.serial("'scroll' — scrolls backward by containerSize when pressing above thumb", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -414,9 +431,9 @@ describe("createScrollbar", () => {
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(200);
-    });
+    }));
 
-    it("'scroll' — clamps to 0 when scrolling backward at start", () => {
+    it.serial("'scroll' — clamps to 0 when scrolling backward at start", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -436,9 +453,9 @@ describe("createScrollbar", () => {
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(0);
-    });
+    }));
 
-    it("'scroll' — clamps to maxScroll when scrolling forward at end", () => {
+    it.serial("'scroll' — clamps to maxScroll when scrolling forward at end", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -458,9 +475,9 @@ describe("createScrollbar", () => {
 
       const position = onScrollMock.mock.calls[0]?.[0] as number;
       expect(position).toBe(600);
-    });
+    }));
 
-    it("'scroll' — repeats scroll while held, stops on mouseup", async () => {
+    it.serial("'scroll' — repeats scroll while held, stops on mouseup", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -485,9 +502,9 @@ describe("createScrollbar", () => {
 
       // Should have scrolled more than once
       expect(onScrollMock.mock.calls.length).toBeGreaterThan(1);
-    });
+    }));
 
-    it("'scroll' — stops repeating when thumb catches cursor", async () => {
+    it.serial("'scroll' — stops repeating when thumb catches cursor", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -515,9 +532,9 @@ describe("createScrollbar", () => {
       // Should not have fired indefinitely — clamped
       const calls = onScrollMock.mock.calls.length;
       expect(calls).toBeGreaterThanOrEqual(1);
-    });
+    }));
 
-    it("'scroll' — schedules auto-hide after mouse release", async () => {
+    it.serial("'scroll' — schedules auto-hide after mouse release", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 50,
@@ -541,11 +558,11 @@ describe("createScrollbar", () => {
       // After autoHideDelay, it should be hidden
       fakeTimers.tick(100);
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
   });
 
   describe("thumb drag", () => {
-    it("should add dragging class on mousedown", () => {
+    it.serial("should add dragging class on mousedown", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -566,9 +583,9 @@ describe("createScrollbar", () => {
       // Cleanup: trigger mouseup
       const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
       dispatchCaptured(mouseupEvent);
-    });
+    }));
 
-    it("should remove dragging class on mouseup", () => {
+    it.serial("should remove dragging class on mouseup", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -590,7 +607,7 @@ describe("createScrollbar", () => {
       dispatchCaptured(mouseupEvent);
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
-    });
+    }));
   });
 
   // ===========================================================================
@@ -598,7 +615,7 @@ describe("createScrollbar", () => {
   // ===========================================================================
 
   describe("touch — thumb drag", () => {
-    it("should add dragging class on thumb touchstart", () => {
+    it.serial("should add dragging class on thumb touchstart", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -616,9 +633,9 @@ describe("createScrollbar", () => {
       thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
-    });
+    }));
 
-    it("should remove dragging class on thumb touchend", () => {
+    it.serial("should remove dragging class on thumb touchend", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -635,9 +652,9 @@ describe("createScrollbar", () => {
       }));
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
-    });
+    }));
 
-    it("should call onScroll during thumb touchmove", () => {
+    it.serial("should call onScroll during thumb touchmove", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -659,9 +676,9 @@ describe("createScrollbar", () => {
       thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
-    });
+    }));
 
-    it("should not call onScroll on touchmove without prior touchstart", () => {
+    it.serial("should not call onScroll on touchmove without prior touchstart", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -674,9 +691,9 @@ describe("createScrollbar", () => {
       }));
 
       expect(onScrollMock).not.toHaveBeenCalled();
-    });
+    }));
 
-    it("should schedule auto-hide on thumb touchend when autoHide is true", () => {
+    it.serial("should schedule auto-hide on thumb touchend when autoHide is true", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 50,
@@ -697,7 +714,7 @@ describe("createScrollbar", () => {
       expect(scrollbar.isVisible()).toBe(true);
       fakeTimers.tick(100);
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
   });
 
   // ===========================================================================
@@ -705,7 +722,7 @@ describe("createScrollbar", () => {
   // ===========================================================================
 
   describe("touch — track tap", () => {
-    it("should jump to position on track touch with 'jump' clickBehavior", () => {
+    it.serial("should jump to position on track touch with 'jump' clickBehavior", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'jump',
@@ -724,9 +741,9 @@ describe("createScrollbar", () => {
       }));
 
       expect(onScrollMock).toHaveBeenCalled();
-    });
+    }));
 
-    it("should page-scroll on track touch with 'scroll' clickBehavior", () => {
+    it.serial("should page-scroll on track touch with 'scroll' clickBehavior", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'scroll',
@@ -745,9 +762,9 @@ describe("createScrollbar", () => {
       }));
 
       expect(onScrollMock).toHaveBeenCalled();
-    });
+    }));
 
-    it("should ignore track touch when target is thumb", () => {
+    it.serial("should ignore track touch when target is thumb", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'jump',
@@ -781,9 +798,9 @@ describe("createScrollbar", () => {
       thumb.dispatchEvent(new PointerEvent("pointerup", { pointerId: 1, pointerType: "touch",
         bubbles: true,
       }));
-    });
+    }));
 
-    it("should show scrollbar on track touch", () => {
+    it.serial("should show scrollbar on track touch", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         clickBehavior: 'jump',
@@ -803,9 +820,9 @@ describe("createScrollbar", () => {
       }));
 
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
 
-    it("should not call onScroll when maxThumbTravel <= 0", () => {
+    it.serial("should not call onScroll when maxThumbTravel <= 0", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
         clickBehavior: 'jump',
@@ -825,11 +842,11 @@ describe("createScrollbar", () => {
       }));
 
       expect(onScrollMock).not.toHaveBeenCalled();
-    });
+    }));
   });
 
   describe("auto-hide", () => {
-    it("should auto-hide after delay when autoHide is true", async () => {
+    it.serial("should auto-hide after delay when autoHide is true", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 50, // Short delay for testing
@@ -843,9 +860,9 @@ describe("createScrollbar", () => {
       fakeTimers.tick(100);
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should not auto-hide when autoHide is false", async () => {
+    it.serial("should not auto-hide when autoHide is false", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
       });
@@ -858,11 +875,11 @@ describe("createScrollbar", () => {
       fakeTimers.tick(50);
 
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
   });
 
   describe("destroy", () => {
-    it("should remove scrollbar elements", () => {
+    it.serial("should remove scrollbar elements", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
 
       expect(viewport.querySelector(".vlist-scrollbar")).not.toBeNull();
@@ -870,9 +887,9 @@ describe("createScrollbar", () => {
       scrollbar.destroy();
 
       expect(viewport.querySelector(".vlist-scrollbar")).toBeNull();
-    });
+    }));
 
-    it("should cleanup event listeners", () => {
+    it.serial("should cleanup event listeners", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(1000, 400);
 
@@ -884,9 +901,9 @@ describe("createScrollbar", () => {
 
       // If no error thrown, test passes
       expect(true).toBe(true);
-    });
+    }));
 
-    it("should remove all four padding CSS variables from viewport on destroy", () => {
+    it.serial("should remove all four padding CSS variables from viewport on destroy", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: 8 });
 
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
@@ -898,11 +915,11 @@ describe("createScrollbar", () => {
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("");
-    });
+    }));
   });
 
   describe("viewport hover", () => {
-    it("should show scrollbar on viewport mouseenter", () => {
+    it.serial("should show scrollbar on viewport mouseenter", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(1000, 400);
 
@@ -910,11 +927,11 @@ describe("createScrollbar", () => {
       viewport.dispatchEvent(mouseenterEvent);
 
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
   });
 
   describe("configuration", () => {
-    it("should use default values when config is empty", () => {
+    it.serial("should use default values when config is empty", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {});
       scrollbar.updateBounds(100000, 400);
 
@@ -925,9 +942,9 @@ describe("createScrollbar", () => {
 
       // Default minThumbSize is 15
       expect(thumbHeight).toBeGreaterThanOrEqual(15);
-    });
+    }));
 
-    it("should allow custom minThumbSize", () => {
+    it.serial("should allow custom minThumbSize", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         minThumbSize: 100,
       });
@@ -939,18 +956,18 @@ describe("createScrollbar", () => {
       const thumbHeight = parseFloat(thumb.style.height);
 
       expect(thumbHeight).toBeGreaterThanOrEqual(100);
-    });
+    }));
 
-    it("should apply uniform padding as CSS variables on viewport", () => {
+    it.serial("should apply uniform padding as CSS variables on viewport", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: 8 });
 
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("8px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("8px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("8px");
-    });
+    }));
 
-    it("should apply per-side padding as CSS variables on viewport", () => {
+    it.serial("should apply per-side padding as CSS variables on viewport", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: { top: 4, right: 6, bottom: 8, left: 10 },
       });
@@ -959,36 +976,36 @@ describe("createScrollbar", () => {
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("6px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("8px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("10px");
-    });
+    }));
 
-    it("should fill omitted sides with the default when padding is a partial object", () => {
+    it.serial("should fill omitted sides with the default when padding is a partial object", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: { top: 8 } });
 
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("8px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("2px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("2px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("2px");
-    });
+    }));
 
-    it("should set all CSS variables to 0px when padding is explicitly 0", () => {
+    it.serial("should set all CSS variables to 0px when padding is explicitly 0", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: 0 });
 
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("0px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("0px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("0px");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("0px");
-    });
+    }));
 
-    it("should not set CSS variables when padding is not specified (CSS wins)", () => {
+    it.serial("should not set CSS variables when padding is not specified (CSS wins)", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {});
 
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-top")).toBe("");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-right")).toBe("");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-bottom")).toBe("");
       expect(viewport.style.getPropertyValue("--vlist-custom-scrollbar-padding-left")).toBe("");
-    });
+    }));
 
-    it("should reduce thumb travel range by top + bottom padding (uniform)", () => {
+    it.serial("should reduce thumb travel range by top + bottom padding (uniform)", () => withFakeTimers((fakeTimers) => {
       const padding = 10;
       scrollbar = createScrollbar(viewport, onScrollMock, { padding });
       scrollbar.updateBounds(1000, 400); // 40% visible
@@ -1003,9 +1020,9 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(1000 - 400); // scrolled to bottom
       const maxThumbTravel = trackLength - thumbHeight;
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
-    });
+    }));
 
-    it("should use asymmetric top + bottom padding for thumb travel when object form is used", () => {
+    it.serial("should use asymmetric top + bottom padding for thumb travel when object form is used", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { padding: { top: 5, bottom: 15 } });
       scrollbar.updateBounds(1000, 400); // 40% visible
 
@@ -1019,9 +1036,9 @@ describe("createScrollbar", () => {
       scrollbar.updatePosition(1000 - 400); // scrolled to bottom
       const maxThumbTravel = trackLength - thumbHeight;
       expect(thumb.style.transform).toBe(`translateY(${maxThumbTravel}px)`);
-    });
+    }));
 
-    it("hover zone default width uses right padding (wall side) + 16", () => {
+    it.serial("hover zone default width uses right padding (wall side) + 16", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         showOnHover: true,
         padding: { top: 0, right: 10, bottom: 0, left: 0 },
@@ -1029,17 +1046,17 @@ describe("createScrollbar", () => {
 
       const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(10 + 16);
-    });
+    }));
 
-    it("hover zone default width equals right padding + 16 for uniform padding", () => {
+    it.serial("hover zone default width equals right padding + 16 for uniform padding", () => withFakeTimers((fakeTimers) => {
       const padding = 6;
       scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: true, padding });
 
       const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(padding + 16);
-    });
+    }));
 
-    it("explicit hoverZoneWidth overrides the padding-based default", () => {
+    it.serial("explicit hoverZoneWidth overrides the padding-based default", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         showOnHover: true,
         padding: 8,
@@ -1048,15 +1065,15 @@ describe("createScrollbar", () => {
 
       const hoverZone = viewport.querySelector(".vlist-scrollbar__hover") as HTMLElement;
       expect(parseFloat(hoverZone.style.width)).toBe(12);
-    });
+    }));
 
-    it("edge zone is always present even when showOnHover is false", () => {
+    it.serial("edge zone is always present even when showOnHover is false", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { showOnHover: false });
 
       expect(viewport.querySelector(".vlist-scrollbar__hover")).not.toBeNull();
-    });
+    }));
 
-    it("clicking in the padding margin above the track triggers page scroll upward", () => {
+    it.serial("clicking in the padding margin above the track triggers page scroll upward", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
         clickBehavior: "scroll",
@@ -1079,9 +1096,9 @@ describe("createScrollbar", () => {
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1]![0] as number;
       expect(newPos).toBeLessThan(400);
-    });
+    }));
 
-    it("clicking in the padding margin below the track triggers page scroll downward", () => {
+    it.serial("clicking in the padding margin below the track triggers page scroll downward", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
         clickBehavior: "scroll",
@@ -1104,9 +1121,9 @@ describe("createScrollbar", () => {
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1]![0] as number;
       expect(newPos).toBeGreaterThan(0);
-    });
+    }));
 
-    it("clicking in the padding margin with jump behavior clamps to track bounds", () => {
+    it.serial("clicking in the padding margin with jump behavior clamps to track bounds", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
         clickBehavior: "jump",
@@ -1124,9 +1141,9 @@ describe("createScrollbar", () => {
       // Click above the track → clamps to top (position 0)
       hoverZone.dispatchEvent(new PointerEvent("pointerdown", { pointerId: 1, pointerType: "mouse", clientY: 5, bubbles: true }));
       expect(onScrollMock).toHaveBeenCalledWith(0);
-    });
+    }));
 
-    it("clicking in the padding margin works even when showOnHover is false", () => {
+    it.serial("clicking in the padding margin works even when showOnHover is false", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         padding: 20,
         clickBehavior: "scroll",
@@ -1149,7 +1166,7 @@ describe("createScrollbar", () => {
       expect(onScrollMock).toHaveBeenCalled();
       const newPos = onScrollMock.mock.calls[onScrollMock.mock.calls.length - 1]![0] as number;
       expect(newPos).toBeLessThan(400);
-    });
+    }));
   });
 
   // ===========================================================================
@@ -1157,25 +1174,25 @@ describe("createScrollbar", () => {
   // ===========================================================================
 
   describe("horizontal mode", () => {
-    it("should add --horizontal class to track", () => {
+    it.serial("should add --horizontal class to track", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
 
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       expect(track.classList.contains("vlist-scrollbar--horizontal")).toBe(
         true,
       );
-    });
+    }));
 
-    it("should not add --horizontal class in vertical mode", () => {
+    it.serial("should not add --horizontal class in vertical mode", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", false);
 
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       expect(track.classList.contains("vlist-scrollbar--horizontal")).toBe(
         false,
       );
-    });
+    }));
 
-    it("should use width instead of height for thumb size", () => {
+    it.serial("should use width instead of height for thumb size", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(1000, 400); // 40% visible
 
@@ -1186,9 +1203,9 @@ describe("createScrollbar", () => {
 
       // 40% of trackLength (400 - 2×defaultPadding = 396) ≈ 159.2px
       expect(thumbWidth).toBeCloseTo(396 * (400 / 1000), 0);
-    });
+    }));
 
-    it("should use translateX instead of translateY for thumb positioning", () => {
+    it.serial("should use translateX instead of translateY for thumb positioning", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(1000, 400);
       scrollbar.updatePosition(0);
@@ -1197,9 +1214,9 @@ describe("createScrollbar", () => {
         ".vlist-scrollbar__thumb",
       ) as HTMLElement;
       expect(thumb.style.transform).toBe("translateX(0px)");
-    });
+    }));
 
-    it("should position thumb at end using translateX when scrolled to end", () => {
+    it.serial("should position thumb at end using translateX when scrolled to end", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(1000, 400);
 
@@ -1213,9 +1230,9 @@ describe("createScrollbar", () => {
       const maxThumbTravel = 396 - thumbWidth; // trackLength = 400 - 2×defaultPadding
 
       expect(thumb.style.transform).toBe(`translateX(${maxThumbTravel}px)`);
-    });
+    }));
 
-    it("should position thumb correctly in the middle using translateX", () => {
+    it.serial("should position thumb correctly in the middle using translateX", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(1000, 400);
 
@@ -1230,9 +1247,9 @@ describe("createScrollbar", () => {
       const expectedPosition = 0.5 * maxThumbTravel;
 
       expect(thumb.style.transform).toBe(`translateX(${expectedPosition}px)`);
-    });
+    }));
 
-    it("should handle horizontal track click using clientX", () => {
+    it.serial("should handle horizontal track click using clientX", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -1257,9 +1274,9 @@ describe("createScrollbar", () => {
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(onScrollMock).toHaveBeenCalled();
-    });
+    }));
 
-    it("should handle horizontal thumb drag using clientX", () => {
+    it.serial("should handle horizontal thumb drag using clientX", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(1000, 400);
       scrollbar.show();
@@ -1293,9 +1310,9 @@ describe("createScrollbar", () => {
       dispatchCaptured(mouseupEvent);
 
       expect(track.classList.contains("vlist-scrollbar--dragging")).toBe(false);
-    });
+    }));
 
-    it("should respect minimum thumb size in horizontal mode", () => {
+    it.serial("should respect minimum thumb size in horizontal mode", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(
         viewport,
         onScrollMock,
@@ -1311,17 +1328,17 @@ describe("createScrollbar", () => {
       const thumbWidth = parseFloat(thumb.style.width);
 
       expect(thumbWidth).toBeGreaterThanOrEqual(50);
-    });
+    }));
 
-    it("should hide horizontal scrollbar when content fits", () => {
+    it.serial("should hide horizontal scrollbar when content fits", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
       scrollbar.updateBounds(300, 400); // Content smaller than container
 
       const track = viewport.querySelector(".vlist-scrollbar") as HTMLElement;
       expect(track.style.display).toBe("none");
-    });
+    }));
 
-    it("should use custom class prefix with horizontal modifier", () => {
+    it.serial("should use custom class prefix with horizontal modifier", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "custom", true);
 
       const track = viewport.querySelector(".custom-scrollbar") as HTMLElement;
@@ -1329,9 +1346,9 @@ describe("createScrollbar", () => {
       expect(track.classList.contains("custom-scrollbar--horizontal")).toBe(
         true,
       );
-    });
+    }));
 
-    it("should destroy horizontal scrollbar cleanly", () => {
+    it.serial("should destroy horizontal scrollbar cleanly", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {}, "vlist", true);
 
       expect(viewport.querySelector(".vlist-scrollbar")).not.toBeNull();
@@ -1339,11 +1356,11 @@ describe("createScrollbar", () => {
       scrollbar.destroy();
 
       expect(viewport.querySelector(".vlist-scrollbar")).toBeNull();
-    });
+    }));
   });
 
   describe("full drag sequence", () => {
-    it("should call onScroll during mousemove drag", async () => {
+    it.serial("should call onScroll during mousemove drag", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1375,9 +1392,9 @@ describe("createScrollbar", () => {
       // End drag
       const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
       dispatchCaptured(mouseupEvent);
-    });
+    }));
 
-    it("should update thumb transform immediately during mousemove", () => {
+    it.serial("should update thumb transform immediately during mousemove", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1407,9 +1424,9 @@ describe("createScrollbar", () => {
       // End drag
       const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
       dispatchCaptured(mouseupEvent);
-    });
+    }));
 
-    it("should apply final position on mouseup", async () => {
+    it.serial("should apply final position on mouseup", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1438,9 +1455,9 @@ describe("createScrollbar", () => {
 
       // onScroll should be called with the final position
       expect(onScrollMock).toHaveBeenCalled();
-    });
+    }));
 
-    it("should remove document event listeners on mouseup", () => {
+    it.serial("should remove document event listeners on mouseup", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1473,9 +1490,9 @@ describe("createScrollbar", () => {
       // Wait a tick for potential RAF
       // onScroll should NOT have been called
       expect(onScrollMock).not.toHaveBeenCalled();
-    });
+    }));
 
-    it("should schedule auto-hide after mouseup when autoHide is true", async () => {
+    it.serial("should schedule auto-hide after mouseup when autoHide is true", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 50,
@@ -1504,9 +1521,9 @@ describe("createScrollbar", () => {
       fakeTimers.tick(100);
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should not hide during drag even if autoHide is enabled", async () => {
+    it.serial("should not hide during drag even if autoHide is enabled", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 30,
@@ -1534,9 +1551,9 @@ describe("createScrollbar", () => {
       // End drag
       const mouseupEvent = new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true });
       dispatchCaptured(mouseupEvent);
-    });
+    }));
 
-    it("should handle multiple sequential drag operations", async () => {
+    it.serial("should handle multiple sequential drag operations", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, { autoHide: false });
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1572,9 +1589,9 @@ describe("createScrollbar", () => {
 
       // Should have additional onScroll calls from second drag
       expect(onScrollMock.mock.calls.length).toBeGreaterThan(firstCallCount);
-    });
+    }));
 
-    it("should prevent default and stop propagation on thumb mousedown", () => {
+    it.serial("should prevent default and stop propagation on thumb mousedown", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1606,11 +1623,11 @@ describe("createScrollbar", () => {
 
       // Cleanup
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
-    });
+    }));
   });
 
   describe("viewport leave", () => {
-    it("should start auto-hide timer on viewport mouseleave", async () => {
+    it.serial("should start auto-hide timer on viewport mouseleave", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 50,
@@ -1631,9 +1648,9 @@ describe("createScrollbar", () => {
       fakeTimers.tick(100);
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should not hide on viewport leave when dragging", async () => {
+    it.serial("should not hide on viewport leave when dragging", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 30,
@@ -1661,9 +1678,9 @@ describe("createScrollbar", () => {
 
       // Cleanup
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
-    });
+    }));
 
-    it("should cancel pending hide timer when mouse re-enters viewport", async () => {
+    it.serial("should cancel pending hide timer when mouse re-enters viewport", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: true,
         autoHideDelay: 80,
@@ -1686,9 +1703,9 @@ describe("createScrollbar", () => {
       // (show() clears pending hide timeout, then schedules a new one)
       // We just check it didn't hide at the original 80ms mark
       // It may have hidden by the new cycle's 80ms, so check at ~60ms after re-enter
-    });
+    }));
 
-    it("should not start hide timer on leave when autoHide is false", async () => {
+    it.serial("should not start hide timer on leave when autoHide is false", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         autoHide: false,
       });
@@ -1704,11 +1721,11 @@ describe("createScrollbar", () => {
       // Should still be visible (autoHide is false, but viewport leave
       // still schedules a timeout if autoHide is true — when false, nothing happens)
       expect(scrollbar.isVisible()).toBe(true);
-    });
+    }));
   });
 
   describe("edge cases", () => {
-    it("should handle updatePosition when totalSize <= containerSize", () => {
+    it.serial("should handle updatePosition when totalSize <= containerSize", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(400, 400); // Content fits
 
@@ -1717,9 +1734,9 @@ describe("createScrollbar", () => {
 
       // Should not crash
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should handle updatePosition when maxThumbTravel is 0", () => {
+    it.serial("should handle updatePosition when maxThumbTravel is 0", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock, {
         minThumbSize: 400,
       });
@@ -1729,18 +1746,18 @@ describe("createScrollbar", () => {
 
       // Should not crash
       expect(true).toBe(true);
-    });
+    }));
 
-    it("should not show scrollbar when totalSize equals containerSize", () => {
+    it.serial("should not show scrollbar when totalSize equals containerSize", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(400, 400);
 
       scrollbar.show();
 
       expect(scrollbar.isVisible()).toBe(false);
-    });
+    }));
 
-    it("should handle destroy during drag", () => {
+    it.serial("should handle destroy during drag", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1764,9 +1781,9 @@ describe("createScrollbar", () => {
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
 
       expect(true).toBe(true);
-    });
+    }));
 
-    it("should clamp scroll position within valid range during drag", async () => {
+    it.serial("should clamp scroll position within valid range during drag", async () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1799,9 +1816,9 @@ describe("createScrollbar", () => {
 
       // Cleanup
       dispatchCaptured(new PointerEvent("pointerup", { pointerId: 1, pointerType: "mouse", bubbles: true }));
-    });
+    }));
 
-    it("should ignore track click on thumb element", () => {
+    it.serial("should ignore track click on thumb element", () => withFakeTimers((fakeTimers) => {
       scrollbar = createScrollbar(viewport, onScrollMock);
       scrollbar.updateBounds(2000, 400);
       scrollbar.show();
@@ -1836,7 +1853,7 @@ describe("createScrollbar", () => {
 
       // onScroll should NOT be called for click on thumb
       expect(onScrollMock).not.toHaveBeenCalled();
-    });
+    }));
   });
 });
 
@@ -1860,7 +1877,7 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
     viewport.remove();
   });
 
-  it("should cancel pending animation frame on destroy during drag", () => {
+  it.serial("should cancel pending animation frame on destroy during drag", () => {
     const onScrollMock = mock(() => {});
     const scrollbar = createScrollbar(viewport, onScrollMock, {
       autoHide: false,
@@ -1903,7 +1920,7 @@ describe("scroll/scrollbar — destroy with pending animation frame (L348-349)",
     expect(viewport.querySelector(".vlist-scrollbar")).toBeNull();
   });
 
-  it("should handle destroy without pending animation frame", () => {
+  it.serial("should handle destroy without pending animation frame", () => {
     const onScrollMock = mock(() => {});
     const scrollbar = createScrollbar(viewport, onScrollMock);
 
