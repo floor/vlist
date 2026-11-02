@@ -11,6 +11,36 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.3] - 2026-11-02
+
+Scroll position and search stay right when a list's data or layout changes, and tree focus follows its node through expand and collapse: filtered and grouped search, replaced table data, tree collapse, and page scrolling.
+
+Who is affected: lists using `tree()`, `search()`, `table()` or `page()` when data changes, branches expand or collapse, search filters regroup items, or the document scrolls and resizes.
+
+### Fixed
+
+- Table columns respond to page-mode window resize events; height-only changes continue to preserve dragged column widths.
+
+- Tables resize shorter content before synchronizing the native scroll source, so replacement rows render immediately at the reachable position.
+
+- Tables remove old rendered rows and reset the accessible row count when their items become empty, including grouped tables.
+
+- Page mode updates window dimensions and emits resize events when either axis changes, including width-only changes on vertical lists.
+
+- Page mode reads the current document position on initialization and after scroll writes, retaining scroll padding through native window events and document-edge clamping.
+
+- Tree: collapsing branches, collapsing all nodes, or replacing the tree with shorter data synchronizes the cached scroll position with the native scrollbar, so rendered rows stay in the viewport.
+
+- Search filtering composes with grouped table item access and refreshes group keys when a different query has the same match count. Unopened zero-minimum searches retain the original list.
+
+- Search navigation maps data matches through grouped layouts and asks the layout owner to reveal them. Match events report the source item alongside its data index, including grouped tables.
+
+- Tree: expanding branches, all nodes or siblings retains the focused item; collapsing a focused descendant moves focus to its surviving parent (the root when collapsing all), including with selection or a11y focus ownership. The ring and active descendant are remapped together.
+
+- Tree: expanding or collapsing branches above the viewport keeps a surviving visible node at the same screen position, in both orientations. Empty trees discard the old sub-item anchor.
+
+- Search: active queries refresh their matches after replacing, appending or removing items; filtered rows no longer retain the previous source array. Appending matches keeps the current navigation position.
+
 ## [3.3.2] - 2026-11-02
 
 Resizing rows with `remeasureItem()` keeps the list on the row you are looking at.
@@ -2019,7 +2049,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.3...HEAD
+[3.3.3]: https://github.com/floor/vlist/compare/v3.3.2...v3.3.3
 [3.3.2]: https://github.com/floor/vlist/compare/v3.3.1...v3.3.2
 [3.3.1]: https://github.com/floor/vlist/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/floor/vlist/compare/v3.2.0...v3.3.0

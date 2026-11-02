@@ -219,6 +219,8 @@ export function tree<T extends VListItem = VListItem>(
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   let lastTotalSize = -1;
+  let anchorId: string | number | undefined;
+  let anchorOffset = 0;
   let forceNextRender = true;
   let lastItems: readonly T[] | null = null;
   let roleSet = false;
@@ -252,7 +254,7 @@ export function tree<T extends VListItem = VListItem>(
   }
 
   let cachedSelectFn: ((...ids: (string | number)[]) => void) | null | undefined;
-  let cachedFocusFn: ((id: string | number, keyboard?: boolean) => void) | null | undefined;
+  let cachedFocusFn: ((id: string | number, keyboard?: boolean | "preserve") => void) | null | undefined;
   let cachedFollowFn: (() => boolean) | null | undefined;
 
   function resolveSelectionMethods(): void {
@@ -347,8 +349,9 @@ export function tree<T extends VListItem = VListItem>(
     } else {
       layout.rebuild(currentItems, true);
     }
-    syncTotals();
+    // Native read-back can render immediately; release old rows first.
     detachAll();
+    syncTotals();
   }
 
   // ── Sync totals after layout changes ─────────────────────────────
@@ -358,6 +361,8 @@ export function tree<T extends VListItem = VListItem>(
     origSizeCacheRebuild(layout.totalVisible);
     const totalSize = sizeCache.getTotalSize();
     applyContentSize(totalSize);
+    // Read back the native source after the DOM clamps a shorter tree.
+    scrollTo(scroll.getPixelEquivalent());
 
     const getSb = getMethod("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
     if (getSb) {
@@ -366,9 +371,27 @@ export function tree<T extends VListItem = VListItem>(
     }
   }
 
-  function invalidateTree(): void {
+  function invalidateTree(focusId?: string | number, collapsedId?: string | number): void {
+    const index = anchorId === undefined ? undefined : layout.idToIndex.get(anchorId);
+    const offset = anchorOffset;
     syncTotals();
     detachAll();
+    if (index !== undefined) {
+      const delta = sizeCache.getOffset(index) + offset - scroll.getPixelEquivalent();
+      if (delta) scroll.shiftBy(delta);
+    }
+    if (focusId !== undefined) {
+      const id = layout.idToIndex.has(focusId) ? focusId : collapsedId;
+      if (id !== undefined) {
+        if (hasExternalFocus) {
+          resolveSelectionMethods();
+          cachedFocusFn?.(id, "preserve");
+        } else {
+          focusedIndex = layout.idToIndex.get(id)!;
+          if (focusVisible) contentElement.setAttribute("aria-activedescendant", `${classPrefix}-item-${focusedIndex}`);
+        }
+      }
+    }
     doForceRender();
   }
 
@@ -443,10 +466,11 @@ export function tree<T extends VListItem = VListItem>(
       }
     }
 
+    const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
     const count = layout.expand(id);
     if (count === 0) return;
 
-    invalidateTree();
+    invalidateTree(focusId);
 
     emitter.emit("tree:expand" as TreeEventKey, {
       id, item: node.item, depth: node.depth,
@@ -458,21 +482,11 @@ export function tree<T extends VListItem = VListItem>(
     if (flatIdx === undefined) return;
     const node = layout.flatNodes[flatIdx]!;
 
+    const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
     const count = layout.collapse(id);
     if (count === 0) return;
 
-    if (!hasExternalFocus && focusedIndex > flatIdx) {
-      if (focusedIndex <= flatIdx + count) {
-        focusedIndex = flatIdx;
-      } else {
-        focusedIndex -= count;
-      }
-      if (focusVisible) {
-        contentElement.setAttribute("aria-activedescendant", `${classPrefix}-item-${focusedIndex}`);
-      }
-    }
-
-    invalidateTree();
+    invalidateTree(focusId, id);
 
     emitter.emit("tree:collapse" as TreeEventKey, {
       id, item: node.item, depth: node.depth,
@@ -582,6 +596,7 @@ export function tree<T extends VListItem = VListItem>(
 
     const totalItems = layout.totalVisible;
     if (cs <= 0 || totalItems === 0) {
+      anchorId = undefined;
       if (rendered.size > 0) {
         detachAll();
       }
@@ -593,6 +608,9 @@ export function tree<T extends VListItem = VListItem>(
     if (visEnd < totalItems - 1) visEnd++;
     visStart = Math.max(0, visStart);
     visEnd = Math.min(totalItems - 1, Math.max(0, visEnd));
+    // Keep the visible item, including its sub-item offset, across mutations.
+    anchorId = layout.flatNodes[visStart]?.id;
+    anchorOffset = scrollPos - sizeCache.getOffset(visStart);
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
@@ -705,7 +723,7 @@ export function tree<T extends VListItem = VListItem>(
     }
     if (!anyAdded) return;
     layout.rebuild(layout.rootItems as T[], true);
-    invalidateTree();
+    invalidateTree(node.id);
   }
 
   // =================================================================
@@ -1002,13 +1020,16 @@ export function tree<T extends VListItem = VListItem>(
       });
 
       ctx.hooks.method("expandAll", (): void => {
+        const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
         layout.expandAll(layout.rootItems as T[]);
-        invalidateTree();
+        invalidateTree(focusId);
       });
 
       ctx.hooks.method("collapseAll", (): void => {
+        let node = layout.flatNodes[getEffectiveFocusedIndex()];
+        while (node?.parentId != null) node = layout.flatNodes[layout.idToIndex.get(node.parentId)!];
         layout.collapseAll();
-        invalidateTree();
+        invalidateTree(node?.id);
       });
 
       ctx.hooks.method("expandTo", (id: string | number): void => {
