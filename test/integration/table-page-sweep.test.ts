@@ -97,14 +97,17 @@ for (const owner of ["selection", "a11y"] as const) {
   }));
 }
 
-it("table: destroy during a column drag restores cursor and ends capture", scoped(scope => {
+it("table: destroy during a column drag removes the root and stops resize events", scoped(scope => {
   const f = tableList(scope); const root = f.list.element;
   const handle = f.container.querySelector<HTMLElement>(".vlist-table-header-resize")!;
   let captured = false;
   handle.setPointerCapture = () => { captured = true; }; handle.releasePointerCapture = () => { captured = false; };
   handle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 200, pointerId: 1 }));
   expect(captured).toBe(true); expect(root.style.cursor).toBe("col-resize");
-  f.list.destroy(); expect(root.style.cursor).toBe(""); expect(root.classList.contains("vlist--col-resizing")).toBe(false); expect(captured).toBe(false);
+  let events = 0; f.list.on("column:resize", () => { events++; });
+  f.list.destroy(); expect(root.isConnected).toBe(false);
+  handle.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX: 300, pointerId: 1 }));
+  expect(events).toBe(0);
 }));
 
 it("table: declared conflicts reject both plugin orders", scoped(scope => {
@@ -180,4 +183,42 @@ for (const horizontal of [false, true]) {
 it.serial("page table: window resize resolves flexible columns", scoped(scope => {
   const doc = documentModel(scope); const f = doc.make([table<Row>({ columns: [{ key: "name", label: "Name" }], rowHeight: 40 })]);
   expect(f.list.getColumnWidths().name).toBe(800); doc.resize(1000, 600); expect(f.list.getColumnWidths().name).toBe(1000);
+}));
+
+for (const owner of ["standalone", "selection", "a11y"] as const) {
+  it.serial(`table groups ${owner}: shortening then emptying data clears rows and counts`, scoped(async scope => {
+    const extra: VListPlugin<Row>[] = [groups<Row>({ getGroupForIndex: i => i < 50 ? "A" : "B", header: { height: 30, template: key => key }, sticky: true })];
+    if (owner === "selection") extra.push(selection<Row>({ mode: "single" }));
+    if (owner === "a11y") extra.push(a11y<Row>());
+    const f = tableList(scope, extra); await Promise.resolve(); await Promise.resolve();
+    f.list.scrollToIndex(70); f.list.setItems(rows(2, 1000));
+    expect(f.list.getScrollPosition()).toBe(0); expect(f.content.querySelector('[data-id="1000"]')).not.toBeNull();
+    f.list.setItems([]); expect(f.rendered().length).toBe(0); expect(f.list.element.getAttribute("aria-rowcount")).toBe("1");
+    f.list.setItems(rows(5, 2000)); expect(f.content.querySelector('[data-id="2000"]')).not.toBeNull();
+    expect(f.list.element.getAttribute("aria-rowcount")).toBe("7"); // five rows, group header and table header
+  }));
+}
+
+it("table: theme/class changes preserve the header and subsequent column updates", scoped(scope => {
+  const f = tableList(scope); f.list.element.classList.add("consumer-theme"); f.list.element.style.setProperty("--vlist-bg", "black");
+  f.list.resizeColumn(0, 240); f.list.updateColumns(columns());
+  expect(f.container.querySelectorAll("[role=columnheader]").length).toBe(2);
+  expect(f.container.querySelector("[role=columnheader]")!.textContent).toContain("Name");
+  expect(f.list.element.style.getPropertyValue("--vlist-bg")).toBe("black");
+}));
+
+it.serial("page table: height-only window changes preserve dragged column widths", scoped(scope => {
+  const doc = documentModel(scope); const f = doc.make([table<Row>({ columns: columns(), rowHeight: 40 })]);
+  f.list.resizeColumn("name", 250); doc.resize(800, 700);
+  expect(f.list.getColumnWidths().name).toBe(250);
+}));
+
+it.serial("page: larger viewport renders the newly visible rows and deduplicates unchanged resize", scoped(scope => {
+  const doc = documentModel(scope); const f = doc.make(); let resizes = 0; f.list.on("resize", () => { resizes++; });
+  doc.resize(800, 1500); expect(f.container.textContent).toContain("Name 30"); doc.resize(800, 1500); expect(resizes).toBe(1);
+}));
+
+it.serial("page: immediate destroy cancels deferred initial synchronization", scoped(async scope => {
+  const doc = documentModel(scope, false, 1000); const f = doc.make(); f.list.destroy(); await Promise.resolve();
+  expect(f.list.element.isConnected).toBe(false); expect(f.list.getScrollPosition()).toBe(0);
 }));
