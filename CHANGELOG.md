@@ -13,6 +13,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
+- Grid item replacement clears empty rows and synchronizes shorter content with native scroll bounds; column updates retain a visible item and its offset.
+
 - Table columns respond to page-mode window resize events; height-only changes continue to preserve dragged column widths.
 
 - Tables resize shorter content before synchronizing the native scroll source, so replacement rows render immediately at the reachable position.

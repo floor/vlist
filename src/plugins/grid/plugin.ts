@@ -205,7 +205,7 @@ export function grid<T extends VListItem = VListItem>(
     forceNextRender = false;
 
     const totalRows = getRowCount();
-    if (cs <= 0 || totalRows === 0) return;
+    if (cs <= 0) return;
 
     // Visible row range
     resolveItemStateFn();
@@ -334,12 +334,18 @@ export function grid<T extends VListItem = VListItem>(
 
   function gridForceRender(): void {
     if (engineState.destroyed) return;
+    const previousSize = lastContentTotalSize;
     rebuildAsRows(getRowCount());
+    const totalSize = sizeCache.getTotalSize();
     lastContentTotalSize = -1;
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
     forceNextRender = true;
+    if (totalSize < previousSize) {
+      storedCtx?.render.contentSize(totalSize);
+      scroll.to(scroll.getPixelEquivalent());
+    }
     gridRenderIfNeeded();
   }
 
@@ -489,6 +495,11 @@ export function grid<T extends VListItem = VListItem>(
           throw new Error("[vlist] updateGrid: gap must be >= 0");
         }
 
+        const position = scroll.getPixelEquivalent();
+        const anchorRow = sizeCache.indexAtOffset(position);
+        const anchorItem = anchorRow * columns;
+        const inRow = position - sizeCache.getOffset(anchorRow);
+
         layout.update(newConfig);
         if (newConfig.columns !== undefined) columns = Math.max(1, Math.floor(newConfig.columns));
         if (newConfig.gap !== undefined) gap = newConfig.gap;
@@ -515,6 +526,9 @@ export function grid<T extends VListItem = VListItem>(
         containerWidth = engineState.crossSize - crossPadTotal;
         recomputeColumnWidth();
         gridForceRender();
+        if (!ctx.hooks.get("_isGroupHeader")) {
+          scroll.to(sizeCache.getOffset(layout.getRow(anchorItem)) + inRow);
+        }
       });
 
       // Override scrollToIndex: item index → row index
