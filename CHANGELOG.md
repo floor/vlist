@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.2] - 2026-11-02
+
 Resizing rows with `remeasureItem()` keeps the list on the row you are looking at.
 
 Who is affected: lists that resize rows with `remeasureItem()` — directly or through `autosize()` — while the user is scrolled or a smooth scroll is in flight, and any list destroyed while a remeasure may still arrive.
@@ -2017,7 +2019,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.2...HEAD
+[3.3.2]: https://github.com/floor/vlist/compare/v3.3.1...v3.3.2
 [3.3.1]: https://github.com/floor/vlist/compare/v3.3.0...v3.3.1
 [3.3.0]: https://github.com/floor/vlist/compare/v3.2.0...v3.3.0
 [3.2.0]: https://github.com/floor/vlist/compare/v3.1.8...v3.2.0
