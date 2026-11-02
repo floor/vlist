@@ -378,8 +378,8 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     // aria-setsize is the same for every row, so it only needs rewriting when
     // the total moves — appending items must not leave the rendered rows
     // announcing the old count.
+    const total = totalItemsGetter?.() ?? Infinity;
     if (isInteractive && totalItemsGetter) {
-      const total = totalItemsGetter();
       if (total !== lastAriaTotal) {
         lastAriaTotal = total;
         lastAriaSetSize = String(total);
@@ -494,7 +494,7 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     for (const [index, tracked] of rendered) {
       if (visibleSet.has(index)) {
         tracked.lastSeenFrame = frameCounter;
-      } else if (frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
+      } else if (index >= total || frameCounter - tracked.lastSeenFrame > RELEASE_GRACE) {
         pool.release(tracked.element);
         rendered.delete(index);
       } else {

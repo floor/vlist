@@ -389,7 +389,7 @@ export function masonry<T extends VListItem = VListItem>(
     lastContainerSize = containerSize;
     forceNextRender = false;
 
-    if (containerSize <= 0 || cachedPlacements.length === 0) return;
+    if (containerSize <= 0) return;
 
     const mainAxisStart = Math.max(0, scrollPosition - overscanPx);
     const mainAxisEnd = scrollPosition + containerSize + overscanPx;
@@ -427,12 +427,14 @@ export function masonry<T extends VListItem = VListItem>(
 
   function masonryForceRender(): void {
     if (engineState.destroyed) return;
+    const previousSize = lastContentTotalSize;
     lastContentTotalSize = -1;
     calculateLayout();
     engineState.prevRangeStart = -1;
     engineState.prevRangeEnd = -1;
     engineState.renderPending = true;
     forceNextRender = true;
+    if (lastContentTotalSize < previousSize) scroll.to(scroll.getPixelEquivalent());
     masonryRenderIfNeeded();
   }
 
@@ -517,9 +519,15 @@ export function masonry<T extends VListItem = VListItem>(
         const updates: Partial<{ columns: number; gap: number }> = {};
         if (newConfig.columns !== undefined) updates.columns = newConfig.columns;
         if (newConfig.gap !== undefined) updates.gap = newConfig.gap;
+        const position = scroll.getPixelEquivalent();
+        const anchor = cachedPlacements.find(p => p.y + p.size > position);
+        const offset = anchor ? position - anchor.y : 0;
         layout.update(updates);
         renderer?.clear();
         masonryForceRender();
+        if (anchor && !ctx.hooks.get("_isGroupHeader")) {
+          scroll.to(cachedPlacements[anchor.index]!.y + offset);
+        }
       });
 
       // scrollToIndex: map item index to its placement position

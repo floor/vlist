@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- Carousel replacement refreshes its virtual window and active index even at the same item count or during a transition. Completed navigation releases its target for snapshot restoration; keyboard wrap keeps the visible focus ring and active descendant together.
+
+- Masonry removes items outside a replacement dataset immediately, synchronizes shorter content with native scroll bounds, and retains a visible item when columns change.
+
+- Grid item replacement clears empty rows and synchronizes shorter content with native scroll bounds; column updates retain a visible item and its offset.
+
 ## [3.3.3] - 2026-11-02
 
 Scroll position and search stay right when a list's data or layout changes, and tree focus follows its node through expand and collapse: filtered and grouped search, replaced table data, tree collapse, and page scrolling.
