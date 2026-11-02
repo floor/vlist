@@ -11,6 +11,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.4] - 2026-11-02
+
+Grid and masonry clear stale rows after data replacement and keep a visible item across column changes; carousels keep a valid slide after replacement, restore unchanged-layout snapshots, and keep keyboard focus on the visible slide.
+
+Who is affected: ungrouped lists using `grid()` or `masonry()` when replacing items or changing columns, and `carousel()` lists when replacing items, restoring an unchanged-layout snapshot, or wrapping keyboard focus with `selection()` or `a11y()`.
+
 ### Fixed
 
 - Carousel replacement refreshes its virtual window and active index even at the same item count or during a transition. Completed navigation releases its target for snapshot restoration; keyboard wrap keeps the visible focus ring and active descendant together.
@@ -2057,7 +2063,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.3...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD
+[3.3.4]: https://github.com/floor/vlist/compare/v3.3.3...v3.3.4
 [3.3.3]: https://github.com/floor/vlist/compare/v3.3.2...v3.3.3
 [3.3.2]: https://github.com/floor/vlist/compare/v3.3.1...v3.3.2
 [3.3.1]: https://github.com/floor/vlist/compare/v3.3.0...v3.3.1
