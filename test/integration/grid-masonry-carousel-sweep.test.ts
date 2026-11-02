@@ -63,7 +63,7 @@ function fixture(scope: TestScope, kind: Layout, horizontal = false, extra: VLis
   };
 }
 
-for (const kind of ["grid"] as const) for (const horizontal of [false, true]) {
+for (const kind of ["grid", "masonry"] as const) for (const horizontal of [false, true]) {
   const axis = horizontal ? "horizontal" : "vertical";
   it(`${kind} ${axis}: empty replacement removes all rendered items`, scoped(scope => {
     const f = fixture(scope, kind, horizontal); f.list.scrollToIndex(80); expect(f.rendered().length).toBeGreaterThan(0);
@@ -123,7 +123,26 @@ it("grid groups: navigation reaches a data item without selecting a header", sco
   await Promise.resolve(); f.list.scrollToIndex(60); expect(f.row(60)).not.toBeNull(); expect(f.list.getItemAt(60)?.id).toBe(60);
 }));
 
-for (const kind of ["grid"] as const) {
+it("masonry: uneven appended items keep prior placements while scrolled", scoped(scope => {
+  const heights = Array.from({ length: 100 }, (_, i) => [30, 400, 70, 150][i % 4]!);
+  const f = fixture(scope, "masonry", false, [], heights); f.list.scrollToIndex(50); const pos = f.list.getScrollPosition(); const transform = f.row(50)!.style.transform;
+  heights.push(1000, 20, 700); f.list.appendItems(rows(3, 100)); expect(f.list.getScrollPosition()).toBe(pos); expect(f.row(50)!.style.transform).toBe(transform);
+  f.list.scrollToIndex(102); expect(f.row(102)).not.toBeNull();
+}));
+
+it("masonry: cross-size resize and column change produce correctly sized placements", scoped(async scope => {
+  const f = fixture(scope, "masonry"); await f.resize(900, 400); f.list.updateMasonry({ columns: 4 });
+  expect(f.list.getMasonryLayout().columns).toBe(4); expect(f.row(0)!.style.width).toBe("219px");
+}));
+
+it("masonry data: resolved async rows replace placeholders at their layout positions", scoped(async scope => {
+  const container = createContainer();
+  const list = createVList<Row>({ container, item: { height: 60, template: row => row.label ?? "loading" } }, [masonry<Row>({ columns: 3 }), data<Row>({ adapter: { read: async ({ offset, limit }) => ({ items: rows(Math.min(limit, 90 - offset), offset), total: 90, hasMore: offset + limit < 90 }) } })]);
+  scope.own(list, container); await waitFor(() => list.total === 90 && !!container.querySelector('[data-id="0"]'), "masonry data rows");
+  list.scrollToIndex(60); await waitFor(() => !!container.querySelector('[data-id="60"]'), "masonry async target"); expect(container.textContent).toContain("Item 60");
+}));
+
+for (const kind of ["grid", "masonry"] as const) {
   it(`${kind}: autosize conflict is clear in either order`, scoped(scope => {
     const container = createContainer(); scope.defer(() => container.remove());
     for (const reverse of [false, true]) {
@@ -132,12 +151,27 @@ for (const kind of ["grid"] as const) {
       expect(() => createVList({ container, items: rows(), item: { height: 40, template: (row: Row) => row.label } }, reverse ? plugins.reverse() : plugins)).toThrow(`Plugin "${kind}" conflicts with "autosize"`);
     }
   }));
-}// groups() caches its own column geometry; refreshing that owner needs a separate change.
-for (const kind of ["grid"] as const) {
+}for (const horizontal of [false, true]) {
+  it(`masonry ${horizontal ? "horizontal" : "vertical"}: column update preserves a visible item`, scoped(scope => {
+    const f = fixture(scope, "masonry", horizontal); f.list.scrollToIndex(60); f.list.updateMasonry({ columns: 2 });
+    expect(f.row(60)).not.toBeNull(); expect(f.list.getScrollPosition()).toBe(30 * 48);
+  }));
+}
+
+it("masonry: destroy before a queued resize leaves no mounted items", scoped(async scope => {
+  const f = fixture(scope, "masonry"); await waitFor(() => observers.has(f.viewport), "masonry observer"); const callback = observers.get(f.viewport)!;
+  f.list.destroy(); expect(f.list.element.isConnected).toBe(false);
+  expect(() => callback([{ target: f.viewport, contentRect: new DOMRect(0, 0, 900, 600), borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }], {} as ResizeObserver)).not.toThrow();
+  expect(f.list.element.querySelectorAll("[data-id]").length).toBe(0);
+}));
+
+// groups() caches its own column geometry; refreshing that owner needs a separate change.
+for (const kind of ["grid", "masonry"] as const) {
   it.todo(`${kind} groups: column updates refresh the grouped layout`, scoped(async scope => {
     const f = fixture(scope, kind, false, [groups<Row>({ getGroupForIndex: i => i < 50 ? "A" : "B", header: { height: 30, template: key => key } })]);
     await Promise.resolve();
-    f.list.updateGrid({ columns: 2 });
+    if (kind === "grid") f.list.updateGrid({ columns: 2 });
+    else f.list.updateMasonry({ columns: 2 });
     expect(f.row(0)).not.toBeNull();
     expect(f.row(0)?.style.width).toBe("296px");
   }));
