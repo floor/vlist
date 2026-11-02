@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [next, staging, main]
+    branches: [main, staging]
   pull_request:
-    branches: [next, staging, main]
+    branches: [main, staging]
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -26,7 +26,7 @@ jobs:
 
       # Every gate below runs even when an earlier one is red, and the last
       # step fails the job if any did. Before 2026-09-25 the job stopped at the
-      # first red step, so one failure hid every gate behind it: next was red
+      # first red step, so one failure hid every gate behind it: the integration branch was red
       # for three days and it took five CI round-trips to learn there were five
       # layers (typecheck, test types, the harness, coverage, size). Now one run
       # names them all. `outcome` is the step's own result; `conclusion` would

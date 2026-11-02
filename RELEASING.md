@@ -15,18 +15,18 @@ reaches users (and the live examples) once it's published.
 A new export, config option, method, or event is a **feature** → minor. New
 API must never ship in a patch — that's exactly the surprise SemVer prevents.
 
-## Two trains
+## Release lines
 
-- **3.x** lives on `next`. A 3.0.0 (and later 3.x) release is `next → main`,
-  then the tag from `main`.
-- **2.x** lives on `staging`. A 2.8.x patch is `staging → main`, then the tag
-  from `main`. `staging` is frozen maintenance: it holds nothing `next` does
-  not.
+3.x integrates and releases from `main`. Feature branches and release branches
+reach it through reviewed PRs; never push directly to `main`. The retired
+integration branch is no longer part of release preparation or publication.
+
+2.x remains frozen maintenance on `staging`: its release branch merges into
+`staging`, then a pinned `staging → main` PR carries the release onto `main`.
+Its version cannot be cut from the 3.x line.
 
 Within a line, a patch is `fix` / `perf` / `docs` only. The moment a `feat`
 lands, the next release on that line is a minor.
-
-`main` is protected and is the released line.
 
 ## When to cut a release
 
@@ -42,70 +42,65 @@ the integration branch but not yet published.
 
 ## Process
 
-Work on the integration branch for the line you are releasing (`next` for 3.x,
-`staging` for 2.x), with a clean working tree.
+A 3.x release has three steps: one release PR into `main`, the operator's
+pinned merge, then a separately authorized tag. Use a clean worktree; the
+script never checks out an integration branch held by another worktree.
 
-1. **Prep the notes** — keep the release's entries in `CHANGELOG.md` under
-   `[Unreleased]`. When more than one change ships, open the section with a
-   one-sentence theme above its first heading. The script refuses an empty section,
-   a section without entries, or multiple entries without that theme. Commit the
-   notes before starting; leave the section populated for the script to roll.
-2. **Release** — `bun run release [patch|minor|major|<version>] [--from next|staging] [--dry-run] [--tag]`.
-   The script derives the source branch from the version being released (`next`
-   for 3.x, `staging` for 2.x), requires you to be on that branch, bumps
-   `package.json` (a prerelease such as `3.0.0-next.2` is never bumped — its
-   stable release is named, `bun run release 3.0.0` — and a version not above the
-   current one is refused unless resuming an already-bumped release), and prepares
-   the release on `chore/release-X.Y.Z`, cut from the source branch. It rolls
-   `[Unreleased]` into `[X.Y.Z] - <UTC date>`, leaves a fresh empty `[Unreleased]`,
-   and updates both compare links. It runs `bun run size`, refreshes the measured
-   plugin-size tables and matching base-size prose in `README.md` and
-   `npm-readme.md`, and updates both files' version markers. A failed size check
-   or a missing size-table row stops preparation.
-   It commits `chore(release): vX.Y.Z` on that branch, pushes
-   the release branch (never the source branch directly), opens a PR into the source
-   branch, and waits for it to merge. Once merged, it opens a PR from the source
-   branch onto `main` and waits for it to merge. Both merges must be merge commits
-   pinned to the verified PR head.
-   Once the PR onto `main` merges, the script verifies the merge commit is on `main`,
-   verifies `package.json` matches the release version, verifies all check runs on that
-   commit are completed and successful, prints the verified SHA and the exact next
-   command, and stops without tagging. It waits up to ten minutes for missing or
-   pending checks; a failed check stops it immediately.
-   The tag is a separate, deliberate invocation:
-   `bun run release X.Y.Z --tag`.
-   This re-verifies all preconditions from scratch, creates an annotated tag
-   `git tag -a vX.Y.Z <sha> -m vX.Y.Z` on the verified commit, and pushes it.
-   The tag triggers `publish.yml` → `npm publish` + GitHub Release, whose notes
-   come from the tag's CHANGELOG section and compare link.
-   Pass `--dry-run` to preview all planned steps and commands without touching files,
-   branches, PRs, or tags.
-   `--from` confirms the derived branch; it cannot send 3.x through `staging`.
-3. **Move `next` at the release** — a stable publish moves `latest` only.
-   `publish.yml` moves `next` itself with the workflow's OIDC identity
-   (`npm dist-tag add vlist@X.Y.Z next`), which npm supports from 11.21.0 once
-   **Allow npm dist-tag** is enabled on the package's trusted publisher on
-   npmjs.com (disabled by default). The move is allowed to fail; if `next` is
-   below the published version, the last step warns with the command a maintainer
-   runs — `npm dist-tag add vlist@X.Y.Z next --auth-type=web`
-   (browser 2FA; no token). `bun run release` also prints that command as its
-   last line. The warning names the version just published even while the
-   registry still shows the old `latest` (public registry visibility can lag a
-   fresh publish, and the step does not wait for it). When the registry cannot be
-   read, it warns that the tags are unknown. In both cases it exits 0.
+1. **Prepare the release PR.** Commit the notes under `[Unreleased]` through
+   a PR before starting: a one-sentence theme, a Who is affected paragraph,
+   then the change headings and entries. Run
+   `bun run release [patch|minor|major|<version>] [--from main]`. The script
+   fetches `main` and cuts `chore/release-X.Y.Z` from `origin/main` in the
+   current worktree. It bumps `package.json`, rolls the notes to
+   `[X.Y.Z] - <UTC date>` with a fresh empty `[Unreleased]`, refreshes compare
+   links, and updates both README version markers, measured size tables and
+   matching prose. A failed size gate stops preparation; never raise a budget.
+   It commits and pushes only the release branch, opens its PR into `main`,
+   and waits. A prerelease is never bumped: name its stable version explicitly.
+2. **Merge pinned to the reviewed head.** Independent review and all CI must
+   pass on the release PR's exact head and on its base. The operator performs
+   a merge commit pinned to that head. The script verifies the merge's parents,
+   its presence on `main`, `package.json`, and every check run on that exact
+   merge commit. It waits up to ten minutes for missing or pending checks,
+   stops immediately for a failed check, then stops without tagging.
+3. **Tag on the release decision.** Run `bun run release X.Y.Z --tag`. It
+   re-verifies from scratch, fetches main's objects without checking out main,
+   creates `git tag -a vX.Y.Z <verified merge sha> -m vX.Y.Z`, and pushes only
+   that tag. It leaves the caller's branch or detached HEAD unchanged and
+   does not switch branches after pushing. The tag triggers `publish.yml`: npm,
+   GitHub Release, stable npm `next` dist-tag and the production site dispatch.
 
-**Manual preparation fallback / resume.** If preparation was completed manually,
-commit the package version, dated changelog section and compare links, and both
-README version markers and measured sizes on `chore/release-X.Y.Z`. From that
-branch, `bun run release X.Y.Z` resumes the committed bump without rolling the
-changelog again. If the branch was already pushed without its source PR, follow
-the script's diagnostic: verify the remote package version and release commit
-subject, open that PR, then rerun. An unfinished release branch without the target
-version committed is refused. This is a resume path, not an automatic fallback
-after a size failure; a fresh run from the integration branch still needs populated
-`[Unreleased]`.
+Use `--dry-run` to print the plan without changing files, branches, PRs or
+tags. `--from main|staging` confirms the derived release line; it cannot send
+3.x through staging. A worktree on a feature branch or detached HEAD can
+prepare or tag a 3.x release; preparation always starts from remote main,
+not from unmerged feature changes. Existing release branches must be resumed
+in the worktree holding them; the script never forces a checkout.
 
-**Publication follow-through.** If npm reports that a version is being processed,
+**Manual preparation / resume.** Commit the package version, dated section,
+compare links and measured README versions/sizes on `chore/release-X.Y.Z`.
+From that branch, the release command resumes the committed bump without
+rolling the changelog again. If the branch was pushed without its PR, verify
+its remote package version and release commit, open the PR into `main` using
+the script's diagnostic, then resume. An unfinished local release branch is
+refused. This is not a fallback after a size failure.
+
+**2.x maintenance.** Use `--from staging` for a 2.x version. Its release PR
+goes into staging and is followed by the existing staging-to-main PR. Both
+merges must be pinned merge commits. Source ref updates are fetched without
+checking out staging; tagging uses the same verified main SHA and leaves
+the current worktree unchanged.
+
+**npm tags.** A stable publish moves `latest` and asks npm to move the `next`
+dist-tag to the same version with the workflow's OIDC identity (npm 11.21.0+,
+**Allow npm dist-tag** enabled on its trusted publisher). The move is allowed
+to fail; a stale or unreadable registry read warns with the exact maintainer
+command: `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. This is an npm
+tag, not a Git branch.
+
+**Publication follow-through.** Check the production version at
+`https://vlist.io/dist/version.json`, alongside the deployment run.
+If npm reports that a version is being processed,
 wait for visibility rather than retrying publication: once npm has accepted a
 version, do not publish it again. Check `npm view vlist@X.Y.Z version` and
 `npm view vlist dist-tags` before moving `next`. A stale registry read alone does
@@ -134,13 +129,13 @@ npm `latest` or production vlist.io. Any tag whose version contains a hyphen
 with `npm publish --tag next` and creates a GitHub prerelease. Users install it
 with `npm install vlist@next`.
 
-1. **Branch** — cut it from the branch that holds the work (`next` for 3.0), not
+1. **Branch** — cut it from the branch that holds the work (`main` for 3.x), not
    from `staging`. `bun run release` does not apply.
 2. **Prep** — set `package.json` to `X.Y.Z-next.N`, move the `[Unreleased]`
    entries into a `[X.Y.Z-next.N] - <date>` section of `CHANGELOG.md`, and update
    the version line in `README.md` and `npm-readme.md`. Commit
    `chore(release): vX.Y.Z-next.N` and push the branch.
-3. **Verify** — CI runs on pushes and PRs to `next`, `staging` and `main`.
+3. **Verify** — CI runs on pushes and PRs to `main` and 2.x `staging`.
    Verify the exact tag candidate from a clean export: `bun install --frozen-lockfile`,
    `bun run typecheck`, `bun test`, `bun run scripts/coverage.ts --threshold 85`,
    `bun run build --types`, `bun run size`, `npm pack --dry-run`. A local run

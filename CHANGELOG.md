@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Release preparation and tagging work with multiple worktrees, with one release PR into main for 3.x.
+
+Who is affected: maintainers using the release script, especially when another worktree holds main or staging.
+
+### Fixed
+
+- Release tooling prepares 3.x releases directly from main and tags verified merges without checking out branches held by other worktrees.
+
 ## [3.3.4] - 2026-11-02
 
 Grid and masonry clear stale rows after data replacement and keep a visible item across column changes; carousels keep a valid slide after replacement, restore unchanged-layout snapshots, and keep keyboard focus on the visible slide.

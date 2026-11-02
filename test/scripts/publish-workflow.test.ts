@@ -21,7 +21,7 @@ test('a stable publish asks vlist.io to redeploy with the released version', () 
 });
 
 test('a prerelease never redeploys the production site', () => {
-  expect(redeploy?.if).toBe(steps[indexOf('Move next to this release')]?.if);
+  expect(redeploy?.if).toBe(steps[indexOf('Move npm next to this release')]?.if);
   expect(redeploy?.if).toBe("${{ !contains(github.ref_name, '-') }}");
 });
 
@@ -32,4 +32,17 @@ test('the redeploy is asked for only once the package and the release are out', 
 
 test('a refused redeploy does not turn a published release red', () => {
   expect(redeploy?.['continue-on-error']).toBe(true);
+});
+
+
+test('stable publication moves the npm next dist-tag', () => {
+  const move = steps[indexOf('Move npm next to this release')] as WorkflowStep & { run?: string };
+  expect(move?.if).toBe("${{ !contains(github.ref_name, '-') }}");
+  expect(move?.run).toBe('npm dist-tag add "vlist@${GITHUB_REF_NAME#v}" next');
+});
+
+test('CI targets main and 2.x staging, with no retired integration branch', () => {
+  const ci = Bun.YAML.parse(readFileSync(resolve(import.meta.dir, '../../.github/workflows/ci.yml'), 'utf8')) as { on: { push: { branches: string[] }; pull_request: { branches: string[] } } };
+  expect(ci.on.push.branches).toEqual(['main', 'staging']);
+  expect(ci.on.pull_request.branches).toEqual(['main', 'staging']);
 });
