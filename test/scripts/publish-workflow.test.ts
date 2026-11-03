@@ -21,7 +21,7 @@ test('a stable publish asks vlist.io to redeploy with the released version', () 
 });
 
 test('a prerelease never redeploys the production site', () => {
-  expect(redeploy?.if).toBe(steps[indexOf('Move npm next to this release')]?.if);
+  expect(redeploy?.if).toBe(steps[indexOf('Remove npm next dist-tag')]?.if);
   expect(redeploy?.if).toBe("${{ !contains(github.ref_name, '-') }}");
 });
 
@@ -35,10 +35,14 @@ test('a refused redeploy does not turn a published release red', () => {
 });
 
 
-test('stable publication moves the npm next dist-tag', () => {
-  const move = steps[indexOf('Move npm next to this release')] as WorkflowStep & { run?: string };
-  expect(move?.if).toBe("${{ !contains(github.ref_name, '-') }}");
-  expect(move?.run).toBe('npm dist-tag add "vlist@${GITHUB_REF_NAME#v}" next');
+test('stable publication removes the npm next dist-tag with a soft-fail warning and no check-dist-tags step', () => {
+  const remove = steps[indexOf('Remove npm next dist-tag')] as WorkflowStep & { run?: string };
+  expect(remove?.if).toBe("${{ !contains(github.ref_name, '-') }}");
+  expect(remove?.['continue-on-error']).toBe(true);
+  expect(remove?.run).toContain('npm dist-tag rm vlist next');
+  expect(remove?.run).toContain('::warning');
+  expect(steps.some((step) => (step as { run?: string }).run?.includes('npm dist-tag add'))).toBe(false);
+  expect(steps.some((step) => (step as { run?: string }).run?.includes('check-dist-tags'))).toBe(false);
 });
 
 test('CI targets main and 2.x staging, with no retired integration branch', () => {

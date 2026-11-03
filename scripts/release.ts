@@ -21,7 +21,6 @@
  */
 
 import { execSync } from "node:child_process";
-import { nextTagCommand } from "./check-dist-tags";
 
 // =============================================================================
 // Constants & Types
@@ -2047,10 +2046,7 @@ const main = async (): Promise<void> => {
 
   step(1, "Checking release state and preconditions...");
 
-  const { version: oldVersion } = read("cat package.json", packageJsonSchema);
-  const currentRemoteTagSha = getRemoteTag(oldVersion);
-  const isCurrentUntagged = currentRemoteTagSha === null;
-
+  let oldVersion: string;
   let newVersion: string;
   let sourceBranch: ReleaseBranch;
   let releaseBranch: string;
@@ -2061,6 +2057,21 @@ const main = async (): Promise<void> => {
   });
 
   try {
+    const initialSource: ReleaseBranch =
+      args.kind === "exact"
+        ? resolveSourceBranch(args.version, args.from)
+        : (args.from ?? (currentBranch === "staging" ? "staging" : "main"));
+    const onReleaseBranch =
+      args.kind === "exact"
+        ? currentBranch === releaseBranchFor(args.version)
+        : currentBranch.startsWith("chore/release-");
+    oldVersion = read(
+      onReleaseBranch ? "cat package.json" : `git show origin/${initialSource}:package.json`,
+      packageJsonSchema,
+    ).version;
+    const currentRemoteTagSha = getRemoteTag(oldVersion);
+    const isCurrentUntagged = currentRemoteTagSha === null;
+
     newVersion = resolveNewVersion(oldVersion, args, {
       allowSame: true,
       isCurrentUntagged: isCurrentUntagged && args.kind === "bump",
@@ -2200,7 +2211,12 @@ const main = async (): Promise<void> => {
     // The dry run refuses what the live run would refuse, before printing a plan.
     if (state === "create-source-pr" && currentBranch !== releaseBranch) {
       try {
-        assertUnreleasedReady(await Bun.file("CHANGELOG.md").text());
+        const changelog = read(`git show origin/${sourceBranch}:CHANGELOG.md`, {
+          kind: "text",
+          name: "source_changelog",
+          parse: (raw) => raw,
+        });
+        assertUnreleasedReady(changelog);
       } catch (err: unknown) {
         console.error(`  ✗ ${err instanceof Error ? err.message : String(err)}`);
         process.exit(1);
@@ -2241,7 +2257,6 @@ const main = async (): Promise<void> => {
       console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
       log(`Done! v${newVersion} is publishing to npm.`);
       log(`Monitor: https://github.com/floor/vlist/actions`);
-      log(`Last step, once it is on npm: ${nextTagCommand(newVersion)}`);
       return;
     }
     if (state === "tag-release") {
@@ -2252,7 +2267,6 @@ const main = async (): Promise<void> => {
       console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
       log(`Done! v${newVersion} is publishing to npm.`);
       log(`Monitor: https://github.com/floor/vlist/actions`);
-      log(`Last step, once it is on npm: ${nextTagCommand(newVersion)}`);
       return;
     }
     console.error(`  ✗ Cannot tag v${newVersion}: state is ${state}`);
@@ -2303,8 +2317,9 @@ const main = async (): Promise<void> => {
       run(`git checkout -b ${releaseBranch} origin/${sourceBranch}`);
 
       const pkgContent = read("cat package.json", { kind: "text", name: "cat_package_json", parse: (raw) => raw });
+      const { version: sourceVersion } = validate(pkgContent, packageJsonSchema, "package.json");
       await Bun.write("package.json", bumpPackageVersion(pkgContent, newVersion));
-      console.log(`  ✓ package.json: ${oldVersion} → ${newVersion}`);
+      console.log(`  ✓ package.json: ${sourceVersion} → ${newVersion}`);
 
       await Bun.write("CHANGELOG.md", rollChangelog(changelog, newVersion, utcDateStamp(new Date())));
       console.log(`  ✓ CHANGELOG.md: [Unreleased] rolled into [${newVersion}]`);

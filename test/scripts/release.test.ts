@@ -1093,13 +1093,13 @@ describe("planRelease", () => {
     expect(commands).toContain("git add package.json README.md npm-readme.md CHANGELOG.md");
     // Verifies it pushes chore/release-2.8.3
     expect(commands).toContain("git push origin chore/release-2.8.3");
-    // CRITICAL: Verifies it NEVER pushes next directly!
+    // CRITICAL: Verifies it NEVER pushes staging directly!
     expect(commands).not.toContain("git push origin staging");
-    // Verifies PR chore/release-2.8.3 -> next is opened
+    // Verifies PR chore/release-2.8.3 -> staging is opened
     expect(
       commands.some((c) => c?.includes("gh pr create --base staging --head chore/release-2.8.3")),
     ).toBe(true);
-    // Verifies PR next -> main is opened
+    // Verifies PR staging -> main is opened
     expect(
       commands.some((c) => c?.includes("gh pr create --base main --head staging")),
     ).toBe(true);
@@ -1120,7 +1120,8 @@ describe("planRelease", () => {
     // Does NOT cut chore/release-2.8.3 or push it again
     expect(commands).not.toContain("git checkout -b chore/release-2.8.3 origin/staging");
     expect(commands).not.toContain("git push origin chore/release-2.8.3");
-    // Opens PR next -> main
+    // Fetches staging and opens PR staging -> main
+    expect(commands).toContain("git fetch origin staging");
     expect(
       commands.some((c) => c?.includes("gh pr create --base main --head staging")),
     ).toBe(true);

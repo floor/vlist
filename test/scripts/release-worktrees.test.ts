@@ -74,6 +74,7 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
       const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "3.3.5", ...(checkout === "resume" ? [] : ["--tag"])], { cwd: repo, env, timeout: 15_000 });
       const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
       expect(output).toContain(checkout === "resume" ? "verified with all passing checks" : "Tag v3.3.5 pushed");
+      expect(output).not.toContain("npm dist-tag add");
       expect(result.exitCode).toBe(0);
       if (checkout === "resume") {
         expect(git(root, "--git-dir", remote, "tag", "-l", "v3.3.5")).toBe("");
@@ -124,6 +125,10 @@ for (const source of ["main", "staging"] as const) {
       git(repo, "checkout", "-b", "feature");
       git(repo, "worktree", "add", held, "main");
       writeFileSync(join(repo, "private-feature.txt"), "not merged");
+      if (source === "main") {
+        writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.0" }));
+        writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\n## [3.3.0] - 2026-10-01\n");
+      }
       git(repo, "add", ".");
       git(repo, "commit", "-m", "unmerged feature");
       if (source === "staging") git(repo, "checkout", "staging");
@@ -172,6 +177,7 @@ for (const source of ["main", "staging"] as const) {
   `);
       const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version], { cwd: repo, env, timeout: 15_000 });
       const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
+      expect(output).toContain(`package.json: ${previous} → ${version}`);
       expect(output).toContain("verified with all passing checks");
       expect(result.exitCode).toBe(0);
       const commands = readFileSync(commandsFile, "utf8").trim().split("\n").map(line => JSON.parse(line) as string);
@@ -188,3 +194,71 @@ for (const source of ["main", "staging"] as const) {
   }, 20_000);
 
 }
+
+it("reads origin/<source> package.json and CHANGELOG.md during dry-run and bump resolution from feature or detached HEAD", () => {
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-origin-reads-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  const readyChangelog = "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [3.3.4] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD\n";
+  const emptyChangelog = "# Changelog\n\n## [Unreleased]\n\n## [3.3.4] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD\n";
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.4" }));
+    writeFileSync(join(repo, "CHANGELOG.md"), readyChangelog);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "main with ready unreleased notes");
+    git(repo, "tag", "-a", "v3.3.4", "-m", "v3.3.4");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main", "v3.3.4");
+
+    // Feature branch has a conflicting local package.json (9.9.9) and an empty local CHANGELOG.md.
+    git(repo, "checkout", "-b", "feature");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "9.9.9" }));
+    writeFileSync(join(repo, "CHANGELOG.md"), emptyChangelog);
+    git(repo, "commit", "-am", "feature with diverged local package.json and empty changelog");
+
+    const preload = join(root, "github-dry-run-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec } from "node:child_process";
+const execute = realExec;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    for (const detach of [false, true] as const) {
+      if (detach) git(repo, "checkout", "--detach");
+      const dryRun = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "patch", "--dry-run"], { cwd: repo, env, timeout: 15_000 });
+      const dryOut = new TextDecoder().decode(dryRun.stdout) + new TextDecoder().decode(dryRun.stderr);
+      expect(dryRun.exitCode).toBe(0);
+      expect(dryOut).toContain("Release plan for v3.3.5 (from main):");
+    }
+
+    // Now reverse: origin/main has an empty [Unreleased], while the caller's feature branch has ready notes.
+    git(repo, "checkout", "main");
+    writeFileSync(join(repo, "CHANGELOG.md"), emptyChangelog);
+    git(repo, "commit", "-am", "main with empty unreleased");
+    git(repo, "push", "origin", "main");
+    git(repo, "checkout", "feature");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.4" }));
+    writeFileSync(join(repo, "CHANGELOG.md"), readyChangelog);
+    git(repo, "commit", "-am", "feature with ready local changelog");
+
+    const refused = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "3.3.5", "--dry-run"], { cwd: repo, env, timeout: 15_000 });
+    const refusedOut = new TextDecoder().decode(refused.stdout) + new TextDecoder().decode(refused.stderr);
+    expect(refused.exitCode).toBe(1);
+    expect(refusedOut).toContain("CHANGELOG.md: ## [Unreleased] is empty");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);

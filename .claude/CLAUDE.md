@@ -221,19 +221,15 @@ Runs on pushes and PRs targeting `main` or 2.x `staging`:
 Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 1. Checks out the tag, installs, builds
 2. Publishes to npm (`npm publish`)
-3. On a stable release, moves npm `next` to the version just published with the
-   workflow's OIDC identity (`npm dist-tag add`, npm >= 11.21.0). Needs
+3. On a stable release, removes any npm `next` dist-tag (`npm dist-tag rm vlist next`)
+   with the workflow's OIDC identity (npm >= 11.21.0). Needs
    **Allow npm dist-tag** on the package's trusted publisher on npmjs.com
-   (disabled by default); the step is allowed to fail when that is off
+   (disabled by default); the step is soft-failed (`continue-on-error: true`)
+   and logs a warning when `next` is absent or could not be removed
 4. Creates a GitHub Release with the tag's `CHANGELOG.md` section and its
    compare link (`scripts/release-notes.ts`), `--verify-tag`; a re-run on the
    same tag edits the existing release's notes instead of failing
-5. Its last step is the fallback for step 3: it warns while npm `next` is below
-   the version just published (`scripts/check-dist-tags.ts`, #334), without
-   waiting for the registry's `latest` to catch up, so a maintainer runs
-   `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. The step prints that
-   exact command in a warning and exits 0; when the registry cannot be read, it
-   warns that the tags are unknown and still exits 0
+5. On a stable release, dispatches `vlist-released` to `floor/vlist.io` (`continue-on-error: true`)
 
 **Do not manually create GitHub Releases** — the workflow handles it.
 
@@ -252,10 +248,10 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 4. The script verifies the main merge, package version and all checks, then
    stops. A separate `bun run release X.Y.Z --tag` re-verifies and tags that
    exact merge, without switching branches before or after the tag push.
-5. Publish CI handles npm, the stable npm `next` dist-tag, the GitHub Release
-   and the site dispatch. Verify npm version/tags and the live version at
-   `https://vlist.io/dist/version.json`; wait through registry processing,
-   never republish an accepted version.
+5. Publish CI handles npm, removing any npm `next` dist-tag on stable releases,
+   the GitHub Release and the site dispatch. Verify npm version/tags and the
+   live version at `https://vlist.io/dist/version.json`; wait through registry
+   processing, never republish an accepted version.
 
 A prerelease is never bumped automatically; name its stable version explicitly.
 `--dry-run` prints the plan without changing files, branches, PRs or tags.

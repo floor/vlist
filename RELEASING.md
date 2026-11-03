@@ -68,7 +68,8 @@ script never checks out an integration branch held by another worktree.
    creates `git tag -a vX.Y.Z <verified merge sha> -m vX.Y.Z`, and pushes only
    that tag. It leaves the caller's branch or detached HEAD unchanged and
    does not switch branches after pushing. The tag triggers `publish.yml`: npm,
-   GitHub Release, stable npm `next` dist-tag and the production site dispatch.
+   removal of any npm `next` dist-tag on stable releases, the GitHub Release
+   and the production site dispatch.
 
 Use `--dry-run` to print the plan without changing files, branches, PRs or
 tags. `--from main|staging` confirms the derived release line; it cannot send
@@ -91,19 +92,20 @@ merges must be pinned merge commits. Source ref updates are fetched without
 checking out staging; tagging uses the same verified main SHA and leaves
 the current worktree unchanged.
 
-**npm tags.** A stable publish moves `latest` and asks npm to move the `next`
-dist-tag to the same version with the workflow's OIDC identity (npm 11.21.0+,
-**Allow npm dist-tag** enabled on its trusted publisher). The move is allowed
-to fail; a stale or unreadable registry read warns with the exact maintainer
-command: `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. This is an npm
-tag, not a Git branch.
+**npm tags.** A stable publish moves `latest` and removes any `next`
+dist-tag (`npm dist-tag rm vlist next`) with the workflow's OIDC identity
+(npm 11.21.0+, **Allow npm dist-tag** enabled on its trusted publisher). The
+removal is soft-failed (`continue-on-error: true`) and logs a warning if `next`
+was absent or could not be removed; if a stale `next` dist-tag remains on npm,
+a maintainer removes it with `npm dist-tag rm vlist next --auth-type=web`.
+This is an npm tag, not a Git branch.
 
 **Publication follow-through.** Check the production version at
 `https://vlist.io/dist/version.json`, alongside the deployment run.
 If npm reports that a version is being processed,
 wait for visibility rather than retrying publication: once npm has accepted a
 version, do not publish it again. Check `npm view vlist@X.Y.Z version` and
-`npm view vlist dist-tags` before moving `next`. A stale registry read alone does
+`npm view vlist dist-tags`. A stale registry read alone does
 not establish that publication failed.
 
 If npm has accepted the version but the GitHub Release step failed, recover that
@@ -118,8 +120,8 @@ gh release create vX.Y.Z --title vX.Y.Z --notes-file notes.md --verify-tag --lat
 If it already exists, update its notes with
 `gh release edit vX.Y.Z --title vX.Y.Z --notes-file notes.md`. For a prerelease,
 creation uses `--prerelease --latest=false` in place of `--latest`, as the workflow
-does. Then check the npm tags and use the maintainer's `next` command above if
-the move is still needed.
+does. Then check `npm view vlist dist-tags` and remove any leftover `next` dist-tag
+with `npm dist-tag rm vlist next --auth-type=web` if needed.
 
 ### Pre-releases
 
@@ -151,6 +153,7 @@ npm. Fix the branch, delete the tag (`git push origin :refs/tags/vX.Y.Z-next.N`
 and `git tag -d vX.Y.Z-next.N`), and tag the fixed commit with the same version.
 **Once npm has a version, never reuse it**: bump to the next `-next.N` instead.
 
-**Promotion** — the final `X.Y.Z` is cut from the integration branch with
-`bun run release X.Y.Z` (`next → main` for 3.x). Do not merge into `staging` first;
+**Promotion** — the final `X.Y.Z` is cut from `main` with
+`bun run release X.Y.Z` (a release PR into `main` for 3.x); stable publication
+moves `latest` and removes the `next` dist-tag. Do not merge into `staging` first;
 `staging` is the 2.x maintenance line.
