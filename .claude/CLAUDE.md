@@ -29,13 +29,13 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun test` — run all tests
 - `bun test --concurrent` — run all tests in parallel (~2x faster); gated in CI
 - `bun test --changed` — run only tests affected by uncommitted changes
-- `bun test --changed=next` — run tests affected by changes since `next`
+- `bun test --changed=main` — run tests affected by changes since `main`
 - `bun test test/plugins/grid/` — run one folder
 - `bun test --watch` — watch mode
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
-- `bun run release [patch|minor|major|<version>] [--from next|staging]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `next`, 2.x from `staging`.
+- `bun run release [patch|minor|major|<version>] [--from main|staging]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `main`, 2.x from `staging`.
 
 ## Project Structure
 
@@ -188,18 +188,16 @@ Conventional Commits: `type(scope): description`
 
 ## Git Workflow
 
-**Working branch is `next`.** The 3.0 line integrates there. `main` is the released
-2.x line and is protected. `staging` is the frozen 2.x maintenance branch: it holds
-nothing `next` does not.
+**Integration and release branch is `main`.** Work on feature branches cut from
+`main` and propose every change through a PR into `main`. `staging` remains
+the frozen 2.x maintenance branch.
 
-- ❌ **NEVER commit or push to `main`** — it is protected and will be rejected
+- ❌ **NEVER commit or push directly to `main`** — it is protected
 - ❌ **NEVER merge, tag, release, deploy, or post publicly without explicit permission**
-- ✅ Feature branches branch off `next` and merge back into `next` through a PR
+- ✅ Feature branches branch off `main` and merge back through a PR
 - ✅ Committing on your own branch and opening a PR is ordinary work — no need to ask
-- ✅ A PR merges only after CI is green on its head — **Test & Build** (Typecheck, Test, Test `--concurrent`, Coverage threshold, Build, Bundle size + tree-shaking, Heap growth) and **Browser suites** — and a review has passed
-- ✅ **A PR merges only when `next` is green at its base.** If `next` is red, the first PR is
-  the one that makes it green — nothing else merges on top. Ten PRs merged onto a red `next`
-  in 2026-09 and hid five layers of failure for three days
+- ✅ A PR merges only after exact-head CI (**Test & Build** and **Browser suites**) and independent review pass
+- ✅ The base on `main` must be green before a PR merges; repair a red base first
 
 The boundary is at publication, not at authorship: writing code and proposing it is
 the work, while anything the outside world sees as final — a merge, a tag, a release,
@@ -208,13 +206,13 @@ applies to every contributor, human or agent.
 
 **Before any git operation**, verify you're on the right branch:
 ```
-git branch --show-current  # a feature branch or `next`, NEVER `main`
+git branch --show-current  # a feature branch, never commit directly to `main`
 ```
 
 ## CI/CD
 
 ### CI (`ci.yml`)
-Runs on push to `next`, `staging` and `main`, and on PRs targeting any of them:
+Runs on pushes and PRs targeting `main` or 2.x `staging`:
 - Typecheck, Test, Test `--concurrent`, Coverage threshold (85%), Build, Bundle size, Heap growth —
   **every gate runs even when an earlier one is red**, and the final `Gate` step fails the job
   naming each red one. Read the `Gate` step's log, not the first red step
@@ -223,48 +221,50 @@ Runs on push to `next`, `staging` and `main`, and on PRs targeting any of them:
 Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 1. Checks out the tag, installs, builds
 2. Publishes to npm (`npm publish`)
-3. On a stable release, moves npm `next` to the version just published with the
-   workflow's OIDC identity (`npm dist-tag add`, npm >= 11.21.0). Needs
+3. On a stable release, removes any npm `next` dist-tag (`npm dist-tag rm vlist next`)
+   with the workflow's OIDC identity (npm >= 11.21.0). Needs
    **Allow npm dist-tag** on the package's trusted publisher on npmjs.com
-   (disabled by default); the step is allowed to fail when that is off
+   (disabled by default); the step is soft-failed (`continue-on-error: true`)
+   and logs a warning when `next` is absent or could not be removed
 4. Creates a GitHub Release with the tag's `CHANGELOG.md` section and its
    compare link (`scripts/release-notes.ts`), `--verify-tag`; a re-run on the
    same tag edits the existing release's notes instead of failing
-5. Its last step is the fallback for step 3: it warns while npm `next` is below
-   the version just published (`scripts/check-dist-tags.ts`, #334), without
-   waiting for the registry's `latest` to catch up, so a maintainer runs
-   `npm dist-tag add vlist@X.Y.Z next --auth-type=web`. The step prints that
-   exact command in a warning and exits 0; when the registry cannot be read, it
-   warns that the tags are unknown and still exits 0
+5. On a stable release, dispatches `vlist-released` to `floor/vlist.io` (`continue-on-error: true`)
 
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major|<version>] [--from next|staging]` automates
-the full release flow. The source branch is derived from the version being
-released: `next` for 3.x, `staging` for 2.x. `--from` confirms that branch; it
-cannot send 3.x through `staging`.
+`bun run release [patch|minor|major|<version>] [--from main|staging]` prepares
+3.x from `main` and 2.x from `staging`. A 3.x release has one release PR into
+`main`; 2.x retains its staging-to-main promotion. `--from` confirms the line.
 
-1. Verifies you're on the source branch with a clean tree, pulls latest
-2. Bumps version in `package.json`. A prerelease (`3.0.0-next.2`) is never
-   bumped: its stable release is named explicitly (`bun run release 3.0.0`), and
-   a version not above the current one is refused
-3. Updates README version badge and changelog stats
-4. Commits `chore(release): vX.Y.Z` and pushes the source branch
-5. Creates PR `<source> → main` via `gh` CLI
-6. Polls every 10s until the PR is merged (max 10 min)
-7. Checks out `main`, pulls, pushes the version tag (triggers publish.yml)
-8. Returns to the source branch
-9. Prints the `npm dist-tag add vlist@X.Y.Z next --auth-type=web` a maintainer
-   runs if the publish workflow could not move `next` itself (see RELEASING.md)
+1. Commit notes under `[Unreleased]`: a theme, Who is affected, and entries.
+2. From a clean worktree, run the release command. It fetches the source and
+   creates `chore/release-X.Y.Z` from its remote tip, without checking out an
+   integration branch another worktree may hold. It bumps the package, dates
+   the notes, updates compare links and refreshes both README versions/sizes.
+3. It pushes only the release branch and opens its PR into `main`. The
+   operator merges with a merge commit pinned to the verified PR head.
+4. The script verifies the main merge, package version and all checks, then
+   stops. A separate `bun run release X.Y.Z --tag` re-verifies and tags that
+   exact merge, without switching branches before or after the tag push.
+5. Publish CI handles npm, removing any npm `next` dist-tag on stable releases,
+   the GitHub Release and the site dispatch. Verify npm version/tags and the
+   live version at `https://vlist.io/dist/version.json`; wait through registry
+   processing, never republish an accepted version.
+
+A prerelease is never bumped automatically; name its stable version explicitly.
+`--dry-run` prints the plan without changing files, branches, PRs or tags.
 
 ### Pre-Release Checklist
-Before tagging a new version, complete ALL of these steps:
-1. Bump the version in `package.json`
-2. Update `CHANGELOG.md` with the new version entries
-3. Run `bun run size` to get current bundle sizes
-4. Update `README.md` — version reference, base size in tagline, AND verify every row in the Plugins size table against `bun run size` output
-5. Update `npm-readme.md` — version reference and base size
+
+1. Review one release PR into `main`: package bump, dated changelog with theme
+   and Who is affected, compare links, both README version labels and sizes.
+2. Run `bun run size`; never move a failing budget to make a release pass.
+3. Require independent review and green CI on the exact head and base.
+4. Have the operator merge pinned to that head; verify the main merge's checks.
+5. Tag only on the explicit release decision. Confirm npm, Release and the
+   deployed site's version before recording the release.
 
 ## Zero Dependencies
 

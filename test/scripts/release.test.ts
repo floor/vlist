@@ -1,7 +1,7 @@
 /**
  * vlist — Release script
  *
- * The 3.0 line integrates on `next` and the 2.x line stays on `staging`.
+ * The 3.x line releases from `main` and the 2.x line stays on `staging`.
  * These tests pin the branch derivation, the explicit stable release of a
  * prerelease, and the README rewrite — so cutting 3.0.0 cannot fail at the
  * first guard again, and cannot happen by a bare `bun run release` either.
@@ -126,53 +126,50 @@ describe("compareVersions", () => {
 });
 
 describe("sourceBranchFor", () => {
-  it("sends 2.x through staging and 3.x through next", () => {
+  it("sends 2.x through staging and 3.x through main", () => {
     expect(sourceBranchFor("2.8.1")).toBe("staging");
     expect(sourceBranchFor("2.8.2")).toBe("staging");
-    expect(sourceBranchFor("3.0.0")).toBe("next");
-    expect(sourceBranchFor("3.0.0-next.2")).toBe("next");
-    expect(sourceBranchFor("4.0.0")).toBe("next");
+    expect(sourceBranchFor("3.0.0")).toBe("main");
+    expect(sourceBranchFor("3.0.0-next.2")).toBe("main");
+    expect(sourceBranchFor("4.0.0")).toBe("main");
   });
 });
 
 describe("resolveSourceBranch", () => {
   it("derives the branch when --from is omitted", () => {
-    expect(resolveSourceBranch("3.0.0", null)).toBe("next");
+    expect(resolveSourceBranch("3.0.0", null)).toBe("main");
     expect(resolveSourceBranch("2.8.2", null)).toBe("staging");
   });
 
   it("accepts --from when it matches the derived branch", () => {
-    expect(resolveSourceBranch("3.0.0", "next")).toBe("next");
+    expect(resolveSourceBranch("3.0.0", "main")).toBe("main");
     expect(resolveSourceBranch("2.8.2", "staging")).toBe("staging");
   });
 
-  it("refuses to cut 3.x from staging or 2.x from next", () => {
+  it("refuses to cut 3.x from staging or 2.x from main", () => {
     expect(() => resolveSourceBranch("3.0.0", "staging")).toThrow(
-      "v3.0.0 releases from 'next', not 'staging'",
+      "v3.0.0 releases from 'main', not 'staging'",
     );
-    expect(() => resolveSourceBranch("2.8.2", "next")).toThrow(
-      "v2.8.2 releases from 'staging', not 'next'",
+    expect(() => resolveSourceBranch("2.8.2", "main")).toThrow(
+      "v2.8.2 releases from 'staging', not 'main'",
     );
   });
 });
 
 describe("assertCurrentBranch", () => {
-  it("accepts the source branch", () => {
-    expect(() => assertCurrentBranch("next", "next", "3.0.0")).not.toThrow();
+  it("accepts a feature branch or detached HEAD for a main release", () => {
+    expect(() => assertCurrentBranch("chore/main-only", "main", "3.3.5")).not.toThrow();
+    expect(() => assertCurrentBranch("", "main", "3.3.5")).not.toThrow();
+  });
+
+  it("retains the staging source guard for 2.x preparation", () => {
     expect(() => assertCurrentBranch("staging", "staging", "2.8.2")).not.toThrow();
+    expect(() => assertCurrentBranch("feature", "staging", "2.8.2")).toThrow("Must be on staging");
   });
 
-  it("refuses staging when cutting 3.0.0", () => {
-    expect(() => assertCurrentBranch("staging", "next", "3.0.0")).toThrow(
-      "Must be on next to release v3.0.0 (currently on 'staging')",
-    );
-  });
-
-  it("names detached HEAD instead of an empty branch", () => {
+  it("names detached HEAD when the staging guard refuses", () => {
     expect(currentBranchLabel("")).toBe("detached HEAD");
-    expect(() => assertCurrentBranch("", "next", "3.0.0")).toThrow(
-      "Must be on next to release v3.0.0 (currently on 'detached HEAD')",
-    );
+    expect(() => assertCurrentBranch("", "staging", "2.8.2")).toThrow("currently on 'detached HEAD'");
   });
 });
 
@@ -211,7 +208,7 @@ describe("resolveNewVersion", () => {
   });
 
   it("accepts an exact stable version", () => {
-    expect(resolveNewVersion("3.0.0-next.2", { kind: "exact", version: "3.0.0", from: "next" })).toBe(
+    expect(resolveNewVersion("3.0.0-next.2", { kind: "exact", version: "3.0.0", from: "main" })).toBe(
       "3.0.0",
     );
   });
@@ -230,10 +227,10 @@ describe("parseArgs", () => {
 
   it("parses bump types and --from in either order", () => {
     expect(parseArgs(["minor"])).toEqual({ kind: "bump", bumpType: "minor", from: null, dryRun: false, tag: false });
-    expect(parseArgs(["major", "--from", "next"])).toEqual({
+    expect(parseArgs(["major", "--from", "main"])).toEqual({
       kind: "bump",
       bumpType: "major",
-      from: "next",
+      from: "main",
       dryRun: false,
       tag: false,
     });
@@ -244,15 +241,15 @@ describe("parseArgs", () => {
       dryRun: false,
       tag: false,
     });
-    expect(parseArgs(["--from=next"])).toEqual({ kind: "bump", bumpType: "patch", from: "next", dryRun: false, tag: false });
+    expect(parseArgs(["--from=main"])).toEqual({ kind: "bump", bumpType: "patch", from: "main", dryRun: false, tag: false });
   });
 
   it("parses an exact version", () => {
     expect(parseArgs(["3.0.0"])).toEqual({ kind: "exact", version: "3.0.0", from: null, dryRun: false, tag: false });
-    expect(parseArgs(["3.0.0", "--from", "next"])).toEqual({
+    expect(parseArgs(["3.0.0", "--from", "main"])).toEqual({
       kind: "exact",
       version: "3.0.0",
-      from: "next",
+      from: "main",
       dryRun: false,
       tag: false,
     });
@@ -286,7 +283,7 @@ describe("parseArgs", () => {
     expect(() => parseArgs(["foo"])).toThrow(USAGE);
     expect(() => parseArgs(["patch", "minor"])).toThrow(USAGE);
     expect(() => parseArgs(["--from"])).toThrow(USAGE);
-    expect(() => parseArgs(["--from", "main"])).toThrow(USAGE);
+    expect(() => parseArgs(["--from", "next"])).toThrow(USAGE);
   });
 });
 
@@ -694,10 +691,10 @@ describe("parseArgs — --dry-run", () => {
       dryRun: true,
       tag: false,
     });
-    expect(parseArgs(["--dry-run", "minor", "--from", "next"])).toEqual({
+    expect(parseArgs(["--dry-run", "minor", "--from", "main"])).toEqual({
       kind: "bump",
       bumpType: "minor",
-      from: "next",
+      from: "main",
       dryRun: true,
       tag: false,
     });
@@ -708,22 +705,22 @@ describe("detectReleaseState", () => {
   it("detects already-tagged when tag exists on main matching verified merge commit", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
         localTagSha: null,
         mainPr: {
           number: 360,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
       }),
     ).toBe("already-tagged");
   });
@@ -731,19 +728,19 @@ describe("detectReleaseState", () => {
   it("detects tag-release when PR into main is merged", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 360,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
       }),
@@ -753,18 +750,18 @@ describe("detectReleaseState", () => {
   it("detects await-main-pr when PR into main is open", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 360,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "OPEN",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
       }),
     ).toBe("await-main-pr");
@@ -774,19 +771,19 @@ describe("detectReleaseState", () => {
     // Case A: source PR merged
     expect(
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         sourcePr: {
           number: 359,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "chore/release-3.1.3",
-          baseRefName: "next",
+          headRefName: "chore/release-2.8.3",
+          baseRefName: "staging",
           headRefOid: "111",
           mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         sourcePrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
       }),
@@ -795,8 +792,8 @@ describe("detectReleaseState", () => {
     // Case B: package.json on sourceBranch already at targetVersion
     expect(
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
       }),
@@ -806,18 +803,18 @@ describe("detectReleaseState", () => {
   it("detects await-source-pr when PR into source branch is open", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         sourcePr: {
           number: 359,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "OPEN",
-          headRefName: "chore/release-3.1.3",
-          baseRefName: "next",
+          headRefName: "chore/release-2.8.3",
+          baseRefName: "staging",
           headRefOid: "111",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
       }),
     ).toBe("await-source-pr");
@@ -826,8 +823,8 @@ describe("detectReleaseState", () => {
   it("detects create-source-pr on fresh run", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
       }),
@@ -847,32 +844,32 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
 
   const mergedMainPr = (overrides: Record<string, unknown> = {}) => ({
     number: 376,
-    title: "chore(release): v3.1.3",
+    title: "chore(release): v2.8.3",
     state: "MERGED" as const,
-    headRefName: "next",
+    headRefName: "staging",
     baseRefName: "main",
     headRefOid: HEAD,
     mergeCommitOid: MERGE,
-    packageVersion: "3.1.3",
+    packageVersion: "2.8.3",
     ...overrides,
   });
 
   const mergedSourcePr = (overrides: Record<string, unknown> = {}) => ({
     number: 375,
-    title: "chore(release): v3.1.3",
+    title: "chore(release): v2.8.3",
     state: "MERGED" as const,
-    headRefName: "chore/release-3.1.3",
-    baseRefName: "next",
+    headRefName: "chore/release-2.8.3",
+    baseRefName: "staging",
     headRefOid: HEAD,
     mergeCommitOid: MERGE,
-    packageVersion: "3.1.3",
+    packageVersion: "2.8.3",
     ...overrides,
   });
 
   describe("assertPinnedMerge", () => {
     const facts = (overrides: Record<string, unknown> = {}) => ({
       prNumber: 376,
-      description: "next → main",
+      description: "staging → main",
       headRefOid: HEAD,
       mergeCommitOid: MERGE,
       parents: [BASE, HEAD] as readonly string[] | null | undefined,
@@ -936,12 +933,12 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
       );
       const timeout = pinMergeTimeoutMessage(
         375,
-        "chore/release-3.1.3 → next",
-        "3.1.3",
+        "chore/release-2.8.3 → staging",
+        "2.8.3",
         HEAD,
       );
       expect(timeout).toContain(`gh pr merge 375 --merge --match-head-commit ${HEAD}`);
-      expect(timeout).toContain("bun run release 3.1.3 --tag");
+      expect(timeout).toContain("bun run release 2.8.3 --tag");
       expect(timeout).not.toContain("Merge it manually");
     });
 
@@ -953,7 +950,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         "await-main-pr",
       ] as const;
       for (const state of states) {
-        const steps = planRelease({ targetVersion: "3.1.3", sourceBranch: "next", state });
+        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "staging", state });
         const merges = steps
           .map((s) => s.command)
           .filter((c): c is string => !!c && c.startsWith("gh pr merge"));
@@ -964,8 +961,8 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
 
     it("the plan prints the real head sha when the pull request is known", () => {
       const waiting = planRelease({
-        targetVersion: "3.1.3",
-        sourceBranch: "next",
+        targetVersion: "2.8.3",
+        sourceBranch: "staging",
         state: "await-main-pr",
         mainPr: mergedMainPr({ state: "OPEN", mergeCommitOid: undefined }),
       });
@@ -974,8 +971,8 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
       );
 
       const sourcing = planRelease({
-        targetVersion: "3.1.3",
-        sourceBranch: "next",
+        targetVersion: "2.8.3",
+        sourceBranch: "staging",
         state: "await-source-pr",
         sourcePr: mergedSourcePr({ state: "OPEN", mergeCommitOid: undefined }),
       });
@@ -987,8 +984,8 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
 
   describe("detectReleaseState certifies only a pinned merge", () => {
     const ctx = (overrides: Record<string, unknown> = {}) => ({
-      currentVersion: "3.1.2",
-      targetVersion: "3.1.3",
+      currentVersion: "2.8.2",
+      targetVersion: "2.8.3",
       remoteTagSha: null,
       localTagSha: null,
       ...overrides,
@@ -1026,7 +1023,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         detectReleaseState(
           ctx({
             remoteTagSha: MERGE,
-            packageVersionAtMergeSha: "3.1.3",
+            packageVersionAtMergeSha: "2.8.3",
             mainPr: mergedMainPr(),
             mainPrMergeParents: [BASE, HEAD],
           }),
@@ -1036,7 +1033,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         detectReleaseState(
           ctx({
             remoteTagSha: MERGE,
-            packageVersionAtMergeSha: "3.1.3",
+            packageVersionAtMergeSha: "2.8.3",
             mainPr: mergedMainPr(),
             mainPrMergeParents: [BASE],
           }),
@@ -1050,7 +1047,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
           ctx({
             sourcePr: mergedSourcePr(),
             sourcePrMergeParents: [BASE, HEAD],
-            originSourceVersion: "3.1.3",
+            originSourceVersion: "2.8.3",
           }),
         ),
       ).toBe("create-main-pr");
@@ -1059,7 +1056,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
           ctx({
             sourcePr: mergedSourcePr(),
             sourcePrMergeParents: [BASE],
-            originSourceVersion: "3.1.3",
+            originSourceVersion: "2.8.3",
           }),
         ),
       ).toThrow(/not merged as a merge commit/);
@@ -1070,94 +1067,93 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
 describe("planRelease", () => {
   it("plans create-source-pr: pushes release branch, never the source branch directly, and never tags without --tag", () => {
     const steps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "create-source-pr",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     const descriptions = steps.map((s) => s.description);
 
-    // Verifies it cuts chore/release-3.1.3
-    expect(commands).toContain("git checkout -b chore/release-3.1.3");
+    // Verifies it cuts chore/release-2.8.3
+    expect(commands).toContain("git checkout -b chore/release-2.8.3 origin/staging");
     // The plan names the changelog roll, both READMEs, the size refresh, and the
     // refusals, so a dry run shows what the release will do (#383/#384 done by hand).
     expect(descriptions).toContain(
       "Refuse if CHANGELOG.md [Unreleased] is empty or has no entries, or a multi-change section has no theme line",
     );
     expect(descriptions).toContain(
-      "Roll CHANGELOG.md [Unreleased] into the 3.1.3 section and update compare links",
+      "Roll CHANGELOG.md [Unreleased] into the 2.8.3 section and update compare links",
     );
     expect(descriptions).toContain(
-      "Update the version marker in README.md and npm-readme.md to v3.1.3",
+      "Update the version marker in README.md and npm-readme.md to v2.8.3",
     );
     expect(descriptions).toContain(
       "Run bun run size and refresh README size rows (stops if over budget)",
     );
     expect(commands).toContain("git add package.json README.md npm-readme.md CHANGELOG.md");
-    // Verifies it pushes chore/release-3.1.3
-    expect(commands).toContain("git push origin chore/release-3.1.3");
-    // CRITICAL: Verifies it NEVER pushes next directly!
-    expect(commands).not.toContain("git push origin next");
-    // Verifies PR chore/release-3.1.3 -> next is opened
+    // Verifies it pushes chore/release-2.8.3
+    expect(commands).toContain("git push origin chore/release-2.8.3");
+    // CRITICAL: Verifies it NEVER pushes staging directly!
+    expect(commands).not.toContain("git push origin staging");
+    // Verifies PR chore/release-2.8.3 -> staging is opened
     expect(
-      commands.some((c) => c?.includes("gh pr create --base next --head chore/release-3.1.3")),
+      commands.some((c) => c?.includes("gh pr create --base staging --head chore/release-2.8.3")),
     ).toBe(true);
-    // Verifies PR next -> main is opened
+    // Verifies PR staging -> main is opened
     expect(
-      commands.some((c) => c?.includes("gh pr create --base main --head next")),
+      commands.some((c) => c?.includes("gh pr create --base main --head staging")),
     ).toBe(true);
     // Verifies NO tag commands without --tag
     expect(commands.some((c) => c?.startsWith("git tag"))).toBe(false);
     expect(commands.some((c) => c?.startsWith("git push origin v"))).toBe(false);
-    expect(steps.some((s) => s.description.includes("bun run release 3.1.3 --tag"))).toBe(true);
+    expect(steps.some((s) => s.description.includes("bun run release 2.8.3 --tag"))).toBe(true);
   });
 
   it("plans create-main-pr when resuming with package.json already bumped", () => {
     const steps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "create-main-pr",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
 
-    // Does NOT cut chore/release-3.1.3 or push it again
-    expect(commands).not.toContain("git checkout -b chore/release-3.1.3");
-    expect(commands).not.toContain("git push origin chore/release-3.1.3");
-    // Opens PR next -> main
+    // Does NOT cut chore/release-2.8.3 or push it again
+    expect(commands).not.toContain("git checkout -b chore/release-2.8.3 origin/staging");
+    expect(commands).not.toContain("git push origin chore/release-2.8.3");
+    // Fetches staging and opens PR staging -> main
+    expect(commands).toContain("git fetch origin staging");
     expect(
-      commands.some((c) => c?.includes("gh pr create --base main --head next")),
+      commands.some((c) => c?.includes("gh pr create --base main --head staging")),
     ).toBe(true);
     // Verifies NO tag commands without --tag
     expect(commands.some((c) => c?.startsWith("git tag"))).toBe(false);
-    expect(steps.some((s) => s.description.includes("bun run release 3.1.3 --tag"))).toBe(true);
+    expect(steps.some((s) => s.description.includes("bun run release 2.8.3 --tag"))).toBe(true);
   });
 
   it("plans tag-release without --tag: prompts to run with --tag and issues no tag command", () => {
     const steps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "tag-release",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     expect(commands).toEqual([]);
-    expect(steps[0]?.description).toContain("Run 'bun run release 3.1.3 --tag' to tag and push");
+    expect(steps[0]?.description).toContain("Run 'bun run release 2.8.3 --tag' to tag and push");
   });
 
   it("plans tag-release with --tag: issues annotated tag and push commands", () => {
     const steps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "tag-release",
       tag: true,
       verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     expect(commands).toEqual([
-      "git checkout main",
-      "git pull origin main",
-      "git tag -a v3.1.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v3.1.3",
-      "git push origin v3.1.3",
-      "git checkout next",
+      "git fetch origin main",
+      "git tag -a v2.8.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v2.8.3",
+      "git push origin v2.8.3",
     ]);
   });
 });
@@ -1165,29 +1161,29 @@ describe("planRelease", () => {
 describe("formatReleasePlan", () => {
   it("formats plan with state and numbered commands when --tag is passed", () => {
     const steps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "tag-release",
       tag: true,
       verifiedSha: "425ecd4b",
     });
-    const formatted = formatReleasePlan("3.1.3", "next", "tag-release", steps);
-    expect(formatted).toContain("Release plan for v3.1.3 (from next)");
+    const formatted = formatReleasePlan("2.8.3", "staging", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v2.8.3 (from staging)");
     expect(formatted).toContain("State: tag-release");
-    expect(formatted).toContain("git tag -a v3.1.3");
+    expect(formatted).toContain("git tag -a v2.8.3");
   });
 
   it("formats plan prompting for --tag when no flag is passed", () => {
     const steps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "tag-release",
       verifiedSha: "425ecd4b",
     });
-    const formatted = formatReleasePlan("3.1.3", "next", "tag-release", steps);
-    expect(formatted).toContain("Release plan for v3.1.3 (from next)");
+    const formatted = formatReleasePlan("2.8.3", "staging", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v2.8.3 (from staging)");
     expect(formatted).toContain("State: tag-release");
-    expect(formatted).toContain("bun run release 3.1.3 --tag");
+    expect(formatted).toContain("bun run release 2.8.3 --tag");
   });
 });
 
@@ -1196,30 +1192,30 @@ describe("resolveNewVersion — re-entrancy", () => {
     // When resuming with exact version matching current package.json
     expect(
       resolveNewVersion(
-        "3.1.3",
-        { kind: "exact", version: "3.1.3", from: "next", dryRun: false },
+        "2.8.3",
+        { kind: "exact", version: "2.8.3", from: "staging", dryRun: false },
         { allowSame: true },
       ),
-    ).toBe("3.1.3");
+    ).toBe("2.8.3");
 
     // When resuming with bump but current package.json is untagged
     expect(
       resolveNewVersion(
-        "3.1.3",
-        { kind: "bump", bumpType: "patch", from: "next", dryRun: false },
+        "2.8.3",
+        { kind: "bump", bumpType: "patch", from: "staging", dryRun: false },
         { isCurrentUntagged: true },
       ),
-    ).toBe("3.1.3");
+    ).toBe("2.8.3");
   });
 
   it("allows inspecting an already-tagged target version when exact and allowSame is set", () => {
     expect(
       resolveNewVersion(
-        "3.1.2",
-        { kind: "exact", version: "3.1.2", from: "next", dryRun: false },
+        "2.8.2",
+        { kind: "exact", version: "2.8.2", from: "staging", dryRun: false },
         { allowSame: true },
       ),
-    ).toBe("3.1.2");
+    ).toBe("2.8.2");
   });
 });
 
@@ -1228,132 +1224,132 @@ describe("pull request identification (fail-closed)", () => {
     const candidates = [
       {
         number: 360,
-        title: "chore(release): v3.1.2",
+        title: "chore(release): v2.8.2",
         state: "OPEN" as const,
-        headRefName: "next",
+        headRefName: "staging",
         baseRefName: "main",
         headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
         mergedAt: null,
-        packageVersion: "3.1.2",
+        packageVersion: "2.8.2",
       },
     ];
-    expect(selectPullRequest(candidates, "next", "main", "3.1.3")).toBeNull();
-    expect(selectPullRequest(candidates, "next", "main", "3.1.2")).toEqual(candidates[0]!);
+    expect(selectPullRequest(candidates, "staging", "main", "2.8.3")).toBeNull();
+    expect(selectPullRequest(candidates, "staging", "main", "2.8.2")).toEqual(candidates[0]!);
   });
 
   it("an old merged pull request for another version: does not attach", () => {
     const candidates = [
       {
         number: 354,
-        title: "chore(release): v3.1.1",
+        title: "chore(release): v2.8.1",
         state: "MERGED" as const,
-        headRefName: "next",
+        headRefName: "staging",
         baseRefName: "main",
         headRefOid: "e16296a882831a7aebf2e1fe60609e834368ad91",
         mergedAt: "2026-10-02T22:56:04Z",
         mergeCommitOid: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
-        packageVersion: "3.1.1",
+        packageVersion: "2.8.1",
       },
     ];
-    expect(selectPullRequest(candidates, "next", "main", "3.1.3")).toBeNull();
+    expect(selectPullRequest(candidates, "staging", "main", "2.8.3")).toBeNull();
   });
 
   it("two candidates: stops and names all matching candidates", () => {
     const candidates = [
       {
         number: 400,
-        title: "chore(release): v3.1.3",
+        title: "chore(release): v2.8.3",
         state: "OPEN" as const,
-        headRefName: "chore/release-3.1.3",
-        baseRefName: "next",
+        headRefName: "chore/release-2.8.3",
+        baseRefName: "staging",
         headRefOid: "aaa1",
         mergedAt: null,
-        packageVersion: "3.1.3",
+        packageVersion: "2.8.3",
       },
       {
         number: 401,
-        title: "chore(release): v3.1.3",
+        title: "chore(release): v2.8.3",
         state: "OPEN" as const,
-        headRefName: "chore/release-3.1.3",
-        baseRefName: "next",
+        headRefName: "chore/release-2.8.3",
+        baseRefName: "staging",
         headRefOid: "aaa2",
         mergedAt: null,
-        packageVersion: "3.1.3",
+        packageVersion: "2.8.3",
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
-    ).toThrow("Multiple matching pull requests found for chore/release-3.1.3 → next: #400, #401");
+      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
+    ).toThrow("Multiple matching pull requests found for chore/release-2.8.3 → staging: #400, #401");
   });
 
   it("a closed-unmerged candidate: stops and names the closed PR", () => {
     const candidates = [
       {
         number: 399,
-        title: "chore(release): v3.1.3",
+        title: "chore(release): v2.8.3",
         state: "CLOSED" as const,
-        headRefName: "chore/release-3.1.3",
-        baseRefName: "next",
+        headRefName: "chore/release-2.8.3",
+        baseRefName: "staging",
         headRefOid: "deadbeef",
         mergedAt: null,
-        packageVersion: "3.1.3",
+        packageVersion: "2.8.3",
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
-    ).toThrow("Pull request #399 (chore/release-3.1.3 → next) was closed without merging");
+      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
+    ).toThrow("Pull request #399 (chore/release-2.8.3 → staging) was closed without merging");
   });
 
   it("a candidate without headRefOid: stops and names the unreadable PR", () => {
     const candidates = [
       {
         number: 402,
-        title: "chore(release): v3.1.3",
+        title: "chore(release): v2.8.3",
         state: "OPEN" as const,
-        headRefName: "chore/release-3.1.3",
-        baseRefName: "next",
+        headRefName: "chore/release-2.8.3",
+        baseRefName: "staging",
         headRefOid: "",
         mergedAt: null,
-        packageVersion: "3.1.3",
+        packageVersion: "2.8.3",
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
-    ).toThrow("Pull request #402 (chore/release-3.1.3 → next) returned no headRefOid from GitHub");
+      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
+    ).toThrow("Pull request #402 (chore/release-2.8.3 → staging) returned no headRefOid from GitHub");
   });
 
   it("a candidate with unreadable packageVersion: stops and names the PR", () => {
     const candidates = [
       {
         number: 403,
-        title: "chore(release): v3.1.3",
+        title: "chore(release): v2.8.3",
         state: "OPEN" as const,
-        headRefName: "chore/release-3.1.3",
-        baseRefName: "next",
+        headRefName: "chore/release-2.8.3",
+        baseRefName: "staging",
         headRefOid: "deadbeef",
         mergedAt: null,
         packageVersion: null,
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-3.1.3", "next", "3.1.3"),
-    ).toThrow("Could not determine package.json version for pull request #403 (chore/release-3.1.3 → next) at commit deadbeef");
+      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
+    ).toThrow("Could not determine package.json version for pull request #403 (chore/release-2.8.3 → staging) at commit deadbeef");
   });
 
   it("detects an unrelated open release PR on source branch as blocking", () => {
     const candidates = [
       {
         number: 360,
-        title: "chore(release): v3.1.2",
+        title: "chore(release): v2.8.2",
         state: "OPEN" as const,
-        headRefName: "next",
+        headRefName: "staging",
         baseRefName: "main",
         headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
         mergedAt: null,
-        packageVersion: "3.1.2",
+        packageVersion: "2.8.2",
       },
     ];
-    const blocking = detectBlockingPr(candidates, "next", "3.1.3");
+    const blocking = detectBlockingPr(candidates, "staging", "2.8.3");
     expect(blocking).toEqual(candidates[0]!);
   });
 });
@@ -1718,59 +1714,59 @@ describe("tag and branch verification (fail-closed)", () => {
   it("remote tag present with no merged main PR: stops because tag is unverified", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.2",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.2",
         remoteTagSha: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
         localTagSha: null,
       }),
     ).toThrow(
-      "Remote tag v3.1.2 exists at b626354e1d91e73ecbe4adbd2c81a49e4611c0bd, but no merged pull request into main was found to verify it against",
+      "Remote tag v2.8.2 exists at b626354e1d91e73ecbe4adbd2c81a49e4611c0bd, but no merged pull request into main was found to verify it against",
     );
   });
 
   it("remote tag at a wrong SHA: stops and reports mismatch", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: "cccc111122223333444455556666777788889999",
         localTagSha: null,
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
       }),
     ).toThrow(
-      "Remote tag v3.1.3 points to cccc111122223333444455556666777788889999, but verified merge commit from PR #370 is bbbb111122223333444455556666777788889999",
+      "Remote tag v2.8.3 points to cccc111122223333444455556666777788889999, but verified merge commit from PR #370 is bbbb111122223333444455556666777788889999",
     );
   });
 
   it("remote tag present matching verified merge commit: detects already-tagged", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: "bbbb111122223333444455556666777788889999",
         localTagSha: null,
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
       }),
     ).toBe("already-tagged");
   });
@@ -1778,83 +1774,83 @@ describe("tag and branch verification (fail-closed)", () => {
   it("remote tag present with conflicting local tag: stops with both shas", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: "bbbb111122223333444455556666777788889999",
         localTagSha: "aaaa111122223333444455556666777788889999",
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
       }),
     ).toThrow(
-      "Local tag v3.1.3 points to aaaa111122223333444455556666777788889999, but remote tag is at bbbb111122223333444455556666777788889999",
+      "Local tag v2.8.3 points to aaaa111122223333444455556666777788889999, but remote tag is at bbbb111122223333444455556666777788889999",
     );
   });
 
   it("blocked release: stops immediately when an unrelated release PR is open", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         blockingPr: {
           number: 360,
-          title: "chore(release): v3.1.2",
+          title: "chore(release): v2.8.2",
           state: "OPEN",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
-          packageVersion: "3.1.2",
+          packageVersion: "2.8.2",
         },
       }),
     ).toThrow(
-      "A 3.1.3 release cannot start while 3.1.2's release (PR #360) is unmerged",
+      "A 2.8.3 release cannot start while 2.8.2's release (PR #360) is unmerged",
     );
   });
 
   it("collision before version shortcut: remote release branch exists without PR when package.json is already target version", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         remoteBranchExists: true,
         sourcePr: null,
       }),
     ).toThrow(
-      "Remote branch chore/release-3.1.3 exists on origin, but no open or merged pull request matches it",
+      "Remote branch chore/release-2.8.3 exists on origin, but no open or merged pull request matches it",
     );
   });
 
   it("merge sha not on main: stops when mergeCommit is not an ancestor of origin/main", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         isMergeCommitAncestor: false,
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
         checkRuns: [{ name: "CI", status: "completed", conclusion: "success" }],
       }),
     ).toThrow("Merge commit 222 from PR #370 is not an ancestor of origin/main");
@@ -1863,46 +1859,46 @@ describe("tag and branch verification (fail-closed)", () => {
   it("package.json at the sha ≠ target: stops when package.json at merge SHA does not match target", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         isMergeCommitAncestor: true,
-        packageVersionAtMergeSha: "3.1.2",
+        packageVersionAtMergeSha: "2.8.2",
         checkRuns: [{ name: "CI", status: "completed", conclusion: "success" }],
       }),
-    ).toThrow("package.json at merge commit 222 is v3.1.2, not target v3.1.3");
+    ).toThrow("package.json at merge commit 222 is v2.8.2, not target v2.8.3");
   });
 
   it("local-only tag at the right sha: detects push-local-tag", () => {
     expect(
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: "222",
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         isMergeCommitAncestor: true,
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
         mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
         checkRuns: [
           { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
@@ -1915,65 +1911,65 @@ describe("tag and branch verification (fail-closed)", () => {
   it("local-only tag at a wrong sha: stops and reports the mismatch", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.3",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.3",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: "999",
         mainPr: {
           number: 370,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         isMergeCommitAncestor: true,
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
         mainPrMergeParents: ["aaaa111122223333444455556666777788889999", "111"],
         checkRuns: [
           { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
           { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
         ],
       }),
-    ).toThrow("Local tag v3.1.3 points to 999, but verified merge commit is 222");
+    ).toThrow("Local tag v2.8.3 points to 999, but verified merge commit is 222");
   });
 
   it("remote release branch without a pull request: stops on collision", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         remoteBranchExists: true,
         sourcePr: null,
       }),
-    ).toThrow("Remote branch chore/release-3.1.3 exists on origin, but no open or merged pull request matches it");
+    ).toThrow("Remote branch chore/release-2.8.3 exists on origin, but no open or merged pull request matches it");
   });
 
   it("remote release branch collision error includes resumption command and branch discrimination advice", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         remoteBranchExists: true,
         sourcePr: null,
       }),
-    ).toThrow("gh pr create --base next --head chore/release-3.1.3 --title \"chore(release): v3.1.3\"");
+    ).toThrow("gh pr create --base staging --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         remoteBranchExists: true,
         sourcePr: null,
       }),
-    ).toThrow("verify that origin/chore/release-3.1.3's package.json version is 3.1.3");
+    ).toThrow("verify that origin/chore/release-2.8.3's package.json version is 2.8.3");
   });
 
   it("remote release branch collision error targets staging for 2.x", () => {
@@ -1993,24 +1989,24 @@ describe("tag and branch verification (fail-closed)", () => {
   it("interruption on release branch without commit: stops with instructions", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
-        currentBranch: "chore/release-3.1.3",
-        releaseBranchCommitVersion: "3.1.2",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
+        currentBranch: "chore/release-2.8.3",
+        releaseBranchCommitVersion: "2.8.2",
         remoteTagSha: null,
         localTagSha: null,
       }),
     ).toThrow(
-      "Release branch chore/release-3.1.3 is checked out, but release commit for v3.1.3 is not committed. Switch to source branch or commit the release bump.",
+      "Release branch chore/release-2.8.3 is checked out, but release commit for v2.8.3 is not committed. Switch to source branch or commit the release bump.",
     );
   });
 
   it("interruption on release branch with commit but not pushed: detects create-source-pr", () => {
     const state = detectReleaseState({
-      currentVersion: "3.1.2",
-      targetVersion: "3.1.3",
-      currentBranch: "chore/release-3.1.3",
-      releaseBranchCommitVersion: "3.1.3",
+      currentVersion: "2.8.2",
+      targetVersion: "2.8.3",
+      currentBranch: "chore/release-2.8.3",
+      releaseBranchCommitVersion: "2.8.3",
       isReleaseBranchPushed: false,
       remoteTagSha: null,
       localTagSha: null,
@@ -2018,47 +2014,47 @@ describe("tag and branch verification (fail-closed)", () => {
     expect(state).toBe("create-source-pr");
 
     const plan = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
-      currentBranch: "chore/release-3.1.3",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
+      currentBranch: "chore/release-2.8.3",
       state,
       isReleaseBranchPushed: false,
     });
     const cmds = plan.map((p) => p.command).filter(Boolean);
     // Pushes existing branch, does NOT checkout -b or commit again
-    expect(cmds).not.toContain("git checkout -b chore/release-3.1.3");
-    expect(cmds).toContain("git push origin chore/release-3.1.3");
+    expect(cmds).not.toContain("git checkout -b chore/release-2.8.3 origin/staging");
+    expect(cmds).toContain("git push origin chore/release-2.8.3");
   });
 
   it("interruption on release branch with PR merged but origin/<source> package.json below target: stops", () => {
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
-        currentBranch: "chore/release-3.1.3",
-        sourceBranch: "next",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
+        currentBranch: "chore/release-2.8.3",
+        sourceBranch: "staging",
         sourcePr: {
           number: 359,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "chore/release-3.1.3",
-          baseRefName: "next",
+          headRefName: "chore/release-2.8.3",
+          baseRefName: "staging",
           headRefOid: "111",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
-        originSourceVersion: "3.1.2",
+        originSourceVersion: "2.8.2",
         remoteTagSha: null,
         localTagSha: null,
       }),
     ).toThrow(
-      "Pull request #359 into next is merged, but origin/next package.json is v3.1.2, not target v3.1.3",
+      "Pull request #359 into staging is merged, but origin/staging package.json is v2.8.2, not target v2.8.3",
     );
   });
 
   it("assertCurrentBranch accepts release branch of target version", () => {
-    expect(() => assertCurrentBranch("chore/release-3.1.3", "next", "3.1.3")).not.toThrow();
-    expect(() => assertCurrentBranch("chore/release-3.1.2", "next", "3.1.3")).toThrow(
-      "Must be on next to release v3.1.3 (currently on 'chore/release-3.1.2')",
+    expect(() => assertCurrentBranch("chore/release-2.8.3", "staging", "2.8.3")).not.toThrow();
+    expect(() => assertCurrentBranch("chore/release-2.8.2", "staging", "2.8.3")).toThrow(
+      "Must be on staging to release v2.8.3 (currently on 'chore/release-2.8.2')",
     );
   });
 });
@@ -2076,8 +2072,8 @@ describe("stop before the tag — ruled behavior", () => {
 
     for (const state of states) {
       const steps = planRelease({
-        targetVersion: "3.1.3",
-        sourceBranch: "next",
+        targetVersion: "2.8.3",
+        sourceBranch: "staging",
         state,
       });
       const commands = steps.map((s) => s.command).filter(Boolean);
@@ -2085,35 +2081,34 @@ describe("stop before the tag — ruled behavior", () => {
         expect(cmd).not.toMatch(/^git tag/);
         expect(cmd).not.toMatch(/^git push origin v/);
       }
-      expect(steps.some((s) => s.description.includes("bun run release 3.1.3 --tag"))).toBe(true);
+      expect(steps.some((s) => s.description.includes("bun run release 2.8.3 --tag"))).toBe(true);
     }
   });
 
   it("with --tag flag on verified release: includes tag and push commands", () => {
     const tagSteps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "tag-release",
       tag: true,
       verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
     });
     const tagCommands = tagSteps.map((s) => s.command).filter(Boolean);
     expect(tagCommands).toContain(
-      "git tag -a v3.1.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v3.1.3",
+      "git tag -a v2.8.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v2.8.3",
     );
-    expect(tagCommands).toContain("git push origin v3.1.3");
+    expect(tagCommands).toContain("git push origin v2.8.3");
 
     const pushSteps = planRelease({
-      targetVersion: "3.1.3",
-      sourceBranch: "next",
+      targetVersion: "2.8.3",
+      sourceBranch: "staging",
       state: "push-local-tag",
       tag: true,
       verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
     });
     const pushCommands = pushSteps.map((s) => s.command).filter(Boolean);
     expect(pushCommands).toEqual([
-      "git push origin v3.1.3",
-      "git checkout next",
+      "git push origin v2.8.3",
     ]);
   });
 
@@ -2121,54 +2116,54 @@ describe("stop before the tag — ruled behavior", () => {
     // Failing precondition 1: main PR is not merged yet (OPEN)
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 360,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "OPEN",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         tag: true,
       }),
-    ).toThrow("Cannot tag v3.1.3: pull request #360 into main is still open");
+    ).toThrow("Cannot tag v2.8.3: pull request #360 into main is still open");
 
     // Failing precondition 2: no main PR found
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: null,
         tag: true,
       }),
-    ).toThrow("Cannot tag v3.1.3: no pull request into main found");
+    ).toThrow("Cannot tag v2.8.3: no pull request into main found");
 
     // Failing precondition 3: check runs pending
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 360,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         isMergeCommitAncestor: true,
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
         checkRuns: [{ name: "CI", status: "in_progress", conclusion: null }],
         tag: true,
       }),
@@ -2177,22 +2172,22 @@ describe("stop before the tag — ruled behavior", () => {
     // Failing precondition 4: merge commit not on main
     expect(() =>
       detectReleaseState({
-        currentVersion: "3.1.2",
-        targetVersion: "3.1.3",
+        currentVersion: "2.8.2",
+        targetVersion: "2.8.3",
         remoteTagSha: null,
         localTagSha: null,
         mainPr: {
           number: 360,
-          title: "chore(release): v3.1.3",
+          title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "next",
+          headRefName: "staging",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
-          packageVersion: "3.1.3",
+          packageVersion: "2.8.3",
         },
         isMergeCommitAncestor: false,
-        packageVersionAtMergeSha: "3.1.3",
+        packageVersionAtMergeSha: "2.8.3",
         checkRuns: [{ name: "CI", status: "completed", conclusion: "success" }],
         tag: true,
       }),
@@ -2202,21 +2197,21 @@ describe("stop before the tag — ruled behavior", () => {
 
 describe("parseLsRemoteTags", () => {
   it("extracts peeled sha when annotated tag is present", () => {
-    const raw = "b93cb2bd74070eafe390b3c619aeadb293dca23f\trefs/tags/v3.1.1\nb626354e1d91e73ecbe4adbd2c81a49e4611c0bd\trefs/tags/v3.1.1^{}";
-    expect(parseLsRemoteTags(raw, "v3.1.1")).toBe("b626354e1d91e73ecbe4adbd2c81a49e4611c0bd");
+    const raw = "b93cb2bd74070eafe390b3c619aeadb293dca23f\trefs/tags/v2.8.1\nb626354e1d91e73ecbe4adbd2c81a49e4611c0bd\trefs/tags/v2.8.1^{}";
+    expect(parseLsRemoteTags(raw, "v2.8.1")).toBe("b626354e1d91e73ecbe4adbd2c81a49e4611c0bd");
   });
 
   it("extracts direct sha for lightweight tag", () => {
-    const raw = "b93cb2bd74070eafe390b3c619aeadb293dca23f\trefs/tags/v3.1.1";
-    expect(parseLsRemoteTags(raw, "v3.1.1")).toBe("b93cb2bd74070eafe390b3c619aeadb293dca23f");
+    const raw = "b93cb2bd74070eafe390b3c619aeadb293dca23f\trefs/tags/v2.8.1";
+    expect(parseLsRemoteTags(raw, "v2.8.1")).toBe("b93cb2bd74070eafe390b3c619aeadb293dca23f");
   });
 
   it("returns null when tag is not found", () => {
-    expect(parseLsRemoteTags("", "v3.1.2")).toBeNull();
+    expect(parseLsRemoteTags("", "v2.8.2")).toBeNull();
   });
 
   it("malformed ls-remote output for tags throws error", () => {
-    expect(() => parseLsRemoteTags("not-a-sha refs/tags/v3.1.2", "v3.1.2")).toThrow(
+    expect(() => parseLsRemoteTags("not-a-sha refs/tags/v2.8.2", "v2.8.2")).toThrow(
       "Malformed git ls-remote tag output",
     );
   });
@@ -2229,7 +2224,7 @@ describe("parseRemoteBranchSha (fail-closed)", () => {
   });
 
   it("returns null when remote branch does not exist (empty output)", () => {
-    expect(parseRemoteBranchSha("", "chore/release-3.1.3")).toBeNull();
+    expect(parseRemoteBranchSha("", "chore/release-2.8.3")).toBeNull();
   });
 
   it("malformed ls-remote output without 40-hex SHA throws error", () => {
@@ -2242,9 +2237,9 @@ describe("parseRemoteBranchSha (fail-closed)", () => {
 describe("typed validators for gh and git responses (fail-closed)", () => {
   const validPr = {
     number: 360,
-    title: "chore(release): v3.1.2",
+    title: "chore(release): v2.8.2",
     state: "MERGED",
-    headRefName: "next",
+    headRefName: "staging",
     baseRefName: "main",
     headRefOid: "dccf137b59e8a9ffc907a37a859daaf7d1801110",
     mergedAt: "2026-10-09T12:00:00Z",
@@ -2370,7 +2365,7 @@ describe("typed validators for gh and git responses (fail-closed)", () => {
   });
 
   it("parsePackageJsonVersion accepts valid package.json", () => {
-    expect(parsePackageJsonVersion(JSON.stringify({ version: "3.1.2" }), "test")).toBe("3.1.2");
+    expect(parsePackageJsonVersion(JSON.stringify({ version: "2.8.2" }), "test")).toBe("2.8.2");
   });
 
   it("parsePackageJsonVersion fails closed on missing version", () => {
@@ -2518,9 +2513,9 @@ describe("table-driven declarative schema tests (fail-closed, generated from sch
 
   testSchemaFields("prCandidateSchema (state=MERGED)", prCandidateSchema, {
     number: 360,
-    title: "chore(release): v3.1.3",
+    title: "chore(release): v2.8.3",
     state: "MERGED",
-    headRefName: "next",
+    headRefName: "staging",
     baseRefName: "main",
     headRefOid: "a".repeat(40),
     mergedAt: "2026-10-09T10:00:00Z",
@@ -2529,9 +2524,9 @@ describe("table-driven declarative schema tests (fail-closed, generated from sch
 
   testSchemaFields("prCandidateSchema (state=OPEN)", prCandidateSchema, {
     number: 360,
-    title: "chore(release): v3.1.3",
+    title: "chore(release): v2.8.3",
     state: "OPEN",
-    headRefName: "next",
+    headRefName: "staging",
     baseRefName: "main",
     headRefOid: "a".repeat(40),
     mergedAt: null,
@@ -2584,10 +2579,54 @@ describe("table-driven declarative schema tests (fail-closed, generated from sch
   });
 
   testSchemaFields("packageJsonSchema", packageJsonSchema, {
-    version: "3.1.2",
+    version: "2.8.2",
   });
 
   testSchemaFields("ghContentSchema", ghContentSchema, {
     content: "dGVzdA==",
+  });
+});
+
+
+describe("main-only releases", () => {
+  it("derives main for 3.x and accepts the explicit main flag", () => {
+    expect(sourceBranchFor("3.3.5")).toBe("main");
+    expect(parseArgs(["3.3.5", "--from", "main"])).toMatchObject({ from: "main" });
+  });
+
+  it("plans one release PR into main and never a main-to-main promotion", () => {
+    const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "create-source-pr" });
+    const commands = steps.flatMap(step => step.command ? [step.command] : []);
+    expect(commands.filter(command => command.startsWith("gh pr create"))).toHaveLength(1);
+    expect(commands).toContain('gh pr create --base main --head chore/release-3.3.5 --title "chore(release): v3.3.5" --body "Release commit for v3.3.5."');
+    expect(commands).toContain("git checkout -b chore/release-3.3.5 origin/main");
+    expect(commands.some(command => /git (checkout main|pull)/.test(command))).toBe(false);
+  });
+
+  it("tags the verified SHA without checking out or returning to held branches", () => {
+    const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "tag-release", tag: true, verifiedSha: "1234" });
+    const commands = steps.flatMap(step => step.command ? [step.command] : []);
+    expect(commands).toEqual(["git fetch origin main", "git tag -a v3.3.5 1234 -m v3.3.5", "git push origin v3.3.5"]);
+    const retry = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "push-local-tag", tag: true, verifiedSha: "1234" });
+    expect(retry.flatMap(step => step.command ? [step.command] : [])).toEqual(["git push origin v3.3.5"]);
+  });
+});
+
+
+describe("main release guards", () => {
+  it("does not plan a promotion from main to itself in any pre-tag state", () => {
+    for (const state of ["create-source-pr", "await-source-pr", "create-main-pr", "await-main-pr"] as const) {
+      const commands = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state }).flatMap(step => step.command ? [step.command] : []);
+      expect(commands.filter(command => command.startsWith("gh pr create"))).toHaveLength(state.startsWith("create") ? 1 : 0);
+      expect(commands.some(command => command.includes("--head main"))).toBe(false);
+      expect(commands.some(command => /git (checkout main|pull)/.test(command))).toBe(false);
+    }
+  });
+
+  it("blocks another open release into main without blocking ordinary feature PRs", () => {
+    const candidate = { number: 501, title: "release", state: "OPEN" as const, headRefName: "chore/release-3.3.5", baseRefName: "main", headRefOid: "abc", packageVersion: "3.3.5" };
+    expect(detectBlockingPr([candidate], "main", "3.3.6")).toBe(candidate);
+    expect(detectBlockingPr([candidate], "main", "3.3.5")).toBeNull();
+    expect(detectBlockingPr([{ ...candidate, headRefName: "feature" }], "main", "3.3.6")).toBeNull();
   });
 });
