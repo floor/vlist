@@ -24,14 +24,15 @@
  * query from keystrokes only.
  */
 
-const SVG_SEARCH =
-  '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"></path><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>';
-const SVG_CLEAR =
-  '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="M0 0h24v24H0z" fill="none"></path><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>';
-const SVG_PREV =
-  '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path></svg>';
-const SVG_NEXT =
-  '<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"></path></svg>';
+const PATH_SEARCH =
+  "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z";
+const PATH_CLEAR =
+  "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z";
+const PATH_PREV = "M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z";
+const PATH_NEXT = "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z";
+
+const svgIcon = (d: string): string =>
+  `<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="${d}"></path></svg>`;
 
 export interface SearchBarCallbacks {
   onInput(value: string): void;
@@ -69,15 +70,14 @@ export interface SearchBar {
 const iconButton = (
   className: string,
   label: string,
-  svg: string,
-  tabIndex: number,
+  path: string,
 ): HTMLButtonElement => {
   const b = document.createElement("button");
   b.type = "button";
   b.className = className;
-  b.tabIndex = tabIndex;
+  b.tabIndex = -1;
   b.setAttribute("aria-label", label);
-  b.innerHTML = svg;
+  b.innerHTML = svgIcon(path);
   return b;
 };
 
@@ -107,7 +107,7 @@ export const createSearchBar = (
   const leadingIcon = document.createElement("span");
   leadingIcon.className = `${p}__leading-icon`;
   leadingIcon.setAttribute("aria-hidden", "true");
-  leadingIcon.innerHTML = SVG_SEARCH;
+  leadingIcon.innerHTML = svgIcon(PATH_SEARCH);
 
   const inputWrapper = document.createElement("div");
   inputWrapper.className = `${p}__input-wrapper`;
@@ -125,22 +125,19 @@ export const createSearchBar = (
   counter.className = `${p}__counter`;
   counter.setAttribute("aria-live", "polite");
 
-  const prev = iconButton(`${p}__nav-prev`, text.previous, SVG_PREV, -1);
-  const next = iconButton(`${p}__nav-next`, text.next, SVG_NEXT, -1);
+  const prev = iconButton(`${p}__nav-prev`, text.previous, PATH_PREV);
+  const next = iconButton(`${p}__nav-next`, text.next, PATH_NEXT);
 
   const clear = iconButton(
     `${p}__clear-button ${p}__clear-button--hidden`,
     text.clear,
-    SVG_CLEAR,
-    -1,
+    PATH_CLEAR,
   );
 
   container.append(leadingIcon, inputWrapper, counter, prev, next, clear);
   root.appendChild(container);
 
-  if (position === "top" && before) parent.insertBefore(root, before);
-  else if (position === "top") parent.insertBefore(root, parent.firstChild);
-  else parent.appendChild(root);
+  parent.insertBefore(root, position === "top" ? (before ?? parent.firstChild) : null);
 
   const reflectClear = (): void => {
     clear.classList.toggle(`${p}__clear-button--hidden`, input.value.length === 0);
@@ -150,21 +147,18 @@ export const createSearchBar = (
     reflectClear();
     cb.onInput(input.value);
   };
-  const onKeydown = (e: KeyboardEvent): void => cb.onKeydown(e);
   const onLeadingClick = (): void => input.focus();
   const onClearClick = (): void => {
     cb.onClear();
     input.focus();
   };
-  const onPrev = (): void => cb.onPrev();
-  const onNext = (): void => cb.onNext();
 
   input.addEventListener("input", onInput);
-  input.addEventListener("keydown", onKeydown);
+  input.addEventListener("keydown", cb.onKeydown);
   leadingIcon.addEventListener("click", onLeadingClick);
   clear.addEventListener("click", onClearClick);
-  prev.addEventListener("click", onPrev);
-  next.addEventListener("click", onNext);
+  prev.addEventListener("click", cb.onPrev);
+  next.addEventListener("click", cb.onNext);
 
   return {
     root,
@@ -186,11 +180,11 @@ export const createSearchBar = (
     },
     destroy(): void {
       input.removeEventListener("input", onInput);
-      input.removeEventListener("keydown", onKeydown);
+      input.removeEventListener("keydown", cb.onKeydown);
       leadingIcon.removeEventListener("click", onLeadingClick);
       clear.removeEventListener("click", onClearClick);
-      prev.removeEventListener("click", onPrev);
-      next.removeEventListener("click", onNext);
+      prev.removeEventListener("click", cb.onPrev);
+      next.removeEventListener("click", cb.onNext);
       root.remove();
     },
   };
