@@ -61,7 +61,7 @@ function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void
 
   const scroll = raw.scroll as { mode?: string; runway?: unknown } | undefined;
   if (scroll?.runway !== undefined || !/^(auto|native|synthetic)?$/.test(scroll?.mode ?? "")) {
-    throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed in 3.0)');
+    throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed)');
   }
 }
 
@@ -961,6 +961,10 @@ export function createCore<T extends VListItem = VListItem>(
 
   let resizeObserver: ResizeObserver | null = null;
   if (!skipDefaultResize) {
+    // Plugins (table, groups) shrink this box during setup. The observer
+    // starts on a later turn, so the first scroll would still see the
+    // pre-setup size. page() skips this branch and keeps the window size.
+    state.containerSize = isX ? dom.viewport.clientWidth : dom.viewport.clientHeight;
     const initObserver = (): void => {
       if (state.destroyed) return;
       resizeObserver = new ResizeObserver((entries) => {
