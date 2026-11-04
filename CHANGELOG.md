@@ -11,6 +11,18 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.3.5] - 2026-11-04
+
+Tree focus survives a data replacement, and grouped grids and masonry reflow when their column count changes.
+
+Who is affected: lists using `tree()` that replace their items with `setItems` while a node has keyboard focus, and lists using `groups()` with `grid()` or `masonry()` that change columns with `updateGrid` or `updateMasonry`.
+
+### Fixed
+
+- Tree `setItems` keeps focus on the focused node when it is still present, and otherwise moves focus to the first row instead of a node that no longer exists.
+
+- Grouped grid and masonry recompute their column geometry on a column change, so items and group headers move to their new positions.
+
 ## [3.3.4] - 2026-11-02
 
 Grid and masonry clear stale rows after data replacement and keep a visible item across column changes; carousels keep a valid slide after replacement, restore unchanged-layout snapshots, and keep keyboard focus on the visible slide.
@@ -2063,7 +2075,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.5...HEAD
+[3.3.5]: https://github.com/floor/vlist/compare/v3.3.4...v3.3.5
 [3.3.4]: https://github.com/floor/vlist/compare/v3.3.3...v3.3.4
 [3.3.3]: https://github.com/floor/vlist/compare/v3.3.2...v3.3.3
 [3.3.2]: https://github.com/floor/vlist/compare/v3.3.1...v3.3.2
