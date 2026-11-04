@@ -268,78 +268,42 @@ export function groups<T extends VListItem = VListItem>(
   }
 
   function getGridContentSize(): number {
-    if (!gridItemPositions || gridItemPositions.size === 0) return sizeCache.getTotalSize();
-    const total = layout.totalEntries;
-
-    if (isMasonry) {
-      // Last group's bottom (tallest lane) is the content bottom — already
-      // computed during rebuild. Fall back to the header bottom for an
-      // empty trailing group.
-      const lastBottom = masonryGroupBottoms?.[masonryGroupBottoms.length - 1];
-      return lastBottom ?? 0;
-    }
-
-    // Grid: rows are aligned, last item bottom = content bottom.
-    let maxY = 0;
-    for (let i = total - 1; i >= 0; i--) {
-      const pos = gridItemPositions.get(i);
-      if (pos) { maxY = pos.rowY + (pos.h ?? sizeCache.getSize(i)); break; }
-      const entry = layout.getEntry(i);
-      if (entry.type === "header") { maxY = sizeCache.getOffset(i) + sizeCache.getSize(i); break; }
-    }
-    return maxY;
+    if (!gridSorted || gridSorted.length === 0) return sizeCache.getTotalSize();
+    if (isMasonry) return masonryGroupBottoms?.[masonryGroupBottoms.length - 1] ?? 0;
+    // Every layout index is placed, so the last entry is the one the old
+    // reverse scan stopped on. Height stays live for the size cache.
+    const index = gridSorted[gridSorted.length - 1]![0];
+    const pos = gridItemPositions!.get(index)!;
+    return pos.rowY + (pos.h ?? sizeCache.getSize(index));
   }
+
+  const mainProp = (): "width" | "height" => isX ? "width" : "height";
+  const crossProp = (): "width" | "height" => isX ? "height" : "width";
 
   function buildTransform(layoutIndex: number, base: number): string {
     // RFC-012: subtract baseOffset so absolute virtual offsets map into the
     // content element. baseOffset is 0 in native mode (byte-identical).
-    if (gridItemPositions) {
-      const pos = gridItemPositions.get(layoutIndex);
-      if (pos) {
-        const x = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
-        const y = pos.rowY - base;
-        if (isX) return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
-        return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-      }
+    let cross = 0;
+    let main: number;
+    const pos = gridItemPositions?.get(layoutIndex);
+    if (pos) {
+      cross = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
+      main = pos.rowY - base;
+    } else {
+      main = sizeCache.getOffset(layoutIndex) - base;
     }
-
-    const offset = sizeCache.getOffset(layoutIndex) - base;
-    if (isX) {
-      return `translate(${Math.round(offset)}px, 0)`;
-    }
-    return `translate(0, ${Math.round(offset)}px)`;
+    const x = Math.round(isX ? main : cross);
+    const y = Math.round(isX ? cross : main);
+    return `translate(${x}px, ${y}px)`;
   }
 
   function applySizeStyles(element: HTMLElement, layoutIndex: number): void {
     const pos = gridItemPositions?.get(layoutIndex);
-    if (pos) {
-      const size = pos.h ?? sizeCache.getSize(layoutIndex);
-      if (pos.col < 0) {
-        // Header: spans full width
-        if (isX) {
-          element.style.width = `${size}px`;
-          element.style.height = "";
-        } else {
-          element.style.height = `${size}px`;
-          element.style.width = "100%";
-        }
-      } else {
-        if (isX) {
-          element.style.width = `${size}px`;
-          element.style.height = `${gridColWidth}px`;
-        } else {
-          element.style.height = `${size}px`;
-          element.style.width = `${gridColWidth}px`;
-        }
-      }
-      return;
-    }
-    const fallbackSize = sizeCache.getSize(layoutIndex);
-    if (isX) {
-      element.style.width = `${fallbackSize}px`;
-    } else {
-      element.style.height = `${fallbackSize}px`;
-    }
+    const size = pos ? (pos.h ?? sizeCache.getSize(layoutIndex)) : sizeCache.getSize(layoutIndex);
+    element.style[mainProp()] = `${size}px`;
+    if (!pos) return;
+    // Header spans the cross axis. A cell takes one column.
+    element.style[crossProp()] = pos.col < 0 ? (isX ? "" : "100%") : `${gridColWidth}px`;
   }
 
 
@@ -361,6 +325,14 @@ export function groups<T extends VListItem = VListItem>(
     if (detached.size > 0) {
       detached.forEach((element) => pool.release(element));
       detached.clear();
+    }
+  }
+
+  function writeContent(element: HTMLElement, content: string | Node): void {
+    if (typeof content === "string") element.innerHTML = content;
+    else {
+      element.innerHTML = "";
+      element.appendChild(content);
     }
   }
 
@@ -395,13 +367,7 @@ export function groups<T extends VListItem = VListItem>(
         element.style.display = "none";
       } else {
         element.style.display = "";
-        const content = headerTemplate(entry.group.key, entry.group.groupIndex);
-        if (typeof content === "string") {
-          element.innerHTML = content;
-        } else {
-          element.innerHTML = "";
-          element.appendChild(content);
-        }
+        writeContent(element, headerTemplate(entry.group.key, entry.group.groupIndex));
       }
       return true;
     }
@@ -445,13 +411,7 @@ export function groups<T extends VListItem = VListItem>(
 
     if (isf) isf(layoutIndex, itemState);
     else { itemState.selected = false; itemState.focused = false; }
-    const content = userTemplate(item, dataIndex, itemState);
-    if (typeof content === "string") {
-      element.innerHTML = content;
-    } else {
-      element.innerHTML = "";
-      element.appendChild(content);
-    }
+    writeContent(element, userTemplate(item, dataIndex, itemState));
     rowContentWritten(element);
     return !isPlaceholder;
   }
@@ -691,15 +651,21 @@ export function groups<T extends VListItem = VListItem>(
       layout.rebuild(lastDataCount, getLoadedItem ?? ctxGetItem);
       const newGroups = layout.groups;
 
-      let boundariesChanged = newGroups.length !== prevGroupCount;
-      if (!boundariesChanged) {
-        for (let i = 0; i < prevGroupCount; i++) {
-          if (newGroups[i]!.headerLayoutIndex !== prevGroups[i]!.headerLayoutIndex) {
-            boundariesChanged = true;
-            break;
-          }
+      // One walk: a moved header, or a group added or removed.
+      let firstShift = Infinity;
+      const minG = Math.min(prevGroupCount, newGroups.length);
+      for (let g = 0; g < minG; g++) {
+        if (newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex) {
+          firstShift = Math.min(newGroups[g]!.headerLayoutIndex, prevGroups[g]!.headerLayoutIndex);
+          break;
         }
       }
+      if (newGroups.length > prevGroupCount && minG < newGroups.length) {
+        firstShift = Math.min(firstShift, newGroups[minG]!.headerLayoutIndex);
+      } else if (prevGroupCount > newGroups.length && minG < prevGroupCount) {
+        firstShift = Math.min(firstShift, prevGroups[minG]!.headerLayoutIndex);
+      }
+      const boundariesChanged = newGroups.length !== prevGroupCount || firstShift < Infinity;
 
       if (boundariesChanged) {
         origSizeCacheRebuild(layout.totalEntries);
@@ -714,19 +680,6 @@ export function groups<T extends VListItem = VListItem>(
         // Only clear DOM if the boundary shift affects the rendered range.
         // Preload-ahead data often creates new groups far from the viewport
         // — no reason to destroy visible elements for that.
-        let firstShift = Infinity;
-        const minG = Math.min(prevGroupCount, newGroups.length);
-        for (let g = 0; g < minG; g++) {
-          if (newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex) {
-            firstShift = Math.min(newGroups[g]!.headerLayoutIndex, prevGroups[g]!.headerLayoutIndex);
-            break;
-          }
-        }
-        if (newGroups.length > prevGroupCount && minG < newGroups.length) {
-          firstShift = Math.min(firstShift, newGroups[minG]!.headerLayoutIndex);
-        } else if (prevGroupCount > newGroups.length && minG < prevGroupCount) {
-          firstShift = Math.min(firstShift, prevGroups[minG]!.headerLayoutIndex);
-        }
 
         if (firstShift <= engineState.prevRangeEnd) {
           detachAll();
