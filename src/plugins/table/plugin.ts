@@ -463,6 +463,14 @@ export function table<T extends VListItem = VListItem>(
         onColumnSort,
         onColumnClick,
       );
+      // page() scrolls the window, so the column header sticks under the
+      // caller's band instead of leaving with the document.
+      if (dom.root.classList.contains(`${classPrefix}--page`)) {
+        const pad = Number.parseFloat(dom.root.style.getPropertyValue("--vlist-page-pad")) || 0;
+        tableHeader.element.style.position = "sticky";
+        tableHeader.element.style.top = `${pad}px`;
+        tableHeader.element.style.zIndex = "6";
+      }
 
       tableHeader.rebuild(tableLayout);
       if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
