@@ -843,7 +843,7 @@ export function createCore<T extends VListItem = VListItem>(
     // so must this. Measured before: the empty root stayed in the caller's
     // container after the throw.
     dom.root.remove();
-    throw new Error("vlist: page() is not compatible with the carousel plugin");
+    throw new Error("vlist: page() is not compatible with the carousel plugin — document scrolling cannot wrap.");
   }
   function createLogicalHandler(factory: SyntheticFactory): LogicalScrollHandler {
     return factory({
