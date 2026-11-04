@@ -40,7 +40,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   onResize: (columnIndex: number, newWidth: number) => void,
   onSort?: (event: ColumnSortEvent) => void,
   onClick?: (event: ColumnClickEvent) => void,
-  multiSort: boolean = true,
+  multiSort: boolean = false,
 ): TableHeader<T> => {
   const rowgroup = document.createElement("div");
   rowgroup.setAttribute("role", "rowgroup");
@@ -66,7 +66,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   let currentSorts: TableSort[] = [];
   let currentLayout: TableLayout<T> | null = null;
   let liveRegion: HTMLElement | null = null;
-  let ownsLive = false;
 
   let isDragging = false;
   let dragColumnIndex = -1;
@@ -179,18 +178,16 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       }
       descText = `sorted by ${parts.join(", then ")}`;
       if (!liveRegion) {
-        liveRegion = root.querySelector<HTMLElement>('[aria-live="polite"]');
-        if (!liveRegion) {
-          liveRegion = document.createElement("div");
-          liveRegion.className = `${classPrefix}-live`;
-          liveRegion.setAttribute("aria-live", "polite");
-          root.appendChild(liveRegion);
-          ownsLive = true;
-        }
-        liveRegion.id ||= `${classPrefix}-live`;
+        liveRegion = document.createElement("div");
+        liveRegion.id = `${classPrefix}-table-live`;
+        liveRegion.style.cssText =
+          "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
+          "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+        liveRegion.setAttribute("aria-live", "polite");
+        rowgroup.appendChild(liveRegion);
       }
       liveRegion.textContent = descText;
-    } else if (liveRegion && element.hasAttribute("aria-description")) {
+    } else if (liveRegion) {
       liveRegion.textContent = "";
     }
 
@@ -397,7 +394,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     element.removeEventListener("keydown", onKeyDown);
     element.removeEventListener("focusin", onFocusIn);
     root.style.removeProperty("--vlist-table-header-height");
-    if (ownsLive) liveRegion?.remove();
     liveRegion = null;
     rowgroup.remove();
     cells = [];

@@ -458,7 +458,7 @@ export function table<T extends VListItem = VListItem>(
         onColumnResize,
         onColumnSort,
         onColumnClick,
-        config.multiSort ?? true,
+        config.multiSort ?? Array.isArray(config.sort),
       );
 
       tableHeader.rebuild(tableLayout);

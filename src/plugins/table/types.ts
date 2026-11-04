@@ -184,8 +184,8 @@ export interface TableConfig<T extends VListItem = VListItem> {
 
   /**
    * Enable multi-column sorting via Shift/Ctrl/Meta + click or Enter/Space
-   * (default: true). Set to `false` to restrict interactive sorting to a
-   * single column at a time.
+   * (default: false; enabled when set to `true` or when `sort` is initialized
+   * with an array).
    */
   multiSort?: boolean;
 

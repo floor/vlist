@@ -1481,7 +1481,7 @@ describe("table — multi-column sort (#20)", () => {
     { key: "role", label: "Role", width: 100, sortable: true },
   ];
 
-  it("initializes from config.sort array and exposes getSorts() / setSort(sorts)", () => {
+  it("initializes from config.sort array, enables multiSort automatically, and leaves the list status liveRegion untouched", () => {
     const plugin = table({
       columns: sortableCols,
       rowHeight: 40,
@@ -1491,6 +1491,7 @@ describe("table — multi-column sort (#20)", () => {
       ],
     });
     const t = createTableMockContext();
+    t.dom.liveRegion.textContent = "100 items loaded";
     plugin.setup!(t.ctx);
 
     const getSort = t.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
@@ -1504,10 +1505,19 @@ describe("table — multi-column sort (#20)", () => {
     ]);
 
     const cells = t.dom.root.querySelectorAll<HTMLElement>(".vlist-table-header-cell");
+    const sortLive = t.dom.root.querySelector<HTMLElement>("#vlist-table-live")!;
     expect(cells[0]!.getAttribute("aria-sort")).toBe("ascending");
     expect(cells[1]!.getAttribute("aria-sort")).toBeNull();
-    expect(t.dom.liveRegion.textContent).toBe("sorted by Name ascending, then Email descending");
+    expect(sortLive.textContent).toBe("sorted by Name ascending, then Email descending");
     expect(cells[1]!.getAttribute("aria-description")).toBe("sorted by Name ascending, then Email descending");
+    expect(cells[1]!.getAttribute("aria-describedby")).toBe("vlist-table-live");
+    // List's own status liveRegion is untouched
+    expect(t.dom.liveRegion.id).toBe("");
+    expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
+
+    // Shift+Click works because sort was passed as an array
+    cells[2]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+    expect(getSorts()).toHaveLength(3);
 
     setSort([
       { key: "role", direction: "desc" },
@@ -1520,19 +1530,21 @@ describe("table — multi-column sort (#20)", () => {
     ]);
     expect(cells[2]!.getAttribute("aria-sort")).toBe("descending");
     expect(cells[0]!.getAttribute("aria-sort")).toBeNull();
-    expect(t.dom.liveRegion.textContent).toBe("sorted by Role descending, then Name ascending");
+    expect(sortLive.textContent).toBe("sorted by Role descending, then Name ascending");
+    expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
 
     setSort([]);
     expect(getSort()).toEqual({ key: null, direction: "asc" });
     expect(getSorts()).toEqual([]);
     expect(cells[2]!.getAttribute("aria-sort")).toBeNull();
-    expect(t.dom.liveRegion.textContent).toBe("");
+    expect(sortLive.textContent).toBe("");
+    expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
 
     t.cleanup();
   });
 
-  it("handles Shift+Click and Ctrl+Click multi-sort and emits sorts in column:sort", () => {
-    const plugin = table({ columns: sortableCols, rowHeight: 40 });
+  it("handles Shift+Click and Ctrl+Click multi-sort when multiSort: true and emits sorts in column:sort", () => {
+    const plugin = table({ columns: sortableCols, rowHeight: 40, multiSort: true });
     const t = createTableMockContext();
     plugin.setup!(t.ctx);
 
@@ -1562,18 +1574,19 @@ describe("table — multi-column sort (#20)", () => {
       ],
     });
 
+    const sortLive = t.dom.root.querySelector<HTMLElement>("#vlist-table-live")!;
     expect(cells[0]!.getAttribute("aria-sort")).toBe("ascending");
     expect(cells[1]!.getAttribute("aria-sort")).toBeNull();
     expect(cells[2]!.getAttribute("aria-sort")).toBeNull();
-    expect(t.dom.liveRegion.textContent).toBe(
+    expect(sortLive.textContent).toBe(
       "sorted by Name ascending, then Email ascending, then Role ascending",
     );
 
     t.cleanup();
   });
 
-  it("restricts Shift+Click to single-column sort when multiSort: false", () => {
-    const plugin = table({ columns: sortableCols, rowHeight: 40, multiSort: false });
+  it("defaults multiSort to false so modifier clicks stay single-column until multiSort: true", () => {
+    const plugin = table({ columns: sortableCols, rowHeight: 40 });
     const t = createTableMockContext();
     plugin.setup!(t.ctx);
 

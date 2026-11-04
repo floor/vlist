@@ -1391,15 +1391,16 @@ describe("createTableHeader - multi-column sort (#20)", () => {
     expect(cell1.getAttribute("aria-sort")).toBeNull();
     expect(cell2.getAttribute("aria-sort")).toBeNull();
 
-    // Secondary keys announced via polite live region + header accessible description
+    // Secondary keys announced via header-owned polite live region + accessible description
     const expectedDesc = "sorted by Name ascending, then Date descending";
-    const live = root.querySelector('[aria-live="polite"]') as HTMLElement;
+    const live = root.querySelector("#vlist-table-live") as HTMLElement;
     expect(live).not.toBeNull();
+    expect(live.getAttribute("aria-live")).toBe("polite");
     expect(live.textContent).toBe(expectedDesc);
     expect(header.element.getAttribute("aria-description")).toBe(expectedDesc);
-    expect(header.element.getAttribute("aria-describedby")).toBe(live.id);
+    expect(header.element.getAttribute("aria-describedby")).toBe("vlist-table-live");
     expect(cell1.getAttribute("aria-description")).toBe(expectedDesc);
-    expect(cell1.getAttribute("aria-describedby")).toBe(live.id);
+    expect(cell1.getAttribute("aria-describedby")).toBe("vlist-table-live");
     expect(cell0.getAttribute("aria-description")).toBeNull();
 
     // Reducing back to 1 column clears priority badges and secondary description
@@ -1414,14 +1415,52 @@ describe("createTableHeader - multi-column sort (#20)", () => {
     root.remove();
   });
 
-  it("Shift+Click, Ctrl+Click, Meta+Click, and Shift+Enter append, flip in place, and remove secondary sorts", () => {
+  it("does not overwrite or clear the list's own status live region", () => {
+    const { root } = createTestDOM();
+    // Simulate the list's own status region created by createDOMStructure in core/dom.ts
+    const listStatus = document.createElement("div");
+    listStatus.className = "vlist-live";
+    listStatus.setAttribute("aria-live", "polite");
+    listStatus.setAttribute("aria-atomic", "true");
+    listStatus.setAttribute("role", "status");
+    listStatus.textContent = "Row 1 of 50 selected";
+    root.appendChild(listStatus);
+
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([
+      col("name", { label: "Name", sortable: true }),
+      col("value", { label: "Date", sortable: true }),
+    ]);
+    header.rebuild(layout);
+
+    header.updateSort([
+      { key: "name", direction: "asc" },
+      { key: "value", direction: "desc" },
+    ]);
+
+    const sortLive = root.querySelector("#vlist-table-live") as HTMLElement;
+    expect(sortLive).not.toBeNull();
+    expect(sortLive).not.toBe(listStatus);
+    expect(sortLive.textContent).toBe("sorted by Name ascending, then Date descending");
+    expect(listStatus.id).toBe("");
+    expect(listStatus.textContent).toBe("Row 1 of 50 selected");
+
+    header.updateSort([{ key: "name", direction: "asc" }]);
+    expect(sortLive.textContent).toBe("");
+    expect(listStatus.textContent).toBe("Row 1 of 50 selected");
+
+    header.destroy();
+    root.remove();
+  });
+
+  it("Shift+Click, Ctrl+Click, Meta+Click, and Shift+Enter append, flip in place, and remove secondary sorts when multiSort is true", () => {
     const { root } = createTestDOM();
     const sortCalls: any[] = [];
     const onSort = mock((e: any) => {
       sortCalls.push(e);
       header.updateSort(e.sorts ?? (e.direction ? [{ key: e.key, direction: e.direction }] : []));
     });
-    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort, undefined, true);
     const layout = createResolvedLayout([
       col("name", { label: "Name", sortable: true }),
       col("value", { label: "Value", sortable: true }),
