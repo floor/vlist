@@ -26,6 +26,13 @@
     position: static;
 }
 
+/* page() scrolls the window, so the column header sticks under the caller's band. */
+.vlist--page.vlist--table .vlist-table-header {
+    position: sticky;
+    top: var(--vlist-page-pad, 0px);
+    z-index: 6;
+}
+
 /* =============================================================================
    Scrollbar positioning in table mode
    The custom scrollbar track and hover zone are positioned relative to the

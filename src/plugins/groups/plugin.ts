@@ -883,6 +883,8 @@ export function groups<T extends VListItem = VListItem>(
 
       rootElement.classList.add(`${classPrefix}--grouped`);
 
+      let pageSticky = 0;
+      let stickyBox: HTMLElement | null = null;
       if (config.sticky !== false) {
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
           const group = layout.groups[groupIndex];
@@ -925,7 +927,20 @@ export function groups<T extends VListItem = VListItem>(
 
         stickyHeader.update(scroll.getPixelEquivalent());
 
-        if (!isX) {
+        const onPage = rootElement.classList.contains(`${classPrefix}--page`);
+        if (onPage) {
+          // The window is the scroller. Pin under the caller's band and the
+          // table header; do not shrink the document box.
+          pageSticky = headerH;
+          stickyBox = stickyContainer;
+          stickyContainer.style.position = "sticky";
+          stickyContainer.style.zIndex = "4";
+          const pad = Number.parseFloat(rootElement.style.getPropertyValue("--vlist-page-pad")) || 0;
+          const tableH = Number.parseFloat(rootElement.style.getPropertyValue("--vlist-table-header-height")) || 0;
+          const edge = `${pad + tableH}px`;
+          if (isX) stickyContainer.style.left = edge;
+          else stickyContainer.style.top = edge;
+        } else if (!isX) {
           // Vertical: relative container occupies a top row via block flow;
           // shrinking the viewport height lets it sit below.
           ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
@@ -1066,6 +1081,27 @@ export function groups<T extends VListItem = VListItem>(
       // scrollToIndex one below replace page's, so they fold the band in;
       // without page it reads zero and the geometry is unchanged.
       const readScrollPadding = createScrollPaddingReader(ctx);
+      // Page mode does not shrink the viewport, so the sticky header covers
+      // the window. Clip it from the data side when the stack is taller than
+      // the window: the caller's band and the table header stay, and the
+      // group header takes only what is left.
+      const stickyCover = (start: number, end: number): number => {
+        if (pageSticky <= 0 || !stickyBox) return 0;
+        const room = (isX ? window.innerWidth : window.innerHeight) - end - start;
+        const cover = Math.max(0, Math.min(pageSticky, room));
+        const next = `${cover}px`;
+        if (stickyBox.style.maxHeight !== next) stickyBox.style.maxHeight = next;
+        return cover;
+      };
+      if (pageSticky > 0) {
+        const onClip = (): void => {
+          const pad = readScrollPadding();
+          stickyCover(pad.start, pad.end);
+        };
+        onClip();
+        window.addEventListener("resize", onClip);
+        ctx.hooks.onDestroy(() => window.removeEventListener("resize", onClip));
+      }
 
       ctx.hooks.method("_scrollItemIntoView", (layoutIndex: number): void => {
         if (layoutIndex < 0) return;
@@ -1075,7 +1111,8 @@ export function groups<T extends VListItem = VListItem>(
         const cs = engineState.containerSize;
         const sp = scroll.getPixelEquivalent();
         const pagePad = readScrollPadding();
-        const padStart = mainPadStart + pagePad.start;
+        const cover = stickyCover(pagePad.start, pagePad.end);
+        const padStart = mainPadStart + pagePad.start + cover;
         const padEnd = mainPadEnd + pagePad.end;
         // page() scrolls the window, so the list may legitimately sit below the
         // viewport top by the start band. Without page the floor stays 0.
@@ -1121,6 +1158,8 @@ export function groups<T extends VListItem = VListItem>(
 
           // Bottom padding to keep clear when aligning the last item to the end.
           const pagePad = readScrollPadding();
+          const cover = stickyCover(pagePad.start, pagePad.end);
+          const startPad = pagePad.start + cover;
           const endPad = (gridItemPositions ? mainAxisPadding : 0) + pagePad.end;
 
           // Masonry: align:end targets the group's tallest-lane bottom, not the
@@ -1136,15 +1175,15 @@ export function groups<T extends VListItem = VListItem>(
           let pos: number;
           switch (align) {
             case "center":
-              pos = offset - pagePad.start - (cs - pagePad.start - pagePad.end - itemSize) / 2;
+              pos = offset - startPad - (cs - startPad - pagePad.end - itemSize) / 2;
               break;
             case "end":
               pos = endBottom - cs + endPad;
               break;
             default:
-              pos = offset - pagePad.start;
+              pos = offset - startPad;
           }
-          const minPos = pagePad.start > 0 ? -pagePad.start : 0;
+          const minPos = startPad > 0 ? -startPad : 0;
           pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
           return pos;
         };

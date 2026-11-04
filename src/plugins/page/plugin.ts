@@ -62,6 +62,7 @@ export function page<T extends VListItem = VListItem>(
       // ── 2. Modify DOM for window scroll ────────────────────────
       dom.root.style.overflow = "visible";
       dom.root.style.height = "auto";
+      dom.root.classList.add(`${cfg.classPrefix}--page`);
 
       if (isX) {
         dom.viewport.style.overflowX = "visible";
@@ -149,14 +150,41 @@ export function page<T extends VListItem = VListItem>(
       cleanupResize = () => win.removeEventListener("resize", onWindowResize);
 
       // ── 7. Scroll padding (scrollToIndex adjustments) ──────────
+      // P is the caller's band. T, the table header, is added when that
+      // plugin has published its height. The CSS variable stays P so the
+      // table header can sit under the band and the group header under both.
+      const callerStart = (): number =>
+        scrollPadding ? resolvePad(isX ? scrollPadding.left : scrollPadding.top) : 0;
+      const callerEnd = (): number =>
+        scrollPadding ? resolvePad(isX ? scrollPadding.right : scrollPadding.bottom) : 0;
+      // Header elements appear during later plugins' setup. One microtask
+      // grabs them so later padding reads can move the pins without querying.
+      let tableEl: HTMLElement | null = null;
+      let stickyEl: HTMLElement | null = null;
+      const tableHeight = (): number => {
+        const tableH = ctx.hooks.get("_getTableHeaderHeight") as (() => number) | undefined;
+        return tableH ? tableH() : 0;
+      };
+      const writePins = (start: number, tableH: number): void => {
+        dom.root.style.setProperty("--vlist-page-pad", `${start}px`);
+        if (tableEl) tableEl.style.top = `${start}px`;
+        if (stickyEl) stickyEl.style[isX ? "left" : "top"] = `${start + tableH}px`;
+      };
+      const getPadding = (): ScrollPadding => {
+        const start = callerStart();
+        const tableH = tableHeight();
+        writePins(start, tableH);
+        return { start: start + tableH, end: callerEnd() };
+      };
+      writePins(callerStart(), 0);
+      queueMicrotask(() => {
+        tableEl = dom.root.querySelector(`.${cfg.classPrefix}-table-header`);
+        stickyEl = dom.root.querySelector(`.${cfg.classPrefix}-sticky-header`);
+        writePins(callerStart(), tableHeight());
+      });
+      ctx.hooks.method(SCROLL_PADDING_HOOK, getPadding);
+
       if (scrollPadding) {
-        // Published so the layout plugins that displace page's own scroll
-        // computations — groups(), masonry() — keep honouring the band.
-        const getPadding = (): ScrollPadding => ({
-          start: resolvePad(isX ? scrollPadding.left : scrollPadding.top),
-          end: resolvePad(isX ? scrollPadding.right : scrollPadding.bottom),
-        });
-        ctx.hooks.method(SCROLL_PADDING_HOOK, getPadding);
 
         ctx.scroll.setToPosFn((index, sc, containerSize, totalItems, align) => {
           const { start: startPad, end: endPad } = getPadding();
