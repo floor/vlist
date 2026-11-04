@@ -238,16 +238,14 @@ export function table<T extends VListItem = VListItem>(
     }
 
     if (layoutToDataFn) {
-      const toData = layoutToDataFn;
       let firstDataIndex = -1;
-      for (let i = renderStart; i <= renderEnd; i++) {
-        const di = toData(i);
-        if (di >= 0) { firstDataIndex = di; break; }
-      }
       let lastDataIndex = -1;
-      for (let i = renderEnd; i >= renderStart; i--) {
-        const di = toData(i);
-        if (di >= 0) { lastDataIndex = di; break; }
+      for (let i = renderStart; i <= renderEnd; i++) {
+        const di = layoutToDataFn(i);
+        if (di >= 0) {
+          if (firstDataIndex < 0) firstDataIndex = di;
+          lastDataIndex = di;
+        }
       }
       engineState.startIndex = firstDataIndex < 0 ? renderStart : firstDataIndex;
       engineState.visibleCount = firstDataIndex < 0 ? 0 : lastDataIndex - firstDataIndex + 1;
@@ -285,6 +283,13 @@ export function table<T extends VListItem = VListItem>(
     tableRenderIfNeeded();
   }
 
+  function syncLayoutDOM(): void {
+    if (!tableLayout || !storedCtx) return;
+    tableHeader?.update(tableLayout);
+    tableRenderer?.updateColumnLayout(tableLayout);
+    storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
+  }
+
   function resizeColumns(width: number): void {
     if (!tableLayout || !storedCtx) return;
     // Core runs the resize hooks when either viewport axis changes. A
@@ -298,9 +303,7 @@ export function table<T extends VListItem = VListItem>(
     if (Math.abs(width - resolvedCross) < 1) return;
     resolvedCross = width;
     tableLayout.resolve(engineState.crossSize);
-    tableHeader?.update(tableLayout);
-    tableRenderer?.updateColumnLayout(tableLayout);
-    storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
+    syncLayoutDOM();
   }
 
   // =========================================================================
@@ -417,12 +420,6 @@ export function table<T extends VListItem = VListItem>(
       resolvedCross = engineState.crossSize;
       tableLayout.resolve(resolvedCross);
 
-      // ── Content width ───────────────────────────────────────────
-      const updateContentWidth = (): void => {
-        if (!tableLayout) return;
-        dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
-      };
-
       // ── Column resize handler ───────────────────────────────────
       const onColumnResize = (columnIndex: number, newWidth: number): void => {
         if (!tableLayout) return;
@@ -430,9 +427,7 @@ export function table<T extends VListItem = VListItem>(
         if (!col) return;
         const previousWidth = col.width;
         const actualWidth = tableLayout.resizeColumn(columnIndex, newWidth);
-        tableHeader?.update(tableLayout);
-        tableRenderer?.updateColumnLayout(tableLayout);
-        updateContentWidth();
+        syncLayoutDOM();
         emitter.emit("column:resize" as never, {
           key: col.def.key,
           index: columnIndex,
@@ -466,7 +461,7 @@ export function table<T extends VListItem = VListItem>(
 
       tableHeader.rebuild(tableLayout);
       if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
-      updateContentWidth();
+      dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
 
       // ── Create table renderer ───────────────────────────────────
       tableRenderer = createTableRenderer<T>(
@@ -492,15 +487,13 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Header scroll sync ──────────────────────────────────────
-      const headerWithSync = tableHeader as typeof tableHeader &
-        { syncScroll?: (scrollLeft: number) => void };
       let lastSyncedScrollLeft = -1;
 
       const syncHeaderScroll = (): void => {
         const scrollLeft = dom.viewport.scrollLeft;
         if (scrollLeft !== lastSyncedScrollLeft) {
           lastSyncedScrollLeft = scrollLeft;
-          headerWithSync?.syncScroll?.(scrollLeft);
+          tableHeader?.syncScroll?.(scrollLeft);
         }
       };
 
@@ -515,34 +508,24 @@ export function table<T extends VListItem = VListItem>(
         resolvedCross = engineState.crossSize;
         tableHeader.rebuild(tableLayout);
         if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
-        updateContentWidth();
-        tableRenderer?.updateColumnLayout(tableLayout);
+        syncLayoutDOM();
         tableRenderer?.clear();
         ctx.render.force();
       });
 
       ctx.hooks.method("resizeColumn", (keyOrIndex: string | number, width: number): void => {
         if (!tableLayout) return;
-        let columnIndex: number;
-        if (typeof keyOrIndex === "string") {
-          const cols = tableLayout.columns;
-          columnIndex = -1;
-          for (let i = 0; i < cols.length; i++) {
-            if (cols[i]!.def.key === keyOrIndex) { columnIndex = i; break; }
-          }
-          if (columnIndex === -1) return;
-        } else {
-          columnIndex = keyOrIndex;
-        }
-        onColumnResize(columnIndex, width);
+        const columnIndex = typeof keyOrIndex === "string"
+          ? tableLayout.columns.findIndex((c) => c.def.key === keyOrIndex)
+          : keyOrIndex;
+        if (columnIndex >= 0) onColumnResize(columnIndex, width);
       });
 
       ctx.hooks.method("getColumnWidths", (): Record<string, number> => {
         if (!tableLayout) return {};
         const result: Record<string, number> = {};
-        const cols = tableLayout.columns;
-        for (let i = 0; i < cols.length; i++) {
-          result[cols[i]!.def.key] = cols[i]!.width;
+        for (const col of tableLayout.columns) {
+          result[col.def.key] = col.width;
         }
         return result;
       });
@@ -626,13 +609,14 @@ export function table<T extends VListItem = VListItem>(
         localRenderer?.destroy();
         if (tableRenderer === localRenderer) tableRenderer = null;
         dom.content.style.minWidth = "";
-        dom.root.classList.remove(`${classPrefix}--table`);
-        dom.root.classList.remove(`${classPrefix}--table-row-borders`);
-        dom.root.classList.remove(`${classPrefix}--table-col-borders`);
-        dom.root.removeAttribute("role");
-        dom.root.removeAttribute("aria-colcount");
-        dom.root.removeAttribute("aria-rowcount");
-        dom.root.removeAttribute("tabindex");
+        dom.root.classList.remove(
+          `${classPrefix}--table`,
+          `${classPrefix}--table-row-borders`,
+          `${classPrefix}--table-col-borders`,
+        );
+        for (const attr of ["role", "aria-colcount", "aria-rowcount", "tabindex"]) {
+          dom.root.removeAttribute(attr);
+        }
         dom.viewport.removeAttribute("role");
         dom.content.removeAttribute("role");
         // Put the name back where core wrote it, for the same reason it moved.
@@ -648,9 +632,7 @@ export function table<T extends VListItem = VListItem>(
 
       onAfterScroll(): void {
         if (!storedCtx || !tableHeader) return;
-        const h = tableHeader as typeof tableHeader &
-          { syncScroll?: (scrollLeft: number) => void };
-        h?.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
+        tableHeader.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
       },
     },
 

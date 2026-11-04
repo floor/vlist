@@ -64,7 +64,7 @@ export const createTableLayout = <T extends VListItem = VListItem>(
       def,
       index,
       width: 0,
-      minWidth: clampPositive(def.minWidth ?? globalMinWidth, 1),
+      minWidth: Math.max(1, def.minWidth ?? globalMinWidth),
       maxWidth: def.maxWidth ?? globalMaxWidth,
       resizable: def.resizable ?? globalResizable,
       offset: 0,
@@ -229,15 +229,11 @@ export const createTableLayout = <T extends VListItem = VListItem>(
     return resolved[lo];
   };
 
-  const getColumnOffset = (columnIndex: number): number => {
-    if (columnIndex < 0 || columnIndex >= resolved.length) return 0;
-    return resolved[columnIndex]!.offset;
-  };
+  const getColumnOffset = (columnIndex: number): number =>
+    resolved[columnIndex]?.offset ?? 0;
 
-  const getColumnWidth = (columnIndex: number): number => {
-    if (columnIndex < 0 || columnIndex >= resolved.length) return 0;
-    return resolved[columnIndex]!.width;
-  };
+  const getColumnWidth = (columnIndex: number): number =>
+    resolved[columnIndex]?.width ?? 0;
 
   // =========================================================================
   // Update
@@ -286,7 +282,3 @@ export const createTableLayout = <T extends VListItem = VListItem>(
 /** Clamp a value to [min, max] */
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
-
-/** Ensure a positive value (at least `floor`) */
-const clampPositive = (value: number, floor: number): number =>
-  Math.max(floor, value);

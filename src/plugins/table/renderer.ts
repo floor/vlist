@@ -95,19 +95,17 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
 // Element Pool (row-level)
 // =============================================================================
 
+const RESET_ATTRS = ["data-id", "data-index", "aria-selected", "aria-rowindex", "role"];
+
 const createElementPool = (): { acquire: () => HTMLElement; release: (el: HTMLElement) => void; clear: () => void } => {
   const pool: HTMLElement[] = [];
   return {
     acquire: (): HTMLElement => pool.pop() || document.createElement("div"),
     release: (el: HTMLElement): void => {
-      el.parentNode?.removeChild(el);
+      el.remove();
       if (pool.length < 200) {
         el.className = "";
-        el.removeAttribute("data-id");
-        el.removeAttribute("data-index");
-        el.removeAttribute("aria-selected");
-        el.removeAttribute("aria-rowindex");
-        el.removeAttribute("role");
+        for (const attr of RESET_ATTRS) el.removeAttribute(attr);
         el.style.cssText = "";
         el.textContent = "";
         pool.push(el);
@@ -225,6 +223,15 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     el.setAttribute("data-index", String(index));
   };
 
+  /** Write a string (innerHTML) or DOM node (replaceChildren) into a container */
+  const setHtmlOrChild = (el: HTMLElement, result: HTMLElement | string): void => {
+    if (typeof result === "string") {
+      el.innerHTML = result;
+    } else {
+      el.replaceChildren(result);
+    }
+  };
+
   /** Check if an item id represents a placeholder (async loading) */
   const isPH = (id: string | number): boolean => String(id).startsWith("__placeholder_");
 
@@ -260,12 +267,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isPlaceholder: boolean = false,
   ): void => {
     if (col.def.cell) {
-      const result = col.def.cell(item, col.def, rowIndex);
-      if (typeof result === "string") {
-        cell.innerHTML = result;
-      } else {
-        cell.replaceChildren(result);
-      }
+      setHtmlOrChild(cell, col.def.cell(item, col.def, rowIndex));
     } else {
       // Default: show item[column.key] as text
       const value = (item as Record<string, unknown>)[col.def.key];
@@ -308,17 +310,46 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   ): void => {
     let className = rowClass;
     if (striped) {
-      if (cachedStripeFn) {
-        const si = cachedStripeFn(index);
-        if (si >= 0 && (si & 1) === 1) className += ` ${oddClass}`;
-      } else if ((index & 1) === 1) {
-        className += ` ${oddClass}`;
-      }
+      const si = cachedStripeFn ? cachedStripeFn(index) : index;
+      if (si >= 0 && (si & 1) === 1) className += ` ${oddClass}`;
     }
     if (isPlaceholder) className += ` ${placeholderClass}`;
     if (isSelected) className += ` ${selectedClass}`;
     if (isFocused) className += ` ${focusedClass}`;
     element.className = className;
+  };
+
+  /** Sync a tracked row's selection and focus classes/ARIA */
+  const syncRowState = (
+    tracked: TrackedRow,
+    index: number,
+    isSelected: boolean,
+    isFocused: boolean,
+    isPlaceholder: boolean = false,
+  ): void => {
+    applyRowClasses(tracked.element, index, isSelected, isFocused, isPlaceholder);
+    setAriaSelected(tracked.element, isSelected);
+    tracked.lastSelected = isSelected;
+    tracked.lastFocused = isFocused;
+  };
+
+  /** Re-render all cells and sync state for a tracked data row */
+  const syncRowItem = (
+    tracked: TrackedRow,
+    index: number,
+    item: T,
+    isSelected: boolean,
+    isFocused: boolean,
+    isPlaceholder: boolean = false,
+  ): void => {
+    const cols = currentLayout.columns;
+    for (let c = 0; c < tracked.cells.length && c < cols.length; c++) {
+      applyCellTemplate(tracked.cells[c]!, item, cols[c]!, index, isPlaceholder);
+    }
+    tracked.element.setAttribute("data-id", String(item.id));
+    tracked._lastItem = item;
+    tracked.lastItemId = item.id;
+    syncRowState(tracked, index, isSelected, isFocused, isPlaceholder);
   };
 
   // =========================================================================
@@ -330,15 +361,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
    */
   const applyCellAlign = (cell: HTMLElement, col: ResolvedColumn<T>): void => {
     const align = col.def.align;
-    if (align === "center") {
-      cell.classList.add(cellCenterClass);
-      cell.classList.remove(cellRightClass);
-    } else if (align === "right") {
-      cell.classList.add(cellRightClass);
-      cell.classList.remove(cellCenterClass);
-    } else {
-      cell.classList.remove(cellCenterClass, cellRightClass);
-    }
+    cell.classList.toggle(cellCenterClass, align === "center");
+    cell.classList.toggle(cellRightClass, align === "right");
   };
 
   // =========================================================================
@@ -410,12 +434,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     content.className = groupHeaderContentClass;
 
     if (groupHeaderTemplate) {
-      const result = groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex);
-      if (typeof result === "string") {
-        content.innerHTML = result;
-      } else {
-        content.appendChild(result);
-      }
+      setHtmlOrChild(content, groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex));
     }
 
     element.appendChild(content);
@@ -534,8 +553,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     // Render each item in range
     for (let i = range.start; i <= range.end; i++) {
       // Items array is 0-indexed relative to range.start
-      const itemIndex = i - range.start;
-      const item = items[itemIndex];
+      const item = items[i - range.start];
       if (!item) continue;
 
       let isSelected = selectedIds.has(item.id);
@@ -544,66 +562,32 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       // ── Check if this item is a group header ──
       const isHeader = groupHeaderFn ? groupHeaderFn(item) : false;
 
-      const existing = rendered.get(i);
+      let existing = rendered.get(i);
+
+      // ── Check if row type changed (data row ↔ group header) ──
+      if (existing && existing.isGroupHeader !== isHeader) {
+        pool.release(existing.element);
+        rendered.delete(i);
+        existing = undefined;
+      }
 
       if (existing) {
-        // ── Check if row type changed (data row ↔ group header) ──
-        if (existing.isGroupHeader !== isHeader) {
-          // Type changed — release old element, create new one
-          pool.release(existing.element);
-          rendered.delete(i);
-          const tracked = isHeader
-            ? renderGroupHeaderRow(item, i, sc, origin)
-            : renderRow(item, i, isSelected, isFocused, sc, origin);
-          rendered.set(i, tracked);
-          if (!fragment) fragment = document.createDocumentFragment();
-          fragment.appendChild(tracked.element);
-          continue;
-        }
-
         if (isHeader) {
           // ── Group header fast path ──
-          const itemChanged = existing._lastItem !== item;
-          if (itemChanged) {
-            // Different group header — re-render content
+          if (existing._lastItem !== item) {
             const headerItem = item as unknown as GroupHeaderItem;
             const content = existing.element.firstElementChild as HTMLElement;
             if (content && groupHeaderTemplate) {
-              const result = groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex);
-              if (typeof result === "string") {
-                content.innerHTML = result;
-              } else {
-                content.replaceChildren(result);
-              }
+              setHtmlOrChild(content, groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex));
               rowContentWritten(existing.element);
             }
             existing.element.setAttribute("data-id", String(item.id));
             existing._lastItem = item;
             existing.lastItemId = item.id;
           }
-
-          // Position update
-          const offset = sc.getOffset(i) - origin;
-          if (existing.lastOffset !== offset) {
-            existing.lastOffset = offset;
-            existing.element.style.transform = `translateY(${offset}px)`;
-          }
-
-          // Height update (only when changed)
-          const height = sc.getSize(i);
-          if (existing.lastHeight !== height) {
-            existing.lastHeight = height;
-            existing.element.style.height = `${height}px`;
-          }
-
         } else {
           // ── Data row path ──
-          const itemChanged = existing._lastItem !== item;
-          const selectedChanged = existing.lastSelected !== isSelected;
-          const focusedChanged = existing.lastFocused !== isFocused;
-
-          if (itemChanged) {
-            // Different item at this index — full re-render of cells
+          if (existing._lastItem !== item) {
             const wasPlaceholder = existing.lastItemId != null && isPH(existing.lastItemId);
             const isPlaceholder = isPH(item.id);
 
@@ -612,53 +596,35 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               isSelected = true;
             }
 
-            const cols = currentLayout.columns;
-            for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
-              applyCellTemplate(existing.cells[c]!, item, cols[c]!, i, isPlaceholder);
-            }
-            applyRowClasses(existing.element, i, isSelected, isFocused, isPlaceholder);
-            existing.element.setAttribute("data-id", String(item.id));
-            setAriaSelected(existing.element, isSelected);
+            syncRowItem(existing, i, item, isSelected, isFocused, isPlaceholder);
 
             // Fade-in animation when placeholder is replaced with real data
             if (wasPlaceholder && !isPlaceholder) {
               existing.element.classList.add(replacedClass);
               setTimeout(() => {
-                existing.element.classList.remove(replacedClass);
+                existing!.element.classList.remove(replacedClass);
               }, 300);
             }
-
-            existing._lastItem = item;
-            existing.lastItemId = item.id;
-            existing.lastSelected = isSelected;
-            existing.lastFocused = isFocused;
-          } else if (selectedChanged || focusedChanged) {
-            // Same item — only update classes/aria if state changed
-            applyRowClasses(existing.element, i, isSelected, isFocused, isPH(item.id));
-            setAriaSelected(existing.element, isSelected);
-            existing.lastSelected = isSelected;
-            existing.lastFocused = isFocused;
+          } else if (existing.lastSelected !== isSelected || existing.lastFocused !== isFocused) {
+            syncRowState(existing, i, isSelected, isFocused, isPH(item.id));
           }
 
-          // Position update only when offset changed
-          const offset = sc.getOffset(i) - origin;
-          if (existing.lastOffset !== offset) {
-            existing.lastOffset = offset;
-            existing.element.style.transform = `translateY(${offset}px)`;
-          }
-
-          // Update row height only when changed
-          const height = sc.getSize(i);
-          if (existing.lastHeight !== height) {
-            existing.lastHeight = height;
-            existing.element.style.height = `${height}px`;
-          }
-
-          // Update ARIA set size if changed
           if (setSizeChanged) {
             existing.element.setAttribute("aria-rowindex", String(i + 2));
           }
+        }
 
+        // Position and height update (only when changed)
+        const offset = sc.getOffset(i) - origin;
+        if (existing.lastOffset !== offset) {
+          existing.lastOffset = offset;
+          existing.element.style.transform = `translateY(${offset}px)`;
+        }
+
+        const height = sc.getSize(i);
+        if (existing.lastHeight !== height) {
+          existing.lastHeight = height;
+          existing.element.style.height = `${height}px`;
         }
       } else {
         // Transfer selection from placeholder → real item ID (async loading)
@@ -711,23 +677,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     const existing = rendered.get(index);
-    if (!existing) return;
-
-    // Group headers are not selectable — skip state updates
-    if (existing.isGroupHeader) return;
-
-    const cols = currentLayout.columns;
-    for (let c = 0; c < existing.cells.length && c < cols.length; c++) {
-      applyCellTemplate(existing.cells[c]!, item, cols[c]!, index);
-    }
-    existing.element.setAttribute("data-id", String(item.id));
-    existing._lastItem = item;
-    existing.lastItemId = item.id;
-
-    applyRowClasses(existing.element, index, isSelected, isFocused);
-    setAriaSelected(existing.element, isSelected);
-    existing.lastSelected = isSelected;
-    existing.lastFocused = isFocused;
+    if (!existing || existing.isGroupHeader) return;
+    syncRowItem(existing, index, item, isSelected, isFocused);
   };
 
   /**
@@ -739,19 +690,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isFocused: boolean,
   ): void => {
     const existing = rendered.get(index);
-    if (!existing) return;
-
-    // Group headers are not selectable — skip state updates
-    if (existing.isGroupHeader) return;
-
-    const selectedChanged = existing.lastSelected !== isSelected;
-    const focusedChanged = existing.lastFocused !== isFocused;
-
-    if (selectedChanged || focusedChanged) {
-      applyRowClasses(existing.element, index, isSelected, isFocused);
-      setAriaSelected(existing.element, isSelected);
-      existing.lastSelected = isSelected;
-      existing.lastFocused = isFocused;
+    if (!existing || existing.isGroupHeader) return;
+    if (existing.lastSelected !== isSelected || existing.lastFocused !== isFocused) {
+      syncRowState(existing, index, isSelected, isFocused);
     }
   };
 
