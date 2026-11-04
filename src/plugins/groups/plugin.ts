@@ -82,6 +82,8 @@ export function groups<T extends VListItem = VListItem>(
   let ctxGetItem: (index: number) => T | undefined;
   let getLoadedItem: ((index: number) => T | undefined) | null = null;
   let isX: boolean;
+  let mainProp: "width" | "height";
+  let crossProp: "width" | "height";
   let classPrefix: string;
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
@@ -277,21 +279,17 @@ export function groups<T extends VListItem = VListItem>(
     return pos.rowY + (pos.h ?? sizeCache.getSize(index));
   }
 
-  const mainProp = (): "width" | "height" => isX ? "width" : "height";
-  const crossProp = (): "width" | "height" => isX ? "height" : "width";
-
   function buildTransform(layoutIndex: number, base: number): string {
     // RFC-012: subtract baseOffset so absolute virtual offsets map into the
     // content element. baseOffset is 0 in native mode (byte-identical).
-    let cross = 0;
-    let main: number;
     const pos = gridItemPositions?.get(layoutIndex);
-    if (pos) {
-      cross = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
-      main = pos.rowY - base;
-    } else {
-      main = sizeCache.getOffset(layoutIndex) - base;
+    if (!pos) {
+      const offset = Math.round(sizeCache.getOffset(layoutIndex) - base);
+      // 1D keeps a bare 0 on the cross axis. Callers match the first "Npx".
+      return isX ? `translate(${offset}px, 0)` : `translate(0, ${offset}px)`;
     }
+    const cross = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
+    const main = pos.rowY - base;
     const x = Math.round(isX ? main : cross);
     const y = Math.round(isX ? cross : main);
     return `translate(${x}px, ${y}px)`;
@@ -300,10 +298,10 @@ export function groups<T extends VListItem = VListItem>(
   function applySizeStyles(element: HTMLElement, layoutIndex: number): void {
     const pos = gridItemPositions?.get(layoutIndex);
     const size = pos ? (pos.h ?? sizeCache.getSize(layoutIndex)) : sizeCache.getSize(layoutIndex);
-    element.style[mainProp()] = `${size}px`;
+    element.style[mainProp] = `${size}px`;
     if (!pos) return;
     // Header spans the cross axis. A cell takes one column.
-    element.style[crossProp()] = pos.col < 0 ? (isX ? "" : "100%") : `${gridColWidth}px`;
+    element.style[crossProp] = pos.col < 0 ? (isX ? "" : "100%") : `${gridColWidth}px`;
   }
 
 
@@ -714,6 +712,8 @@ export function groups<T extends VListItem = VListItem>(
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
+      mainProp = isX ? "width" : "height";
+      crossProp = isX ? "height" : "width";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       mainAxisPadding = ctx.config.mainAxisPadding;
