@@ -1393,14 +1393,14 @@ describe("createTableHeader - multi-column sort (#20)", () => {
 
     // Secondary keys announced via header-owned polite live region + accessible description
     const expectedDesc = "sorted by Name ascending, then Date descending";
-    const live = root.querySelector("#vlist-table-live") as HTMLElement;
+    const live = root.querySelector('[id^="vlist-table-live-"]') as HTMLElement;
     expect(live).not.toBeNull();
     expect(live.getAttribute("aria-live")).toBe("polite");
     expect(live.textContent).toBe(expectedDesc);
     expect(header.element.getAttribute("aria-description")).toBe(expectedDesc);
-    expect(header.element.getAttribute("aria-describedby")).toBe("vlist-table-live");
+    expect(header.element.getAttribute("aria-describedby")).toBe(live.id);
     expect(cell1.getAttribute("aria-description")).toBe(expectedDesc);
-    expect(cell1.getAttribute("aria-describedby")).toBe("vlist-table-live");
+    expect(cell1.getAttribute("aria-describedby")).toBe(live.id);
     expect(cell0.getAttribute("aria-description")).toBeNull();
 
     // Reducing back to 1 column clears priority badges and secondary description
@@ -1415,8 +1415,9 @@ describe("createTableHeader - multi-column sort (#20)", () => {
     root.remove();
   });
 
-  it("does not overwrite or clear the list's own status live region", () => {
-    const { root } = createTestDOM();
+  it("does not overwrite or clear the list's own status live region and gives each table on a page a unique live region id", () => {
+    const { root: root1 } = createTestDOM();
+    const { root: root2 } = createTestDOM();
     // Simulate the list's own status region created by createDOMStructure in core/dom.ts
     const listStatus = document.createElement("div");
     listStatus.className = "vlist-live";
@@ -1424,33 +1425,51 @@ describe("createTableHeader - multi-column sort (#20)", () => {
     listStatus.setAttribute("aria-atomic", "true");
     listStatus.setAttribute("role", "status");
     listStatus.textContent = "Row 1 of 50 selected";
-    root.appendChild(listStatus);
+    root1.appendChild(listStatus);
 
-    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const header1 = createTableHeader<TestItem>(root1, 40, "vlist", mock());
+    const header2 = createTableHeader<TestItem>(root2, 40, "vlist", mock());
     const layout = createResolvedLayout([
       col("name", { label: "Name", sortable: true }),
       col("value", { label: "Date", sortable: true }),
     ]);
-    header.rebuild(layout);
+    header1.rebuild(layout);
+    header2.rebuild(layout);
 
-    header.updateSort([
+    header1.updateSort([
       { key: "name", direction: "asc" },
       { key: "value", direction: "desc" },
     ]);
+    header2.updateSort([
+      { key: "value", direction: "asc" },
+      { key: "name", direction: "desc" },
+    ]);
 
-    const sortLive = root.querySelector("#vlist-table-live") as HTMLElement;
-    expect(sortLive).not.toBeNull();
-    expect(sortLive).not.toBe(listStatus);
-    expect(sortLive.textContent).toBe("sorted by Name ascending, then Date descending");
+    const id1 = header1.element.getAttribute("aria-describedby")!;
+    const id2 = header2.element.getAttribute("aria-describedby")!;
+    expect(id1).toMatch(/^vlist-table-live-\d+$/);
+    expect(id2).toMatch(/^vlist-table-live-\d+$/);
+    expect(id1).not.toBe(id2);
+
+    const sortLive1 = document.getElementById(id1) as HTMLElement;
+    const sortLive2 = document.getElementById(id2) as HTMLElement;
+    expect(sortLive1).not.toBeNull();
+    expect(sortLive2).not.toBeNull();
+    expect(sortLive1).not.toBe(listStatus);
+    expect(sortLive1.textContent).toBe("sorted by Name ascending, then Date descending");
+    expect(sortLive2.textContent).toBe("sorted by Date ascending, then Name descending");
     expect(listStatus.id).toBe("");
     expect(listStatus.textContent).toBe("Row 1 of 50 selected");
 
-    header.updateSort([{ key: "name", direction: "asc" }]);
-    expect(sortLive.textContent).toBe("");
+    header1.updateSort([{ key: "name", direction: "asc" }]);
+    expect(sortLive1.textContent).toBe("");
+    expect(sortLive2.textContent).toBe("sorted by Date ascending, then Name descending");
     expect(listStatus.textContent).toBe("Row 1 of 50 selected");
 
-    header.destroy();
-    root.remove();
+    header1.destroy();
+    header2.destroy();
+    root1.remove();
+    root2.remove();
   });
 
   it("Shift+Click, Ctrl+Click, Meta+Click, and Shift+Enter append, flip in place, and remove secondary sorts when multiSort is true", () => {

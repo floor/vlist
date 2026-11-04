@@ -18,6 +18,7 @@ const MIN_DRAG_DELTA = 1;
 const RESIZE_STEP = 10;
 const SORT_ASC = "\u25B2"; // ▲
 const SORT_DESC = "\u25BC"; // ▼
+let nextLiveId = 0;
 
 export const toSorts = (v: unknown, direction: "asc" | "desc" = "asc"): TableSort[] =>
   Array.isArray(v)
@@ -179,7 +180,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       descText = `sorted by ${parts.join(", then ")}`;
       if (!liveRegion) {
         liveRegion = document.createElement("div");
-        liveRegion.id = `${classPrefix}-table-live`;
+        liveRegion.id = `${classPrefix}-table-live-${++nextLiveId}`;
         liveRegion.style.cssText =
           "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
           "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";

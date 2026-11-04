@@ -1505,12 +1505,12 @@ describe("table — multi-column sort (#20)", () => {
     ]);
 
     const cells = t.dom.root.querySelectorAll<HTMLElement>(".vlist-table-header-cell");
-    const sortLive = t.dom.root.querySelector<HTMLElement>("#vlist-table-live")!;
+    const sortLive = t.dom.root.querySelector<HTMLElement>('[id^="vlist-table-live-"]')!;
     expect(cells[0]!.getAttribute("aria-sort")).toBe("ascending");
     expect(cells[1]!.getAttribute("aria-sort")).toBeNull();
     expect(sortLive.textContent).toBe("sorted by Name ascending, then Email descending");
     expect(cells[1]!.getAttribute("aria-description")).toBe("sorted by Name ascending, then Email descending");
-    expect(cells[1]!.getAttribute("aria-describedby")).toBe("vlist-table-live");
+    expect(cells[1]!.getAttribute("aria-describedby")).toBe(sortLive.id);
     // List's own status liveRegion is untouched
     expect(t.dom.liveRegion.id).toBe("");
     expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
@@ -1574,7 +1574,7 @@ describe("table — multi-column sort (#20)", () => {
       ],
     });
 
-    const sortLive = t.dom.root.querySelector<HTMLElement>("#vlist-table-live")!;
+    const sortLive = t.dom.root.querySelector<HTMLElement>('[id^="vlist-table-live-"]')!;
     expect(cells[0]!.getAttribute("aria-sort")).toBe("ascending");
     expect(cells[1]!.getAttribute("aria-sort")).toBeNull();
     expect(cells[2]!.getAttribute("aria-sort")).toBeNull();
