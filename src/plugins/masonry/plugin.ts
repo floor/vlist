@@ -523,9 +523,13 @@ export function masonry<T extends VListItem = VListItem>(
         const anchor = cachedPlacements.find(p => p.y + p.size > position);
         const offset = anchor ? position - anchor.y : 0;
         layout.update(updates);
+        if (ctx.hooks.get("_isGroupHeader")) {
+          ctx.render.force();
+          return;
+        }
         renderer?.clear();
         masonryForceRender();
-        if (anchor && !ctx.hooks.get("_isGroupHeader")) {
+        if (anchor) {
           scroll.to(cachedPlacements[anchor.index]!.y + offset);
         }
       });

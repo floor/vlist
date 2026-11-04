@@ -501,8 +501,19 @@ export function grid<T extends VListItem = VListItem>(
         const inRow = position - sizeCache.getOffset(anchorRow);
 
         layout.update(newConfig);
-        if (newConfig.columns !== undefined) columns = Math.max(1, Math.floor(newConfig.columns));
+        if (newConfig.columns !== undefined) {
+          columns = Math.max(1, Math.floor(newConfig.columns));
+          ctx.nav.set({ ud: layout.columns });
+        }
         if (newConfig.gap !== undefined) gap = newConfig.gap;
+
+        containerWidth = engineState.crossSize - crossPadTotal;
+        recomputeColumnWidth();
+
+        if (ctx.hooks.get("_isGroupHeader")) {
+          ctx.render.force();
+          return;
+        }
 
         if (newConfig.gap !== undefined || newConfig.columns !== undefined) {
           const newGap = layout.gap;
@@ -519,16 +530,8 @@ export function grid<T extends VListItem = VListItem>(
           rebuildAsRows(getRowCount());
         }
 
-        if (newConfig.columns !== undefined) {
-          ctx.nav.set({ ud: layout.columns });
-        }
-
-        containerWidth = engineState.crossSize - crossPadTotal;
-        recomputeColumnWidth();
         gridForceRender();
-        if (!ctx.hooks.get("_isGroupHeader")) {
-          scroll.to(sizeCache.getOffset(layout.getRow(anchorItem)) + inRow);
-        }
+        scroll.to(sizeCache.getOffset(layout.getRow(anchorItem)) + inRow);
       });
 
       // Override scrollToIndex: item index → row index

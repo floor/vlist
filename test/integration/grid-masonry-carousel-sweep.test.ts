@@ -239,14 +239,24 @@ it("masonry: destroy before a queued resize leaves no mounted items", scoped(asy
   expect(f.list.element.querySelectorAll("[data-id]").length).toBe(0);
 }));
 
-// groups() caches its own column geometry; refreshing that owner needs a separate change.
 for (const kind of ["grid", "masonry"] as const) {
-  it.todo(`${kind} groups: column updates refresh the grouped layout`, scoped(async scope => {
+  it(`${kind} groups: column updates refresh the grouped layout`, scoped(async scope => {
     const f = fixture(scope, kind, false, [groups<Row>({ getGroupForIndex: i => i < 50 ? "A" : "B", header: { height: 30, template: key => key } })]);
     await Promise.resolve();
     if (kind === "grid") f.list.updateGrid({ columns: 2 });
     else f.list.updateMasonry({ columns: 2 });
     expect(f.row(0)).not.toBeNull();
     expect(f.row(0)?.style.width).toBe("296px");
+  }));
+  it(`${kind} groups: group headers sit at updated positions after a column change`, scoped(async scope => {
+    const f = fixture(scope, kind, false, [groups<Row>({ getGroupForIndex: i => i < 6 ? "A" : "B", header: { height: 30, template: key => key } })]);
+    await Promise.resolve();
+    const header = (index: number) => f.content.querySelector<HTMLElement>(`[data-id="__group_header_${index}"]`);
+    expect(header(0)?.style.transform).toBe("translate(0px, 0px)");
+    expect(header(1)?.style.transform).toBe(kind === "grid" ? "translate(0px, 104px)" : "translate(0px, 96px)");
+    if (kind === "grid") f.list.updateGrid({ columns: 2 });
+    else f.list.updateMasonry({ columns: 2 });
+    expect(header(0)?.style.transform).toBe("translate(0px, 0px)");
+    expect(header(1)?.style.transform).toBe(kind === "grid" ? "translate(0px, 160px)" : "translate(0px, 144px)");
   }));
 }
