@@ -681,6 +681,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Navigated to a match (navigate mode) */
   "search:match": { index: number; item: T | undefined; matchIndex: number; matches: number };
 
+  /** Table column pinned or unpinned (columnPin plugin) */
+  "column:pin": import("./plugins/table").ColumnPinEvent;
+
   /** Destroy — fired just before the instance is torn down */
   destroy: undefined;
 }

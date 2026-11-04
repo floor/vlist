@@ -329,6 +329,7 @@ export function table<T extends VListItem = VListItem>(
       if (resolvedConfig.reverse) {
         throw new Error("[vlist] table: cannot be used with reverse mode");
       }
+      (resolvedConfig as { _table?: boolean })._table = true;
     },
 
     setup(ctx: PluginContext<T>): void {
