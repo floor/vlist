@@ -95,6 +95,7 @@ export function groups<T extends VListItem = VListItem>(
   let gridCrossPadTotal = 0;
   let mainAxisPadding = 0;
   let isMasonry = false;
+  let layoutSourceFn: (() => { columns: number; gap: number }) | undefined;
   let masonryItemSize: ((dataIndex: number) => number) | null = null;
   // The item accessor as it was before setSizeConfig replaced the cache with a
   // layout-indexed one. Masonry placement needs data-space heights, and reading
@@ -458,10 +459,13 @@ export function groups<T extends VListItem = VListItem>(
   let lastCrossSize = 0;
 
   function syncGridIfResized(): void {
-    if (gridColumns <= 0) return;
+    if (!layoutSourceFn) return;
+    const gl = layoutSourceFn();
     const cross = engineState.crossSize;
-    if (cross === lastCrossSize) return;
+    if (cross === lastCrossSize && gl.columns === gridColumns && gl.gap === gridGap) return;
     lastCrossSize = cross;
+    gridColumns = gl.columns;
+    gridGap = gl.gap;
     rebuildGridPositions();
     const totalSize = getGridContentSize();
     updateContentSize?.(totalSize);
@@ -774,26 +778,22 @@ export function groups<T extends VListItem = VListItem>(
       // Groups is 11 so this read sees them even when the caller listed
       // groups first — wrapping the size cache and replacing render has to
       // happen after those plugins, or they overwrite both and headers vanish.
-      const gridLayoutFn = getMethod?.("getGridLayout") as (() => { columns: number; gap: number }) | undefined;
-      const masonryLayoutFn = getMethod?.("getMasonryLayout") as (() => { columns: number; gap: number; containerSize: number }) | undefined;
-      if (gridLayoutFn) {
-        const gl = gridLayoutFn();
+      const masonryLayoutFn = getMethod?.("getMasonryLayout") as (() => { columns: number; gap: number }) | undefined;
+      layoutSourceFn = (getMethod?.("getGridLayout") as typeof masonryLayoutFn) ?? masonryLayoutFn;
+      if (layoutSourceFn) {
+        const gl = layoutSourceFn();
         gridColumns = gl.columns;
         gridGap = gl.gap;
         gridCrossPadStart = ctx.config.crossPadStart;
         gridCrossPadTotal = ctx.config.crossAxisPadding;
-      } else if (masonryLayoutFn) {
-        const ml = masonryLayoutFn();
-        gridColumns = ml.columns;
-        gridGap = ml.gap;
-        gridCrossPadStart = ctx.config.crossPadStart;
-        gridCrossPadTotal = ctx.config.crossAxisPadding;
-        isMasonry = true;
-        const rawSpec = ctx.sizes.rawSpec;
-        if (typeof rawSpec === "function") {
-          masonryItemSize = (dataIndex: number) => {
-            return rawSpec(dataIndex, { columnWidth: gridColWidth });
-          };
+        if (masonryLayoutFn) {
+          isMasonry = true;
+          const rawSpec = ctx.sizes.rawSpec;
+          if (typeof rawSpec === "function") {
+            masonryItemSize = (dataIndex: number) => {
+              return rawSpec(dataIndex, { columnWidth: gridColWidth });
+            };
+          }
         }
       }
 
