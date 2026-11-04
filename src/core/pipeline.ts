@@ -209,6 +209,33 @@ function isContiguousWindow(indices: Int32Array, count: number): boolean {
 }
 
 
+function applyTemplate<T extends VListItem>(
+  target: HTMLElement,
+  template: ItemTemplate<T>,
+  item: T,
+  publicIndex: number,
+  rc: RenderConfig,
+): boolean {
+  let result: string | HTMLElement;
+  try {
+    result = template(item, publicIndex, itemState);
+  } catch (err: unknown) {
+    rc.emitter?.emit("error", {
+      error: err instanceof Error ? err : new Error(String(err)),
+      context: `template:render:${publicIndex}`,
+    });
+    return false;
+  }
+  if (typeof result === "string") {
+    target.innerHTML = result;
+  } else {
+    target.textContent = "";
+    target.appendChild(result);
+  }
+  rowContentWritten(target);
+  return true;
+}
+
 export function phase2Commit<T extends VListItem>(
   state: EngineState,
   pool: ElementPool,
@@ -266,27 +293,9 @@ export function phase2Commit<T extends VListItem>(
         _lastItem?: unknown;
       };
 
-      if (item !== undefined) {
-        let result: string | HTMLElement;
-        try {
-          result = template(item, publicIndex, itemState);
-        } catch (err: unknown) {
-          if (rc.emitter) {
-            rc.emitter.emit("error", {
-              error: err instanceof Error ? err : new Error(String(err)),
-              context: `template:render:${publicIndex}`,
-            });
-          }
-          pool.release(acquired);
-          continue;
-        }
-        if (typeof result === "string") {
-          acquired.innerHTML = result;
-        } else {
-          acquired.textContent = "";
-          acquired.appendChild(result);
-        }
-        rowContentWritten(acquired);
+      if (item !== undefined && !applyTemplate(acquired, template, item, publicIndex, rc)) {
+        pool.release(acquired);
+        continue;
       }
 
       acquired.setAttribute("role", rc.itemRole);
@@ -341,25 +350,7 @@ export function phase2Commit<T extends VListItem>(
       if (item !== undefined && el._lastItem !== item) {
         const oldId = element.getAttribute("data-id");
         const newId = String(item.id);
-        let result: string | HTMLElement;
-        try {
-          result = template(item, publicIndex, itemState);
-        } catch (err: unknown) {
-          if (rc.emitter) {
-            rc.emitter.emit("error", {
-              error: err instanceof Error ? err : new Error(String(err)),
-              context: `template:render:${publicIndex}`,
-            });
-          }
-          continue;
-        }
-        if (typeof result === "string") {
-          element.innerHTML = result;
-        } else {
-          element.textContent = "";
-          element.appendChild(result);
-        }
-        rowContentWritten(element);
+        if (!applyTemplate(element, template, item, publicIndex, rc)) continue;
         element.setAttribute("data-id", newId);
         el._lastItem = item;
 

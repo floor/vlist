@@ -574,3 +574,37 @@ describe("data ops — removeItems", () => {
     expect(vlist.items.length).toBe(0);
   });
 });
+
+// =============================================================================
+// PluginContext.items — insertAt and removeById
+// =============================================================================
+
+describe("data ops — plugin context items", () => {
+  it("ctx.items.insertAt and ctx.items.removeById mutate items and rebuild sizes", () => {
+    let itemsCap: import("../../src/core/types").ItemsCapability<TestItem> | null = null;
+    const vlist = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(3),
+        item: { height: 50, template: simpleTemplate },
+      },
+      [
+        {
+          name: "probe",
+          setup(ctx): void {
+            itemsCap = ctx.items;
+          },
+        },
+      ],
+    );
+    list = vlist;
+
+    itemsCap!.insertAt({ id: 99, name: "Inserted" }, 1);
+    expect(vlist.total).toBe(4);
+    expect(vlist.getItemAt(1)?.id).toBe(99);
+
+    expect(itemsCap!.removeById(99)).toBe(1);
+    expect(vlist.total).toBe(3);
+    expect(itemsCap!.removeById(99)).toBe(-1);
+  });
+});
