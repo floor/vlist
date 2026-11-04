@@ -194,18 +194,14 @@ export function selection<T extends VListItem = VListItem>(
   // ── Selection mutations (keep Set + item cache in sync) ────────
 
   function doSelect(id: string | number, item?: T): void {
-    if (mode === "single") {
-      state.selected.clear();
-      selectedItemCache.clear();
-    }
+    if (mode === "single") doClear();
     state.selected.add(id);
     if (item) selectedItemCache.set(id, item);
   }
 
   function doToggle(id: string | number, item?: T): void {
     if (state.selected.has(id)) {
-      state.selected.delete(id);
-      selectedItemCache.delete(id);
+      doDeselect(id);
     } else {
       doSelect(id, item);
     }
@@ -243,17 +239,7 @@ export function selection<T extends VListItem = VListItem>(
     // in two groups this looped to ten and stopped two entries short, quietly
     // selecting eight.
     const total = getTotalFn();
-    for (let i = 0; i < total; i++) {
-      if (isGHFn?.(i)) continue;
-      const item = getDataItemAtLayout(i);
-      if (item) {
-        state.selected.add(item.id);
-        selectedItemCache.set(item.id, item);
-      } else if (loadedItemFn) {
-        const di = toDataIndex(i);
-        if (di >= 0) state.selected.add(PLACEHOLDER_ID_PREFIX + di);
-      }
-    }
+    if (total > 0) doSelectRange(0, total - 1);
   }
 
   function collectSelectedItems(): T[] {
@@ -313,18 +299,13 @@ export function selection<T extends VListItem = VListItem>(
       getDataTotalFn = () => engineState.totalItems;
 
       if (mode === "none") {
-        ctx.hooks.method("select", () => {});
-        ctx.hooks.method("deselect", () => {});
-        ctx.hooks.method("toggleSelect", () => {});
-        ctx.hooks.method("selectAll", () => {});
-        ctx.hooks.method("clearSelection", () => {});
-        ctx.hooks.method("getSelected", () => []);
-        ctx.hooks.method("getSelectedItems", () => []);
-        ctx.hooks.method("selectNext", () => {});
-        ctx.hooks.method("selectPrevious", () => {});
-        ctx.hooks.method("_seedSelection", () => {});
-        ctx.hooks.method("_getFocusedId", () => undefined);
-        ctx.hooks.method("_focusById", () => {});
+        const noop = (): void => {};
+        const empty = (): never[] => [];
+        for (const m of ["select", "deselect", "toggleSelect", "selectAll", "clearSelection", "selectNext", "selectPrevious", "_seedSelection", "_getFocusedId", "_focusById"]) {
+          ctx.hooks.method(m, noop);
+        }
+        ctx.hooks.method("getSelected", empty);
+        ctx.hooks.method("getSelectedItems", empty);
         return;
       }
 
@@ -536,45 +517,16 @@ export function selection<T extends VListItem = VListItem>(
             state.focusVisible = true;
             handled = true;
           } else switch (event.key) {
-            case "ArrowUp": {
-              const ud = nav.ud || 1;
-              const lr = nav.lr;
-              const isX = resolvedConfig.axis.primary === "x";
-              if (isX && !lr) break;
-              moveFocus(state, -(isX ? lr : ud), total, resolvedConfig.reverse);
-              state.focusVisible = true;
-              handled = true;
-              break;
-            }
-
-            case "ArrowDown": {
-              const ud = nav.ud || 1;
-              const lr = nav.lr;
-              const isX = resolvedConfig.axis.primary === "x";
-              if (isX && !lr) break;
-              moveFocus(state, isX ? lr : ud, total, resolvedConfig.reverse);
-              state.focusVisible = true;
-              handled = true;
-              break;
-            }
-
-            case "ArrowLeft": {
-              const ud = nav.ud || 1;
-              const lr = nav.lr;
-              const isX = resolvedConfig.axis.primary === "x";
-              if (!isX && !lr) break;
-              moveFocus(state, -(isX ? ud : lr), total, resolvedConfig.reverse);
-              state.focusVisible = true;
-              handled = true;
-              break;
-            }
-
+            case "ArrowUp":
+            case "ArrowDown":
+            case "ArrowLeft":
             case "ArrowRight": {
-              const ud = nav.ud || 1;
-              const lr = nav.lr;
+              const isVert = event.key === "ArrowUp" || event.key === "ArrowDown";
               const isX = resolvedConfig.axis.primary === "x";
-              if (!isX && !lr) break;
-              moveFocus(state, isX ? ud : lr, total, resolvedConfig.reverse);
+              const step = isVert === isX ? nav.lr : (nav.ud || 1);
+              if (!step) break;
+              const sign = event.key === "ArrowUp" || event.key === "ArrowLeft" ? -1 : 1;
+              moveFocus(state, sign * step, total, resolvedConfig.reverse);
               state.focusVisible = true;
               handled = true;
               break;

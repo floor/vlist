@@ -1238,3 +1238,373 @@ describe("search — conflicts with tree", () => {
     }
   });
 });
+
+// =============================================================================
+// Active search after updateItem
+// =============================================================================
+
+describe("search — updateItem", () => {
+  const currentRowIndex = (container: HTMLElement): string | null => {
+    const mark = container.querySelector(".vlist-search-match--current");
+    return mark ? mark.closest(".vlist-item")!.getAttribute("data-index") : null;
+  };
+
+  it("updated row enters matches", () => {
+    const { list, container } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("ap"); // Apple (0), Apricot (3), Grape (4)
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+
+    const changes: Array<{ query: string; matches: number; total: number }> = [];
+    list.on("search:change", (e: any) => changes.push(e));
+
+    // Banana (id: 2, index 1) edited to match "ap"
+    list.updateItem(2, { name: "Pineapple" });
+
+    expect(q(list, "getMatches")()).toEqual([0, 1, 3, 4]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("1 of 4");
+    expect(changes).toEqual([{ query: "ap", matches: 4, total: 5 }]);
+    const row1 = container.querySelector('.vlist-item[data-index="1"]')!;
+    expect(row1.querySelector(".vlist-search-match")?.textContent?.toLowerCase()).toBe("ap");
+  });
+
+  it("updated row leaves matches", () => {
+    const { list, container } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("ap"); // [0, 3, 4]
+
+    const changes: Array<{ query: string; matches: number; total: number }> = [];
+    list.on("search:change", (e: any) => changes.push(e));
+
+    // Apricot (id: 4, index 3) edited so it no longer matches "ap"
+    list.updateItem(4, { name: "Peach" });
+
+    expect(q(list, "getMatches")()).toEqual([0, 4]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("1 of 2");
+    expect(changes).toEqual([{ query: "ap", matches: 2, total: 5 }]);
+    const row3 = container.querySelector('.vlist-item[data-index="3"]')!;
+    expect(row3.textContent).toBe("Peach");
+    expect(row3.querySelector(".vlist-search-match")).toBeNull();
+  });
+
+  it("earlier membership edit preserves current row", () => {
+    const { list, container } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("ap"); // [0, 3, 4]
+    q(list, "nextMatch")(); // current ordinal 1 → source index 3 (Apricot)
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("2 of 3");
+    expect(currentRowIndex(container)).toBe("3");
+
+    const matchEvents: any[] = [];
+    list.on("search:match", (e: any) => matchEvents.push(e));
+
+    // Row 1 (Banana, before index 3) enters matches → Apricot shifts to ordinal 2 ("3 of 4")
+    list.updateItem(2, { name: "Snap" });
+    expect(q(list, "getMatches")()).toEqual([0, 1, 3, 4]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("3 of 4");
+    expect(currentRowIndex(container)).toBe("3");
+    expect(matchEvents).toEqual([]);
+
+    // Row 0 (Apple, before index 3) leaves matches → Apricot shifts to ordinal 1 ("2 of 3")
+    list.updateItem(1, { name: "Pear" });
+    expect(q(list, "getMatches")()).toEqual([1, 3, 4]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("2 of 3");
+    expect(currentRowIndex(container)).toBe("3");
+    expect(matchEvents).toEqual([]);
+  });
+
+  it("removed current selects successor and wraps", () => {
+    const { list, container } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("ap"); // [0, 3, 4]: Apple, Apricot, Grape
+    q(list, "nextMatch")(); // current ordinal 1 → source index 3 (Apricot)
+
+    const matchEvents: any[] = [];
+    list.on("search:match", (e: any) => matchEvents.push(e));
+
+    // Remove current match (Apricot at index 3) → selects successor Grape at index 4 (ordinal 1 of 2)
+    list.updateItem(4, { name: "Peach" });
+    expect(q(list, "getMatches")()).toEqual([0, 4]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("2 of 2");
+    expect(currentRowIndex(container)).toBe("4");
+    expect(matchEvents.length).toBe(1);
+    expect(matchEvents[0]).toMatchObject({ index: 4, matchIndex: 1, matches: 2 });
+
+    // Remove last match (Grape at index 4) → wraps to first match Apple at index 0 (ordinal 0 of 1)
+    list.updateItem(5, { name: "Plum" });
+    expect(q(list, "getMatches")()).toEqual([0]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("1 of 1");
+    expect(currentRowIndex(container)).toBe("0");
+    expect(matchEvents.length).toBe(2);
+    expect(matchEvents[1]).toMatchObject({ index: 0, matchIndex: 0, matches: 1 });
+  });
+
+  it("final match removes navigation", () => {
+    const { list, container } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("cherry"); // [2]: Cherry only
+    const prevBtn = container.querySelector(".vlist-search__nav-prev")!;
+    const nextBtn = container.querySelector(".vlist-search__nav-next")!;
+    expect(prevBtn.classList.contains("vlist-search__nav-prev--hidden")).toBe(false);
+    expect(nextBtn.classList.contains("vlist-search__nav-next--hidden")).toBe(false);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("1 of 1");
+
+    const matchEvents: any[] = [];
+    list.on("search:match", (e: any) => matchEvents.push(e));
+
+    list.updateItem(3, { name: "Plum" });
+
+    expect(q(list, "getMatches")()).toEqual([]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("No results");
+    expect(prevBtn.classList.contains("vlist-search__nav-prev--hidden")).toBe(true);
+    expect(nextBtn.classList.contains("vlist-search__nav-next--hidden")).toBe(true);
+    expect(currentRowIndex(container)).toBeNull();
+    expect(matchEvents).toEqual([]);
+  });
+
+  it("nonmatching edit keeps current", () => {
+    const { list, container } = makeList({ mode: "navigate", field: "name" });
+    q(list, "setQuery")("ap"); // [0, 3, 4]
+    q(list, "nextMatch")(); // current → index 3 (Apricot)
+
+    const matchEvents: any[] = [];
+    const changeEvents: any[] = [];
+    list.on("search:match", (e: any) => matchEvents.push(e));
+    list.on("search:change", (e: any) => changeEvents.push(e));
+
+    // Banana (id: 2, index 1) edited to another non-matching name
+    list.updateItem(2, { name: "Blueberry" });
+
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+    expect(container.querySelector(".vlist-search__counter")!.textContent).toBe("2 of 3");
+    expect(currentRowIndex(container)).toBe("3");
+    expect(matchEvents).toEqual([]);
+    expect(changeEvents).toEqual([]);
+  });
+
+  it("updated ID resolves source row", () => {
+    const { list } = makeList({ mode: "filter", field: "name" });
+    q(list, "setQuery")("ap"); // [0, 3, 4]
+    expect(list.total).toBe(3);
+
+    // Update id 2 → id 20 and make it match
+    list.updateItem(2, { id: 20, name: "Pineapple" });
+    expect(q(list, "getMatches")()).toEqual([0, 1, 3, 4]);
+    expect(list.total).toBe(4);
+
+    // Subsequent update using the new id 20 removes it from matches
+    list.updateItem(20, { name: "Banana" });
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+    expect(list.total).toBe(3);
+  });
+
+  it("filtered update repairs totals and mapping", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<Fruit>(
+      {
+        container,
+        items: FRUITS.slice(),
+        item: { height: 30, template: (item) => item.name },
+      },
+      [selection<Fruit>({ mode: "multiple" }), search<Fruit>({ mode: "filter", field: "name" })],
+    );
+    lists.push(list);
+
+    q(list, "setQuery")("ap"); // Apple (0), Apricot (3), Grape (4)
+    expect(list.total).toBe(3);
+    const content = container.querySelector<HTMLElement>(".vlist-content")!;
+    expect(content.style.height).toBe("90px");
+
+    // Banana (id: 2, source index 1) enters filtered set at virtual index 1
+    list.updateItem(2, { name: "Pineapple" });
+    expect(list.total).toBe(4);
+    expect(content.style.height).toBe("120px");
+
+    const row1 = container.querySelector<HTMLElement>('.vlist-item[data-index="1"]')!;
+    expect(row1.getAttribute("data-id")).toBe("2");
+    expect(row1.textContent).toBe("Pineapple");
+    expect(row1.querySelector(".vlist-search-match")).not.toBeNull();
+
+    row1.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect((list as any).getSelected()).toEqual([2]);
+
+    // Apricot (id: 4, source index 3) leaves filtered set → virtual indices 0, 1, 2 map to ids 1, 2, 5
+    list.updateItem(4, { name: "Peach" });
+    expect(list.total).toBe(3);
+    expect(content.style.height).toBe("90px");
+    const row2 = container.querySelector<HTMLElement>('.vlist-item[data-index="2"]')!;
+    expect(row2.getAttribute("data-id")).toBe("5");
+    expect(row2.textContent).toBe("Grape");
+  });
+
+  it("one accessor call per update", () => {
+    const calls: number[] = [];
+    const { list } = makeList({
+      field: (item) => {
+        calls.push(item.id);
+        return item.name;
+      },
+    });
+    q(list, "setQuery")("ap");
+    calls.length = 0;
+
+    list.updateItem(2, { name: "Pineapple" });
+    expect(calls).toEqual([2]);
+
+    list.updateItem(2, { name: "Banana" });
+    expect(calls).toEqual([2, 2]);
+  });
+
+  it("unknown ID does not notify", () => {
+    let calls = 0;
+    let notified = false;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const spyPlugin = {
+      name: "spy",
+      setup(ctx: any) {
+        const prev = ctx.hooks.get("_onItemUpdate");
+        ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<Fruit>) => {
+          notified = true;
+          prev?.(id, u);
+        });
+      },
+    };
+    const list = createVList<Fruit>(
+      {
+        container,
+        items: FRUITS.slice(),
+        item: { height: 30, template: (item) => item.name },
+      },
+      [
+        search<Fruit>({
+          field: (item) => {
+            calls++;
+            return item.name;
+          },
+        }),
+        spyPlugin,
+      ],
+    );
+    lists.push(list);
+
+    q(list, "setQuery")("ap");
+    calls = 0;
+
+    list.updateItem(999, { name: "Pineapple" });
+    expect(notified).toBe(false);
+    expect(calls).toBe(0);
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+  });
+
+  it("inactive query does not match", () => {
+    let calls = 0;
+    const { list } = makeList({
+      minLength: 3,
+      field: (item) => {
+        calls++;
+        return item.name;
+      },
+    });
+    q(list, "setQuery")("ap"); // below minLength (3)
+    calls = 0;
+
+    const changes: any[] = [];
+    list.on("search:change", (e: any) => changes.push(e));
+
+    list.updateItem(2, { name: "Pineapple" });
+    expect(calls).toBe(0);
+    expect(q(list, "getMatches")()).toEqual([]);
+    expect(list.total).toBe(5);
+    expect(changes).toEqual([]);
+  });
+
+  it("scroll commits do not rescan", () => {
+    let calls = 0;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(200),
+        item: { height: 30, template: (row) => row.name },
+      },
+      [
+        search<TestItem>({
+          mode: "navigate",
+          field: (row) => {
+            calls++;
+            return row.name;
+          },
+        }),
+      ],
+    );
+    lists.push(list);
+
+    (list as any).setQuery("1");
+    expect(calls).toBe(200);
+    calls = 0;
+
+    list.scrollToIndex(50);
+    list.scrollToIndex(120);
+    expect(calls).toBe(0);
+
+    list.updateItem(2, { name: "Item 102" } as Partial<TestItem>);
+    expect(calls).toBe(1);
+
+    list.scrollToIndex(0);
+    expect(calls).toBe(1);
+  });
+
+  it("chained hooks both run", () => {
+    const order: string[] = [];
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const firstPlugin = {
+      name: "first-update-hook",
+      priority: 10,
+      setup(ctx: any) {
+        const prev = ctx.hooks.get("_onItemUpdate");
+        ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<Fruit>) => {
+          prev?.(id, u);
+          order.push(`first:${id}`);
+        });
+      },
+    };
+    const list = createVList<Fruit>(
+      {
+        container,
+        items: FRUITS.slice(),
+        item: { height: 30, template: (item) => item.name },
+      },
+      [firstPlugin, search<Fruit>({ field: "name" })],
+    );
+    lists.push(list);
+
+    q(list, "setQuery")("ap");
+    list.on("search:change", () => order.push("search"));
+
+    list.updateItem(2, { name: "Pineapple" });
+    expect(order).toEqual(["first:2", "search"]);
+    expect(q(list, "getMatches")()).toEqual([0, 1, 3, 4]);
+  });
+
+  it("destroy releases hook state", () => {
+    let calls = 0;
+    const { list } = makeList({
+      field: (item) => {
+        calls++;
+        return item.name;
+      },
+    });
+    q(list, "setQuery")("ap");
+    expect(q(list, "getMatches")()).toEqual([0, 3, 4]);
+
+    list.destroy();
+    lists = lists.filter((l) => l !== list);
+    calls = 0;
+
+    expect(q(list, "getQuery")()).toBe("");
+    expect(q(list, "getMatches")()).toEqual([]);
+
+    list.updateItem(2, { name: "Pineapple" });
+    expect(calls).toBe(0);
+    expect(q(list, "getMatches")()).toEqual([]);
+  });
+});
