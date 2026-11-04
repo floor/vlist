@@ -337,6 +337,7 @@ export function tree<T extends VListItem = VListItem>(
     if (currentItems === lastItems && currentItems.length === lastItemsLength) return;
     lastItems = currentItems;
     lastItemsLength = currentItems.length;
+    const focusId = layout.flatNodes[getEffectiveFocusedIndex()]?.id;
     // Initial data is validated in setup(); runtime swaps skip the O(n)
     // duplicate-id walk to keep data updates off the validation hot path.
     if (isParentIdMode) {
@@ -349,14 +350,17 @@ export function tree<T extends VListItem = VListItem>(
     } else {
       layout.rebuild(currentItems, true);
     }
-    // Native read-back can render immediately; release old rows first.
-    detachAll();
-    syncTotals();
+    anchorId = undefined;
+    invalidateTree(focusId);
   }
 
   // ── Sync totals after layout changes ─────────────────────────────
 
-  function syncTotals(): void {
+  function invalidateTree(focusId?: string | number, collapsedId = layout.flatNodes[0]?.id): void {
+    const index = anchorId === undefined ? undefined : layout.idToIndex.get(anchorId);
+    const offset = anchorOffset;
+    // Native read-back can render immediately; release old rows first.
+    detachAll();
     engineState.totalItems = layout.totalVisible;
     origSizeCacheRebuild(layout.totalVisible);
     const totalSize = sizeCache.getTotalSize();
@@ -365,17 +369,8 @@ export function tree<T extends VListItem = VListItem>(
     scrollTo(scroll.getPixelEquivalent());
 
     const getSb = getMethod("_scrollbar:getInstance") as (() => { updateBounds(t: number, c: number): void }) | undefined;
-    if (getSb) {
-      const sb = getSb();
-      sb?.updateBounds(totalSize, engineState.containerSize);
-    }
-  }
+    getSb?.()?.updateBounds(totalSize, engineState.containerSize);
 
-  function invalidateTree(focusId?: string | number, collapsedId?: string | number): void {
-    const index = anchorId === undefined ? undefined : layout.idToIndex.get(anchorId);
-    const offset = anchorOffset;
-    syncTotals();
-    detachAll();
     if (index !== undefined) {
       const delta = sizeCache.getOffset(index) + offset - scroll.getPixelEquivalent();
       if (delta) scroll.shiftBy(delta);
