@@ -424,6 +424,8 @@ export function search<T extends VListItem = VListItem>(
       fn(el);
     }
   };
+  const highlightTarget = (t: HTMLElement): void => highlightElement(t, query, caseSensitive, matchClass);
+  const clearTarget = (t: HTMLElement): void => clearHighlights(t, matchClass);
 
   const highlightVisible = (state: EngineState): void => {
     if (!doHighlight) return;
@@ -448,14 +450,14 @@ export function search<T extends VListItem = VListItem>(
       if (row._stamp !== queryVersion) {
         // Newly rendered, rewritten, or built for an older query.
         if (active) {
-          eachScope(el, (t) => highlightElement(t, query, caseSensitive, matchClass));
+          eachScope(el, highlightTarget);
           marksPresent = true;
           row._stamp = queryVersion;
           row._searchMarkCurrent = false;
         } else if (row._stamp) {
           // Marks built for a query that is no longer active. A row the
           // renderer has written since carries 0 and costs nothing.
-          eachScope(el, (t) => clearHighlights(t, matchClass));
+          eachScope(el, clearTarget);
           row._stamp = 0;
         }
       }
