@@ -487,13 +487,15 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Header scroll sync ──────────────────────────────────────
+      const headerWithSync = tableHeader as typeof tableHeader &
+        { syncScroll?: (scrollLeft: number) => void };
       let lastSyncedScrollLeft = -1;
 
       const syncHeaderScroll = (): void => {
         const scrollLeft = dom.viewport.scrollLeft;
         if (scrollLeft !== lastSyncedScrollLeft) {
           lastSyncedScrollLeft = scrollLeft;
-          tableHeader?.syncScroll?.(scrollLeft);
+          headerWithSync?.syncScroll?.(scrollLeft);
         }
       };
 
@@ -524,8 +526,9 @@ export function table<T extends VListItem = VListItem>(
       ctx.hooks.method("getColumnWidths", (): Record<string, number> => {
         if (!tableLayout) return {};
         const result: Record<string, number> = {};
-        for (const col of tableLayout.columns) {
-          result[col.def.key] = col.width;
+        const cols = tableLayout.columns;
+        for (let i = 0; i < cols.length; i++) {
+          result[cols[i]!.def.key] = cols[i]!.width;
         }
         return result;
       });
@@ -566,31 +569,22 @@ export function table<T extends VListItem = VListItem>(
         const viewportWidth = dom.viewport.clientWidth;
         if (tableLayout.totalWidth <= viewportWidth) return;
 
-        // Column offsets run from the physical left. RTL native scrollLeft is
-        // zero at the right edge and negative toward the left in current engines.
         const origin = crossRTL ? tableLayout.totalWidth - viewportWidth : 0;
         const scrollLeft = dom.viewport.scrollLeft + origin;
+        const go = (x: number): void => {
+          dom.viewport.scrollLeft = x - origin;
+          event.preventDefault();
+        };
 
         if (event.key === "ArrowRight") {
           for (let i = 0; i < cols.length; i++) {
-            if (cols[i]!.offset > scrollLeft + 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset - origin;
-              event.preventDefault();
-              return;
-            }
+            if (cols[i]!.offset > scrollLeft + 1) return go(cols[i]!.offset);
           }
         } else {
           for (let i = cols.length - 1; i >= 0; i--) {
-            if (cols[i]!.offset < scrollLeft - 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset - origin;
-              event.preventDefault();
-              return;
-            }
+            if (cols[i]!.offset < scrollLeft - 1) return go(cols[i]!.offset);
           }
-          if (scrollLeft > 0) {
-            dom.viewport.scrollLeft = -origin;
-            event.preventDefault();
-          }
+          if (scrollLeft > 0) go(0);
         }
       });
 
@@ -614,8 +608,9 @@ export function table<T extends VListItem = VListItem>(
           `${classPrefix}--table-row-borders`,
           `${classPrefix}--table-col-borders`,
         );
-        for (const attr of ["role", "aria-colcount", "aria-rowcount", "tabindex"]) {
-          dom.root.removeAttribute(attr);
+        const rootAttrs = ["role", "aria-colcount", "aria-rowcount", "tabindex"];
+        for (let i = 0; i < rootAttrs.length; i++) {
+          dom.root.removeAttribute(rootAttrs[i]!);
         }
         dom.viewport.removeAttribute("role");
         dom.content.removeAttribute("role");
@@ -632,7 +627,9 @@ export function table<T extends VListItem = VListItem>(
 
       onAfterScroll(): void {
         if (!storedCtx || !tableHeader) return;
-        tableHeader.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
+        const h = tableHeader as typeof tableHeader &
+          { syncScroll?: (scrollLeft: number) => void };
+        h?.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
       },
     },
 

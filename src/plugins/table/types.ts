@@ -300,9 +300,6 @@ export interface TableHeader<T extends VListItem = VListItem> {
 
   /** Destroy and remove header DOM */
   destroy: () => void;
-
-  /** Synchronize header scroll position with the viewport */
-  syncScroll?: (scrollLeft: number) => void;
 }
 
 // =============================================================================

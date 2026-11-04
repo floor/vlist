@@ -105,7 +105,7 @@ const createElementPool = (): { acquire: () => HTMLElement; release: (el: HTMLEl
       el.remove();
       if (pool.length < 200) {
         el.className = "";
-        for (const attr of RESET_ATTRS) el.removeAttribute(attr);
+        for (let i = 0; i < RESET_ATTRS.length; i++) el.removeAttribute(RESET_ATTRS[i]!);
         el.style.cssText = "";
         el.textContent = "";
         pool.push(el);
@@ -216,13 +216,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     selected ? el.setAttribute("aria-selected", "true") : el.removeAttribute("aria-selected");
   };
 
-  /** Set common row data attributes */
-  const setRowAttrs = (el: HTMLElement, role: string, id: string | number, index: number): void => {
-    el.setAttribute("role", role);
-    el.setAttribute("data-id", String(id));
-    el.setAttribute("data-index", String(index));
-  };
-
   /** Write a string (innerHTML) or DOM node (replaceChildren) into a container */
   const setHtmlOrChild = (el: HTMLElement, result: HTMLElement | string): void => {
     if (typeof result === "string") {
@@ -243,8 +236,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
   const cellClass = `${classPrefix}-table-cell`;
-  const cellCenterClass = `${classPrefix}-table-cell--center`;
-  const cellRightClass = `${classPrefix}-table-cell--right`;
   const cellSkeletonClass = `${classPrefix}-table-cell-skeleton`;
   const oddClass = `${classPrefix}-item--odd`;
   const placeholderClass = `${classPrefix}-item--placeholder`;
@@ -333,6 +324,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     tracked.lastFocused = isFocused;
   };
 
+  const setTrackedItem = (tracked: TrackedRow, item: T): void => {
+    tracked.element.setAttribute("data-id", String(item.id));
+    tracked._lastItem = item;
+    tracked.lastItemId = item.id;
+  };
+
   /** Re-render all cells and sync state for a tracked data row */
   const syncRowItem = (
     tracked: TrackedRow,
@@ -346,121 +343,18 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     for (let c = 0; c < tracked.cells.length && c < cols.length; c++) {
       applyCellTemplate(tracked.cells[c]!, item, cols[c]!, index, isPlaceholder);
     }
-    tracked.element.setAttribute("data-id", String(item.id));
-    tracked._lastItem = item;
-    tracked.lastItemId = item.id;
+    setTrackedItem(tracked, item);
     syncRowState(tracked, index, isSelected, isFocused, isPlaceholder);
-  };
-
-  // =========================================================================
-  // Cell Sizing & Positioning
-  // =========================================================================
-
-  /**
-   * Apply alignment style to a cell based on column definition.
-   */
-  const applyCellAlign = (cell: HTMLElement, col: ResolvedColumn<T>): void => {
-    const align = col.def.align;
-    cell.classList.toggle(cellCenterClass, align === "center");
-    cell.classList.toggle(cellRightClass, align === "right");
   };
 
   // =========================================================================
   // Row Building
   // =========================================================================
 
-  /**
-   * Create or reuse cells for a row element, matching the current column count.
-   */
-  const ensureCells = (rowElement: HTMLElement, existingCells: HTMLElement[]): HTMLElement[] => {
-    const cols = currentLayout.columns;
-    const targetCount = cols.length;
-
-    // Reuse existing cells where possible
-    if (existingCells.length === targetCount) {
-      return existingCells;
-    }
-
-    const cells: HTMLElement[] = [];
-
-    for (let i = 0; i < targetCount; i++) {
-      let cell: HTMLElement;
-      if (i < existingCells.length) {
-        cell = existingCells[i]!;
-      } else {
-        cell = document.createElement("div");
-        cell.className = cellClass;
-        rowElement.appendChild(cell);
-      }
-      cells.push(cell);
-    }
-
-    // Remove excess cells
-    for (let i = targetCount; i < existingCells.length; i++) {
-      existingCells[i]!.remove();
-    }
-
-    return cells;
-  };
-
-  /**
-   * Render a group header row: full-width, no cells, custom template.
-   */
-  const renderGroupHeaderRow = (
+  const mountRow = (
     item: T,
     index: number,
-    sc: SizeCache,
-    origin: number,
-  ): TrackedRow => {
-    const element = pool.acquire();
-    const headerItem = item as unknown as GroupHeaderItem;
-    const height = sc.getSize(index);
-    const offset = sc.getOffset(index) - origin;
-
-    // Set all styles in one operation (element was reset by pool.release)
-    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
-    element.className = groupHeaderRowClass;
-
-    // ARIA — group header is presentational, not a data row
-    setRowAttrs(element, "presentation", item.id, index);
-    element.removeAttribute("aria-selected");
-    element.removeAttribute("aria-rowindex");
-
-    // Clear any leftover cells from pooled element reuse
-    element.replaceChildren();
-
-    // Create the single content container
-    const content = document.createElement("div");
-    content.className = groupHeaderContentClass;
-
-    if (groupHeaderTemplate) {
-      setHtmlOrChild(content, groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex));
-    }
-
-    element.appendChild(content);
-    rowContentWritten(element);
-
-    return {
-      element,
-      cells: [],  // No cells for group headers
-      index,
-      isGroupHeader: true,
-      _lastItem: item,
-      lastItemId: item.id,
-      lastSelected: false,
-      lastFocused: false,
-      lastOffset: offset,
-      lastHeight: height,
-    };
-  };
-
-  /**
-   * Render a full row: create element, set cells, apply state.
-   * Returns a TrackedRow for the rendered map.
-   */
-  const renderRow = (
-    item: T,
-    index: number,
+    isHeader: boolean,
     isSelected: boolean,
     isFocused: boolean,
     sc: SizeCache,
@@ -469,48 +363,56 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const element = pool.acquire();
     const height = sc.getSize(index);
     const offset = sc.getOffset(index) - origin;
-    const isPlaceholder = isPH(item.id);
-
-    // Set all row styles in one operation (element was reset by pool.release)
-    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
-
-    applyRowClasses(element, index, isSelected, isFocused, isPlaceholder);
-
-    // ARIA attributes
-    setRowAttrs(element, "row", item.id, index);
-    element.id = `${ariaIdPrefix}-item-${index}`;
-    element.setAttribute("aria-rowindex", String(index + 2)); // +2: header is row 1
-
-    setAriaSelected(element, isSelected);
-
-    // Create cells
-    const cells = ensureCells(element, []);
-    const cols = currentLayout.columns;
-
-    for (let i = 0; i < cells.length && i < cols.length; i++) {
-      const cell = cells[i]!;
-      const col = cols[i]!;
-
-      cell.style.cssText = `left:${col.offset}px;width:${col.width}px`;
-      cell.setAttribute("role", "gridcell");
-      cell.setAttribute("aria-colindex", String(i + 1));
-
-      applyCellAlign(cell, col);
-      applyCellTemplate(cell, item, col, index, isPlaceholder);
-    }
-
-    return {
+    const cells: HTMLElement[] = [];
+    const tracked: TrackedRow = {
       element,
       cells,
       index,
-      isGroupHeader: false,
+      isGroupHeader: isHeader,
       _lastItem: item,
       lastItemId: item.id,
-      lastSelected: isSelected,
-      lastFocused: isFocused,
+      lastSelected: false,
+      lastFocused: false,
       lastOffset: offset,
       lastHeight: height,
     };
+
+    element.style.cssText = `width:${currentLayout.totalWidth}px;height:${height}px;transform:translateY(${offset}px)`;
+    element.setAttribute("role", isHeader ? "presentation" : "row");
+    element.setAttribute("data-index", String(index));
+
+    if (isHeader) {
+      const headerItem = item as unknown as GroupHeaderItem;
+      element.className = groupHeaderRowClass;
+      setTrackedItem(tracked, item);
+      const content = document.createElement("div");
+      content.className = groupHeaderContentClass;
+      if (groupHeaderTemplate) {
+        setHtmlOrChild(content, groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex));
+      }
+      element.appendChild(content);
+      rowContentWritten(element);
+    } else {
+      element.id = `${ariaIdPrefix}-item-${index}`;
+      element.setAttribute("aria-rowindex", String(index + 2));
+
+      const cols = currentLayout.columns;
+      for (let i = 0; i < cols.length; i++) {
+        const cell = document.createElement("div");
+        const col = cols[i]!;
+        const align = col.def.align;
+        cell.className =
+          align === "center" || align === "right" ? `${cellClass} ${cellClass}--${align}` : cellClass;
+        cell.style.cssText = `left:${col.offset}px;width:${col.width}px`;
+        cell.setAttribute("role", "gridcell");
+        cell.setAttribute("aria-colindex", String(i + 1));
+        element.appendChild(cell);
+        cells.push(cell);
+      }
+      syncRowItem(tracked, index, item, isSelected, isFocused, isPH(item.id));
+    }
+
+    return tracked;
   };
 
   // =========================================================================
@@ -563,6 +465,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       const isHeader = groupHeaderFn ? groupHeaderFn(item) : false;
 
       let existing = rendered.get(i);
+      const wasExisting = !!existing;
 
       // ── Check if row type changed (data row ↔ group header) ──
       if (existing && existing.isGroupHeader !== isHeader) {
@@ -581,9 +484,7 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
               setHtmlOrChild(content, groupHeaderTemplate(headerItem.groupKey, headerItem.groupIndex));
               rowContentWritten(existing.element);
             }
-            existing.element.setAttribute("data-id", String(item.id));
-            existing._lastItem = item;
-            existing.lastItemId = item.id;
+            setTrackedItem(existing, item);
           }
         } else {
           // ── Data row path ──
@@ -628,14 +529,12 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
         }
       } else {
         // Transfer selection from placeholder → real item ID (async loading)
-        if (claimPlaceholderSelection(selectedIds, i, item.id)) {
+        if (!wasExisting && claimPlaceholderSelection(selectedIds, i, item.id)) {
           isSelected = true;
         }
 
         // New row — create and collect in fragment for batched insertion
-        const tracked = isHeader
-          ? renderGroupHeaderRow(item, i, sc, origin)
-          : renderRow(item, i, isSelected, isFocused, sc, origin);
+        const tracked = mountRow(item, i, isHeader, isSelected, isFocused, sc, origin);
         rendered.set(i, tracked);
 
         if (!fragment) fragment = document.createDocumentFragment();
