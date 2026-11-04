@@ -277,6 +277,26 @@ it.serial("page table groups: headers stack as band, table, group", scoped(scope
   expect(sticky.style.position).toBe("sticky");
 }));
 
+it.serial("page table groups: a 60-frame window scroll does not rewrite the pins", scoped(async scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([
+    table<Row>({ columns: columns(), rowHeight: 40, headerHeight: TABLE_H }),
+    groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } }),
+  ], 30);
+  await Promise.resolve();
+  let writes = 0;
+  const proto = CSSStyleDeclaration.prototype;
+  const orig = proto.setProperty;
+  proto.setProperty = function (property: string, value: string | null, priority?: string): void {
+    if (property === "--vlist-page-pad") writes++;
+    orig.call(this, property, value ?? "", priority);
+  };
+  scope.defer(() => { proto.setProperty = orig; });
+  for (let frame = 1; frame <= 60; frame++) doc.move(frame * 40);
+  expect(writes).toBe(0);
+  expect(f.list.getScrollPosition()).toBeGreaterThan(0);
+}));
+
 it.serial("page groups: sticky false does not pin a group header", scoped(scope => {
   const doc = documentModel(scope);
   const f = doc.make([groups<Row>({ sticky: false, getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } })]);
