@@ -306,6 +306,40 @@ export function search<T extends VListItem = VListItem>(
     armCancelTimer();
   };
 
+  const onItemUpdate = (id: string | number, updates: Partial<T>): void => {
+    if (!open || !isActive()) return;
+    const items = ctx.items.all();
+    const targetId = updates.id ?? id;
+    const idx = items.findIndex((item) => item.id === targetId);
+    if (idx < 0) return;
+    const matched = matchesItem(items[idx], caseSensitive ? query : query.toLowerCase());
+    if (matched === matchSet.has(idx)) return;
+
+    const prevRow = matches[current];
+    let pos = 0;
+    while (pos < matches.length && matches[pos]! < idx) pos++;
+    if (matched) {
+      matches.splice(pos, 0, idx);
+      matchSet.add(idx);
+    } else {
+      matches.splice(pos, 1);
+      matchSet.delete(idx);
+    }
+    current =
+      prevRow !== undefined && prevRow !== idx
+        ? matches.indexOf(prevRow)
+        : pos < matches.length
+          ? pos
+          : 0;
+
+    if (mode === "filter") syncFilter(true);
+    updateCounter();
+    if (mode === "navigate" && matches.length > 0 && matches[current] !== prevRow) {
+      scrollToMatch();
+    }
+    emitSearchChange();
+  };
+
   // ── Open / close ────────────────────────────────────────────────────────────
 
   // Opens without moving the caret. openSearch() also selects the field,
@@ -593,6 +627,12 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_getLoadedItem", getItem);
       if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
+      let prevOnUpdate = ctx.hooks.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined;
+      ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
+        prevOnUpdate?.(id, u);
+        onItemUpdate(id, u);
+      });
+
       // Public methods.
       ctx.hooks.method("openSearch", openSearch);
       ctx.hooks.method("closeSearch", closeSearch);
@@ -610,6 +650,13 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.onDestroy(() => {
         clearCancelTimer();
         syncFilter(false);
+        open = false;
+        query = "";
+        matches = [];
+        matchSet.clear();
+        current = 0;
+        lastItems = null;
+        prevOnUpdate = undefined;
         bar?.destroy();
         bar = null;
         ctx.dom.root.classList.remove(

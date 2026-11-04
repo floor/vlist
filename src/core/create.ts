@@ -1069,6 +1069,7 @@ export function createCore<T extends VListItem = VListItem>(
         if (idx === -1) return;
         items[idx] = { ...items[idx]!, ...updates };
       }
+      (methods.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined)?.(id, updates);
       doForceRender();
     },
 
