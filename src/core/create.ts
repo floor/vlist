@@ -61,7 +61,7 @@ function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void
 
   const scroll = raw.scroll as { mode?: string; runway?: unknown } | undefined;
   if (scroll?.runway !== undefined || !/^(auto|native|synthetic)?$/.test(scroll?.mode ?? "")) {
-    throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed)');
+    throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed in 3.0)');
   }
 }
 
@@ -837,7 +837,7 @@ export function createCore<T extends VListItem = VListItem>(
     // so must this. Measured before: the empty root stayed in the caller's
     // container after the throw.
     dom.root.remove();
-    throw new Error("vlist: page() is not compatible with the carousel plugin — document scrolling cannot wrap.");
+    throw new Error("vlist: page() is not compatible with the carousel plugin");
   }
   function createLogicalHandler(factory: SyntheticFactory): LogicalScrollHandler {
     return factory({
