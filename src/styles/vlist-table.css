@@ -26,7 +26,17 @@
     position: static;
 }
 
-/* page() scrolls the window, so the column header sticks under the caller's band. */
+/* page() scrolls the window, so the column header sticks under the caller's band.
+   The header's row group is only as tall as the header, and a sticky box
+   cannot leave its parent, so the group is the pin. Its top follows the
+   band, which page() writes as --vlist-page-pad. */
+.vlist--page.vlist--table > [role="rowgroup"] {
+    position: sticky;
+    top: var(--vlist-page-pad, 0px);
+    z-index: 6;
+    height: var(--vlist-table-header-height, auto);
+}
+
 .vlist--page.vlist--table .vlist-table-header {
     position: sticky;
     top: var(--vlist-page-pad, 0px);
