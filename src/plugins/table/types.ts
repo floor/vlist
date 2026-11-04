@@ -183,16 +183,27 @@ export interface TableConfig<T extends VListItem = VListItem> {
   rowBorders?: boolean;
 
   /**
-   * Sort indicator for a column.
-   * The table renders an indicator in the header but does NOT sort data.
-   * Update this and call the exposed `updateColumns()` method to reflect changes.
+   * Enable multi-column sorting via Shift/Ctrl/Meta + click or Enter/Space
+   * (default: true). Set to `false` to restrict interactive sorting to a
+   * single column at a time.
    */
-  sort?: {
-    /** Column key currently sorted by */
-    key: string;
-    /** Sort direction */
-    direction: "asc" | "desc";
-  };
+  multiSort?: boolean;
+
+  /**
+   * Sort indicator for one or more columns.
+   * Accepts a single `{ key, direction }` object or an array of `TableSort`
+   * descriptors ordered by priority (primary sort first).
+   * The table renders indicators in the header but does NOT sort data.
+   */
+  sort?: TableSort | TableSort[];
+}
+
+/** Single column sort descriptor */
+export interface TableSort {
+  /** Column key currently sorted by */
+  key: string;
+  /** Sort direction */
+  direction: "asc" | "desc";
 }
 
 // =============================================================================
@@ -286,8 +297,8 @@ export interface TableHeader<T extends VListItem = VListItem> {
   /** Update header cell positions and widths (call after layout.resolve) */
   update: (layout: TableLayout<T>) => void;
 
-  /** Update sort indicator display */
-  updateSort: (key: string | null, direction: "asc" | "desc") => void;
+  /** Update sort indicator display (single column or priority-ordered array) */
+  updateSort: (keyOrSorts: string | null | readonly TableSort[], direction?: "asc" | "desc") => void;
 
   /** Rebuild header cells (call after column definitions change) */
   rebuild: (layout: TableLayout<T>) => void;
@@ -379,6 +390,9 @@ export interface ColumnSortEvent {
 
   /** Current sort direction (toggles on each click: null → asc → desc → null) */
   direction: "asc" | "desc" | null;
+
+  /** Active sort columns in priority order (primary first) */
+  sorts?: TableSort[];
 }
 
 /**

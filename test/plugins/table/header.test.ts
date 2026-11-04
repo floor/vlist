@@ -1350,3 +1350,163 @@ describe("createTableHeader - destroy", () => {
     expect(root.style.getPropertyValue('--vlist-table-header-height')).toBe("");
   });
 });
+
+// =============================================================================
+// Multi-Column Sort (#20)
+// =============================================================================
+
+describe("createTableHeader - multi-column sort (#20)", () => {
+  it("renders indicators, priority badges, primary-only aria-sort, polite live region, and accessible description", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([
+      col("name", { label: "Name", sortable: true }),
+      col("value", { label: "Date", sortable: true }),
+      col("id", { label: "ID", sortable: true }),
+    ]);
+
+    header.rebuild(layout);
+    header.updateSort([
+      { key: "name", direction: "asc" },
+      { key: "value", direction: "desc" },
+    ]);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+    const cell1 = scrollContainer.children[1] as HTMLElement;
+    const cell2 = scrollContainer.children[2] as HTMLElement;
+    const ind0 = cell0.querySelector(".vlist-table-header-sort") as HTMLElement;
+    const ind1 = cell1.querySelector(".vlist-table-header-sort") as HTMLElement;
+    const ind2 = cell2.querySelector(".vlist-table-header-sort") as HTMLElement;
+
+    expect(ind0.textContent).toBe("\u25B2");
+    expect(ind0.dataset.sortPriority).toBe("1");
+    expect(ind1.textContent).toBe("\u25BC");
+    expect(ind1.dataset.sortPriority).toBe("2");
+    expect(ind2.textContent).toBe("");
+    expect(ind2.dataset.sortPriority).toBeUndefined();
+
+    // WAI-ARIA 1.2: aria-sort on primary column only
+    expect(cell0.getAttribute("aria-sort")).toBe("ascending");
+    expect(cell1.getAttribute("aria-sort")).toBeNull();
+    expect(cell2.getAttribute("aria-sort")).toBeNull();
+
+    // Secondary keys announced via polite live region + header accessible description
+    const expectedDesc = "sorted by Name ascending, then Date descending";
+    const live = root.querySelector('[aria-live="polite"]') as HTMLElement;
+    expect(live).not.toBeNull();
+    expect(live.textContent).toBe(expectedDesc);
+    expect(header.element.getAttribute("aria-description")).toBe(expectedDesc);
+    expect(header.element.getAttribute("aria-describedby")).toBe(live.id);
+    expect(cell1.getAttribute("aria-description")).toBe(expectedDesc);
+    expect(cell1.getAttribute("aria-describedby")).toBe(live.id);
+    expect(cell0.getAttribute("aria-description")).toBeNull();
+
+    // Reducing back to 1 column clears priority badges and secondary description
+    header.updateSort([{ key: "name", direction: "asc" }]);
+    expect(ind0.dataset.sortPriority).toBeUndefined();
+    expect(ind1.dataset.sortPriority).toBeUndefined();
+    expect(live.textContent).toBe("");
+    expect(header.element.getAttribute("aria-description")).toBeNull();
+    expect(cell1.getAttribute("aria-description")).toBeNull();
+
+    header.destroy();
+    root.remove();
+  });
+
+  it("Shift+Click, Ctrl+Click, Meta+Click, and Shift+Enter append, flip in place, and remove secondary sorts", () => {
+    const { root } = createTestDOM();
+    const sortCalls: any[] = [];
+    const onSort = mock((e: any) => {
+      sortCalls.push(e);
+      header.updateSort(e.sorts ?? (e.direction ? [{ key: e.key, direction: e.direction }] : []));
+    });
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock(), onSort);
+    const layout = createResolvedLayout([
+      col("name", { label: "Name", sortable: true }),
+      col("value", { label: "Value", sortable: true }),
+      col("id", { label: "ID", sortable: true }),
+    ]);
+
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+    const cell1 = scrollContainer.children[1] as HTMLElement;
+    const cell2 = scrollContainer.children[2] as HTMLElement;
+
+    // 1. Plain click on Name -> primary sort asc
+    cell0.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(sortCalls[0]).toEqual({ key: "name", index: 0, direction: "asc" });
+
+    // 2. Shift+Click on Value -> appended as secondary sort asc
+    cell1.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+    expect(sortCalls[1]).toEqual({
+      key: "value",
+      index: 1,
+      direction: "asc",
+      sorts: [
+        { key: "name", direction: "asc" },
+        { key: "value", direction: "asc" },
+      ],
+    });
+
+    // 3. Ctrl+Click on ID -> appended as tertiary sort asc
+    cell2.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+    expect(sortCalls[2].sorts).toEqual([
+      { key: "name", direction: "asc" },
+      { key: "value", direction: "asc" },
+      { key: "id", direction: "asc" },
+    ]);
+
+    // 4. Meta+Click on Value -> flips Value in place to desc (keeps priority 2)
+    cell1.dispatchEvent(new MouseEvent("click", { bubbles: true, metaKey: true }));
+    expect(sortCalls[3]).toEqual({
+      key: "value",
+      index: 1,
+      direction: "desc",
+      sorts: [
+        { key: "name", direction: "asc" },
+        { key: "value", direction: "desc" },
+        { key: "id", direction: "asc" },
+      ],
+    });
+
+    // 5. Shift+Click on Value again -> removes Value, ID shifts up to priority 2
+    cell1.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+    expect(sortCalls[4]).toEqual({
+      key: "value",
+      index: 1,
+      direction: null,
+      sorts: [
+        { key: "name", direction: "asc" },
+        { key: "id", direction: "asc" },
+      ],
+    });
+
+    // 6. Shift+Enter on focused cell2 (ID) -> flips ID to desc via keyboard
+    cell2.focus();
+    cell2.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+    expect(sortCalls[5]).toEqual({
+      key: "id",
+      index: 2,
+      direction: "desc",
+      sorts: [
+        { key: "name", direction: "asc" },
+        { key: "id", direction: "desc" },
+      ],
+    });
+
+    // 7. Plain click on Value -> resets multi-sort to single primary sort on Value
+    cell1.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(sortCalls[6]).toEqual({
+      key: "value",
+      index: 1,
+      direction: "asc",
+      sorts: [{ key: "value", direction: "asc" }],
+    });
+
+    header.destroy();
+    root.remove();
+  });
+});

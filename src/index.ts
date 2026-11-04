@@ -34,7 +34,7 @@ export type { DataPluginConfig } from "./plugins/data";
 export { groups } from "./plugins/groups";
 export type { GroupsPluginConfig } from "./plugins/groups";
 export { table } from "./plugins/table";
-export type { TablePluginConfig } from "./plugins/table";
+export type { TablePluginConfig, TableSort } from "./plugins/table";
 export { sortable } from "./plugins/sortable";
 export type { SortablePluginConfig } from "./plugins/sortable";
 export { tree } from "./plugins/tree";

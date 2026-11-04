@@ -146,6 +146,7 @@
 
 /* Sort indicator */
 .vlist-table-header-sort {
+    position: relative;
     margin-left: 4px;
     flex-shrink: 0;
     opacity: 0;
@@ -153,6 +154,13 @@
     transition: opacity 0.15s ease;
     pointer-events: none;
     color: var(--vlist-text-muted, #6b7280);
+}
+
+.vlist-table-header-sort[data-sort-priority]::after {
+    content: attr(data-sort-priority);
+    font-size: 9px;
+    margin-left: 1px;
+    vertical-align: super;
 }
 
 /* Resize handle */
