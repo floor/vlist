@@ -59,11 +59,26 @@ export interface CarouselPluginConfig {
   /** Custom easing function for snap animation. Receives t in [0,1], returns eased value. */
   snapEasing?: (t: number) => number;
   peek?: number | string | "auto";
+  /**
+   * @deprecated Never read by `carousel()`. Pass a `SlotConfig` or `SlotConfigResolver` to `variant` to cap the focal slot width. Will be removed in 4.0.
+   */
   largeItemMaxWidth?: number | "auto";
+  /**
+   * @deprecated Never read by `carousel()`. Import `vlist/styles/carousel` (which locks media to `--vlist-carousel-focal-width`) or drive transforms from `--vlist-carousel-offset` and `--vlist-carousel-progress`. Will be removed in 4.0.
+   */
   parallax?: number;
+  /**
+   * @deprecated Never read by `carousel()`. Pass a `SlotConfig` or `SlotConfigResolver` to `variant` to set the visible slot count and ratios. Will be removed in 4.0.
+   */
   visibleCount?: number;
+  /**
+   * @deprecated Never read by `carousel()`. Use the `"hero"` (`focalSlot: 0`) or `"hero-center"` (`focalSlot: 1`) preset, or set `focalSlot` on a custom `SlotConfig` `variant`. Will be removed in 4.0.
+   */
   focalAlign?: "center" | "start";
   initialIndex?: number;
+  /**
+   * @deprecated Never read by `carousel()`. Set `--vlist-carousel-radius` in CSS (read by `vlist/styles/carousel`) or `border-radius` on the slide element. Will be removed in 4.0.
+   */
   cornerRadius?: number;
   gap?: number;
 }
