@@ -123,7 +123,7 @@ createVList(config, [       → VList instance
 #### Option, feature, or plugin
 
 - **Option.** A small behaviour is an option of its plugin. Multi-sort is an option of `table()`. If it needs bytes beyond that plugin's budget, the size raise is the owner's call.
-- **Feature.** A large optional capability of a plugin is a feature inside it, as in `table({ features: [...] })`. Each feature is a tree-shaken function exported next to its plugin, so an app that does not import it pays nothing. Column pinning and reordering are features of `table()`.
+- **Feature.** A large optional capability of a plugin is a feature inside it, as in `table({ features: [...] })`. Each feature is a tree-shaken function exported next to its plugin, so an app that does not import it pays nothing. For example, a future data-grid capability inside `table()`.
 - **Plugin.** A new top-level plugin is only for a capability that stands on its own. `grid()`, `table()` and `search()` are plugins.
 
 **Key patterns:**
