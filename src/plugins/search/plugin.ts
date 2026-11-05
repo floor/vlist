@@ -86,6 +86,8 @@ export interface SearchPluginConfig<T extends VListItem = VListItem> {
   mode?: "filter" | "navigate";
   /** Where to place the search bar. "none" = invisible, keyboard-only. Default "top". */
   position?: "top" | "bottom" | "none";
+  /** When the bar is shown: always ("visible", default) or on the first typed character ("auto"). */
+  open?: "visible" | "auto";
   /** Field(s) to search — a property key, accessor, or (default) all string values. */
   field?: FieldAccessor<T>;
   /** Case-sensitive matching. Default false. */
@@ -136,6 +138,7 @@ export function search<T extends VListItem = VListItem>(
 ): SearchPluginInstance<T> {
   const mode = config.mode ?? "filter";
   const position = config.position ?? "top";
+  const auto = config.open === "auto" && position !== "none";
   const text: Required<SearchText> = { ...DEFAULT_SEARCH_TEXT, ...config.text };
   const caseSensitive = config.caseSensitive ?? false;
   const doHighlight = config.highlight !== false;
@@ -154,8 +157,10 @@ export function search<T extends VListItem = VListItem>(
   let classPrefix: string;
   let matchClass: string;
   let currentClass: string;
+  let hiddenClass: string;
 
   let bar: SearchBar | null = null;
+  let returnFocus: HTMLElement | null = null;
   let open = false;
   let query = "";
   /** Bumped on every query change. Rows stamped with an older value re-highlight.
@@ -346,6 +351,11 @@ export function search<T extends VListItem = VListItem>(
   // which would replace what the user just typed on the next key.
   const markOpen = (): void => {
     if (!open) {
+      if (auto) {
+        const active = ctx.dom.root.ownerDocument.activeElement;
+        if (active instanceof HTMLElement && active !== bar?.input) returnFocus = active;
+        bar?.root.classList.remove(hiddenClass);
+      }
       open = true;
       ctx.dom.root.classList.add(`${classPrefix}--search-open`);
       ctx.emitter.emit("search:open", undefined);
@@ -363,9 +373,23 @@ export function search<T extends VListItem = VListItem>(
     const wasOpen = open || query.length > 0;
     open = false;
     if (query.length > 0) applyQuery("");
+    if (auto) bar?.root.classList.add(hiddenClass);
     ctx.dom.root.classList.remove(`${classPrefix}--search-open`);
     setSearchingClass();
-    if (wasOpen) ctx.emitter.emit("search:close", undefined);
+    if (wasOpen) {
+      ctx.emitter.emit("search:close", undefined);
+      if (auto && ctx.dom.root.isConnected) {
+        const target = returnFocus?.isConnected
+          ? returnFocus
+          : ctx.dom.content.hasAttribute("tabindex")
+            ? ctx.dom.content
+            : ctx.dom.root.hasAttribute("tabindex")
+              ? ctx.dom.root
+              : ctx.dom.viewport;
+        returnFocus = null;
+        target.focus({ preventScroll: true });
+      }
+    }
   };
 
   // ── Match navigation ────────────────────────────────────────────────────────
@@ -498,7 +522,26 @@ export function search<T extends VListItem = VListItem>(
       openSearch();
       return;
     }
-    if (!open && (position !== "none" || !isPrintable(e))) return;
+    if (!open) {
+      if (auto) {
+        const t = e.target as HTMLElement | null;
+        if (
+          !e.isComposing &&
+          e.keyCode !== 229 &&
+          isPrintable(e) &&
+          /[\p{L}\p{N}]/u.test(e.key) &&
+          !(t && (t.isContentEditable || t.closest?.("input,textarea,select,[contenteditable]:not([contenteditable=false])")))
+        ) {
+          e.preventDefault();
+          markOpen();
+          applyQuery(e.key);
+          bar?.input.focus();
+          bar?.input.setSelectionRange(1, 1);
+        }
+        return;
+      }
+      if (position !== "none" || !isPrintable(e)) return;
+    }
     // Open (or invisible type-ahead start): handle navigation/close/type-ahead keys.
     // (Printable input in visible mode is handled by the input element's own `input` event.)
     switch (e.key) {
@@ -564,6 +607,7 @@ export function search<T extends VListItem = VListItem>(
       classPrefix = ctx.config.classPrefix;
       matchClass = `${classPrefix}-search-match`;
       currentClass = `${classPrefix}-search-match--current`;
+      hiddenClass = `${classPrefix}-search--hidden`;
 
       const nextMatch = (): void => step(1);
       const prevMatch = (): void => step(-1);
@@ -582,13 +626,20 @@ export function search<T extends VListItem = VListItem>(
               markOpen();
               applyQuery(value);
             },
-            onClear: () => applyQuery(""),
+            onClear: () => {
+              if (auto) closeSearch();
+              else {
+                applyQuery("");
+                bar?.input.focus();
+              }
+            },
             onPrev: prevMatch,
             onNext: nextMatch,
             onKeydown,
           },
         );
         updateNav();
+        if (auto) bar.root.classList.add(hiddenClass);
         if (variant !== "default") {
           bar.root.classList.add(`${classPrefix}-search--${variant}`);
         }
@@ -656,6 +707,7 @@ export function search<T extends VListItem = VListItem>(
         matchSet.clear();
         current = 0;
         lastItems = null;
+        returnFocus = null;
         prevOnUpdate = undefined;
         bar?.destroy();
         bar = null;

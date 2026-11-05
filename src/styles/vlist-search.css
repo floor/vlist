@@ -288,3 +288,7 @@
 .vlist-search--md3 .vlist-search__clear-button:hover {
     background-color: var(--vlist-search-md3-state);
 }
+
+.vlist-search--hidden {
+    display: none;
+}

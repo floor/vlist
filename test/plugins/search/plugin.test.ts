@@ -1608,3 +1608,200 @@ describe("search — updateItem", () => {
     expect(q(list, "getMatches")()).toEqual([]);
   });
 });
+
+// =============================================================================
+// open: "auto" (type-to-reveal + hide on Escape / X)
+// =============================================================================
+
+describe('open: "auto"', () => {
+  const MULTILINGUAL_ITEMS: Fruit[] = [
+    { id: 1, name: "Apple 2", kind: "pome" },
+    { id: 2, name: "Éclair", kind: "pastry" },
+    { id: 3, name: "Журавлина", kind: "berry" },
+    { id: 4, name: "Straße", kind: "street" },
+    { id: 5, name: "Cherry", kind: "drupe" },
+  ];
+
+  const withAutoList = (
+    run: (list: VList<Fruit>, container: HTMLElement) => void,
+    searchConfig: Parameters<typeof search<Fruit>>[0] = { open: "auto", field: "name" },
+    extraPlugins: any[] = [],
+  ): void => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<Fruit>(
+      {
+        container,
+        items: MULTILINGUAL_ITEMS.slice(),
+        item: { height: 30, template: (item) => item.name },
+      },
+      [...extraPlugins, search<Fruit>(searchConfig)],
+    );
+    try {
+      run(list, container);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  };
+
+  const pressKey = (
+    target: HTMLElement,
+    key: string,
+    opts: KeyboardEventInit & { keyCode?: number } = {},
+  ): KeyboardEvent => {
+    const event = new KeyboardEvent("keydown", {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...opts,
+    });
+    if (opts.keyCode !== undefined) {
+      Object.defineProperty(event, "keyCode", { value: opts.keyCode });
+    }
+    target.dispatchEvent(event);
+    return event;
+  };
+
+  it("starts hidden via the BEM modifier class without inline display styles", () => {
+    withAutoList((_list, container) => {
+      const bar = container.querySelector<HTMLElement>(".vlist-search")!;
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+      expect(bar.style.display).toBe("");
+    });
+  });
+
+  it("does not open on a bare letter when open is default ('visible')", () => {
+    withAutoList(
+      (list) => {
+        const ev = pressKey(list.element, "a");
+        expect(ev.defaultPrevented).toBe(false);
+        expect(q(list, "getQuery")()).toBe("");
+      },
+      { field: "name" },
+    );
+  });
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("opens on a typed ASCII letter, 'é', 'ж', or digit, focuses the input with caret at end, and filters", () => {
+    for (const [ch, expectedMatches] of [
+      ["a", 3],
+      ["é", 1],
+      ["ж", 1],
+      ["ß", 1],
+      ["2", 1],
+    ] as const) {
+      withAutoList((list, container) => {
+        const bar = container.querySelector<HTMLElement>(".vlist-search")!;
+        const input = container.querySelector<HTMLInputElement>(".vlist-search__input")!;
+        const content = container.querySelector<HTMLElement>(".vlist-content")!;
+        content.tabIndex = 0;
+        content.focus();
+
+        const ev = pressKey(content, ch);
+        expect(ev.defaultPrevented).toBe(true);
+        expect(bar.classList.contains("vlist-search--hidden")).toBe(false);
+        expect(document.activeElement).toBe(input);
+        expect(input.value).toBe(ch);
+        expect(input.selectionStart).toBe(1);
+        expect(input.selectionEnd).toBe(1);
+        expect(q(list, "getQuery")()).toBe(ch);
+        expect(list.total).toBe(expectedMatches);
+      });
+    }
+  });
+
+  it("ignores modified keys, IME composition (isComposing / keyCode 229), defaultPrevented, non-alphanumeric keys, and editable targets", () => {
+    withAutoList((list, container) => {
+      const bar = container.querySelector<HTMLElement>(".vlist-search")!;
+
+      // Modified keys (Ctrl, Meta, Alt) except Ctrl/Cmd+F
+      pressKey(list.element, "a", { ctrlKey: true });
+      pressKey(list.element, "a", { metaKey: true });
+      pressKey(list.element, "a", { altKey: true });
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+
+      // IME composition
+      pressKey(list.element, "a", { isComposing: true });
+      pressKey(list.element, "a", { keyCode: 229 });
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+
+      // Non-letter/number keys
+      for (const k of [" ", ".", "/", "Backspace", "ArrowDown", "Enter", "Escape"]) {
+        pressKey(list.element, k);
+      }
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+
+      // defaultPrevented
+      const prevented = new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true });
+      prevented.preventDefault();
+      list.element.dispatchEvent(prevented);
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+
+      // Editable targets inside the list
+      const row = container.querySelector<HTMLElement>(".vlist-item")!;
+      const innerInput = document.createElement("input");
+      const innerTextarea = document.createElement("textarea");
+      const innerSelect = document.createElement("select");
+      const innerEditable = document.createElement("div");
+      innerEditable.setAttribute("contenteditable", "true");
+      row.append(innerInput, innerTextarea, innerSelect, innerEditable);
+
+      for (const el of [innerInput, innerTextarea, innerSelect, innerEditable]) {
+        pressKey(el, "a");
+      }
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+      expect(q(list, "getQuery")()).toBe("");
+    });
+  });
+
+  // Serial: reads document.activeElement, which is one per process.
+  it.serial("Escape and the X button hide the bar, clear the filter, and restore focus to the remembered element or tab-stop fallback", () => {
+    withAutoList((list, container) => {
+      const bar = container.querySelector<HTMLElement>(".vlist-search")!;
+      const input = container.querySelector<HTMLInputElement>(".vlist-search__input")!;
+      const clear = container.querySelector<HTMLElement>(".vlist-search__clear-button")!;
+      const content = container.querySelector<HTMLElement>(".vlist-content")!;
+      content.tabIndex = 0;
+
+      // 1. Escape restores focus to remembered element (content)
+      content.focus();
+      pressKey(content, "é");
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(false);
+      expect(list.total).toBe(1);
+      expect(document.activeElement).toBe(input);
+
+      pressKey(input, "Escape");
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+      expect(q(list, "getQuery")()).toBe("");
+      expect(list.total).toBe(MULTILINGUAL_ITEMS.length);
+      expect(document.activeElement).toBe(content);
+
+      // 2. X button hides the bar, clears the filter, emits search:close, and restores focus
+      let closed = 0;
+      list.on("search:close", () => { closed++; });
+      pressKey(content, "ж");
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(false);
+      expect(list.total).toBe(1);
+
+      clear.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      expect(closed).toBe(1);
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+      expect(q(list, "getQuery")()).toBe("");
+      expect(list.total).toBe(MULTILINGUAL_ITEMS.length);
+      expect(document.activeElement).toBe(content);
+
+      // 3. Disconnected remembered element falls back to a11y tab-stop (content with tabindex)
+      const transient = document.createElement("button");
+      list.element.appendChild(transient);
+      transient.focus();
+      pressKey(transient, "a");
+      expect(document.activeElement).toBe(input);
+      transient.remove();
+
+      pressKey(input, "Escape");
+      expect(bar.classList.contains("vlist-search--hidden")).toBe(true);
+      expect(document.activeElement).toBe(content);
+    });
+  });
+});

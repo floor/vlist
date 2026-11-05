@@ -148,15 +148,11 @@ export const createSearchBar = (
     cb.onInput(input.value);
   };
   const onLeadingClick = (): void => input.focus();
-  const onClearClick = (): void => {
-    cb.onClear();
-    input.focus();
-  };
 
   input.addEventListener("input", onInput);
   input.addEventListener("keydown", cb.onKeydown);
   leadingIcon.addEventListener("click", onLeadingClick);
-  clear.addEventListener("click", onClearClick);
+  clear.addEventListener("click", cb.onClear);
   prev.addEventListener("click", cb.onPrev);
   next.addEventListener("click", cb.onNext);
 
@@ -182,7 +178,7 @@ export const createSearchBar = (
       input.removeEventListener("input", onInput);
       input.removeEventListener("keydown", cb.onKeydown);
       leadingIcon.removeEventListener("click", onLeadingClick);
-      clear.removeEventListener("click", onClearClick);
+      clear.removeEventListener("click", cb.onClear);
       prev.removeEventListener("click", cb.onPrev);
       next.removeEventListener("click", cb.onNext);
       root.remove();
