@@ -1139,6 +1139,7 @@ export const SIZE_ROW_SCENARIOS: readonly { readonly label: string; readonly sce
   { label: "`masonry()`", scenario: "masonry" },
   { label: "`tree()`", scenario: "tree" },
   { label: "`search()`", scenario: "search" },
+  { label: "`search()` + `searchReveal()`", scenario: "search + searchReveal" },
   { label: "`carousel()`", scenario: "carousel" },
   { label: "`vlist/synthetic` + `carousel()`", scenario: "synthetic + carousel" },
   { label: "`vlist/synthetic` + `sortable()`", scenario: "synthetic + sortable" },

@@ -13,3 +13,4 @@ export {
 } from "./plugin";
 export { makeGetText, type FieldAccessor } from "./match";
 export type { SearchMethods } from "./plugin";
+export { searchReveal, type SearchRevealConfig, type SearchRevealText } from "./reveal";

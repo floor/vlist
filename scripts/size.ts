@@ -25,7 +25,7 @@ const entry = `${root}/src/index.ts`;
 const ALL_PLUGINS = [
   "a11y", "selection", "data", "scrollbar", "sortable",
   "groups", "page", "snapshots", "transition",
-  "autosize", "grid", "table", "masonry", "tree", "search",
+  "autosize", "grid", "table", "masonry", "tree", "search", "searchReveal",
 ] as const;
 
 type PluginName = (typeof ALL_PLUGINS)[number];
@@ -64,6 +64,8 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   sortable:   ["sort:start", "sort:end", "--sorting"],
   tree:       ["--tree", "tree-node", "treeitem"],
   search:     ["-search-match", "search:change", "openSearch"],
+  // Both strings live only in reveal.ts. A leak into `search` fails the gate.
+  searchReveal: ["searchReveal", "search--hidden"],
 };
 
 // ── Scenarios ─────────────────────────────────────────────────────
@@ -91,6 +93,7 @@ export const SCENARIO_DEFS = [
   { name: "masonry",           imports: ["createVList", "masonry"] },
   { name: "tree",              imports: ["createVList", "tree"] },
   { name: "search",            imports: ["createVList", "search"] },
+  { name: "search + searchReveal", imports: ["createVList", "search", "searchReveal"] },
   { name: "carousel",          imports: ["createVList", "carousel"] },
   // Framework entries (#328): the hook alone, the framework external.
   { name: "vue",               imports: ["useVList"] },
@@ -204,6 +207,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   masonry: kb(15.08),
   tree: kb(15.94),
   search: kb(13.94),
+  // searchReveal() measured 14877 bytes gzipped. measured + 1% is 15026;
+  // kb(14.7) is 15052, the smallest tenth at or above it. `search` stays 14264.
+  "search + searchReveal": kb(14.7),
   carousel: kb(16.15),
   vue: kb(10.77),
   svelte: kb(10.67),

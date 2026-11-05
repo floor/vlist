@@ -282,6 +282,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `masonry()` | 39.6 KB | 14.9 KB |
 | `tree()` | 43.5 KB | 15.8 KB |
 | `search()` | 36.5 KB | 13.9 KB |
+| `search()` + `searchReveal()` | 38.4 KB | 14.5 KB |
 | `carousel()` | 43.4 KB | 16.0 KB |
 | `vlist/synthetic` + `carousel()` | 49.5 KB | 18.3 KB |
 | `vlist/synthetic` + `sortable()` | 46.1 KB | 16.7 KB |
@@ -435,6 +436,7 @@ const list = createVList({
   // matches highlighted with <mark>. Use mode: 'navigate' to jump between
   // matches instead of hiding non-matches.
   search(),
+  // searchReveal() is opt-in: a typed letter shows the bar with that letter in it.
 ])
 ```
 

@@ -39,8 +39,8 @@ export { sortable } from "./plugins/sortable";
 export type { SortablePluginConfig } from "./plugins/sortable";
 export { tree } from "./plugins/tree";
 export type { TreePluginConfig, FlatNode } from "./plugins/tree";
-export { search, DEFAULT_SEARCH_TEXT } from "./plugins/search";
-export type { SearchPluginConfig, SearchText } from "./plugins/search";
+export { search, DEFAULT_SEARCH_TEXT, searchReveal } from "./plugins/search";
+export type { SearchPluginConfig, SearchText, SearchRevealConfig, SearchRevealText } from "./plugins/search";
 export { carousel, registerPreset, getPreset, resolvePreset, full, hero, heroCenter, multi, uncontained } from "./plugins/carousel";
 export type { CarouselPluginConfig, CarouselVariant, CarouselDirection, CarouselState, SlotConfig, SlotConfigResolver, TextFade } from "./plugins/carousel";
 

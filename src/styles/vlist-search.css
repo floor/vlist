@@ -83,6 +83,12 @@
     display: flex;
 }
 
+/* searchReveal() hides the bar until a letter opens it. Two classes beat the
+   display above; the hidden attribute would not. */
+.vlist-search.vlist-search--hidden {
+    display: none;
+}
+
 .vlist-search__container {
     display: flex;
     align-items: center;

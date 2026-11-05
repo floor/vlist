@@ -602,6 +602,7 @@ describe("SIZE_ROW_SCENARIOS", () => {
       { label: "`masonry()`", scenario: "masonry" },
       { label: "`tree()`", scenario: "tree" },
       { label: "`search()`", scenario: "search" },
+      { label: "`search()` + `searchReveal()`", scenario: "search + searchReveal" },
       { label: "`carousel()`", scenario: "carousel" },
       { label: "`vlist/synthetic` + `carousel()`", scenario: "synthetic + carousel" },
       { label: "`vlist/synthetic` + `sortable()`", scenario: "synthetic + sortable" },
@@ -638,7 +639,7 @@ describe("refreshReadmeSizes", () => {
   it("refuses a README whose size table lost a row", () => {
     const missing = README_SIZE_FIXTURE.replace("| `a11y()` | 27.3 KB | 10.3 KB |\n", "");
     expect(() => refreshReadmeSizes(missing, parseSizeOutput(measured), "npm-readme.md")).toThrow(
-      "npm-readme.md: size table rows missing (25/26 found)",
+      "npm-readme.md: size table rows missing (26/27 found)",
     );
   });
 
