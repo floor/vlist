@@ -54,7 +54,7 @@ describe("size gate", () => {
       autosize: kb(12.21),
       grid: kb(13.24),
       table: kb(16.77),
-      "table + columnPin": kb(18.72),
+      "table + columnPin": kb(18.54),
       masonry: kb(15.08),
       tree: kb(15.94),
       search: kb(13.94),
