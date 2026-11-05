@@ -11,7 +11,7 @@
  */
 
 import type { VListItem } from "../../types";
-import type { VListPlugin, PluginContext, ResolvedConfig } from "../../core/types";
+import type { VListPlugin, PluginContext } from "../../core/types";
 import type { TableColumn, TableLayout, ColumnPinEvent, ColumnResizeEvent } from "./types";
 
 // =============================================================================
@@ -54,12 +54,6 @@ export function columnPin<T extends VListItem = VListItem>(
     // Runs right after table() (priority 10)
     priority: 12,
 
-    validateConfig(resolvedConfig: ResolvedConfig): void {
-      if (!(resolvedConfig as { _table?: boolean })._table) {
-        throw new Error("[vlist] columnPin: requires table() plugin");
-      }
-    },
-
     setup(ctx: PluginContext<T>): void {
       const getLayout = ctx.hooks.get("_getTableLayout") as
         | (() => TableLayout<T> | null)
@@ -70,7 +64,15 @@ export function columnPin<T extends VListItem = VListItem>(
       const layout = getLayout?.();
 
       if (!layout || !baseUpdateColumns) {
-        throw new Error("[vlist] columnPin: requires table() plugin");
+        const fail = (): never => {
+          ctx.dom.root.remove();
+          throw new Error("[vlist] columnPin: requires table() plugin");
+        };
+        if (ctx.dom.liveRegion.hasAttribute("role")) {
+          ctx.render.setFn(fail, fail);
+          return;
+        }
+        return fail();
       }
 
       const { dom, emitter } = ctx;

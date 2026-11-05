@@ -25,7 +25,7 @@ const entry = `${root}/src/index.ts`;
 const ALL_PLUGINS = [
   "a11y", "selection", "data", "scrollbar", "sortable",
   "groups", "page", "snapshots", "transition",
-  "autosize", "grid", "table", "masonry", "tree", "search",
+  "autosize", "grid", "table", "columnPin", "masonry", "tree", "search",
 ] as const;
 
 type PluginName = (typeof ALL_PLUGINS)[number];
@@ -58,6 +58,7 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   transition: ["remove:end", "insert:end"],
   autosize:   ["getMeasuredCount", "setMeasuredSize"],
   table:      ["--table", "column:resize", "column:sort"],
+  columnPin:  ["column:pin", "--pin-left", "setColumnPin"],
   groups:     ["--grouped", "getGroupLayout"],
   data:       ["load:start", "load:end"],
   masonry:    ["--masonry", "getMasonryLayout", "updateMasonry"],
@@ -88,6 +89,7 @@ export const SCENARIO_DEFS = [
   { name: "autosize",          imports: ["createVList", "autosize"] },
   { name: "grid",              imports: ["createVList", "grid"] },
   { name: "table",             imports: ["createVList", "table"] },
+  { name: "table + columnPin", imports: ["createVList", "table", "columnPin"] },
   { name: "masonry",           imports: ["createVList", "masonry"] },
   { name: "tree",              imports: ["createVList", "tree"] },
   { name: "search",            imports: ["createVList", "search"] },
@@ -201,6 +203,7 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   autosize: kb(12.21),
   grid: kb(13.24),
   table: kb(16.77),
+  "table + columnPin": kb(18.72),
   masonry: kb(15.08),
   tree: kb(15.94),
   search: kb(13.94),

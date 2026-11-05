@@ -134,6 +134,11 @@
     background-color: var(--vlist-bg-hover, rgba(0, 0, 0, 0.04));
 }
 
+.vlist-table-header-cell:focus-visible {
+    outline: 2px solid var(--vlist-focus-ring, #3b82f6);
+    outline-offset: -2px;
+}
+
 /* Sortable header cursor */
 .vlist-table-header-cell--sortable {
     cursor: pointer;
