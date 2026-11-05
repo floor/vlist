@@ -223,8 +223,140 @@ it.serial("page: immediate destroy cancels deferred initial synchronization", sc
   expect(f.list.element.isConnected).toBe(false); expect(f.list.getScrollPosition()).toBe(0);
 }));
 
-// Browser geometry (paired published 3.3.2 and candidate) confirms both
-// headers currently leave the window. A minor follow-up must define the
-// shared table/group header stack and dynamic page scroll-padding offsets.
-it.todo("minor: page groups sticky header remains at the window edge", () => {});
-it.todo("minor: page table header remains at the window edge", () => {});
+// Page mode pins the caller's band, then the table header, then the group
+// header. The two headers used to scroll off the window (tops near -2460).
+// These own window geometry, so they are serial.
+const GROUP_H = 40;
+const TABLE_H = 24;
+
+it.serial("page groups: sticky header stays under the page band", scoped(scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } })], 30);
+  const sticky = f.container.querySelector<HTMLElement>(".vlist-sticky-header");
+  const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!;
+  expect(f.list.element.classList.contains("vlist--page")).toBe(true);
+  expect(f.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("30px");
+  expect(sticky).not.toBeNull();
+  expect(sticky!.style.position).toBe("sticky");
+  expect(sticky!.style.top).toBe("30px");
+  expect(viewport.style.height).not.toContain("calc");
+  f.list.scrollToIndex(60);
+  expect(sticky!.style.position).toBe("sticky");
+}));
+
+it.serial("page table: column header stays under the page band", scoped(scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([table<Row>({ columns: columns(), rowHeight: 40, headerHeight: TABLE_H })], 30);
+  const header = f.container.querySelector<HTMLElement>(".vlist-table-header");
+  expect(header).not.toBeNull();
+  expect(header!.style.position).toBe("sticky");
+  expect(header!.style.top).toBe("30px");
+  // The header's own sticky box is this row group. A static group only as
+  // tall as the header carries the header off the window.
+  expect(header!.parentElement!.style.position).toBe("sticky");
+  expect(f.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("30px");
+  f.list.scrollToIndex(60);
+  expect(header!.style.position).toBe("sticky");
+}));
+
+it.serial("page table groups: headers stack as band, table, group", scoped(scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([
+    table<Row>({ columns: columns(), rowHeight: 40, headerHeight: TABLE_H }),
+    groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } }),
+  ], 30);
+  const header = f.container.querySelector<HTMLElement>(".vlist-table-header")!;
+  const sticky = f.container.querySelector<HTMLElement>(".vlist-sticky-header")!;
+  expect(header.style.position).toBe("sticky");
+  expect(header.style.top).toBe("30px");
+  expect(header.parentElement!.style.position).toBe("sticky");
+  expect(Number(header.style.zIndex)).toBeGreaterThan(Number(sticky.style.zIndex));
+  expect(sticky.style.top).toBe(`${30 + TABLE_H}px`);
+  f.list.scrollToIndex(60);
+  expect(header.style.position).toBe("sticky");
+  expect(sticky.style.position).toBe("sticky");
+}));
+
+it.serial("page table groups: a 60-frame window scroll does not rewrite the pins", scoped(async scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([
+    table<Row>({ columns: columns(), rowHeight: 40, headerHeight: TABLE_H }),
+    groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } }),
+  ], 30);
+  await Promise.resolve();
+  let writes = 0;
+  const proto = CSSStyleDeclaration.prototype;
+  const orig = proto.setProperty;
+  proto.setProperty = function (property: string, value: string | null, priority?: string): void {
+    if (property === "--vlist-page-pad") writes++;
+    orig.call(this, property, value ?? "", priority);
+  };
+  scope.defer(() => { proto.setProperty = orig; });
+  for (let frame = 1; frame <= 60; frame++) doc.move(frame * 40);
+  expect(writes).toBe(0);
+  expect(f.list.getScrollPosition()).toBeGreaterThan(0);
+}));
+
+it.serial("page groups: sticky false does not pin a group header", scoped(scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([groups<Row>({ sticky: false, getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } })]);
+  expect(f.container.querySelector(".vlist-sticky-header")).toBeNull();
+}));
+
+it.serial("page: two lists keep their own bands", scoped(scope => {
+  const doc = documentModel(scope);
+  const a = doc.make([], 20);
+  const b = doc.make([], 50);
+  expect(a.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("20px");
+  expect(b.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("50px");
+}));
+
+it.serial("page groups: an oversized stack clips the group header from the data side", scoped(scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([
+    table<Row>({ columns: [{ key: "name", label: "Name", width: 200 }], rowHeight: 40, headerHeight: 40 }),
+    groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: 40, template: key => key } }),
+  ], 40);
+  doc.resize(800, 100);
+  const sticky = f.container.querySelector<HTMLElement>(".vlist-sticky-header")!;
+  expect(sticky.style.position).toBe("sticky");
+  expect(sticky.style.maxHeight).toBe("20px");
+  f.list.scrollToIndex(60);
+  expect(sticky.style.maxHeight).toBe("20px");
+}));
+
+it.serial("page table groups: a padding function moves both headers on the next scroll", scoped(async scope => {
+  const doc = documentModel(scope);
+  let band = 12;
+  const container = createContainer();
+  container.dataset.pageOffset = "200";
+  const list = createVList({
+    container,
+    items: rows(),
+    item: { height: 40, template: (row: Row) => row.name },
+  }, [
+    page<Row>({ scrollPadding: { top: () => band } }),
+    table<Row>({ columns: columns(), rowHeight: 40, headerHeight: TABLE_H }),
+    groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } }),
+  ]) as VList<Row> & TableMethods<Row>;
+  scope.own(list, container);
+  const header = container.querySelector<HTMLElement>(".vlist-table-header")!;
+  const sticky = container.querySelector<HTMLElement>(".vlist-sticky-header")!;
+  expect(header.style.top).toBe("12px");
+  expect(sticky.style.top).toBe(`${12 + TABLE_H}px`);
+  await Promise.resolve();
+  band = 48;
+  list.scrollToIndex(10);
+  expect(header.style.top).toBe("48px");
+  expect(sticky.style.top).toBe(`${48 + TABLE_H}px`);
+  expect(doc.source()).toBeGreaterThanOrEqual(0);
+}));
+
+it.serial("page horizontal groups: sticky header pins to the start edge", scoped(scope => {
+  const doc = documentModel(scope, true);
+  const f = doc.make([groups<Row>({ getGroupForIndex: i => (i < 50 ? "A" : "B"), header: { height: GROUP_H, template: key => key } })], 16);
+  const sticky = f.container.querySelector<HTMLElement>(".vlist-sticky-header")!;
+  expect(sticky.style.position).toBe("sticky");
+  expect(sticky.style.left).toBe("16px");
+  expect(f.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("16px");
+}));

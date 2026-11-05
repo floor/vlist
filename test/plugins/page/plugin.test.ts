@@ -319,8 +319,10 @@ describe("page — Handler Registration", () => {
 
     plugin.setup!(ctx);
 
-    // Window scroll mode is automatic — no public API methods registered
-    expect(methods.size).toBe(0);
+    // Window scroll mode adds no public method. _getScrollPadding stays
+    // registered so a later table() header counts in the band even when
+    // the caller passed no scrollPadding.
+    expect([...methods.keys()]).toEqual(["_getScrollPadding"]);
     cleanup();
   });
 });
