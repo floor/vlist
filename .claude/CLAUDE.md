@@ -171,6 +171,8 @@ Bun test runner with happy-dom (`@happy-dom/global-registrator`). Tests mirror `
 
 ## Adding a New Plugin
 
+A small behaviour is an option of its plugin (multi-sort is an option of `table()`; a size raise is the owner's call). A large optional capability is a feature inside it (`table({ features: [...] })`, a tree-shaken function exported beside the plugin — column pinning and reordering). A new top-level plugin only for a capability that stands on its own (`grid()`, `table()`, `search()`).
+
 1. Create `src/plugins/{name}/` with `plugin.ts` and `index.ts`
 2. Implement `VListPlugin<T>`: `name`, `priority`, `setup(ctx)`, optional `destroy()`
 3. Add tests in `test/plugins/{name}/`
