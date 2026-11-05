@@ -492,6 +492,20 @@
     background-color: var(--vlist-group-header-bg, #f3f4f6);
 }
 
+/* page() pins the group header under the caller's band and any table header.
+   The plugins write the same offsets inline; this keeps a stylesheet-only
+   load on the same stack. */
+.vlist--page .vlist-sticky-header {
+    position: sticky;
+    z-index: 4;
+    top: calc(var(--vlist-page-pad, 0px) + var(--vlist-table-header-height, 0px));
+}
+
+.vlist--page.vlist--horizontal .vlist-sticky-header {
+    top: 0;
+    left: calc(var(--vlist-page-pad, 0px) + var(--vlist-table-header-height, 0px));
+}
+
 /* =============================================================================
    Horizontal Mode
    ============================================================================= */

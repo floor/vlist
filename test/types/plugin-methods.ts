@@ -12,6 +12,8 @@ import { selection } from "../../src/plugins/selection";
 import { tree } from "../../src/plugins/tree";
 import { table } from "../../src/plugins/table";
 import { search } from "../../src/plugins/search";
+import { carousel } from "../../src/plugins/carousel";
+import type { CarouselPluginConfig } from "../../src/plugins/carousel";
 
 interface Row {
   id: number;
@@ -83,4 +85,22 @@ explicit.scrollToIndex(0);
 // @ts-expect-error explicit type argument means plugin methods are not inferred
 explicit.select(1);
 
-export { selectable, treeList, combined, tableList, plain, explicit, ids, rows, expanded, visible, matches, widths, row };
+// ── Deprecated CarouselPluginConfig fields stay accepted on 3.x ──────────────
+
+const deprecatedCarouselConfig: CarouselPluginConfig = {
+  largeItemMaxWidth: 600,
+  parallax: 0.5,
+  visibleCount: 3,
+  focalAlign: "center",
+  cornerRadius: 28,
+};
+const carouselWithDeprecated = carousel<Row>({
+  ...deprecatedCarouselConfig,
+  largeItemMaxWidth: "auto",
+  focalAlign: "start",
+});
+
+// @ts-expect-error focalAlign only accepts "center" | "start"
+const badFocalAlign: CarouselPluginConfig = { focalAlign: "end" };
+
+export { selectable, treeList, combined, tableList, plain, explicit, ids, rows, expanded, visible, matches, widths, row, deprecatedCarouselConfig, carouselWithDeprecated, badFocalAlign };

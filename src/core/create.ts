@@ -968,6 +968,10 @@ export function createCore<T extends VListItem = VListItem>(
 
   let resizeObserver: ResizeObserver | null = null;
   if (!skipDefaultResize) {
+    // Plugins (table, groups) shrink this box during setup. The observer
+    // starts on a later turn, so the first scroll would still see the
+    // pre-setup size. page() skips this branch and keeps the window size.
+    state.containerSize = isX ? dom.viewport.clientWidth : dom.viewport.clientHeight;
     const initObserver = (): void => {
       if (state.destroyed) return;
       resizeObserver = new ResizeObserver((entries) => {

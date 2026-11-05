@@ -89,13 +89,11 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   let active = slotA;
   let standby = slotB;
 
-  // Pre-cached arrays — rebuilt in cacheGroups(), read on every scroll tick
-  // offsets & vSizes are in virtual (scroll) space for binary search / push detection.
-  // sizes are in actual pixels for DOM rendering.
+  // Pre-cached arrays — rebuilt in cacheGroups(), read on every scroll tick.
+  // Header height is one number: the layout size and the painted size match.
   let groups = layout.groups;
   let offsets: number[] = [];
   let sizes: number[] = [];
-  let vSizes: number[] = [];
   let groupCount = 0;
 
   const cacheGroups = (): void => {
@@ -103,11 +101,9 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     groupCount = groups.length;
     offsets = new Array(groupCount);
     sizes = new Array(groupCount);
-    vSizes = new Array(groupCount);
     for (let i = 0; i < groupCount; i++) {
       offsets[i] = getHeaderOffset ? getHeaderOffset(groups[i]!.headerLayoutIndex) : sizeCache.getOffset(groups[i]!.headerLayoutIndex);
       sizes[i] = layout.getHeaderHeight(i);
-      vSizes[i] = sizes[i]!;
     }
   };
   cacheGroups();
@@ -115,7 +111,6 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   // Mutable state
   let curGroup = -1;
   let curSize = 0;
-  let curVSize = 0;
   let nxtGroup = -1;
   let visible = false;
   let lastOffset = 0;
@@ -139,10 +134,8 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     if (gi === curGroup) return;
     curGroup = gi;
     curSize = 0;
-    curVSize = 0;
     if (gi < 0 || gi >= groupCount) { clear(active); return; }
     curSize = fill(active, gi);
-    curVSize = vSizes[gi]!;
     setMain(container, curSize);
     active.style.transform = "";
   };
@@ -169,7 +162,6 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     standby = prev;
     curGroup = nxtGroup;
     curSize = curGroup >= 0 ? sizes[curGroup]! : 0;
-    curVSize = curGroup >= 0 ? vSizes[curGroup]! : 0;
     setMain(container, curSize);
     clear(standby);
     nxtGroup = -1;
@@ -204,7 +196,6 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     clear(active);
     curGroup = -1;
     curSize = 0;
-    curVSize = 0;
     cancel();
   };
 
@@ -223,11 +214,10 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     if (scroll < offsets[0]!) { hide(); return; }
 
     // Binary search — pure array reads, no function calls
-    // offsets and vSizes are in virtual (scroll) space
     let lo = 0, hi = groupCount - 1;
     while (lo < hi) {
       const mid = (lo + hi + 1) >>> 1;
-      if (offsets[mid]! + vSizes[mid]! <= scroll) lo = mid;
+      if (offsets[mid]! + sizes[mid]! <= scroll) lo = mid;
       else hi = mid - 1;
     }
 
@@ -239,15 +229,14 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     const nxt = lo + 1;
     if (nxt < groupCount) {
       const dist = offsets[nxt]! - scroll;
-      if (dist <= 0 && dist > -curVSize) {
+      if (dist <= 0 && dist > -curSize) {
         if (nxtGroup !== nxt || !transitioning) {
           nxtGroup = nxt;
           fill(standby, nxt);
           transitioning = true;
         }
-        const pxDist = curVSize > 0 ? (dist / curVSize) * curSize : dist;
-        applyPush(pxDist);
-      } else if (dist <= -curVSize) {
+        applyPush(dist);
+      } else if (dist <= -curSize) {
         if (transitioning) complete();
       } else {
         if (transitioning) cancel();
@@ -262,7 +251,6 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     const prev = curGroup;
     curGroup = -1;
     curSize = 0;
-    curVSize = 0;
     if (prev >= 0) setCurrent(prev);
   };
 
@@ -270,7 +258,6 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     container.remove();
     curGroup = -1;
     curSize = 0;
-    curVSize = 0;
     nxtGroup = -1;
     visible = false;
     transitioning = false;

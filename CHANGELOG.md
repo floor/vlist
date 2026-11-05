@@ -11,6 +11,41 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-11-05
+
+Every export the types declare now ships at runtime.
+
+Who is affected: apps that import `DEFAULT_SEARCH_TEXT` from `vlist`. Its type was declared, but the published bundle didn't export it, so an ES module import of it failed when the app loaded.
+
+### Fixed
+
+- `vlist` exports `DEFAULT_SEARCH_TEXT` at runtime, as its type declarations already said. A build check now keeps each entry point's runtime exports in step with its declarations.
+
+## [3.4.0] - 2026-11-05
+
+Headers stay put in page mode, and lists know their real size from the first frame.
+
+Who is affected: lists using `page()` with `table()` or `groups()`; lists using `table()` or `groups()` that scroll to an item or reveal a search match right after creation; and `carousel()` users who pass `largeItemMaxWidth`, `parallax`, `visibleCount`, `focalAlign` or `cornerRadius`.
+
+### Fixed
+
+- In page mode, the table header and the active group header stay pinned under the page's scroll padding instead of scrolling off the top: the table header first, the group header below it, and scrolling an item into view clears both.
+
+- Lists re-read their container size after plugins add their headers, so `scrollToIndex` and search reveals right after creation place the item inside the visible area.
+
+### Deprecated
+
+- `carousel()`'s `largeItemMaxWidth`, `parallax`, `visibleCount`, `focalAlign`
+  and `cornerRadius` options on `CarouselPluginConfig`, deprecated for removal
+  in 4.0. None of the five is read by `carousel()`: pass a `SlotConfig` or
+  `SlotConfigResolver` to `variant` to control slot widths and visible slot
+  count (`largeItemMaxWidth`, `visibleCount`), use the `"hero"` (`focalSlot: 0`)
+  or `"hero-center"` (`focalSlot: 1`) preset or `SlotConfig.focalSlot` for focal
+  alignment (`focalAlign`), import `vlist/styles/carousel` (which locks media to
+  `--vlist-carousel-focal-width`) or drive transforms from
+  `--vlist-carousel-offset` and `--vlist-carousel-progress` (`parallax`), and
+  set `--vlist-carousel-radius` or `border-radius` in CSS (`cornerRadius`).
+
 ## [3.3.6] - 2026-11-04
 
 Search stays right when an item's text changes.
@@ -2085,7 +2120,9 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.6...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.4.1...HEAD
+[3.4.1]: https://github.com/floor/vlist/compare/v3.4.0...v3.4.1
+[3.4.0]: https://github.com/floor/vlist/compare/v3.3.6...v3.4.0
 [3.3.6]: https://github.com/floor/vlist/compare/v3.3.5...v3.3.6
 [3.3.5]: https://github.com/floor/vlist/compare/v3.3.4...v3.3.5
 [3.3.4]: https://github.com/floor/vlist/compare/v3.3.3...v3.3.4
