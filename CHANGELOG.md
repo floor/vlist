@@ -24,6 +24,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
   `--vlist-carousel-offset` and `--vlist-carousel-progress` (`parallax`), and
   set `--vlist-carousel-radius` or `border-radius` in CSS (`cornerRadius`).
 
+## [3.3.6] - 2026-11-04
+
+Search stays right when an item's text changes.
+
+Who is affected: lists using `search()` that call `updateItem` while a query is active.
+
+### Fixed
+
+- An active `search()` query refreshes its matches when `updateItem` changes whether an item matches: the item joins or leaves the matches, the current match stays on its item or moves to the next match, and next/previous navigation follows.
+
 ## [3.3.5] - 2026-11-04
 
 Tree focus survives a data replacement, and grouped grids and masonry reflow when their column count changes.
@@ -2088,7 +2098,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.3.5...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.3.6...HEAD
+[3.3.6]: https://github.com/floor/vlist/compare/v3.3.5...v3.3.6
 [3.3.5]: https://github.com/floor/vlist/compare/v3.3.4...v3.3.5
 [3.3.4]: https://github.com/floor/vlist/compare/v3.3.3...v3.3.4
 [3.3.3]: https://github.com/floor/vlist/compare/v3.3.2...v3.3.3

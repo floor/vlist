@@ -432,6 +432,34 @@ export function createCore<T extends VListItem = VListItem>(
     padding: config.mainAxisPadding,
   });
 
+  const getTotal = (): number => virtualTotalFn ? virtualTotalFn() : items.length;
+  const itemAt = (index: number): T | undefined => getItemFn ? getItemFn(index) : items[index];
+  const shiftBy = (delta: number): void => {
+    if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
+    else writeScroll(state.scrollPosition + delta);
+  };
+  const rebuildItems = (): void => {
+    state.totalItems = items.length;
+    sizeCache.rebuild(state.totalItems);
+    syncContentSize();
+  };
+  const removeById = (id: string | number): number => {
+    if (removeItemByIdFn) return removeItemByIdFn(id);
+    const idx = items.findIndex((item) => item.id === id);
+    if (idx !== -1) {
+      items.splice(idx, 1);
+      rebuildItems();
+    }
+    return idx;
+  };
+  const insertAt = (item: T, index?: number): void => {
+    if (insertItemAtFn) insertItemAtFn(item, index ?? state.totalItems);
+    else {
+      items.splice(index ?? items.length, 0, item);
+      rebuildItems();
+    }
+  };
+
   // ── Run plugin setup (cold path) ────────────────────────────────
 
   if (plugins.length > 0) {
@@ -463,10 +491,7 @@ export function createCore<T extends VListItem = VListItem>(
       scroll: {
         ...scrollAdapter,
         to: writeScroll,
-        shiftBy(delta: number): void {
-          if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
-          else ctx.scroll.to(state.scrollPosition + delta);
-        },
+        shiftBy,
         smoothTo(target: number | (() => number), duration: number, easing?: (t: number) => number, onComplete?: () => void): void {
           if (scrollHandler) scrollHandler.smoothScrollTo(target, duration, scrollSetFn ?? undefined, easing, onComplete);
           else ctx.scroll.to(typeof target === "function" ? target() : target);
@@ -490,26 +515,9 @@ export function createCore<T extends VListItem = VListItem>(
 
       items: {
         all: getItems,
-        at(index: number): T | undefined {
-          return getItemFn ? getItemFn(index) : items[index];
-        },
-        removeById(id: string | number): number {
-          if (removeItemByIdFn) return removeItemByIdFn(id);
-          const idx = items.findIndex((item) => item.id === id);
-          if (idx === -1) return -1;
-          items.splice(idx, 1);
-          state.totalItems = items.length;
-          sizeCache.rebuild(state.totalItems);
-          syncContentSize();
-          return idx;
-        },
-        insertAt(item: T, index: number): void {
-          if (insertItemAtFn) { insertItemAtFn(item, index); return; }
-          items.splice(index, 0, item);
-          state.totalItems = items.length;
-          sizeCache.rebuild(state.totalItems);
-          syncContentSize();
-        },
+        at: itemAt,
+        removeById,
+        insertAt,
         setGetFn(fn: (index: number) => T | undefined): void { getItemFn = fn; },
         setRemoveFn(fn: (id: string | number) => number): void { removeItemByIdFn = fn; },
         setInsertFn(fn: (item: T, index: number) => void): void { insertItemAtFn = fn; },
@@ -686,9 +694,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   /** A scroll asked for before the list had a length, once it has one. */
   function flushPendingScroll(): void {
-    if (!pendingScrollToIndex) return;
-    const total = virtualTotalFn ? virtualTotalFn() : items.length;
-    if (total === 0) return;
+    if (!pendingScrollToIndex || getTotal() === 0) return;
     const wanted = pendingScrollToIndex;
     pendingScrollToIndex = null;
     api.scrollToIndex(wanted.index, wanted.alignOrOptions);
@@ -914,30 +920,31 @@ export function createCore<T extends VListItem = VListItem>(
         ? getAtLayout(layoutIndex)
         : getDataItem
           ? getDataItem(dataIndex)
-          : (getItemFn ? getItemFn(dataIndex) : items[dataIndex]);
+          : itemAt(dataIndex);
       index = dataIndex;
     } else {
-      item = getItemFn ? getItemFn(layoutIndex) : items[layoutIndex];
+      item = itemAt(layoutIndex);
     }
     if (item === undefined) return null;
     return { item, index };
   }
 
+  const emitItemMouse = (event: "item:click" | "item:dblclick" | "item:contextmenu", e: MouseEvent): void => {
+    const hit = resolveClickedItem(e);
+    if (hit) emitter.emit(event, { item: hit.item, index: hit.index, event: e });
+  };
+
   function onContentClick(e: MouseEvent): void {
     for (let i = 0; i < clickHandlers.length; i++) clickHandlers[i]!(e);
-
-    const hit = resolveClickedItem(e);
-    if (hit) emitter.emit("item:click", { item: hit.item, index: hit.index, event: e });
+    emitItemMouse("item:click", e);
   }
 
   function onContentDblClick(e: MouseEvent): void {
-    const hit = resolveClickedItem(e);
-    if (hit) emitter.emit("item:dblclick", { item: hit.item, index: hit.index, event: e });
+    emitItemMouse("item:dblclick", e);
   }
 
   function onContentContextMenu(e: MouseEvent): void {
-    const hit = resolveClickedItem(e);
-    if (hit) emitter.emit("item:contextmenu", { item: hit.item, index: hit.index, event: e });
+    emitItemMouse("item:contextmenu", e);
   }
 
   function onContentKeydown(e: KeyboardEvent): void {
@@ -1011,13 +1018,11 @@ export function createCore<T extends VListItem = VListItem>(
   const api: VList<T> = {
     get element(): HTMLElement { return dom.root; },
     get items(): readonly T[] { return items; },
-    get total(): number { return virtualTotalFn ? virtualTotalFn() : items.length; },
+    get total(): number { return getTotal(); },
 
     setItems(newItems: T[]): void {
       items = [...newItems];
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      syncContentSize();
+      rebuildItems();
       doForceRender();
     },
 
@@ -1026,15 +1031,11 @@ export function createCore<T extends VListItem = VListItem>(
       // stays there as messages arrive. Core never read `reverse`, so the view
       // held its pixel position while content grew past it. Only a list
       // already at the end follows — scrolled back through history, it stays.
-      const endOf = (): number =>
-        Math.max(0, sizeCache.getTotalSize() + config.mainAxisPadding - state.containerSize);
-      const wasAtEnd = config.reverse && state.scrollPosition >= endOf() - 1;
+      const wasAtEnd = config.reverse && state.scrollPosition >= scrollAdapter.getMaxPixelEquivalent() - 1;
       items.push(...newItems);
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      syncContentSize();
+      rebuildItems();
       doForceRender();
-      if (wasAtEnd) writeScroll(endOf());
+      if (wasAtEnd) writeScroll(scrollAdapter.getMaxPixelEquivalent());
     },
 
     prependItems(newItems: T[]): void {
@@ -1050,20 +1051,14 @@ export function createCore<T extends VListItem = VListItem>(
       const hadItems = state.totalItems > 0;
       const sizeBefore = sizeCache.getTotalSize();
       items.unshift(...newItems);
-      state.totalItems = items.length;
-      sizeCache.rebuild(state.totalItems);
-      syncContentSize();
+      rebuildItems();
       doForceRender();
       // A list that was empty has no visible row to hold: compensating there
       // would scroll away from the items just supplied.
       if (!config.reverse || !hadItems) return;
       const grew = sizeCache.getTotalSize() - sizeBefore;
       if (grew <= 0) return;
-      const maxScroll = Math.max(
-        0,
-        sizeCache.getTotalSize() + config.mainAxisPadding - state.containerSize,
-      );
-      writeScroll(Math.min(state.scrollPosition + grew, maxScroll));
+      writeScroll(Math.min(state.scrollPosition + grew, scrollAdapter.getMaxPixelEquivalent()));
     },
 
     updateItem(id: string | number, updates: Partial<T>): void {
@@ -1074,6 +1069,7 @@ export function createCore<T extends VListItem = VListItem>(
         if (idx === -1) return;
         items[idx] = { ...items[idx]!, ...updates };
       }
+      (methods.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined)?.(id, updates);
       doForceRender();
     },
 
@@ -1083,8 +1079,7 @@ export function createCore<T extends VListItem = VListItem>(
       // counts headers, and under an adapter the raw array is empty.
       // `invalidate` rejects NaN on its own but the size read around it does
       // not, so reject non-integers and NaN here.
-      const total = virtualTotalFn ? virtualTotalFn() : items.length;
-      if (!Number.isInteger(index) || index < 0 || index >= total) return false;
+      if (!Number.isInteger(index) || index < 0 || index >= getTotal()) return false;
 
       // A layout plugin whose size model cannot address one data item says so.
       // A separate name survives groups() wrapping over its cache.
@@ -1133,43 +1128,18 @@ export function createCore<T extends VListItem = VListItem>(
 
       // A change above the viewport moves everything below it; keep the
       // anchored content still by the same delta.
-      if (cacheIndex < firstVisible) {
-        const delta = newSize - oldSize;
-        if (logicalHandler?.shiftBy) logicalHandler.shiftBy(delta);
-        else writeScroll(state.scrollPosition + delta);
-      }
+      if (cacheIndex < firstVisible) shiftBy(newSize - oldSize);
       doForceRender();
       return true;
     },
 
     insertItem(item: T, index?: number): void {
-      if (insertItemAtFn) {
-        insertItemAtFn(item, index ?? state.totalItems);
-      } else {
-        if (index === undefined) {
-          items.push(item);
-        } else {
-          items.splice(index, 0, item);
-        }
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
-      }
+      insertAt(item, index);
       doForceRender();
     },
 
     removeItem(id: string | number): void {
-      if (removeItemByIdFn) {
-        if (removeItemByIdFn(id) < 0) return;
-      } else {
-        const idx = items.findIndex((item) => item.id === id);
-        if (idx === -1) return;
-        items.splice(idx, 1);
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
-      }
-      doForceRender();
+      if (removeById(id) >= 0) doForceRender();
     },
 
     removeItems(ids: ReadonlyArray<string | number>): number {
@@ -1186,9 +1156,7 @@ export function createCore<T extends VListItem = VListItem>(
       items = items.filter((item) => !idSet.has(item.id));
       const removed = before - items.length;
       if (removed > 0) {
-        state.totalItems = items.length;
-        sizeCache.rebuild(state.totalItems);
-        syncContentSize();
+        rebuildItems();
         state.renderPending = true;
         doRender();
       }
@@ -1211,7 +1179,7 @@ export function createCore<T extends VListItem = VListItem>(
         const toLayout = methods.get("_dataToLayoutIndex") as ((i: number) => number) | undefined;
         return atLayout(toLayout ? toLayout(index) : index);
       }
-      return getItemFn ? getItemFn(index) : items[index];
+      return itemAt(index);
     },
 
     getIndexById(id: string | number): number {
@@ -1223,8 +1191,7 @@ export function createCore<T extends VListItem = VListItem>(
       index: number,
       alignOrOptions: "start" | "center" | "end" | { align?: "start" | "center" | "end"; behavior?: "auto" | "smooth"; duration?: number; easing?: (t: number) => number } = "start",
     ): void {
-      const total = virtualTotalFn ? virtualTotalFn() : items.length;
-      if (total === 0) {
+      if (getTotal() === 0) {
         // not "nowhere to scroll" but "not yet": held until a total arrives
         pendingScrollToIndex = { index, alignOrOptions };
         return;
@@ -1253,9 +1220,7 @@ export function createCore<T extends VListItem = VListItem>(
         const offset = sizeCache.getOffset(clamped);
         const itemSize = sizeCache.getSize(clamped);
         const cs = state.containerSize;
-        const totalSize = sizeCache.getTotalSize();
-        const mp = config.mainAxisPadding;
-        const maxScroll = Math.max(0, totalSize + mp - cs);
+        const maxScroll = scrollAdapter.getMaxPixelEquivalent();
 
         let pos: number;
         if (scrollToPosFn) {
@@ -1267,7 +1232,7 @@ export function createCore<T extends VListItem = VListItem>(
               pos = sp + offset - (cs - itemSize) / 2;
               break;
             case "end":
-              pos = offset + itemSize + mp - cs;
+              pos = offset + itemSize + config.mainAxisPadding - cs;
               break;
             default:
               pos = offset;

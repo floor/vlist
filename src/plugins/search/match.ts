@@ -88,13 +88,7 @@ export const highlightElement = (
   const needle = caseSensitive ? query : query.toLowerCase();
   const qlen = query.length;
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-    acceptNode(node: Node): number {
-      const value = node.nodeValue ?? "";
-      const hay = caseSensitive ? value : value.toLowerCase();
-      return hay.includes(needle) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-    },
-  });
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 
   const targets: Text[] = [];
   let current: Node | null;
@@ -103,9 +97,10 @@ export const highlightElement = (
   for (const textNode of targets) {
     const text = textNode.nodeValue ?? "";
     const hay = caseSensitive ? text : text.toLowerCase();
+    let idx = hay.indexOf(needle, 0);
+    if (idx === -1) continue;
     const frag = document.createDocumentFragment();
     let last = 0;
-    let idx = hay.indexOf(needle, 0);
     while (idx !== -1) {
       if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
       const mark = document.createElement("mark");
