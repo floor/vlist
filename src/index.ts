@@ -33,8 +33,8 @@ export { data } from "./plugins/data";
 export type { DataPluginConfig } from "./plugins/data";
 export { groups } from "./plugins/groups";
 export type { GroupsPluginConfig } from "./plugins/groups";
-export { table } from "./plugins/table";
-export type { TablePluginConfig } from "./plugins/table";
+export { table, columnPin } from "./plugins/table";
+export type { TablePluginConfig, TableSort, ColumnPinPluginConfig, ColumnPinEvent } from "./plugins/table";
 export { sortable } from "./plugins/sortable";
 export type { SortablePluginConfig } from "./plugins/sortable";
 export { tree } from "./plugins/tree";
@@ -56,7 +56,7 @@ export type { SearchMethods } from "./plugins/search";
 export type { SelectionMethods } from "./plugins/selection";
 export type { SnapshotsMethods } from "./plugins/snapshots";
 export type { SortableMethods } from "./plugins/sortable";
-export type { TableMethods } from "./plugins/table";
+export type { TableMethods, ColumnPinMethods } from "./plugins/table";
 export type { TreeMethods } from "./plugins/tree";
 
 // Utils

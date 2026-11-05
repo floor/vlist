@@ -18,13 +18,15 @@ import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 
 import { createTableLayout } from "./layout";
-import { createTableHeader } from "./header";
+import { createTableHeader, toSorts } from "./header";
 import { createTableRenderer, type TableRendererInstance } from "./renderer";
 
 import type {
   TableConfig,
   TableColumn,
   TableLayout,
+  TableHeader,
+  TableSort,
   ColumnResizeEvent,
   ColumnSortEvent,
   ColumnClickEvent,
@@ -50,10 +52,12 @@ export interface TableMethods<T extends VListItem = VListItem> {
   resizeColumn(keyOrIndex: string | number, width: number): void;
   /** Current width of every column, by key. */
   getColumnWidths(): Record<string, number>;
-  /** Set the sort column and direction. */
-  setSort(key: string | null, direction?: "asc" | "desc"): void;
-  /** Current sort column and direction. */
+  /** Set the sort column(s) and direction. */
+  setSort(keyOrSorts: string | null | readonly TableSort[], direction?: "asc" | "desc"): void;
+  /** Current primary sort column and direction. */
   getSort(): { key: string | null; direction: "asc" | "desc" };
+  /** Current sort columns in priority order (primary first). */
+  getSorts(): TableSort[];
 }
 
 export function table<T extends VListItem = VListItem>(
@@ -77,7 +81,7 @@ export function table<T extends VListItem = VListItem>(
   }
 
   let tableLayout: TableLayout<T> | null = null;
-  let tableHeader: ReturnType<typeof createTableHeader<T>> | null = null;
+  let tableHeader: (TableHeader<T> & { syncScroll?: (scrollLeft: number) => void }) | null = null;
   let tableRenderer: TableRendererInstance<T> | null = null;
   // A replacement list can install this same plugin before the old list is
   // destroyed. Only the install that still owns the header and renderer may clear them.
@@ -176,11 +180,8 @@ export function table<T extends VListItem = VListItem>(
     const origin = scroll.getRenderOrigin();
     const scrollPos = scroll.getPixelEquivalent();
     const overscan = storedCtx.config.overscan;
-    let visStart = sizeCache.indexAtOffset(scrollPos);
-    let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
-    if (visEnd < totalItems - 1) visEnd++;
-    visStart = Math.max(0, visStart);
-    visEnd = Math.min(totalItems - 1, visEnd);
+    const visStart = Math.max(0, sizeCache.indexAtOffset(scrollPos));
+    const visEnd = Math.min(totalItems - 1, sizeCache.indexAtOffset(scrollPos + containerSize) + 1);
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
@@ -238,16 +239,14 @@ export function table<T extends VListItem = VListItem>(
     }
 
     if (layoutToDataFn) {
-      const toData = layoutToDataFn;
       let firstDataIndex = -1;
-      for (let i = renderStart; i <= renderEnd; i++) {
-        const di = toData(i);
-        if (di >= 0) { firstDataIndex = di; break; }
-      }
       let lastDataIndex = -1;
-      for (let i = renderEnd; i >= renderStart; i--) {
-        const di = toData(i);
-        if (di >= 0) { lastDataIndex = di; break; }
+      for (let i = renderStart; i <= renderEnd; i++) {
+        const di = layoutToDataFn(i);
+        if (di >= 0) {
+          if (firstDataIndex < 0) firstDataIndex = di;
+          lastDataIndex = di;
+        }
       }
       engineState.startIndex = firstDataIndex < 0 ? renderStart : firstDataIndex;
       engineState.visibleCount = firstDataIndex < 0 ? 0 : lastDataIndex - firstDataIndex + 1;
@@ -285,6 +284,13 @@ export function table<T extends VListItem = VListItem>(
     tableRenderIfNeeded();
   }
 
+  function syncLayoutDOM(): void {
+    if (!tableLayout || !storedCtx) return;
+    tableHeader?.update(tableLayout);
+    tableRenderer?.updateColumnLayout(tableLayout);
+    storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
+  }
+
   function resizeColumns(width: number): void {
     if (!tableLayout || !storedCtx) return;
     // Core runs the resize hooks when either viewport axis changes. A
@@ -298,9 +304,7 @@ export function table<T extends VListItem = VListItem>(
     if (Math.abs(width - resolvedCross) < 1) return;
     resolvedCross = width;
     tableLayout.resolve(engineState.crossSize);
-    tableHeader?.update(tableLayout);
-    tableRenderer?.updateColumnLayout(tableLayout);
-    storedCtx.dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
+    syncLayoutDOM();
   }
 
   // =========================================================================
@@ -354,8 +358,7 @@ export function table<T extends VListItem = VListItem>(
         (typeof rowHeight === "number" ? rowHeight : 40);
 
       // ── Sort state ──────────────────────────────────────────────
-      let sortKey: string | null = config.sort?.key ?? null;
-      let sortDirection: "asc" | "desc" = config.sort?.direction ?? "asc";
+      let sorts = toSorts(config.sort);
 
       // ── Create table layout ─────────────────────────────────────
       tableLayout = createTableLayout<T>(
@@ -367,7 +370,7 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Set row height ──────────────────────────────────────────
-      if (typeof rowHeight === "function" || typeof rowHeight === "number") {
+      if (rowHeight !== undefined) {
         ctx.sizes.setConfig(rowHeight);
       }
       ctx.sizes.rebuild();
@@ -417,12 +420,6 @@ export function table<T extends VListItem = VListItem>(
       resolvedCross = engineState.crossSize;
       tableLayout.resolve(resolvedCross);
 
-      // ── Content width ───────────────────────────────────────────
-      const updateContentWidth = (): void => {
-        if (!tableLayout) return;
-        dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
-      };
-
       // ── Column resize handler ───────────────────────────────────
       const onColumnResize = (columnIndex: number, newWidth: number): void => {
         if (!tableLayout) return;
@@ -430,9 +427,7 @@ export function table<T extends VListItem = VListItem>(
         if (!col) return;
         const previousWidth = col.width;
         const actualWidth = tableLayout.resizeColumn(columnIndex, newWidth);
-        tableHeader?.update(tableLayout);
-        tableRenderer?.updateColumnLayout(tableLayout);
-        updateContentWidth();
+        syncLayoutDOM();
         emitter.emit("column:resize" as never, {
           key: col.def.key,
           index: columnIndex,
@@ -443,10 +438,9 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Column sort handler ─────────────────────────────────────
       const onColumnSort = (event: ColumnSortEvent): void => {
-        sortKey = event.direction === null ? null : event.key;
-        sortDirection = event.direction ?? "asc";
-        tableHeader?.updateSort(sortKey, sortDirection);
-        emitter.emit("column:sort" as never, event as never);
+        sorts = toSorts(event.sorts ?? (event.direction ? event.key : null), event.direction ?? "asc");
+        tableHeader?.updateSort(sorts);
+        emitter.emit("column:sort" as never, { ...event, sorts: toSorts(sorts) } as ColumnSortEvent as never);
       };
 
       // ── Column click handler ────────────────────────────────────
@@ -462,6 +456,7 @@ export function table<T extends VListItem = VListItem>(
         onColumnResize,
         onColumnSort,
         onColumnClick,
+        config.multiSort ?? Array.isArray(config.sort),
       );
       // page() scrolls the window, so the column header sticks under the
       // caller's band instead of leaving with the document.
@@ -483,8 +478,8 @@ export function table<T extends VListItem = VListItem>(
       }
 
       tableHeader.rebuild(tableLayout);
-      if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
-      updateContentWidth();
+      if (sorts.length) tableHeader.updateSort(sorts);
+      dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
 
       // ── Create table renderer ───────────────────────────────────
       tableRenderer = createTableRenderer<T>(
@@ -510,15 +505,13 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Header scroll sync ──────────────────────────────────────
-      const headerWithSync = tableHeader as typeof tableHeader &
-        { syncScroll?: (scrollLeft: number) => void };
       let lastSyncedScrollLeft = -1;
 
       const syncHeaderScroll = (): void => {
         const scrollLeft = dom.viewport.scrollLeft;
         if (scrollLeft !== lastSyncedScrollLeft) {
           lastSyncedScrollLeft = scrollLeft;
-          headerWithSync?.syncScroll?.(scrollLeft);
+          tableHeader?.syncScroll?.(scrollLeft);
         }
       };
 
@@ -532,27 +525,17 @@ export function table<T extends VListItem = VListItem>(
         tableLayout.resolve(engineState.crossSize);
         resolvedCross = engineState.crossSize;
         tableHeader.rebuild(tableLayout);
-        if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
-        updateContentWidth();
-        tableRenderer?.updateColumnLayout(tableLayout);
+        syncLayoutDOM();
         tableRenderer?.clear();
         ctx.render.force();
       });
 
       ctx.hooks.method("resizeColumn", (keyOrIndex: string | number, width: number): void => {
         if (!tableLayout) return;
-        let columnIndex: number;
-        if (typeof keyOrIndex === "string") {
-          const cols = tableLayout.columns;
-          columnIndex = -1;
-          for (let i = 0; i < cols.length; i++) {
-            if (cols[i]!.def.key === keyOrIndex) { columnIndex = i; break; }
-          }
-          if (columnIndex === -1) return;
-        } else {
-          columnIndex = keyOrIndex;
-        }
-        onColumnResize(columnIndex, width);
+        const columnIndex = typeof keyOrIndex === "string"
+          ? tableLayout.columns.findIndex((c) => c.def.key === keyOrIndex)
+          : keyOrIndex;
+        if (columnIndex >= 0) onColumnResize(columnIndex, width);
       });
 
       ctx.hooks.method("getColumnWidths", (): Record<string, number> => {
@@ -565,15 +548,20 @@ export function table<T extends VListItem = VListItem>(
         return result;
       });
 
-      ctx.hooks.method("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
-        sortKey = key;
-        sortDirection = direction ?? "asc";
-        tableHeader?.updateSort(sortKey, sortDirection);
-      });
+      ctx.hooks.method(
+        "setSort",
+        (keyOrSorts: string | null | readonly TableSort[], direction: "asc" | "desc" = "asc"): void => {
+          sorts = toSorts(keyOrSorts, direction);
+          tableHeader?.updateSort(sorts);
+        },
+      );
 
-      ctx.hooks.method("getSort", (): { key: string | null; direction: "asc" | "desc" } => {
-        return { key: sortKey, direction: sortDirection };
-      });
+      ctx.hooks.method("getSort", (): { key: string | null; direction: "asc" | "desc" } => ({
+        key: sorts[0]?.key ?? null,
+        direction: sorts[0]?.direction ?? "asc",
+      }));
+
+      ctx.hooks.method("getSorts", (): TableSort[] => toSorts(sorts));
 
       ctx.hooks.method("_getTableLayout", () => tableLayout);
       ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
@@ -601,31 +589,22 @@ export function table<T extends VListItem = VListItem>(
         const viewportWidth = dom.viewport.clientWidth;
         if (tableLayout.totalWidth <= viewportWidth) return;
 
-        // Column offsets run from the physical left. RTL native scrollLeft is
-        // zero at the right edge and negative toward the left in current engines.
         const origin = crossRTL ? tableLayout.totalWidth - viewportWidth : 0;
         const scrollLeft = dom.viewport.scrollLeft + origin;
+        const go = (x: number): void => {
+          dom.viewport.scrollLeft = x - origin;
+          event.preventDefault();
+        };
 
         if (event.key === "ArrowRight") {
           for (let i = 0; i < cols.length; i++) {
-            if (cols[i]!.offset > scrollLeft + 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset - origin;
-              event.preventDefault();
-              return;
-            }
+            if (cols[i]!.offset > scrollLeft + 1) return go(cols[i]!.offset);
           }
         } else {
           for (let i = cols.length - 1; i >= 0; i--) {
-            if (cols[i]!.offset < scrollLeft - 1) {
-              dom.viewport.scrollLeft = cols[i]!.offset - origin;
-              event.preventDefault();
-              return;
-            }
+            if (cols[i]!.offset < scrollLeft - 1) return go(cols[i]!.offset);
           }
-          if (scrollLeft > 0) {
-            dom.viewport.scrollLeft = -origin;
-            event.preventDefault();
-          }
+          if (scrollLeft > 0) go(0);
         }
       });
 
@@ -644,13 +623,15 @@ export function table<T extends VListItem = VListItem>(
         localRenderer?.destroy();
         if (tableRenderer === localRenderer) tableRenderer = null;
         dom.content.style.minWidth = "";
-        dom.root.classList.remove(`${classPrefix}--table`);
-        dom.root.classList.remove(`${classPrefix}--table-row-borders`);
-        dom.root.classList.remove(`${classPrefix}--table-col-borders`);
-        dom.root.removeAttribute("role");
-        dom.root.removeAttribute("aria-colcount");
-        dom.root.removeAttribute("aria-rowcount");
-        dom.root.removeAttribute("tabindex");
+        dom.root.classList.remove(
+          `${classPrefix}--table`,
+          `${classPrefix}--table-row-borders`,
+          `${classPrefix}--table-col-borders`,
+        );
+        const rootAttrs = ["role", "aria-colcount", "aria-rowcount", "tabindex"];
+        for (let i = 0; i < rootAttrs.length; i++) {
+          dom.root.removeAttribute(rootAttrs[i]!);
+        }
         dom.viewport.removeAttribute("role");
         dom.content.removeAttribute("role");
         // Put the name back where core wrote it, for the same reason it moved.
@@ -665,10 +646,7 @@ export function table<T extends VListItem = VListItem>(
       onResize: resizeColumns,
 
       onAfterScroll(): void {
-        if (!storedCtx || !tableHeader) return;
-        const h = tableHeader as typeof tableHeader &
-          { syncScroll?: (scrollLeft: number) => void };
-        h?.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
+        if (storedCtx) tableHeader?.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
       },
     },
 

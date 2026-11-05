@@ -1469,3 +1469,137 @@ describe('table — physical cross-axis keyboard navigation', () => {
     } finally { t.done(); }
   });
 });
+
+// =============================================================================
+// Multi-Column Sort (#20)
+// =============================================================================
+
+describe("table — multi-column sort (#20)", () => {
+  const sortableCols: TableColumn<TestItem>[] = [
+    { key: "name", label: "Name", width: 150, sortable: true },
+    { key: "email", label: "Email", width: 200, sortable: true },
+    { key: "role", label: "Role", width: 100, sortable: true },
+  ];
+
+  it("initializes from config.sort array, enables multiSort automatically, and leaves the list status liveRegion untouched", () => {
+    const plugin = table({
+      columns: sortableCols,
+      rowHeight: 40,
+      sort: [
+        { key: "name", direction: "asc" },
+        { key: "email", direction: "desc" },
+      ],
+    });
+    const t = createTableMockContext();
+    t.dom.liveRegion.textContent = "100 items loaded";
+    plugin.setup!(t.ctx);
+
+    const getSort = t.methods.get("getSort") as () => { key: string | null; direction: "asc" | "desc" };
+    const getSorts = t.methods.get("getSorts") as () => Array<{ key: string; direction: "asc" | "desc" }>;
+    const setSort = t.methods.get("setSort") as (s: any, d?: any) => void;
+
+    expect(getSort()).toEqual({ key: "name", direction: "asc" });
+    expect(getSorts()).toEqual([
+      { key: "name", direction: "asc" },
+      { key: "email", direction: "desc" },
+    ]);
+
+    const cells = t.dom.root.querySelectorAll<HTMLElement>(".vlist-table-header-cell");
+    const sortLive = t.dom.root.querySelector<HTMLElement>('[id^="vlist-table-live-"]')!;
+    expect(cells[0]!.getAttribute("aria-sort")).toBe("ascending");
+    expect(cells[1]!.getAttribute("aria-sort")).toBeNull();
+    expect(sortLive.textContent).toBe("sorted by Name ascending, then Email descending");
+    expect(cells[1]!.getAttribute("aria-description")).toBe("sorted by Name ascending, then Email descending");
+    expect(cells[1]!.getAttribute("aria-describedby")).toBe(sortLive.id);
+    // List's own status liveRegion is untouched
+    expect(t.dom.liveRegion.id).toBe("");
+    expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
+
+    // Shift+Click works because sort was passed as an array
+    cells[2]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+    expect(getSorts()).toHaveLength(3);
+
+    setSort([
+      { key: "role", direction: "desc" },
+      { key: "name", direction: "asc" },
+    ]);
+    expect(getSort()).toEqual({ key: "role", direction: "desc" });
+    expect(getSorts()).toEqual([
+      { key: "role", direction: "desc" },
+      { key: "name", direction: "asc" },
+    ]);
+    expect(cells[2]!.getAttribute("aria-sort")).toBe("descending");
+    expect(cells[0]!.getAttribute("aria-sort")).toBeNull();
+    expect(sortLive.textContent).toBe("sorted by Role descending, then Name ascending");
+    expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
+
+    setSort([]);
+    expect(getSort()).toEqual({ key: null, direction: "asc" });
+    expect(getSorts()).toEqual([]);
+    expect(cells[2]!.getAttribute("aria-sort")).toBeNull();
+    expect(sortLive.textContent).toBe("");
+    expect(t.dom.liveRegion.textContent).toBe("100 items loaded");
+
+    t.cleanup();
+  });
+
+  it("handles Shift+Click and Ctrl+Click multi-sort when multiSort: true and emits sorts in column:sort", () => {
+    const plugin = table({ columns: sortableCols, rowHeight: 40, multiSort: true });
+    const t = createTableMockContext();
+    plugin.setup!(t.ctx);
+
+    const getSorts = t.methods.get("getSorts") as () => Array<{ key: string; direction: "asc" | "desc" }>;
+    const cells = t.dom.root.querySelectorAll<HTMLElement>(".vlist-table-header-cell");
+
+    cells[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    cells[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+    cells[2]!.dispatchEvent(new MouseEvent("click", { bubbles: true, ctrlKey: true }));
+
+    expect(getSorts()).toEqual([
+      { key: "name", direction: "asc" },
+      { key: "email", direction: "asc" },
+      { key: "role", direction: "asc" },
+    ]);
+
+    const sortEvents = t.emitted.filter((e) => e.event === "column:sort");
+    expect(sortEvents).toHaveLength(3);
+    expect(sortEvents[2]!.payload).toEqual({
+      key: "role",
+      index: 2,
+      direction: "asc",
+      sorts: [
+        { key: "name", direction: "asc" },
+        { key: "email", direction: "asc" },
+        { key: "role", direction: "asc" },
+      ],
+    });
+
+    const sortLive = t.dom.root.querySelector<HTMLElement>('[id^="vlist-table-live-"]')!;
+    expect(cells[0]!.getAttribute("aria-sort")).toBe("ascending");
+    expect(cells[1]!.getAttribute("aria-sort")).toBeNull();
+    expect(cells[2]!.getAttribute("aria-sort")).toBeNull();
+    expect(sortLive.textContent).toBe(
+      "sorted by Name ascending, then Email ascending, then Role ascending",
+    );
+
+    t.cleanup();
+  });
+
+  it("defaults multiSort to false so modifier clicks stay single-column until multiSort: true", () => {
+    const plugin = table({ columns: sortableCols, rowHeight: 40 });
+    const t = createTableMockContext();
+    plugin.setup!(t.ctx);
+
+    const getSorts = t.methods.get("getSorts") as () => Array<{ key: string; direction: "asc" | "desc" }>;
+    const cells = t.dom.root.querySelectorAll<HTMLElement>(".vlist-table-header-cell");
+
+    cells[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    cells[1]!.dispatchEvent(new MouseEvent("click", { bubbles: true, shiftKey: true }));
+
+    expect(getSorts()).toEqual([{ key: "email", direction: "asc" }]);
+    expect(cells[0]!.getAttribute("aria-sort")).toBeNull();
+    expect(cells[1]!.getAttribute("aria-sort")).toBe("ascending");
+
+    t.cleanup();
+  });
+});
