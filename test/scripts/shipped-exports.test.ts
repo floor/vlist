@@ -2,7 +2,7 @@
 // at link time (`does not provide an export named`), before any module code
 // runs. The .d.ts is the contract; the runtime module has to match it.
 import { describe, expect, it } from "bun:test";
-import { mkdtempSync } from "fs";
+import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
 import { build } from "../../build";
@@ -20,10 +20,9 @@ describe("shipped exports", () => {
       const gaps = diffShippedExports(root, outDir);
       expect(formatExportGaps(gaps)).toBe("");
     } finally {
-      const trashed = Bun.spawnSync(["trash", outDir]);
-      if (trashed.exitCode !== 0) {
-        throw new Error(`trash ${outDir} exited ${trashed.exitCode}`);
-      }
+      // The CI runner has no `trash` binary. This is a temp dir the test
+      // created, the same kind build.ts removes with rmSync.
+      rmSync(outDir, { recursive: true, force: true });
     }
   }, 120_000);
 });
