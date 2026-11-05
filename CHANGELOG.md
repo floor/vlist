@@ -11,6 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Deprecated
+
+- `carousel()`'s `largeItemMaxWidth`, `parallax`, `visibleCount`, `focalAlign`
+  and `cornerRadius` options on `CarouselPluginConfig`, deprecated for removal
+  in 4.0. None of the five is read by `carousel()`: pass a `SlotConfig` or
+  `SlotConfigResolver` to `variant` to control slot widths and visible slot
+  count (`largeItemMaxWidth`, `visibleCount`), use the `"hero"` (`focalSlot: 0`)
+  or `"hero-center"` (`focalSlot: 1`) preset or `SlotConfig.focalSlot` for focal
+  alignment (`focalAlign`), import `vlist/styles/carousel` (which locks media to
+  `--vlist-carousel-focal-width`) or drive transforms from
+  `--vlist-carousel-offset` and `--vlist-carousel-progress` (`parallax`), and
+  set `--vlist-carousel-radius` or `border-radius` in CSS (`cornerRadius`).
+
 ## [3.3.6] - 2026-11-04
 
 Search stays right when an item's text changes.
