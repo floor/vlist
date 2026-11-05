@@ -163,12 +163,19 @@ export function columnPin<T extends VListItem = VListItem>(
         return { leftWidth, rightWidth };
       };
 
+      let lastLeftOffset = NaN;
+      let lastRightOffset = NaN;
+
       const syncPinOffsets = (): void => {
         const hasPins = leftOrder.length > 0 || rightOrder.length > 0;
-        dom.root.classList.toggle(rootPinnedClass, hasPins);
         if (!hasPins) {
-          dom.root.style.removeProperty("--vlist-table-pin-left");
-          dom.root.style.removeProperty("--vlist-table-pin-right");
+          if (!Number.isNaN(lastLeftOffset)) {
+            lastLeftOffset = NaN;
+            lastRightOffset = NaN;
+            dom.root.classList.remove(rootPinnedClass);
+            dom.root.style.removeProperty("--vlist-table-pin-left");
+            dom.root.style.removeProperty("--vlist-table-pin-right");
+          }
           return;
         }
         const scrollLeft = dom.viewport.scrollLeft;
@@ -178,8 +185,16 @@ export function columnPin<T extends VListItem = VListItem>(
           rightOrder.length > 0 && viewportWidth > 0
             ? Math.min(0, scrollLeft + viewportWidth - layout.totalWidth)
             : 0;
-        dom.root.style.setProperty("--vlist-table-pin-left", `${leftOffset}px`);
-        dom.root.style.setProperty("--vlist-table-pin-right", `${rightOffset}px`);
+        if (leftOffset === lastLeftOffset && rightOffset === lastRightOffset) return;
+        dom.root.classList.add(rootPinnedClass);
+        if (leftOffset !== lastLeftOffset) {
+          lastLeftOffset = leftOffset;
+          dom.root.style.setProperty("--vlist-table-pin-left", `${leftOffset}px`);
+        }
+        if (rightOffset !== lastRightOffset) {
+          lastRightOffset = rightOffset;
+          dom.root.style.setProperty("--vlist-table-pin-right", `${rightOffset}px`);
+        }
       };
 
       const applyCellPinState = (

@@ -11,7 +11,7 @@
  */
 
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { describe, it, expect, beforeAll, afterAll, afterEach, spyOn } from "bun:test";
 import { capturePrototypeGeometry } from "../../helpers/geometry";
 import { createVList } from "../../../src/core/create";
 import { table } from "../../../src/plugins/table/plugin";
@@ -308,6 +308,34 @@ describe("columnPin — scroll offsets, resize, and virtualized rows", () => {
     // Pinning another column preserves B's resized 200px width
     list.setColumnPin("C", "left");
     expect(list.getColumnWidths().B).toBe(200);
+  });
+
+  it("does not call root.style.setProperty on a vertical-only scroll when scrollLeft is unchanged", () => {
+    const { root, viewport } = createPinnedTable(
+      makeColumns({ A: "left", J: "right" }),
+      undefined,
+      50,
+    );
+
+    const setPropSpy = spyOn(root.style, "setProperty");
+    try {
+      viewport.scrollTop = 400;
+      viewport.dispatchEvent(new Event("scroll"));
+      expect(setPropSpy).not.toHaveBeenCalled();
+
+      // Horizontal scroll still updates the changed CSS custom properties
+      viewport.scrollLeft = 120;
+      viewport.dispatchEvent(new Event("scroll"));
+      expect(setPropSpy).toHaveBeenCalledWith("--vlist-table-pin-left", "120px");
+      expect(setPropSpy).toHaveBeenCalledWith("--vlist-table-pin-right", "-480px");
+
+      setPropSpy.mockClear();
+      viewport.scrollTop = 800;
+      viewport.dispatchEvent(new Event("scroll"));
+      expect(setPropSpy).not.toHaveBeenCalled();
+    } finally {
+      setPropSpy.mockRestore();
+    }
   });
 
   it("stamps pin classes on newly mounted rows during vertical scroll", () => {
