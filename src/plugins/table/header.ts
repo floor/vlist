@@ -63,7 +63,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   let cells: HTMLElement[] = [];
   let sortIndicators: (HTMLElement | null)[] = [];
-  let isVisible = true;
   let currentSorts: TableSort[] = [];
   let currentLayout: TableLayout<T> | null = null;
   let liveRegion: HTMLElement | null = null;
@@ -376,17 +375,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   element.addEventListener("focusin", onFocusIn);
 
   const show = (): void => {
-    if (!isVisible) {
-      isVisible = true;
-      element.style.display = "";
-    }
+    element.style.display = "";
   };
 
   const hide = (): void => {
-    if (isVisible) {
-      isVisible = false;
-      element.style.display = "none";
-    }
+    element.style.display = "none";
   };
 
   const destroy = (): void => {
@@ -401,7 +394,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     sortIndicators = [];
     currentSorts = [];
     currentLayout = null;
-    isVisible = false;
   };
 
   return {

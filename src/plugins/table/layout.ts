@@ -112,11 +112,6 @@ export const createTableLayout = <T extends VListItem = VListItem>(
   const resolve = (containerWidth: number): void => {
     lastContainerWidth = containerWidth;
 
-    if (resolved.length === 0) {
-      totalWidth = 0;
-      return;
-    }
-
     let usedWidth = 0;
     let flexCount = 0;
 
@@ -179,54 +174,27 @@ export const createTableLayout = <T extends VListItem = VListItem>(
    * @returns The actual new width after clamping
    */
   const resizeColumn = (columnIndex: number, newWidth: number): number => {
-    if (columnIndex < 0 || columnIndex >= resolved.length) return 0;
-
-    const col = resolved[columnIndex]!;
-    if (!col.resizable) return col.width;
-
-    const clamped = clamp(newWidth, col.minWidth, col.maxWidth);
-    col.width = clamped;
-
-    // Recalculate offsets from this column onward
-    recalculateOffsets();
-
-    // Spacer mode keeps rows spanning the container after a manual resize by
-    // re-absorbing the slack. Stretch mode leaves the user's widths as-is.
-    if (fillMode === "spacer") applyFill();
-
-    return clamped;
+    const col = resolved[columnIndex];
+    if (!col) return 0;
+    if (col.resizable) {
+      col.width = clamp(newWidth, col.minWidth, col.maxWidth);
+      recalculateOffsets();
+      if (fillMode === "spacer") applyFill();
+    }
+    return col.width;
   };
 
   // =========================================================================
   // Accessors
   // =========================================================================
 
-  const getColumn = (index: number): ResolvedColumn<T> | undefined => {
-    return resolved[index];
-  };
+  const getColumn = (index: number): ResolvedColumn<T> | undefined => resolved[index];
 
   const getColumnAtX = (x: number): ResolvedColumn<T> | undefined => {
-    // Binary search for the column containing x
-    if (resolved.length === 0) return undefined;
-    if (x < 0) return resolved[0];
-    if (x >= totalWidth) return resolved[resolved.length - 1];
-
-    let lo = 0;
-    let hi = resolved.length - 1;
-
-    while (lo < hi) {
-      const mid = (lo + hi) >>> 1;
-      const col = resolved[mid]!;
-      if (x < col.offset) {
-        hi = mid - 1;
-      } else if (x >= col.offset + col.width) {
-        lo = mid + 1;
-      } else {
-        return col;
-      }
+    for (let i = 0; i < resolved.length - 1; i++) {
+      if (x < resolved[i]!.offset + resolved[i]!.width) return resolved[i];
     }
-
-    return resolved[lo];
+    return resolved[resolved.length - 1];
   };
 
   const getColumnOffset = (columnIndex: number): number =>
