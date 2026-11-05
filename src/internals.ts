@@ -58,6 +58,7 @@ export {
   type ColumnSortEvent,
   type ColumnClickEvent,
   type ColumnPinEvent,
+  type ColumnReorderEvent,
 } from "./plugins/table";
 
 // =============================================================================

@@ -61,8 +61,9 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   root.insertBefore(rowgroup, root.firstChild);
   root.style.setProperty("--vlist-table-header-height", `${headerHeight}px`);
 
-  let cells: HTMLElement[] = [];
-  let sortIndicators: (HTMLElement | null)[] = [];
+  const cells = scrollContainer.children as unknown as ArrayLike<
+    HTMLElement & { _sort?: HTMLElement }
+  >;
   let currentSorts: TableSort[] = [];
   let currentLayout: TableLayout<T> | null = null;
   let liveRegion: HTMLElement | null = null;
@@ -74,18 +75,19 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   let focusedCellIndex = 0;
 
   const setTabStop = (index: number): void => {
-    cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
+    for (let i = 0; i < cells.length; i++) {
+      cells[i]!.tabIndex = i === index ? 0 : -1;
+    }
     focusedCellIndex = index;
-    if (cells[index]) cells[index]!.tabIndex = 0;
   };
 
   const findCellIndex = (target: EventTarget | null): number => {
     const cell = (target as HTMLElement | null)?.closest<HTMLElement>("[data-column-key]");
-    return cell ? cells.indexOf(cell) : -1;
+    return cell ? Array.prototype.indexOf.call(cells, cell) : -1;
   };
 
   const createCell = (col: ResolvedColumn<T>, colIndex: number): HTMLElement => {
-    const cell = document.createElement("div");
+    const cell = document.createElement("div") as HTMLElement & { _sort?: HTMLElement };
     cell.className = `${classPrefix}-table-header-cell`;
     cell.setAttribute("role", "columnheader");
     cell.setAttribute("aria-colindex", String(colIndex + 1));
@@ -113,10 +115,8 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       sortIndicator.className = `${classPrefix}-table-header-sort`;
       sortIndicator.setAttribute("aria-hidden", "true");
       cell.appendChild(sortIndicator);
-      sortIndicators.push(sortIndicator);
+      cell._sort = sortIndicator;
       cell.classList.add(`${classPrefix}-table-header-cell--sortable`);
-    } else {
-      sortIndicators.push(null);
     }
 
     if (col.resizable) {
@@ -132,15 +132,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   const rebuild = (layout: TableLayout<T>): void => {
     currentLayout = layout;
     scrollContainer.textContent = "";
-    cells = [];
-    sortIndicators = [];
     focusedCellIndex = 0;
 
     const columns = layout.columns;
     for (let i = 0; i < columns.length; i++) {
-      const cell = createCell(columns[i]!, i);
-      cells.push(cell);
-      scrollContainer.appendChild(cell);
+      scrollContainer.appendChild(createCell(columns[i]!, i));
     }
 
     update(layout);
@@ -197,11 +193,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     };
     setDesc(element, isMulti);
 
-    for (let i = 0; i < sortIndicators.length && i < columns.length; i++) {
-      const indicator = sortIndicators[i];
+    for (let i = 0; i < cells.length && i < columns.length; i++) {
+      const cell = cells[i]!;
+      const indicator = cell._sort;
       if (!indicator) continue;
 
-      const cell = cells[i]!;
       const sortIdx = currentSorts.findIndex((s) => s.key === columns[i]!.def.key);
       const s = currentSorts[sortIdx];
 
@@ -390,8 +386,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     root.style.removeProperty("--vlist-table-header-height");
     liveRegion = null;
     rowgroup.remove();
-    cells = [];
-    sortIndicators = [];
     currentSorts = [];
     currentLayout = null;
   };

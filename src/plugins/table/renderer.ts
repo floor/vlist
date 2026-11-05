@@ -124,9 +124,6 @@ interface TrackedRow {
   /** The row DOM element */
   element: HTMLElement;
 
-  /** Cell elements within the row */
-  cells: HTMLElement[];
-
   /** Item index in the data array */
   index: number;
 
@@ -337,8 +334,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isPlaceholder: boolean = false,
   ): void => {
     const cols = currentLayout.columns;
-    for (let c = 0; c < tracked.cells.length && c < cols.length; c++) {
-      applyCellTemplate(tracked.cells[c]!, item, cols[c]!, index, isPlaceholder);
+    const cells = tracked.element.children;
+    for (let c = 0; c < cells.length && c < cols.length; c++) {
+      applyCellTemplate(cells[c] as HTMLElement, item, cols[c]!, index, isPlaceholder);
     }
     setTrackedItem(tracked, item);
     syncRowState(tracked, index, isSelected, isFocused, isPlaceholder);
@@ -360,10 +358,8 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     const element = pool.acquire();
     const height = sc.getSize(index);
     const offset = sc.getOffset(index) - origin;
-    const cells: HTMLElement[] = [];
     const tracked: TrackedRow = {
       element,
-      cells,
       index,
       isGroupHeader: isHeader,
       _lastItem: item,
@@ -404,7 +400,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
         cell.setAttribute("role", "gridcell");
         cell.setAttribute("aria-colindex", String(i + 1));
         element.appendChild(cell);
-        cells.push(cell);
       }
       syncRowItem(tracked, index, item, isSelected, isFocused, isPH(item.id));
     }
@@ -609,11 +604,14 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       tracked.element.style.width = `${layout.totalWidth}px`;
 
       // Update each cell's position and width (skip group headers — no cells)
-      for (let i = 0; i < tracked.cells.length && i < cols.length; i++) {
-        const cell = tracked.cells[i]!;
-        const col = cols[i]!;
-        cell.style.left = `${col.offset}px`;
-        cell.style.width = `${col.width}px`;
+      if (!tracked.isGroupHeader) {
+        const cells = tracked.element.children;
+        for (let i = 0; i < cells.length && i < cols.length; i++) {
+          const cell = cells[i] as HTMLElement;
+          const col = cols[i]!;
+          cell.style.left = `${col.offset}px`;
+          cell.style.width = `${col.width}px`;
+        }
       }
     }
   };

@@ -98,6 +98,12 @@ export interface TableColumn<T extends VListItem = VListItem> {
    * horizontally.
    */
   pin?: "left" | "right";
+
+  /**
+   * Whether this column can be reordered when the `columnReorder()` plugin
+   * is active (default: true). Set to `false` to lock a column in place.
+   */
+  reorderable?: boolean;
 }
 
 // =============================================================================
@@ -430,5 +436,20 @@ export interface ColumnPinEvent {
   pins: Record<string, "left" | "right">;
 
   /** Full resolved column key order (`[...left, ...unpinned, ...right]`) */
+  order: string[];
+}
+
+/** Payload for column:reorder event */
+export interface ColumnReorderEvent {
+  /** Moved column key */
+  key: string;
+
+  /** Previous resolved column index */
+  fromIndex: number;
+
+  /** New resolved column index */
+  toIndex: number;
+
+  /** Full resolved column key order after the move */
   order: string[];
 }

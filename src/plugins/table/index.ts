@@ -6,6 +6,11 @@
 // v2 Plugin
 export { table, type TablePluginConfig } from "./plugin";
 export { columnPin, type ColumnPinPluginConfig, type ColumnPinMethods } from "./pin";
+export {
+  columnReorder,
+  type ColumnReorderPluginConfig,
+  type ColumnReorderMethods,
+} from "./reorder";
 
 // Layout
 export { createTableLayout } from "./layout";
@@ -30,5 +35,6 @@ export type {
   ColumnSortEvent,
   ColumnClickEvent,
   ColumnPinEvent,
+  ColumnReorderEvent,
 } from "./types";
 export type { TableMethods } from "./plugin";
