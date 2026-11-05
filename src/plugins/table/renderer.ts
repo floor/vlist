@@ -211,11 +211,6 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
   // Helpers
   // =========================================================================
 
-  /** Toggle aria-selected attribute */
-  const setAriaSelected = (el: HTMLElement, selected: boolean): void => {
-    selected ? el.setAttribute("aria-selected", "true") : el.removeAttribute("aria-selected");
-  };
-
   /** Write a string (innerHTML) or DOM node (replaceChildren) into a container */
   const setHtmlOrChild = (el: HTMLElement, result: HTMLElement | string): void => {
     if (typeof result === "string") {
@@ -319,7 +314,9 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
     isPlaceholder: boolean = false,
   ): void => {
     applyRowClasses(tracked.element, index, isSelected, isFocused, isPlaceholder);
-    setAriaSelected(tracked.element, isSelected);
+    isSelected
+      ? tracked.element.setAttribute("aria-selected", "true")
+      : tracked.element.removeAttribute("aria-selected");
     tracked.lastSelected = isSelected;
     tracked.lastFocused = isFocused;
   };
@@ -612,13 +609,11 @@ export const createTableRenderer = <T extends VListItem = VListItem>(
       tracked.element.style.width = `${layout.totalWidth}px`;
 
       // Update each cell's position and width (skip group headers — no cells)
-      if (tracked.cells.length > 0) {
-        for (let i = 0; i < tracked.cells.length && i < cols.length; i++) {
-          const cell = tracked.cells[i]!;
-          const col = cols[i]!;
-          cell.style.left = `${col.offset}px`;
-          cell.style.width = `${col.width}px`;
-        }
+      for (let i = 0; i < tracked.cells.length && i < cols.length; i++) {
+        const cell = tracked.cells[i]!;
+        const col = cols[i]!;
+        cell.style.left = `${col.offset}px`;
+        cell.style.width = `${col.width}px`;
       }
     }
   };

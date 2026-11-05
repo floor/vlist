@@ -25,6 +25,7 @@ import type {
   TableConfig,
   TableColumn,
   TableLayout,
+  TableHeader,
   TableSort,
   ColumnResizeEvent,
   ColumnSortEvent,
@@ -80,7 +81,7 @@ export function table<T extends VListItem = VListItem>(
   }
 
   let tableLayout: TableLayout<T> | null = null;
-  let tableHeader: ReturnType<typeof createTableHeader<T>> | null = null;
+  let tableHeader: (TableHeader<T> & { syncScroll?: (scrollLeft: number) => void }) | null = null;
   let tableRenderer: TableRendererInstance<T> | null = null;
   // A replacement list can install this same plugin before the old list is
   // destroyed. Only the install that still owns the header and renderer may clear them.
@@ -179,11 +180,8 @@ export function table<T extends VListItem = VListItem>(
     const origin = scroll.getRenderOrigin();
     const scrollPos = scroll.getPixelEquivalent();
     const overscan = storedCtx.config.overscan;
-    let visStart = sizeCache.indexAtOffset(scrollPos);
-    let visEnd = sizeCache.indexAtOffset(scrollPos + containerSize);
-    if (visEnd < totalItems - 1) visEnd++;
-    visStart = Math.max(0, visStart);
-    visEnd = Math.min(totalItems - 1, visEnd);
+    const visStart = Math.max(0, sizeCache.indexAtOffset(scrollPos));
+    const visEnd = Math.min(totalItems - 1, sizeCache.indexAtOffset(scrollPos + containerSize) + 1);
     const renderStart = Math.max(0, visStart - overscan);
     const renderEnd = Math.min(totalItems - 1, visEnd + overscan);
 
@@ -372,7 +370,7 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Set row height ──────────────────────────────────────────
-      if (typeof rowHeight === "function" || typeof rowHeight === "number") {
+      if (rowHeight !== undefined) {
         ctx.sizes.setConfig(rowHeight);
       }
       ctx.sizes.rebuild();
@@ -507,15 +505,13 @@ export function table<T extends VListItem = VListItem>(
       );
 
       // ── Header scroll sync ──────────────────────────────────────
-      const headerWithSync = tableHeader as typeof tableHeader &
-        { syncScroll?: (scrollLeft: number) => void };
       let lastSyncedScrollLeft = -1;
 
       const syncHeaderScroll = (): void => {
         const scrollLeft = dom.viewport.scrollLeft;
         if (scrollLeft !== lastSyncedScrollLeft) {
           lastSyncedScrollLeft = scrollLeft;
-          headerWithSync?.syncScroll?.(scrollLeft);
+          tableHeader?.syncScroll?.(scrollLeft);
         }
       };
 
@@ -529,7 +525,6 @@ export function table<T extends VListItem = VListItem>(
         tableLayout.resolve(engineState.crossSize);
         resolvedCross = engineState.crossSize;
         tableHeader.rebuild(tableLayout);
-        if (sorts.length) tableHeader.updateSort(sorts);
         syncLayoutDOM();
         tableRenderer?.clear();
         ctx.render.force();
@@ -651,10 +646,7 @@ export function table<T extends VListItem = VListItem>(
       onResize: resizeColumns,
 
       onAfterScroll(): void {
-        if (!storedCtx || !tableHeader) return;
-        const h = tableHeader as typeof tableHeader &
-          { syncScroll?: (scrollLeft: number) => void };
-        h?.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
+        if (storedCtx) tableHeader?.syncScroll?.(storedCtx.dom.viewport.scrollLeft);
       },
     },
 
