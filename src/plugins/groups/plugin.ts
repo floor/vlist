@@ -82,6 +82,8 @@ export function groups<T extends VListItem = VListItem>(
   let ctxGetItem: (index: number) => T | undefined;
   let getLoadedItem: ((index: number) => T | undefined) | null = null;
   let isX: boolean;
+  let mainProp: "width" | "height";
+  let crossProp: "width" | "height";
   let classPrefix: string;
   let overscan: number;
   let resolveItemState: (() => ItemStateFn | null) | null = null;
@@ -268,78 +270,38 @@ export function groups<T extends VListItem = VListItem>(
   }
 
   function getGridContentSize(): number {
-    if (!gridItemPositions || gridItemPositions.size === 0) return sizeCache.getTotalSize();
-    const total = layout.totalEntries;
-
-    if (isMasonry) {
-      // Last group's bottom (tallest lane) is the content bottom — already
-      // computed during rebuild. Fall back to the header bottom for an
-      // empty trailing group.
-      const lastBottom = masonryGroupBottoms?.[masonryGroupBottoms.length - 1];
-      return lastBottom ?? 0;
-    }
-
-    // Grid: rows are aligned, last item bottom = content bottom.
-    let maxY = 0;
-    for (let i = total - 1; i >= 0; i--) {
-      const pos = gridItemPositions.get(i);
-      if (pos) { maxY = pos.rowY + (pos.h ?? sizeCache.getSize(i)); break; }
-      const entry = layout.getEntry(i);
-      if (entry.type === "header") { maxY = sizeCache.getOffset(i) + sizeCache.getSize(i); break; }
-    }
-    return maxY;
+    if (!gridSorted || gridSorted.length === 0) return sizeCache.getTotalSize();
+    if (isMasonry) return masonryGroupBottoms?.[masonryGroupBottoms.length - 1] ?? 0;
+    // Every layout index is placed, so the last entry is the one the old
+    // reverse scan stopped on. Height stays live for the size cache.
+    const index = gridSorted[gridSorted.length - 1]![0];
+    const pos = gridItemPositions!.get(index)!;
+    return pos.rowY + (pos.h ?? sizeCache.getSize(index));
   }
 
   function buildTransform(layoutIndex: number, base: number): string {
     // RFC-012: subtract baseOffset so absolute virtual offsets map into the
     // content element. baseOffset is 0 in native mode (byte-identical).
-    if (gridItemPositions) {
-      const pos = gridItemPositions.get(layoutIndex);
-      if (pos) {
-        const x = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
-        const y = pos.rowY - base;
-        if (isX) return `translate(${Math.round(y)}px, ${Math.round(x)}px)`;
-        return `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
-      }
+    const pos = gridItemPositions?.get(layoutIndex);
+    if (!pos) {
+      const offset = Math.round(sizeCache.getOffset(layoutIndex) - base);
+      // 1D keeps a bare 0 on the cross axis. Callers match the first "Npx".
+      return isX ? `translate(${offset}px, 0)` : `translate(0, ${offset}px)`;
     }
-
-    const offset = sizeCache.getOffset(layoutIndex) - base;
-    if (isX) {
-      return `translate(${Math.round(offset)}px, 0)`;
-    }
-    return `translate(0, ${Math.round(offset)}px)`;
+    const cross = pos.col < 0 ? 0 : gridCrossPadStart + pos.col * (gridColWidth + gridGap);
+    const main = pos.rowY - base;
+    const x = Math.round(isX ? main : cross);
+    const y = Math.round(isX ? cross : main);
+    return `translate(${x}px, ${y}px)`;
   }
 
   function applySizeStyles(element: HTMLElement, layoutIndex: number): void {
     const pos = gridItemPositions?.get(layoutIndex);
-    if (pos) {
-      const size = pos.h ?? sizeCache.getSize(layoutIndex);
-      if (pos.col < 0) {
-        // Header: spans full width
-        if (isX) {
-          element.style.width = `${size}px`;
-          element.style.height = "";
-        } else {
-          element.style.height = `${size}px`;
-          element.style.width = "100%";
-        }
-      } else {
-        if (isX) {
-          element.style.width = `${size}px`;
-          element.style.height = `${gridColWidth}px`;
-        } else {
-          element.style.height = `${size}px`;
-          element.style.width = `${gridColWidth}px`;
-        }
-      }
-      return;
-    }
-    const fallbackSize = sizeCache.getSize(layoutIndex);
-    if (isX) {
-      element.style.width = `${fallbackSize}px`;
-    } else {
-      element.style.height = `${fallbackSize}px`;
-    }
+    const size = pos ? (pos.h ?? sizeCache.getSize(layoutIndex)) : sizeCache.getSize(layoutIndex);
+    element.style[mainProp] = `${size}px`;
+    if (!pos) return;
+    // Header spans the cross axis. A cell takes one column.
+    element.style[crossProp] = pos.col < 0 ? (isX ? "" : "100%") : `${gridColWidth}px`;
   }
 
 
@@ -361,6 +323,14 @@ export function groups<T extends VListItem = VListItem>(
     if (detached.size > 0) {
       detached.forEach((element) => pool.release(element));
       detached.clear();
+    }
+  }
+
+  function writeContent(element: HTMLElement, content: string | Node): void {
+    if (typeof content === "string") element.innerHTML = content;
+    else {
+      element.innerHTML = "";
+      element.appendChild(content);
     }
   }
 
@@ -395,13 +365,7 @@ export function groups<T extends VListItem = VListItem>(
         element.style.display = "none";
       } else {
         element.style.display = "";
-        const content = headerTemplate(entry.group.key, entry.group.groupIndex);
-        if (typeof content === "string") {
-          element.innerHTML = content;
-        } else {
-          element.innerHTML = "";
-          element.appendChild(content);
-        }
+        writeContent(element, headerTemplate(entry.group.key, entry.group.groupIndex));
       }
       return true;
     }
@@ -445,13 +409,7 @@ export function groups<T extends VListItem = VListItem>(
 
     if (isf) isf(layoutIndex, itemState);
     else { itemState.selected = false; itemState.focused = false; }
-    const content = userTemplate(item, dataIndex, itemState);
-    if (typeof content === "string") {
-      element.innerHTML = content;
-    } else {
-      element.innerHTML = "";
-      element.appendChild(content);
-    }
+    writeContent(element, userTemplate(item, dataIndex, itemState));
     rowContentWritten(element);
     return !isPlaceholder;
   }
@@ -691,15 +649,21 @@ export function groups<T extends VListItem = VListItem>(
       layout.rebuild(lastDataCount, getLoadedItem ?? ctxGetItem);
       const newGroups = layout.groups;
 
-      let boundariesChanged = newGroups.length !== prevGroupCount;
-      if (!boundariesChanged) {
-        for (let i = 0; i < prevGroupCount; i++) {
-          if (newGroups[i]!.headerLayoutIndex !== prevGroups[i]!.headerLayoutIndex) {
-            boundariesChanged = true;
-            break;
-          }
+      // One walk: a moved header, or a group added or removed.
+      let firstShift = Infinity;
+      const minG = Math.min(prevGroupCount, newGroups.length);
+      for (let g = 0; g < minG; g++) {
+        if (newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex) {
+          firstShift = Math.min(newGroups[g]!.headerLayoutIndex, prevGroups[g]!.headerLayoutIndex);
+          break;
         }
       }
+      if (newGroups.length > prevGroupCount && minG < newGroups.length) {
+        firstShift = Math.min(firstShift, newGroups[minG]!.headerLayoutIndex);
+      } else if (prevGroupCount > newGroups.length && minG < prevGroupCount) {
+        firstShift = Math.min(firstShift, prevGroups[minG]!.headerLayoutIndex);
+      }
+      const boundariesChanged = newGroups.length !== prevGroupCount || firstShift < Infinity;
 
       if (boundariesChanged) {
         origSizeCacheRebuild(layout.totalEntries);
@@ -714,19 +678,6 @@ export function groups<T extends VListItem = VListItem>(
         // Only clear DOM if the boundary shift affects the rendered range.
         // Preload-ahead data often creates new groups far from the viewport
         // — no reason to destroy visible elements for that.
-        let firstShift = Infinity;
-        const minG = Math.min(prevGroupCount, newGroups.length);
-        for (let g = 0; g < minG; g++) {
-          if (newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex) {
-            firstShift = Math.min(newGroups[g]!.headerLayoutIndex, prevGroups[g]!.headerLayoutIndex);
-            break;
-          }
-        }
-        if (newGroups.length > prevGroupCount && minG < newGroups.length) {
-          firstShift = Math.min(firstShift, newGroups[minG]!.headerLayoutIndex);
-        } else if (prevGroupCount > newGroups.length && minG < prevGroupCount) {
-          firstShift = Math.min(firstShift, prevGroups[minG]!.headerLayoutIndex);
-        }
 
         if (firstShift <= engineState.prevRangeEnd) {
           detachAll();
@@ -761,6 +712,8 @@ export function groups<T extends VListItem = VListItem>(
       rootElement = ctx.dom.root;
       userTemplate = ctx.template;
       isX = ctx.config.axis.primary === "x";
+      mainProp = isX ? "width" : "height";
+      crossProp = isX ? "height" : "width";
       classPrefix = ctx.config.classPrefix;
       overscan = ctx.config.overscan;
       mainAxisPadding = ctx.config.mainAxisPadding;
@@ -883,6 +836,8 @@ export function groups<T extends VListItem = VListItem>(
 
       rootElement.classList.add(`${classPrefix}--grouped`);
 
+      let pageSticky = 0;
+      let stickyBox: HTMLElement | null = null;
       if (config.sticky !== false) {
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
           const group = layout.groups[groupIndex];
@@ -925,7 +880,20 @@ export function groups<T extends VListItem = VListItem>(
 
         stickyHeader.update(scroll.getPixelEquivalent());
 
-        if (!isX) {
+        const onPage = rootElement.classList.contains(`${classPrefix}--page`);
+        if (onPage) {
+          // The window is the scroller. Pin under the caller's band and the
+          // table header; do not shrink the document box.
+          pageSticky = headerH;
+          stickyBox = stickyContainer;
+          stickyContainer.style.position = "sticky";
+          stickyContainer.style.zIndex = "4";
+          const pad = Number.parseFloat(rootElement.style.getPropertyValue("--vlist-page-pad")) || 0;
+          const tableH = Number.parseFloat(rootElement.style.getPropertyValue("--vlist-table-header-height")) || 0;
+          const edge = `${pad + tableH}px`;
+          if (isX) stickyContainer.style.left = edge;
+          else stickyContainer.style.top = edge;
+        } else if (!isX) {
           // Vertical: relative container occupies a top row via block flow;
           // shrinking the viewport height lets it sit below.
           ctx.dom.viewport.style.height = `calc(100% - ${headerH}px)`;
@@ -1066,6 +1034,27 @@ export function groups<T extends VListItem = VListItem>(
       // scrollToIndex one below replace page's, so they fold the band in;
       // without page it reads zero and the geometry is unchanged.
       const readScrollPadding = createScrollPaddingReader(ctx);
+      // Page mode does not shrink the viewport, so the sticky header covers
+      // the window. Clip it from the data side when the stack is taller than
+      // the window: the caller's band and the table header stay, and the
+      // group header takes only what is left.
+      const stickyCover = (start: number, end: number): number => {
+        if (pageSticky <= 0 || !stickyBox) return 0;
+        const room = (isX ? window.innerWidth : window.innerHeight) - end - start;
+        const cover = Math.max(0, Math.min(pageSticky, room));
+        const next = `${cover}px`;
+        if (stickyBox.style.maxHeight !== next) stickyBox.style.maxHeight = next;
+        return cover;
+      };
+      if (pageSticky > 0) {
+        const onClip = (): void => {
+          const pad = readScrollPadding();
+          stickyCover(pad.start, pad.end);
+        };
+        onClip();
+        window.addEventListener("resize", onClip);
+        ctx.hooks.onDestroy(() => window.removeEventListener("resize", onClip));
+      }
 
       ctx.hooks.method("_scrollItemIntoView", (layoutIndex: number): void => {
         if (layoutIndex < 0) return;
@@ -1075,7 +1064,8 @@ export function groups<T extends VListItem = VListItem>(
         const cs = engineState.containerSize;
         const sp = scroll.getPixelEquivalent();
         const pagePad = readScrollPadding();
-        const padStart = mainPadStart + pagePad.start;
+        const cover = stickyCover(pagePad.start, pagePad.end);
+        const padStart = mainPadStart + pagePad.start + cover;
         const padEnd = mainPadEnd + pagePad.end;
         // page() scrolls the window, so the list may legitimately sit below the
         // viewport top by the start band. Without page the floor stays 0.
@@ -1121,6 +1111,8 @@ export function groups<T extends VListItem = VListItem>(
 
           // Bottom padding to keep clear when aligning the last item to the end.
           const pagePad = readScrollPadding();
+          const cover = stickyCover(pagePad.start, pagePad.end);
+          const startPad = pagePad.start + cover;
           const endPad = (gridItemPositions ? mainAxisPadding : 0) + pagePad.end;
 
           // Masonry: align:end targets the group's tallest-lane bottom, not the
@@ -1136,15 +1128,15 @@ export function groups<T extends VListItem = VListItem>(
           let pos: number;
           switch (align) {
             case "center":
-              pos = offset - pagePad.start - (cs - pagePad.start - pagePad.end - itemSize) / 2;
+              pos = offset - startPad - (cs - startPad - pagePad.end - itemSize) / 2;
               break;
             case "end":
               pos = endBottom - cs + endPad;
               break;
             default:
-              pos = offset - pagePad.start;
+              pos = offset - startPad;
           }
-          const minPos = pagePad.start > 0 ? -pagePad.start : 0;
+          const minPos = startPad > 0 ? -startPad : 0;
           pos = Math.max(minPos, Math.min(pos, maxScroll + pagePad.end));
           return pos;
         };
