@@ -124,7 +124,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   let cells: HTMLElement[] = [];
   let sortIndicators: (HTMLElement | null)[] = [];
-  let isVisible = true;
   let currentSortKey: string | null = null;
   let currentSortDirection: "asc" | "desc" = "asc";
   let currentLayout: TableLayout<T> | null = null;
@@ -500,17 +499,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   // =========================================================================
 
   const show = (): void => {
-    if (!isVisible) {
-      isVisible = true;
-      element.style.display = "";
-    }
+    element.style.display = "";
   };
 
   const hide = (): void => {
-    if (isVisible) {
-      isVisible = false;
-      element.style.display = "none";
-    }
+    element.style.display = "none";
   };
 
   // =========================================================================
@@ -531,7 +524,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cells = [];
     sortIndicators = [];
     currentLayout = null;
-    isVisible = false;
   };
 
   // =========================================================================
