@@ -11,6 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-11-05
+
+Every export the types declare now ships at runtime.
+
+Who is affected: apps that import `DEFAULT_SEARCH_TEXT` from `vlist`. Its type was declared, but the published bundle didn't export it, so an ES module import of it failed when the app loaded.
+
+### Fixed
+
+- `vlist` exports `DEFAULT_SEARCH_TEXT` at runtime, as its type declarations already said. A build check now keeps each entry point's runtime exports in step with its declarations.
+
 ## [3.4.0] - 2026-11-05
 
 Headers stay put in page mode, and lists know their real size from the first frame.
@@ -2110,7 +2120,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.4.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.4.1...HEAD
+[3.4.1]: https://github.com/floor/vlist/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/floor/vlist/compare/v3.3.6...v3.4.0
 [3.3.6]: https://github.com/floor/vlist/compare/v3.3.5...v3.3.6
 [3.3.5]: https://github.com/floor/vlist/compare/v3.3.4...v3.3.5
