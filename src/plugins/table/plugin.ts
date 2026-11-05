@@ -461,6 +461,24 @@ export function table<T extends VListItem = VListItem>(
         onColumnClick,
         config.multiSort ?? Array.isArray(config.sort),
       );
+      // page() scrolls the window, so the column header sticks under the
+      // caller's band instead of leaving with the document.
+      if (dom.root.classList.contains(`${classPrefix}--page`)) {
+        const pad = Number.parseFloat(dom.root.style.getPropertyValue("--vlist-page-pad")) || 0;
+        tableHeader.element.style.position = "sticky";
+        tableHeader.element.style.top = `${pad}px`;
+        tableHeader.element.style.zIndex = "6";
+        // The header sits in a row group only as tall as itself. Sticky
+        // cannot leave that box, so the group has to be the window pin.
+        // Its top follows --vlist-page-pad, which page() refreshes.
+        const rowgroup = tableHeader.element.parentElement;
+        if (rowgroup) {
+          rowgroup.style.position = "sticky";
+          rowgroup.style.zIndex = "6";
+          rowgroup.style.height = `${headerHeight}px`;
+          rowgroup.style.top = "var(--vlist-page-pad, 0px)";
+        }
+      }
 
       tableHeader.rebuild(tableLayout);
       if (sorts.length) tableHeader.updateSort(sorts);

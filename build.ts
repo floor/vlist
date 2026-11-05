@@ -5,6 +5,7 @@ import { resolve } from "path";
 import { versionStamp } from "./scripts/version-stamp";
 import { lazyDriver, DRIVER_FILE } from "./scripts/lazy-driver";
 import { sharedCore } from "./scripts/shared-core";
+import { forceInclusionWrapper, sourceValueExports } from "./scripts/shipped-exports";
 
 // Framework entries (#328): vlist/vue, vlist/svelte, vlist/solid, vlist/react.
 // The framework stays external: it is an optional peer dependency.
@@ -18,9 +19,21 @@ const SHARED_CORE_ENTRIES = ["config", ...FRAMEWORK_ENTRIES];
 const CORE_MARKER = "horizontal RTL lists are not supported";
 
 const isDev = process.argv.includes("--watch");
-const withTypes = process.argv.includes("--types");
 
-async function build() {
+export interface BuildOptions {
+  /** Directory the package exports are written under. Defaults to `./dist`. */
+  readonly outDir?: string;
+  /** Entry bundles and declarations only. Skips CSS and the size table. */
+  readonly entriesOnly?: boolean;
+  /** Emit `.d.ts` next to the bundles. The CLI flag `--types` does the same. */
+  readonly types?: boolean;
+}
+
+export async function build(options: BuildOptions = {}): Promise<void> {
+  const dist = options.outDir ?? "./dist";
+  const emitTypes = options.types === true || process.argv.includes("--types");
+  const entriesOnly = options.entriesOnly === true;
+  const distPath = (name: string): string => `${dist}/${name}`;
   const scratch = mkdtempSync("/tmp/vlist-build-");
   const totalStart = performance.now();
   console.log("Building vlist...\n");
@@ -36,7 +49,7 @@ async function build() {
   // Clean dist folder before building to avoid stale files
   const cleanStart = performance.now();
   if (!isDev) {
-    rmSync("./dist", { recursive: true, force: true });
+    rmSync(dist, { recursive: true, force: true });
     // Recreate it rather than leaving the outdir to Bun.build. There are four
     // separate build calls writing into ./dist, and only the first would create
     // it; the rest assume it is there. That produced one failure in thirty
@@ -48,7 +61,7 @@ async function build() {
     // The cause was never reproduced — 29 consecutive builds after it were
     // clean — so this is not a diagnosis. It removes the window in which the
     // directory can be absent while a build writes into it, whatever opened it.
-    mkdirSync("./dist", { recursive: true });
+    mkdirSync(dist, { recursive: true });
     console.log(
       `  Clean       ${(performance.now() - cleanStart).toFixed(0).padStart(6)}ms  dist/`,
     );
@@ -57,21 +70,18 @@ async function build() {
   // Build main bundle
   const bundleStart = performance.now();
 
-  // Bun tree-shakes re-export barrels into empty stubs, so we
-  // reference all exports in a wrapper to force inclusion.
+  // Bun tree-shakes a re-export barrel into an empty stub unless the wrapper
+  // names every value. A hand-kept list drifted: DEFAULT_SEARCH_TEXT stayed
+  // in the .d.ts and disappeared from dist/index.js, so
+  // `import { DEFAULT_SEARCH_TEXT } from "vlist"` failed at link time.
   const entryAbs = resolve("./src/index.ts");
-  const wrapperCode = [
-    `export { createVList, scrollbar, grid, a11y, selection, page,`,
-    `  snapshots, transition, autosize, masonry, data, groups, table, sortable, tree, search, carousel,`,
-    `  registerPreset, getPreset, resolvePreset, full, hero, heroCenter, multi, uncontained,`,
-    `  createStats, rebuild } from "${entryAbs}";`,
-  ].join("\n");
+  const wrapperCode = forceInclusionWrapper(resolve("."), entryAbs);
   const wrapperPath = `${scratch}/entry.ts`;
   writeFileSync(wrapperPath, wrapperCode);
 
   const bundleResult = await Bun.build({
     entrypoints: [wrapperPath],
-    outdir: "./dist",
+    outdir: dist,
     format: "esm",
     target: "browser",
     minify: !isDev,
@@ -89,7 +99,7 @@ async function build() {
     process.exit(1);
   }
 
-  const bundleFile = Bun.file("./dist/index.js");
+  const bundleFile = Bun.file(distPath("index.js"));
   const bundleSize = (bundleFile.size / 1024).toFixed(1);
   const bundleTime = performance.now() - bundleStart;
   console.log(
@@ -99,7 +109,7 @@ async function build() {
   // Opt-in synthetic entry and the native compatibility alias.
   for (const name of ["synthetic"]) {
     const result = await Bun.build({
-      entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
+      entrypoints: [resolve(`./src/${name}.ts`)], outdir: dist,
       format: "esm", target: "browser", minify: !isDev,
       sourcemap: isDev ? "inline" : "none", naming: `${name}.js`,
       define,
@@ -110,12 +120,16 @@ async function build() {
     }
   }
 
-  await Bun.write("./dist/native.js", 'export { createVList } from "./index.js";\n');
+  // Same derivation as the root barrel. native re-exports the shared core
+  // from dist/index.js instead of bundling a second copy.
+  const nativeNames = sourceValueExports(resolve("."), resolve("./src/native.ts"));
+  if (nativeNames.length === 0) throw new Error("src/native.ts has no value exports");
+  await Bun.write(distPath("native.js"), `export { ${nativeNames.join(", ")} } from "./index.js";\n`);
 
   // scroll.mode: the driver index.js imports lazily, built on its own.
   {
     const result = await Bun.build({
-      entrypoints: [resolve("./src/synthetic/driver.ts")], outdir: "./dist",
+      entrypoints: [resolve("./src/synthetic/driver.ts")], outdir: dist,
       format: "esm", target: "browser", minify: !isDev,
       sourcemap: isDev ? "inline" : "none", naming: DRIVER_FILE, define,
     });
@@ -123,13 +137,13 @@ async function build() {
       for (const log of result.logs) console.error(log);
       process.exit(1);
     }
-    if (!(await Bun.file(`./dist/${DRIVER_FILE}`).text()).includes("pan-x pinch-zoom")) {
+    if (!(await Bun.file(distPath(DRIVER_FILE)).text()).includes("pan-x pinch-zoom")) {
       throw new Error(`dist/${DRIVER_FILE} must contain the synthetic driver`);
     }
   }
 
   for (const name of ["index", "native", "synthetic"]) {
-    const text = await Bun.file(`./dist/${name}.js`).text();
+    const text = await Bun.file(distPath(`${name}.js`)).text();
     const hasDriver = text.includes("pan-x pinch-zoom");
     if (hasDriver !== (name === "synthetic")) {
       throw new Error(`Unexpected synthetic driver presence in dist/${name}.js`);
@@ -148,7 +162,7 @@ async function build() {
 
   const configResult = await Bun.build({
     entrypoints: [cfgWrapperPath],
-    outdir: "./dist",
+    outdir: dist,
     format: "esm",
     target: "browser",
     minify: !isDev,
@@ -167,7 +181,7 @@ async function build() {
     process.exit(1);
   }
 
-  const configFile = Bun.file("./dist/config.js");
+  const configFile = Bun.file(distPath("config.js"));
   const configSize = (configFile.size / 1024).toFixed(1);
   const configTime = performance.now() - configStart;
   console.log(
@@ -175,13 +189,13 @@ async function build() {
   );
 
   // The root bundle loads the synthetic driver lazily, never carries it.
-  const indexText = await Bun.file("./dist/index.js").text();
+  const indexText = await Bun.file(distPath("index.js")).text();
   if (!indexText.includes(`import("./${DRIVER_FILE}")`) || indexText.includes("pan-x pinch-zoom")) {
     throw new Error(`dist/index.js must load the synthetic driver lazily from dist/${DRIVER_FILE}`);
   }
   for (const name of FRAMEWORK_ENTRIES) {
     const result = await Bun.build({
-      entrypoints: [resolve(`./src/${name}.ts`)], outdir: "./dist",
+      entrypoints: [resolve(`./src/${name}.ts`)], outdir: dist,
       format: "esm", target: "browser", minify: !isDev,
       sourcemap: isDev ? "inline" : "none", naming: `${name}.js`,
       external: FRAMEWORKS, plugins: [sharedCore], define,
@@ -194,7 +208,7 @@ async function build() {
 
   // Secondary entries import the core from it: no copy of their own, no driver.
   for (const name of SHARED_CORE_ENTRIES) {
-    const text = await Bun.file(`./dist/${name}.js`).text();
+    const text = await Bun.file(distPath(`${name}.js`)).text();
     if (!/from\s*"\.\/index\.js"/.test(text) || text.includes(CORE_MARKER) || text.includes("pan-x pinch-zoom")) {
       throw new Error(`dist/${name}.js must import the core from ./index.js, not carry its own`);
     }
@@ -209,7 +223,7 @@ async function build() {
 
   const internalsResult = await Bun.build({
     entrypoints: [intWrapperPath],
-    outdir: "./dist",
+    outdir: dist,
     format: "esm",
     target: "browser",
     minify: !isDev,
@@ -226,7 +240,7 @@ async function build() {
     process.exit(1);
   }
 
-  const internalsFile = Bun.file("./dist/internals.js");
+  const internalsFile = Bun.file(distPath("internals.js"));
   const internalsSize = (internalsFile.size / 1024).toFixed(1);
   const internalsTime = performance.now() - internalsStart;
   console.log(
@@ -234,9 +248,9 @@ async function build() {
   );
 
   // Generate type declarations (optional — pass --types or used in prepublishOnly)
-  if (withTypes) {
+  if (emitTypes) {
     const dtsStart = performance.now();
-    const tsc = await $`bunx tsc -p tsconfig.build.json`.quiet().nothrow();
+    const tsc = await $`bunx tsc -p tsconfig.build.json --outDir ${dist}`.quiet().nothrow();
     if (tsc.exitCode !== 0) {
       console.error("\nTypeScript declaration generation failed:\n");
       console.error(tsc.stderr.toString());
@@ -246,6 +260,15 @@ async function build() {
     console.log(
       `  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/**/*.d.ts`,
     );
+  }
+
+  // The export guard builds entries and declarations only. CSS and the size
+  // table do not change which names the bundles export.
+  if (entriesOnly) {
+    rmSync(scratch, { recursive: true, force: true });
+    const totalTime = performance.now() - totalStart;
+    console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
+    return;
   }
 
   // Minify and copy CSS
@@ -260,24 +283,24 @@ async function build() {
       .trim();
     writeFileSync(dest, minified);
   };
-  minifyCss("./src/styles/vlist.css", "./dist/vlist.css");
-  minifyCss("./src/styles/vlist-grid.css", "./dist/vlist-grid.css");
-  minifyCss("./src/styles/vlist-masonry.css", "./dist/vlist-masonry.css");
-  minifyCss("./src/styles/vlist-table.css", "./dist/vlist-table.css");
-  minifyCss("./src/styles/vlist-extras.css", "./dist/vlist-extras.css");
-  minifyCss("./src/styles/vlist-tree.css", "./dist/vlist-tree.css");
-  minifyCss("./src/styles/vlist-search.css", "./dist/vlist-search.css");
-  minifyCss("./src/styles/vlist-carousel.css", "./dist/vlist-carousel.css");
+  minifyCss("./src/styles/vlist.css", distPath("vlist.css"));
+  minifyCss("./src/styles/vlist-grid.css", distPath("vlist-grid.css"));
+  minifyCss("./src/styles/vlist-masonry.css", distPath("vlist-masonry.css"));
+  minifyCss("./src/styles/vlist-table.css", distPath("vlist-table.css"));
+  minifyCss("./src/styles/vlist-extras.css", distPath("vlist-extras.css"));
+  minifyCss("./src/styles/vlist-tree.css", distPath("vlist-tree.css"));
+  minifyCss("./src/styles/vlist-search.css", distPath("vlist-search.css"));
+  minifyCss("./src/styles/vlist-carousel.css", distPath("vlist-carousel.css"));
   const cssTime = performance.now() - cssStart;
-  const cssFile = Bun.file("./dist/vlist.css");
+  const cssFile = Bun.file(distPath("vlist.css"));
   const cssSize = (cssFile.size / 1024).toFixed(1);
-  const gridFile = Bun.file("./dist/vlist-grid.css");
+  const gridFile = Bun.file(distPath("vlist-grid.css"));
   const gridSize = (gridFile.size / 1024).toFixed(1);
-  const masonryFile = Bun.file("./dist/vlist-masonry.css");
+  const masonryFile = Bun.file(distPath("vlist-masonry.css"));
   const masonrySize = (masonryFile.size / 1024).toFixed(1);
-  const tableFile = Bun.file("./dist/vlist-table.css");
+  const tableFile = Bun.file(distPath("vlist-table.css"));
   const tableSize = (tableFile.size / 1024).toFixed(1);
-  const extrasFile = Bun.file("./dist/vlist-extras.css");
+  const extrasFile = Bun.file(distPath("vlist-extras.css"));
   const extrasSize = (extrasFile.size / 1024).toFixed(1);
   console.log(
     `  CSS         ${cssTime.toFixed(0).padStart(6)}ms  dist/vlist.css (${cssSize} KB) + grid (${gridSize} KB) + masonry (${masonrySize} KB) + table (${tableSize} KB) + extras (${extrasSize} KB)`,
@@ -350,9 +373,9 @@ async function build() {
     }
   }
 
-  writeFileSync("./dist/size.json", JSON.stringify(sizes) + "\n");
+  writeFileSync(distPath("size.json"), JSON.stringify(sizes) + "\n");
   // Which vlist this dist is: a site serving the bundle reads it from here.
-  writeFileSync("./dist/version.json", JSON.stringify(versionStamp(resolve("."))) + "\n");
+  writeFileSync(distPath("version.json"), JSON.stringify(versionStamp(resolve("."))) + "\n");
 
   const base = sizes.base ?? { minified: "0", gzipped: "0" };
   const baseGz = parseFloat(base.gzipped);
@@ -369,18 +392,20 @@ async function build() {
   console.log(`\nDone in ${totalTime.toFixed(0)}ms`);
 }
 
-if (isDev) {
-  console.log("Watching for changes...\n");
+if (import.meta.main) {
+  if (isDev) {
+    console.log("Watching for changes...\n");
 
-  const { watch } = await import("fs");
-  watch("./src", { recursive: true }, async (_event, filename) => {
-    if (filename && !filename.includes("node_modules")) {
-      console.log(`\n${filename} changed\n`);
-      await build();
-    }
-  });
+    const { watch } = await import("fs");
+    watch("./src", { recursive: true }, async (_event, filename) => {
+      if (filename && !filename.includes("node_modules")) {
+        console.log(`\n${filename} changed\n`);
+        await build();
+      }
+    });
 
-  await build();
-} else {
-  await build();
+    await build();
+  } else {
+    await build();
+  }
 }

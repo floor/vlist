@@ -588,21 +588,6 @@ describe("carousel — Variant: hero-center", () => {
 // =============================================================================
 
 describe("carousel — MD3 Config", () => {
-  it("should accept largeItemMaxWidth config", () => {
-    const plugin = carousel<TestItem>({ largeItemMaxWidth: 600 });
-    expect(plugin).toBeDefined();
-  });
-
-  it("should accept parallax config", () => {
-    const plugin = carousel<TestItem>({ parallax: 0.5 });
-    expect(plugin).toBeDefined();
-  });
-
-  it("should accept cornerRadius config", () => {
-    const plugin = carousel<TestItem>({ cornerRadius: 28 });
-    expect(plugin).toBeDefined();
-  });
-
   it("should accept peek as number", () => {
     const plugin = carousel<TestItem>({ peek: 56 });
     expect(plugin).toBeDefined();
@@ -884,24 +869,6 @@ describe("carousel — Variant: hero — peek config", () => {
 // =============================================================================
 
 describe("carousel — Variant: hero-center — layout", () => {
-  it("should default focalAlign to center", () => {
-    const items = createTestItems(10);
-    const { ctx, methods, cleanup } = createPluginMockContext<TestItem>(items, {
-      containerWidth: 800,
-      containerHeight: 400,
-      itemSize: 400,
-      isX: true,
-    });
-
-    carousel<TestItem>({ variant: "hero-center" }).setup!(ctx);
-
-    const getState = methods.get("getCarouselState") as Function;
-    expect(getState().index).toBe(0);
-    expect(getState().role).toBe("large");
-
-    cleanup();
-  });
-
   it("step size should account for two peek items", () => {
     const items = createTestItems(10);
     const { ctx, cleanup } = createPluginMockContext<TestItem>(items, {

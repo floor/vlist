@@ -247,16 +247,16 @@ describe("page + layout plugins — scrollToIndex keeps the configured scrollPad
 // =============================================================================
 
 describe("page — _getScrollPadding", () => {
-  it.serial("is not published when no scrollPadding is configured", () => {
-    let read: Function | undefined;
+  it.serial("reads zero when no scrollPadding is configured", () => {
+    let read: (() => { start: number; end: number }) | undefined;
     const host = createContainer({ width: 300, height: WINDOW_HEIGHT });
     const list = createVList<TestItem>(
       { container: host, items: createTestItems(5), item: { height: 50, template: simpleTemplate } },
-      [page(), { name: "inspect", priority: 99, setup(ctx): void { read = ctx.hooks.get("_getScrollPadding"); } }],
+      [page(), { name: "inspect", priority: 99, setup(ctx): void { read = ctx.hooks.get("_getScrollPadding") as typeof read; } }],
     );
     built.push({ list, host });
 
-    expect(read).toBeUndefined();
+    expect(read?.()).toEqual({ start: 0, end: 0 });
   });
 
   it.serial("resolves function padding on every read", () => {

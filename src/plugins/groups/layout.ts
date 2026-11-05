@@ -36,6 +36,29 @@ const EMPTY_GROUP: GroupBoundary = {
 // Binary Search Helpers
 // =============================================================================
 
+const readHeaderIndex = (group: GroupBoundary): number => group.headerLayoutIndex;
+const readDataIndex = (group: GroupBoundary): number => group.firstDataIndex;
+
+/**
+ * Last index whose read(item) is <= limit. Empty input returns 0.
+ * Both group lookups use this one search. `read` is a stable function,
+ * so a lookup allocates nothing.
+ */
+export const findLastAtMost = (
+  items: readonly GroupBoundary[],
+  read: (item: GroupBoundary) => number,
+  limit: number,
+): number => {
+  let lo = 0;
+  let hi = items.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (read(items[mid]!) <= limit) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+};
+
 /**
  * Find the last group whose headerLayoutIndex <= layoutIndex.
  * Returns the group's index in the groups array.
@@ -43,21 +66,7 @@ const EMPTY_GROUP: GroupBoundary = {
 export const findGroupByLayoutIndex = (
   groups: readonly GroupBoundary[],
   layoutIndex: number,
-): number => {
-  let lo = 0;
-  let hi = groups.length - 1;
-
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >>> 1;
-    if (groups[mid]!.headerLayoutIndex <= layoutIndex) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return lo;
-};
+): number => findLastAtMost(groups, readHeaderIndex, layoutIndex);
 
 /**
  * Find the last group whose firstDataIndex <= dataIndex.
@@ -66,21 +75,7 @@ export const findGroupByLayoutIndex = (
 export const findGroupByDataIndex = (
   groups: readonly GroupBoundary[],
   dataIndex: number,
-): number => {
-  let lo = 0;
-  let hi = groups.length - 1;
-
-  while (lo < hi) {
-    const mid = (lo + hi + 1) >>> 1;
-    if (groups[mid]!.firstDataIndex <= dataIndex) {
-      lo = mid;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  return lo;
-};
+): number => findLastAtMost(groups, readDataIndex, dataIndex);
 
 // =============================================================================
 // Layout Builder
