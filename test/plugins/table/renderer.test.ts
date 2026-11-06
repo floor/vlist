@@ -1399,6 +1399,29 @@ describe("group headers", () => {
 
       container.remove();
     });
+
+    it("should not claim placeholder selection when a mounted row flips between group header and data row", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      // First render: index 0 is a group header
+      renderer.render(items, { start: 0, end: 3 }, EMPTY_SET, -1);
+
+      // Select placeholder at index 0, then flip index 0 from group header to data row
+      const selected = new Set<string | number>(["__placeholder_0"]);
+      const noGroupItems: GroupTestItem[] = [
+        { id: 100, name: "Zack", email: "z@test.com", role: "admin" },
+        ...items.slice(1, 4),
+      ];
+      renderer.setGroupHeaderFn(null, null);
+      renderer.render(noGroupItems, { start: 0, end: 3 }, selected, -1);
+
+      expect(selected.has("__placeholder_0")).toBe(true);
+      expect(selected.has(100)).toBe(false);
+      expect(renderer.getElement(0)!.classList.contains("vlist-item--selected")).toBe(false);
+
+      container.remove();
+    });
   });
 
   describe("updateItem with group headers", () => {

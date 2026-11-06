@@ -124,7 +124,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   let cells: HTMLElement[] = [];
   let sortIndicators: (HTMLElement | null)[] = [];
-  let isVisible = true;
   let currentSortKey: string | null = null;
   let currentSortDirection: "asc" | "desc" = "asc";
   let currentLayout: TableLayout<T> | null = null;
@@ -137,6 +136,17 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   // Keyboard focus state (roving tabindex)
   let focusedCellIndex = 0;
+
+  const setTabStop = (index: number): void => {
+    cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
+    focusedCellIndex = index;
+    if (cells[index]) cells[index]!.tabIndex = 0;
+  };
+
+  const findCellIndex = (target: EventTarget | null): number => {
+    const cell = (target as HTMLElement | null)?.closest<HTMLElement>("[data-column-key]");
+    return cell ? cells.indexOf(cell) : -1;
+  };
 
   // =========================================================================
   // Cell Creation
@@ -153,24 +163,10 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cell.tabIndex = colIndex ? -1 : 0;
     cell.dataset.columnKey = col.def.key;
 
-    // Focus can arrive without the arrow keys: a click focuses the clicked
-    // cell (mousedown's default action on its tabindex), a programmatic
-    // focus() does too, and a control inside a label takes focus into the
-    // cell. Wherever focus lands the index follows it, so Enter, Space and
-    // Ctrl+Arrow act on the cell the user is on: the index and the header's
-    // one tab stop move here (#348).
-    cell.addEventListener("focusin", () => {
-      cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
-      focusedCellIndex = colIndex;
-      cell.tabIndex = 0;
-    });
-
     // Alignment modifier class (left is the default — no class needed)
     const align = col.def.align;
-    if (align === "center") {
-      cell.classList.add(`${classPrefix}-table-header-cell--center`);
-    } else if (align === "right") {
-      cell.classList.add(`${classPrefix}-table-header-cell--right`);
+    if (align === "center" || align === "right") {
+      cell.classList.add(`${classPrefix}-table-header-cell--${align}`);
     }
 
     // Content wrapper
@@ -293,15 +289,12 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       const indicator = sortIndicators[i];
       if (!indicator) continue;
 
-      const col = columns[i]!;
-
-      if (col.def.key === key) {
-        indicator.textContent = direction === "asc" ? SORT_ASC : SORT_DESC;
-        indicator.style.opacity = "0.7";
+      const active = columns[i]!.def.key === key;
+      indicator.textContent = active ? (direction === "asc" ? SORT_ASC : SORT_DESC) : "";
+      indicator.style.opacity = active ? "0.7" : "0";
+      if (active) {
         cells[i]!.setAttribute("aria-sort", direction === "asc" ? "ascending" : "descending");
       } else {
-        indicator.textContent = "";
-        indicator.style.opacity = "0";
         cells[i]!.removeAttribute("aria-sort");
       }
     }
@@ -331,9 +324,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     e.stopPropagation();
 
     dragColumnIndex = +target.dataset.resizeIndex!;
-    if (!currentLayout) return;
-
-    const col = currentLayout.getColumn(dragColumnIndex);
+    const col = currentLayout?.getColumn(dragColumnIndex);
     if (!col?.resizable) return;
 
     isDragging = true;
@@ -362,8 +353,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     const delta = e.clientX - dragStartX;
     if (Math.abs(delta) < MIN_DRAG_DELTA) return;
 
-    const newWidth = Math.max(0, dragStartWidth + delta);
-    onResize(dragColumnIndex, newWidth);
+    onResize(dragColumnIndex, Math.max(0, dragStartWidth + delta));
   };
 
   const onPointerUp = (e: PointerEvent): void => {
@@ -395,76 +385,55 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   };
 
   // =========================================================================
-  // Click Interaction (Sort + General)
+  // Click & Sort Interaction
   // =========================================================================
 
+  const emitSort = (col: ResolvedColumn<T> | undefined, index: number): boolean => {
+    if (!col?.def.sortable || !onSort) return false;
+    const key = col.def.key;
+    const direction = currentSortKey === key
+      ? (currentSortDirection === "asc" ? "desc" : null)
+      : "asc";
+    onSort({ key, index, direction });
+    return true;
+  };
+
   const onCellClick = (e: MouseEvent): void => {
-    // Ignore clicks on resize handles
     const target = e.target as HTMLElement;
-    if (target.dataset.resizeIndex) return;
-    if (isDragging) return;
+    if (target.dataset.resizeIndex || isDragging || !currentLayout) return;
 
-    // Walk up to find the header cell
-    let cell: HTMLElement | null = target;
-    while (cell && !cell.dataset.columnKey) {
-      cell = cell.parentElement;
-      // Don't walk outside the header
-      if (cell === element || cell === null) return;
-    }
-
-    const key = cell.dataset.columnKey!;
-    if (!currentLayout) return;
-
-    // Find the column
-    const columns = currentLayout.columns;
-    let colIndex = -1;
-    for (let i = 0; i < columns.length; i++) {
-      if (columns[i]!.def.key === key) {
-        colIndex = i;
-        break;
-      }
-    }
+    const colIndex = findCellIndex(target);
     if (colIndex === -1) return;
 
     // A control the caller supplied inside the cell (a button in the label)
     // owns its own clicks; only the cell itself, its text and our own
     // indicator sort the column.
     const control = target.closest(INTERACTIVE);
-    if (control && control !== cell) return;
+    if (control && control !== cells[colIndex]) return;
 
-    const col = columns[colIndex]!;
-
-    // Emit general click
-    if (onClick) {
-      onClick({ key, index: colIndex, event: e });
-    }
-
-    // Emit sort event for sortable columns
-    if (col.def.sortable && onSort) {
-      let direction: "asc" | "desc" | null;
-
-      if (currentSortKey === key) {
-        // Cycle: asc → desc → null
-        direction = currentSortDirection === "asc" ? "desc" : null;
-      } else {
-        direction = "asc";
-      }
-
-      onSort({ key, index: colIndex, direction });
-    }
+    const col = currentLayout.columns[colIndex]!;
+    onClick?.({ key: col.def.key, index: colIndex, event: e });
+    emitSort(col, colIndex);
   };
 
   // =========================================================================
   // Keyboard Navigation (roving tabindex on header cells)
   // =========================================================================
 
+  // Focus can arrive without the arrow keys: a click focuses the clicked
+  // cell (mousedown's default action on its tabindex), a programmatic
+  // focus() does too, and a control inside a label takes focus into the
+  // cell. Wherever focus lands the index follows it, so Enter, Space and
+  // Ctrl+Arrow act on the cell the user is on (#348).
+  const onFocusIn = (e: FocusEvent): void => {
+    const idx = findCellIndex(e.target);
+    if (idx >= 0) setTabStop(idx);
+  };
+
   const moveFocusToCell = (index: number): void => {
     if (index < 0 || index >= cells.length) return;
-    cells[focusedCellIndex]?.setAttribute("tabindex", "-1");
-    focusedCellIndex = index;
-    const cell = cells[focusedCellIndex]!;
-    cell.tabIndex = 0;
-    cell.focus();
+    setTabStop(index);
+    cells[index]!.focus();
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {
@@ -475,19 +444,18 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     const control = (e.target as HTMLElement).closest(INTERACTIVE);
     if (control && !control.hasAttribute("data-column-key")) return;
 
-    if (key === "ArrowRight") {
+    if (key === "ArrowRight" || key === "ArrowLeft") {
+      const dir = key === "ArrowRight" ? 1 : -1;
       if (e.ctrlKey || e.metaKey) {
-        // Ctrl+Right: resize column wider
-        if (!currentLayout) return;
-        const col = currentLayout.getColumn(focusedCellIndex);
+        const col = currentLayout?.getColumn(focusedCellIndex);
         if (col?.resizable) {
-          onResize(focusedCellIndex, col.width + RESIZE_STEP);
+          onResize(focusedCellIndex, col.width + dir * RESIZE_STEP);
           e.preventDefault();
         }
       } else {
-        // Move focus to next header cell
-        if (focusedCellIndex < cells.length - 1) {
-          moveFocusToCell(focusedCellIndex + 1);
+        const next = focusedCellIndex + dir;
+        if (next >= 0 && next < cells.length) {
+          moveFocusToCell(next);
           e.preventDefault();
         }
       }
@@ -495,52 +463,15 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       return;
     }
 
-    if (key === "ArrowLeft") {
-      if (e.ctrlKey || e.metaKey) {
-        // Ctrl+Left: resize column narrower
-        if (!currentLayout) return;
-        const col = currentLayout.getColumn(focusedCellIndex);
-        if (col?.resizable) {
-          onResize(focusedCellIndex, col.width - RESIZE_STEP);
-          e.preventDefault();
-        }
-      } else {
-        // Move focus to previous header cell
-        if (focusedCellIndex > 0) {
-          moveFocusToCell(focusedCellIndex - 1);
-          e.preventDefault();
-        }
-      }
-      e.stopPropagation();
-      return;
-    }
-
-    if (key === "Home") {
-      moveFocusToCell(0);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    if (key === "End") {
-      moveFocusToCell(cells.length - 1);
+    if (key === "Home" || key === "End") {
+      moveFocusToCell(key === "Home" ? 0 : cells.length - 1);
       e.preventDefault();
       e.stopPropagation();
       return;
     }
 
     if (key === "Enter" || key === " ") {
-      // Trigger sort on sortable columns
-      if (!currentLayout) return;
-      const col = currentLayout.getColumn(focusedCellIndex);
-      if (col?.def.sortable && onSort) {
-        let direction: "asc" | "desc" | null;
-        if (currentSortKey === col.def.key) {
-          direction = currentSortDirection === "asc" ? "desc" : null;
-        } else {
-          direction = "asc";
-        }
-        onSort({ key: col.def.key, index: focusedCellIndex, direction });
+      if (emitSort(currentLayout?.getColumn(focusedCellIndex), focusedCellIndex)) {
         e.preventDefault();
       }
       e.stopPropagation();
@@ -548,11 +479,9 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
 
     if (key === "ArrowDown") {
-      // Return focus to the grid body
       root.focus();
       e.preventDefault();
       e.stopPropagation();
-      return;
     }
   };
 
@@ -563,20 +492,17 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   element.addEventListener("pointerdown", onPointerDown);
   element.addEventListener("click", onCellClick);
   element.addEventListener("keydown", onKeyDown);
+  element.addEventListener("focusin", onFocusIn);
 
   // =========================================================================
   // Visibility
   // =========================================================================
 
   const show = (): void => {
-    if (isVisible) return;
-    isVisible = true;
     element.style.display = "";
   };
 
   const hide = (): void => {
-    if (!isVisible) return;
-    isVisible = false;
     element.style.display = "none";
   };
 
@@ -588,6 +514,7 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     element.removeEventListener("pointerdown", onPointerDown);
     element.removeEventListener("click", onCellClick);
     element.removeEventListener("keydown", onKeyDown);
+    element.removeEventListener("focusin", onFocusIn);
 
     // Clear the CSS variable set during setup
     root.style.removeProperty('--vlist-table-header-height');
@@ -597,7 +524,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cells = [];
     sortIndicators = [];
     currentLayout = null;
-    isVisible = false;
   };
 
   // =========================================================================
