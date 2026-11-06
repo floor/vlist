@@ -18,7 +18,7 @@ import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 
 import { createTableLayout } from "./layout";
-import { createTableHeader } from "./header";
+import { createTableHeader, toSorts } from "./header";
 import { createTableRenderer, type TableRendererInstance } from "./renderer";
 
 import type {
@@ -26,6 +26,7 @@ import type {
   TableColumn,
   TableLayout,
   TableHeader,
+  TableSort,
   ColumnResizeEvent,
   ColumnSortEvent,
   ColumnClickEvent,
@@ -51,10 +52,12 @@ export interface TableMethods<T extends VListItem = VListItem> {
   resizeColumn(keyOrIndex: string | number, width: number): void;
   /** Current width of every column, by key. */
   getColumnWidths(): Record<string, number>;
-  /** Set the sort column and direction. */
-  setSort(key: string | null, direction?: "asc" | "desc"): void;
-  /** Current sort column and direction. */
+  /** Set the sort column(s) and direction. */
+  setSort(keyOrSorts: string | null | readonly TableSort[], direction?: "asc" | "desc"): void;
+  /** Current primary sort column and direction. */
   getSort(): { key: string | null; direction: "asc" | "desc" };
+  /** Current sort columns in priority order (primary first). */
+  getSorts(): TableSort[];
 }
 
 export function table<T extends VListItem = VListItem>(
@@ -355,8 +358,7 @@ export function table<T extends VListItem = VListItem>(
         (typeof rowHeight === "number" ? rowHeight : 40);
 
       // ── Sort state ──────────────────────────────────────────────
-      let sortKey: string | null = config.sort?.key ?? null;
-      let sortDirection: "asc" | "desc" = config.sort?.direction ?? "asc";
+      let sorts = toSorts(config.sort);
 
       // ── Create table layout ─────────────────────────────────────
       tableLayout = createTableLayout<T>(
@@ -436,10 +438,9 @@ export function table<T extends VListItem = VListItem>(
 
       // ── Column sort handler ─────────────────────────────────────
       const onColumnSort = (event: ColumnSortEvent): void => {
-        sortKey = event.direction === null ? null : event.key;
-        sortDirection = event.direction ?? "asc";
-        tableHeader?.updateSort(sortKey, sortDirection);
-        emitter.emit("column:sort" as never, event as never);
+        sorts = toSorts(event.sorts ?? (event.direction ? event.key : null), event.direction ?? "asc");
+        tableHeader?.updateSort(sorts);
+        emitter.emit("column:sort" as never, { ...event, sorts: toSorts(sorts) } as ColumnSortEvent as never);
       };
 
       // ── Column click handler ────────────────────────────────────
@@ -455,6 +456,7 @@ export function table<T extends VListItem = VListItem>(
         onColumnResize,
         onColumnSort,
         onColumnClick,
+        config.multiSort ?? Array.isArray(config.sort),
       );
       // page() scrolls the window, so the column header sticks under the
       // caller's band instead of leaving with the document.
@@ -476,7 +478,7 @@ export function table<T extends VListItem = VListItem>(
       }
 
       tableHeader.rebuild(tableLayout);
-      if (sortKey) tableHeader.updateSort(sortKey, sortDirection);
+      if (sorts.length) tableHeader.updateSort(sorts);
       dom.content.style.minWidth = `${tableLayout.totalWidth}px`;
 
       // ── Create table renderer ───────────────────────────────────
@@ -546,15 +548,20 @@ export function table<T extends VListItem = VListItem>(
         return result;
       });
 
-      ctx.hooks.method("setSort", (key: string | null, direction?: "asc" | "desc"): void => {
-        sortKey = key;
-        sortDirection = direction ?? "asc";
-        tableHeader?.updateSort(sortKey, sortDirection);
-      });
+      ctx.hooks.method(
+        "setSort",
+        (keyOrSorts: string | null | readonly TableSort[], direction: "asc" | "desc" = "asc"): void => {
+          sorts = toSorts(keyOrSorts, direction);
+          tableHeader?.updateSort(sorts);
+        },
+      );
 
-      ctx.hooks.method("getSort", (): { key: string | null; direction: "asc" | "desc" } => {
-        return { key: sortKey, direction: sortDirection };
-      });
+      ctx.hooks.method("getSort", (): { key: string | null; direction: "asc" | "desc" } => ({
+        key: sorts[0]?.key ?? null,
+        direction: sorts[0]?.direction ?? "asc",
+      }));
+
+      ctx.hooks.method("getSorts", (): TableSort[] => toSorts(sorts));
 
       ctx.hooks.method("_getTableLayout", () => tableLayout);
       ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
