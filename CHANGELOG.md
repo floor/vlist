@@ -11,6 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-07
+
+Table headers sort by more than one column.
+
+Who is affected: lists using `table()` whose users should sort by several columns. Nothing changes unless `multiSort: true` is set or `sort` is given an array.
+
+### Added
+
+- `table({ multiSort: true })` lets users sort by several columns: Shift, Ctrl or Cmd with a click (or with Enter or Space) adds a column, flips its direction, or removes it, and the header shows each column's priority. `sort` and `setSort()` accept an ordered array of `{ key, direction }`, `getSorts()` returns the active sorts, and `column:sort` carries `sorts`. As before, the table shows the indicators and reports the order; your code sorts the data. `aria-sort` stays on the primary column, and screen readers hear the full order through a polite announcement.
+
 ## [3.4.1] - 2026-11-05
 
 Every export the types declare now ships at runtime.
@@ -2120,7 +2130,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.4.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.5.0...HEAD
+[3.5.0]: https://github.com/floor/vlist/compare/v3.4.1...v3.5.0
 [3.4.1]: https://github.com/floor/vlist/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/floor/vlist/compare/v3.3.6...v3.4.0
 [3.3.6]: https://github.com/floor/vlist/compare/v3.3.5...v3.3.6
