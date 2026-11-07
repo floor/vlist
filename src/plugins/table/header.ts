@@ -1,82 +1,39 @@
 /**
  * vlist/table - Header
  * Manages the sticky header row that sits above the scrolling viewport.
- *
- * The header is a positioned DOM element inserted into the vlist root
- * container (above the viewport, like the sticky group header). It contains
- * one cell per column, each showing the column label. Resize handles are
- * rendered at the right edge of each resizable column's header cell.
- *
- * Layout:
- *   .vlist (root, position: relative)
- *   ├── .vlist-table-header (position: absolute, top: 0, z-index: 5)
- *   │   ├── .vlist-table-header-cell [col 0]
- *   │   │   ├── .vlist-table-header-content (label)
- *   │   │   ├── .vlist-table-header-sort (sort indicator)
- *   │   │   └── .vlist-table-header-resize (drag handle)
- *   │   ├── .vlist-table-header-cell [col 1]
- *   │   │   └── ...
- *   │   └── ...
- *   └── .vlist-viewport (scrollable, top offset by headerHeight)
- *
- * Resize interaction:
- *   mousedown on handle → pointermove updates column width → pointerup commits
- *   During drag, a class is added to the root for cursor override.
- *
- * Sort interaction:
- *   click on a sortable header cell emits column:sort via the provided callback.
- *   The header renders a visual indicator (▲/▼) for the active sort column.
- *
- * Horizontal scroll sync:
- *   The header's scrollLeft is kept in sync with the viewport's scrollLeft
- *   via the `syncScroll` method, called from the feature's afterScroll hook.
  */
 
 import type { VListItem } from "../../types";
 import type {
   TableLayout,
   TableHeader,
+  TableSort,
   ResolvedColumn,
   ColumnSortEvent,
   ColumnClickEvent,
 } from "./types";
 
-// =============================================================================
-// Constants
-// =============================================================================
-
-/**
- * The core's focusable set (src/core/dom.ts). An event that lands on one of
- * these inside a header cell belongs to it, not to the header: a caller's
- * button in a label opens its own menu instead of sorting the column.
- */
 const INTERACTIVE = "a[href],button,input,select,textarea,[tabindex]";
-
-/** Minimum drag distance (px) before resize is committed */
 const MIN_DRAG_DELTA = 1;
-
-/** Keyboard resize step in pixels */
 const RESIZE_STEP = 10;
-
-/** Sort indicator characters */
 const SORT_ASC = "\u25B2"; // ▲
 const SORT_DESC = "\u25BC"; // ▼
+let nextLiveId = 0;
 
-// =============================================================================
-// Factory
-// =============================================================================
+export const toSorts = (v: unknown, direction: "asc" | "desc" = "asc"): TableSort[] =>
+  Array.isArray(v)
+    ? v.map((s) => ({ key: s.key, direction: s.direction }))
+    : typeof v === "string"
+      ? [{ key: v, direction }]
+      : (v as { key?: string; direction?: "asc" | "desc" })?.key
+        ? [{ key: (v as { key: string }).key, direction: (v as { direction?: "asc" | "desc" }).direction ?? "asc" }]
+        : [];
 
-/**
- * Create a TableHeader instance.
- *
- * @param root - The vlist root element (.vlist)
- * @param headerHeight - Height of the header row in pixels
- * @param classPrefix - CSS class prefix (default: 'vlist')
- * @param onResize - Callback when a column is resized (receives column index and new width)
- * @param onSort - Callback when a sortable header is clicked
- * @param onClick - Callback when any header cell is clicked
- * @returns TableHeader instance
- */
+const setAttr = (el: HTMLElement, name: string, val?: string | null | false): void => {
+  if (val) el.setAttribute(name, val);
+  else el.removeAttribute(name);
+};
+
 export const createTableHeader = <T extends VListItem = VListItem>(
   root: HTMLElement,
   headerHeight: number,
@@ -84,13 +41,8 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   onResize: (columnIndex: number, newWidth: number) => void,
   onSort?: (event: ColumnSortEvent) => void,
   onClick?: (event: ColumnClickEvent) => void,
+  multiSort: boolean = false,
 ): TableHeader<T> => {
-  // =========================================================================
-  // DOM Setup
-  // =========================================================================
-
-  // Rowgroup wrapper — ensures the header row sits inside a proper
-  // ARIA rowgroup within the grid (dom.root has role="grid").
   const rowgroup = document.createElement("div");
   rowgroup.setAttribute("role", "rowgroup");
 
@@ -98,43 +50,27 @@ export const createTableHeader = <T extends VListItem = VListItem>(
   element.className = `${classPrefix}-table-header`;
   element.setAttribute("role", "row");
   element.setAttribute("aria-rowindex", "1");
-
-  // Only dynamic style — height comes from config
   element.style.height = `${headerHeight}px`;
 
-  // Scroll container inside the header — this is what we scroll in sync
-  // with the viewport for horizontal scrolling.
   const scrollContainer = document.createElement("div");
   scrollContainer.className = `${classPrefix}-table-header-scroll`;
   scrollContainer.setAttribute("role", "presentation");
   element.appendChild(scrollContainer);
 
-  // Insert header rowgroup as first child of root (above viewport)
   rowgroup.appendChild(element);
   root.insertBefore(rowgroup, root.firstChild);
-
-  // Expose the header height as a CSS variable on the root so the custom
-  // scrollbar (if active) can offset its track below the header row.
-  // The viewport layout is handled entirely by CSS flex — no inline style needed.
-  root.style.setProperty('--vlist-table-header-height', `${headerHeight}px`);
-
-  // =========================================================================
-  // State
-  // =========================================================================
+  root.style.setProperty("--vlist-table-header-height", `${headerHeight}px`);
 
   let cells: HTMLElement[] = [];
   let sortIndicators: (HTMLElement | null)[] = [];
-  let currentSortKey: string | null = null;
-  let currentSortDirection: "asc" | "desc" = "asc";
+  let currentSorts: TableSort[] = [];
   let currentLayout: TableLayout<T> | null = null;
+  let liveRegion: HTMLElement | null = null;
 
-  // Drag state
   let isDragging = false;
   let dragColumnIndex = -1;
   let dragStartX = 0;
   let dragStartWidth = 0;
-
-  // Keyboard focus state (roving tabindex)
   let focusedCellIndex = 0;
 
   const setTabStop = (index: number): void => {
@@ -148,13 +84,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     return cell ? cells.indexOf(cell) : -1;
   };
 
-  // =========================================================================
-  // Cell Creation
-  // =========================================================================
-
-  /**
-   * Create a single header cell element for a resolved column.
-   */
   const createCell = (col: ResolvedColumn<T>, colIndex: number): HTMLElement => {
     const cell = document.createElement("div");
     cell.className = `${classPrefix}-table-header-cell`;
@@ -163,21 +92,15 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     cell.tabIndex = colIndex ? -1 : 0;
     cell.dataset.columnKey = col.def.key;
 
-    // Alignment modifier class (left is the default — no class needed)
     const align = col.def.align;
     if (align === "center" || align === "right") {
       cell.classList.add(`${classPrefix}-table-header-cell--${align}`);
     }
 
-    // Content wrapper
     const content = document.createElement("div");
     content.className = `${classPrefix}-table-header-content`;
 
-    // Render label
-    const label = col.def.header
-      ? col.def.header(col.def)
-      : col.def.label;
-
+    const label = col.def.header ? col.def.header(col.def) : col.def.label;
     if (typeof label === "string") {
       content.textContent = label;
     } else {
@@ -185,7 +108,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
     cell.appendChild(content);
 
-    // Sort indicator — only created for sortable columns (avoids unnecessary DOM nodes)
     if (col.def.sortable) {
       const sortIndicator = document.createElement("span");
       sortIndicator.className = `${classPrefix}-table-header-sort`;
@@ -194,127 +116,107 @@ export const createTableHeader = <T extends VListItem = VListItem>(
       sortIndicators.push(sortIndicator);
       cell.classList.add(`${classPrefix}-table-header-cell--sortable`);
     } else {
-      // Keep index alignment with columns array
       sortIndicators.push(null);
     }
 
-    // Resize handle (at right edge)
     if (col.resizable) {
       const handle = document.createElement("div");
       handle.className = `${classPrefix}-table-header-resize`;
       handle.dataset.resizeIndex = String(colIndex);
-
       cell.appendChild(handle);
     }
 
     return cell;
   };
 
-  // =========================================================================
-  // Build / Rebuild
-  // =========================================================================
-
-  /**
-   * Build all header cells from a layout.
-   */
   const rebuild = (layout: TableLayout<T>): void => {
     currentLayout = layout;
-
-    // Clear existing cells
     scrollContainer.textContent = "";
     cells = [];
     sortIndicators = [];
-    // Rebuilt cells start with their one tab stop on the first column.
     focusedCellIndex = 0;
 
     const columns = layout.columns;
-
     for (let i = 0; i < columns.length; i++) {
-      const col = columns[i]!;
-      const cell = createCell(col, i);
+      const cell = createCell(columns[i]!, i);
       cells.push(cell);
       scrollContainer.appendChild(cell);
     }
 
-    // Apply widths and offsets
     update(layout);
-
-    // Restore sort indicator if active
-    if (currentSortKey) {
-      updateSort(currentSortKey, currentSortDirection);
-    }
+    if (currentSorts.length) updateSort(currentSorts);
   };
 
-  // =========================================================================
-  // Update (positions & widths)
-  // =========================================================================
-
-  /**
-   * Update header cell widths to match the layout.
-   * Called after layout.resolve() or after a resize.
-   */
   const update = (layout: TableLayout<T>): void => {
     currentLayout = layout;
     const columns = layout.columns;
-
-    // Set scroll container to total column width
     scrollContainer.style.width = `${layout.totalWidth}px`;
-
     for (let i = 0; i < cells.length && i < columns.length; i++) {
-      const cell = cells[i]!;
-      const col = columns[i]!;
-      cell.style.width = `${col.width}px`;
+      cells[i]!.style.width = `${columns[i]!.width}px`;
     }
   };
 
-  // =========================================================================
-  // Sort Indicator
-  // =========================================================================
-
-  /**
-   * Update the sort indicator on header cells.
-   *
-   * @param key - Column key to show sort on, or null to clear
-   * @param direction - Sort direction
-   */
-  const updateSort = (key: string | null, direction: "asc" | "desc"): void => {
-    currentSortKey = key;
-    currentSortDirection = direction;
-
+  const updateSort = (
+    keyOrSorts: string | null | readonly TableSort[],
+    direction: "asc" | "desc" = "asc",
+  ): void => {
+    currentSorts = toSorts(keyOrSorts, direction);
     if (!currentLayout) return;
 
     const columns = currentLayout.columns;
+    const isMulti = currentSorts.length > 1;
+    let descText = "";
+
+    if (isMulti) {
+      const parts: string[] = [];
+      for (let i = 0; i < currentSorts.length; i++) {
+        const s = currentSorts[i]!;
+        const raw = columns.find((c) => c.def.key === s.key)?.def.label;
+        parts.push(
+          `${(typeof raw === "string" ? raw : raw?.textContent) || s.key} ${s.direction === "asc" ? "ascending" : "descending"}`,
+        );
+      }
+      descText = `sorted by ${parts.join(", then ")}`;
+      if (!liveRegion) {
+        liveRegion = document.createElement("div");
+        liveRegion.id = `${classPrefix}-table-live-${++nextLiveId}`;
+        liveRegion.style.cssText =
+          "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
+          "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+        liveRegion.setAttribute("aria-live", "polite");
+        rowgroup.appendChild(liveRegion);
+      }
+      liveRegion.textContent = descText;
+    } else if (liveRegion) {
+      liveRegion.textContent = "";
+    }
+
+    const setDesc = (el: HTMLElement, on: boolean): void => {
+      setAttr(el, "aria-description", on && descText);
+      setAttr(el, "aria-describedby", on && liveRegion!.id);
+    };
+    setDesc(element, isMulti);
 
     for (let i = 0; i < sortIndicators.length && i < columns.length; i++) {
       const indicator = sortIndicators[i];
       if (!indicator) continue;
 
-      const active = columns[i]!.def.key === key;
-      indicator.textContent = active ? (direction === "asc" ? SORT_ASC : SORT_DESC) : "";
-      indicator.style.opacity = active ? "0.7" : "0";
-      if (active) {
-        cells[i]!.setAttribute("aria-sort", direction === "asc" ? "ascending" : "descending");
-      } else {
-        cells[i]!.removeAttribute("aria-sort");
-      }
+      const cell = cells[i]!;
+      const sortIdx = currentSorts.findIndex((s) => s.key === columns[i]!.def.key);
+      const s = currentSorts[sortIdx];
+
+      indicator.textContent = s ? (s.direction === "asc" ? SORT_ASC : SORT_DESC) : "";
+      indicator.style.opacity = s ? "0.7" : "0";
+      if (s && isMulti) indicator.dataset.sortPriority = String(sortIdx + 1);
+      else delete indicator.dataset.sortPriority;
+      setAttr(cell, "aria-sort", sortIdx === 0 && (s!.direction === "asc" ? "ascending" : "descending"));
+      setDesc(cell, sortIdx > 0);
     }
   };
 
-  // =========================================================================
-  // Horizontal Scroll Sync
-  // =========================================================================
-
-  /**
-   * Synchronize header scroll position with the viewport.
-   * Call this from the feature's scroll handler.
-   */
   const syncScroll = (scrollLeft: number): void => {
     scrollContainer.style.transform = `translateX(${-scrollLeft}px)`;
   };
-
-  // =========================================================================
-  // Resize Interaction (Pointer Events)
-  // =========================================================================
 
   const onPointerDown = (e: PointerEvent): void => {
     const target = e.target as HTMLElement;
@@ -331,17 +233,11 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     dragStartX = e.clientX;
     dragStartWidth = col.width;
 
-    // Set cursor on the root to avoid flickering during drag
     root.classList.add(`${classPrefix}--col-resizing`);
     root.style.cursor = "col-resize";
-
-    // Highlight the active resize handle
     target.classList.add(`${classPrefix}-table-header-resize--active`);
-
-    // Capture pointer for tracking outside the element
     target.setPointerCapture(e.pointerId);
 
-    // Bind move and up handlers
     target.addEventListener("pointermove", onPointerMove);
     target.addEventListener("pointerup", onPointerUp);
     target.addEventListener("pointercancel", onPointerUp);
@@ -349,52 +245,49 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   const onPointerMove = (e: PointerEvent): void => {
     if (!isDragging || !currentLayout) return;
-
     const delta = e.clientX - dragStartX;
     if (Math.abs(delta) < MIN_DRAG_DELTA) return;
-
     onResize(dragColumnIndex, Math.max(0, dragStartWidth + delta));
   };
 
   const onPointerUp = (e: PointerEvent): void => {
     if (!isDragging) return;
-
     const target = e.target as HTMLElement;
-
-    // Remove move/up listeners
     target.removeEventListener("pointermove", onPointerMove);
     target.removeEventListener("pointerup", onPointerUp);
     target.removeEventListener("pointercancel", onPointerUp);
-
-    // Release pointer capture
     try {
       target.releasePointerCapture(e.pointerId);
-    } catch {
-      // Pointer may have been released already
-    }
-
-    // Reset drag handle highlight
+    } catch {}
     target.classList.remove(`${classPrefix}-table-header-resize--active`);
-
-    // Reset cursor
     root.classList.remove(`${classPrefix}--col-resizing`);
     root.style.cursor = "";
-
     isDragging = false;
     dragColumnIndex = -1;
   };
 
-  // =========================================================================
-  // Click & Sort Interaction
-  // =========================================================================
-
-  const emitSort = (col: ResolvedColumn<T> | undefined, index: number): boolean => {
+  const emitSort = (col: ResolvedColumn<T> | undefined, index: number, addMulti: boolean): boolean => {
     if (!col?.def.sortable || !onSort) return false;
     const key = col.def.key;
-    const direction = currentSortKey === key
-      ? (currentSortDirection === "asc" ? "desc" : null)
-      : "asc";
-    onSort({ key, index, direction });
+    const idx = currentSorts.findIndex((s) => s.key === key);
+    if (addMulti && multiSort) {
+      const prev = currentSorts[idx]?.direction;
+      const direction: "asc" | "desc" | null = prev ? (prev === "asc" ? "desc" : null) : "asc";
+      const sorts: TableSort[] = !prev
+        ? [...currentSorts, { key, direction: "asc" }]
+        : direction
+          ? currentSorts.map((s, i) => (i === idx ? { key, direction } : s))
+          : currentSorts.filter((_, i) => i !== idx);
+      onSort({ key, index, direction, sorts });
+    } else {
+      const sole = currentSorts.length === 1 && !idx ? currentSorts[0]!.direction : null;
+      const direction: "asc" | "desc" | null = sole ? (sole === "asc" ? "desc" : null) : "asc";
+      onSort(
+        currentSorts.length > 1
+          ? { key, index, direction, sorts: direction ? [{ key, direction }] : [] }
+          : { key, index, direction },
+      );
+    }
     return true;
   };
 
@@ -405,26 +298,14 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     const colIndex = findCellIndex(target);
     if (colIndex === -1) return;
 
-    // A control the caller supplied inside the cell (a button in the label)
-    // owns its own clicks; only the cell itself, its text and our own
-    // indicator sort the column.
     const control = target.closest(INTERACTIVE);
     if (control && control !== cells[colIndex]) return;
 
     const col = currentLayout.columns[colIndex]!;
     onClick?.({ key: col.def.key, index: colIndex, event: e });
-    emitSort(col, colIndex);
+    emitSort(col, colIndex, e.shiftKey || e.ctrlKey || e.metaKey);
   };
 
-  // =========================================================================
-  // Keyboard Navigation (roving tabindex on header cells)
-  // =========================================================================
-
-  // Focus can arrive without the arrow keys: a click focuses the clicked
-  // cell (mousedown's default action on its tabindex), a programmatic
-  // focus() does too, and a control inside a label takes focus into the
-  // cell. Wherever focus lands the index follows it, so Enter, Space and
-  // Ctrl+Arrow act on the cell the user is on (#348).
   const onFocusIn = (e: FocusEvent): void => {
     const idx = findCellIndex(e.target);
     if (idx >= 0) setTabStop(idx);
@@ -438,9 +319,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
   const onKeyDown = (e: KeyboardEvent): void => {
     const key = e.key;
-
-    // Keys aimed at interactive content inside a cell are that content's own:
-    // the header must not move focus or sort out from under a focused button.
     const control = (e.target as HTMLElement).closest(INTERACTIVE);
     if (control && !control.hasAttribute("data-column-key")) return;
 
@@ -471,7 +349,13 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
 
     if (key === "Enter" || key === " ") {
-      if (emitSort(currentLayout?.getColumn(focusedCellIndex), focusedCellIndex)) {
+      if (
+        emitSort(
+          currentLayout?.getColumn(focusedCellIndex),
+          focusedCellIndex,
+          e.shiftKey || e.ctrlKey || e.metaKey,
+        )
+      ) {
         e.preventDefault();
       }
       e.stopPropagation();
@@ -485,18 +369,10 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
   };
 
-  // =========================================================================
-  // Event Binding
-  // =========================================================================
-
   element.addEventListener("pointerdown", onPointerDown);
   element.addEventListener("click", onCellClick);
   element.addEventListener("keydown", onKeyDown);
   element.addEventListener("focusin", onFocusIn);
-
-  // =========================================================================
-  // Visibility
-  // =========================================================================
 
   const show = (): void => {
     element.style.display = "";
@@ -506,29 +382,19 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     element.style.display = "none";
   };
 
-  // =========================================================================
-  // Destroy
-  // =========================================================================
-
   const destroy = (): void => {
     element.removeEventListener("pointerdown", onPointerDown);
     element.removeEventListener("click", onCellClick);
     element.removeEventListener("keydown", onKeyDown);
     element.removeEventListener("focusin", onFocusIn);
-
-    // Clear the CSS variable set during setup
-    root.style.removeProperty('--vlist-table-header-height');
-
+    root.style.removeProperty("--vlist-table-header-height");
+    liveRegion = null;
     rowgroup.remove();
-
     cells = [];
     sortIndicators = [];
+    currentSorts = [];
     currentLayout = null;
   };
-
-  // =========================================================================
-  // Return
-  // =========================================================================
 
   return {
     element,
@@ -538,7 +404,6 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     show,
     hide,
     destroy,
-    // Extra method exposed for scroll sync (not in interface — cast in feature)
     syncScroll,
   } as TableHeader<T> & { syncScroll: (scrollLeft: number) => void };
 };
