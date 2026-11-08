@@ -132,7 +132,12 @@ function documentModel(scope: TestScope, horizontal = false, initial = 0, offset
   };
   prop("innerWidth", { get: () => width }); prop("innerHeight", { get: () => height });
   prop("scrollX", { get: () => x }); prop("scrollY", { get: () => y });
-  prop("scrollTo", { value: (options: ScrollToOptions): void => { x = Math.max(0, Math.min(options.left ?? x, 20000 - width)); y = Math.max(0, Math.min(options.top ?? y, 20000 - height)); } });
+  prop("scrollTo", { value: (leftOrOptions?: number | ScrollToOptions, top?: number): void => {
+    const left = typeof leftOrOptions === "number" ? leftOrOptions : leftOrOptions?.left;
+    const nextTop = typeof leftOrOptions === "number" ? top : leftOrOptions?.top;
+    x = Math.max(0, Math.min(left ?? x, 20000 - width));
+    y = Math.max(0, Math.min(nextTop ?? y, 20000 - height));
+  } });
   const oldRect = HTMLElement.prototype.getBoundingClientRect;
   HTMLElement.prototype.getBoundingClientRect = function (): DOMRect {
     const start = Number(this.closest<HTMLElement>("[data-page-offset]")?.dataset.pageOffset ?? offset);
@@ -368,23 +373,93 @@ it.serial("page horizontal groups: sticky header pins to the start edge", scoped
   expect(f.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("16px");
 }));
 
-it.serial("page table: viewport keeps horizontal scroll enabled instead of inline overflow:visible", scoped(scope => {
+const widePageTable = (scope: TestScope, pin: "left" | null) => {
   const doc = documentModel(scope);
+  const columns = [
+    { key: "name", label: "Name", width: 200, ...(pin ? { pin } : {}) },
+    { key: "value", label: "Value", width: 300 },
+  ];
   const f = doc.make([
     table<Row>({
-      columns: [
-        { key: "id", label: "ID", width: 100, pin: "left" },
-        { key: "name", label: "Name", width: 200 },
-        { key: "value", label: "Value", width: 300 },
-      ],
+      columns,
       rowHeight: 40,
       headerHeight: TABLE_H,
       fillWidth: false,
       features: [columnPin()],
     }),
-  ], 30);
+  ]);
+  const root = f.container.querySelector<HTMLElement>(".vlist")!;
   const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!;
-  expect(viewport.style.overflow).not.toBe("visible");
-  expect(["auto", "scroll", ""]).toContain(viewport.style.overflowX);
+  const list = f.list as typeof f.list & {
+    setColumnPin(key: string, next: "left" | "right" | null): void;
+  };
+  return { doc, root, viewport, list };
+};
+
+it.serial("page table: a pinned column stays with the header while the rest pans", scoped(scope => {
+  const { root, viewport } = widePageTable(scope, "left");
+  expect(root.classList.contains("vlist--table-pinned")).toBe(true);
+  expect(viewport.style.overflow).toBe("");
+
+  viewport.scrollLeft = 50;
+  viewport.dispatchEvent(new Event("scroll"));
+
+  expect(root.style.getPropertyValue("--vlist-table-pin-left")).toBe("50px");
+  expect(root.querySelector(".vlist-table-header-scroll")!.getAttribute("style")).toContain("translateX(-50px)");
+  expect(root.querySelector(".vlist-table-header-cell--pin-left")!.textContent).toContain("Name");
+  expect(root.querySelector(".vlist-table-cell--pin-left")).not.toBeNull();
+  expect(root.querySelector(".vlist-table-header-cell[data-column-key=value]")!.classList.contains("vlist-table-header-cell--pin-left")).toBe(false);
+}));
+
+it.serial("page table: a horizontal wheel and Shift+wheel pan a pinned table", scoped(scope => {
+  const { root, viewport } = widePageTable(scope, "left");
+  const pan = (init: WheelEventInit) => {
+    const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, ...init });
+    // happy-dom's WheelEvent does not implement shiftKey.
+    if (init.shiftKey) Object.defineProperty(event, "shiftKey", { value: true });
+    root.dispatchEvent(event);
+    return event;
+  };
+
+  const horizontal = pan({ deltaX: 40 });
+  expect(horizontal.defaultPrevented).toBe(true);
+  expect(viewport.scrollLeft).toBe(40);
+
+  const shifted = pan({ deltaY: 30, shiftKey: true });
+  expect(shifted.defaultPrevented).toBe(true);
+  expect(viewport.scrollLeft).toBe(70);
+
+  const vertical = pan({ deltaY: 30 });
+  expect(vertical.defaultPrevented).toBe(false);
+  expect(viewport.scrollLeft).toBe(70);
+}));
+
+it.serial("page table: pinning and unpinning hand horizontal scroll to the other scroller", scoped(scope => {
+  const { root, viewport, list } = widePageTable(scope, null);
+  expect(root.classList.contains("vlist--table-pinned")).toBe(false);
+  window.scrollTo({ left: 80, top: 0 });
+  expect(window.scrollX).toBe(80);
+
+  list.setColumnPin("name", "left");
+  expect(root.classList.contains("vlist--table-pinned")).toBe(true);
+  expect(viewport.scrollLeft).toBe(80);
+  expect(window.scrollX).toBe(0);
+
+  list.setColumnPin("name", null);
+  expect(root.classList.contains("vlist--table-pinned")).toBe(false);
+  expect(viewport.scrollLeft).toBe(0);
+  expect(window.scrollX).toBe(80);
+}));
+
+it.serial("page table: an unpinned table keeps document horizontal scroll", scoped(scope => {
+  const { root, viewport } = widePageTable(scope, null);
+  expect(viewport.style.overflow).toBe("");
+  expect(viewport.style.overflowX).toBe("");
+  window.scrollTo({ left: 40, top: 0 });
+  const event = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 25, shiftKey: true });
+  root.dispatchEvent(event);
+  expect(event.defaultPrevented).toBe(false);
+  expect(viewport.scrollLeft).toBe(0);
+  expect(window.scrollX).toBe(40);
 }));
 

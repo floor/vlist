@@ -43,6 +43,17 @@
     z-index: 6;
 }
 
+/* An unpinned page table keeps the document as its horizontal scrollport.
+   A pinned one scrolls the viewport, and only while a column is pinned. */
+.vlist--page.vlist--table > .vlist-viewport {
+    overflow: visible;
+}
+
+.vlist--page.vlist--table-pinned > .vlist-viewport {
+    overflow-x: auto;
+    overflow-y: visible;
+}
+
 /* =============================================================================
    Scrollbar positioning in table mode
    The custom scrollbar track and hover zone are positioned relative to the

@@ -103,24 +103,29 @@ describe("page — DOM Modifications", () => {
     cleanup();
   });
 
-  it("should set viewport overflow to visible (vertical mode)", () => {
+  it("should leave viewport overflow to the page class (vertical mode)", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items, { isX: false });
 
     plugin.setup!(ctx);
-    expect(ctx.dom.viewport.style.overflow).toBe("visible");
+    expect(ctx.dom.root.classList.contains("vlist--page")).toBe(true);
+    expect(ctx.dom.viewport.style.overflow).toBe("");
+    expect(ctx.dom.viewport.style.overflowX).toBe("");
+    expect(ctx.dom.viewport.style.overflowY).toBe("");
     cleanup();
   });
 
-  it("should set viewport overflowX and overflowY to visible (horizontal mode)", () => {
+  it("should leave viewport overflow to the page class (horizontal mode)", () => {
     const plugin = page<TestItem>();
     const items = createTestItems(100);
     const { ctx, cleanup } = createPluginMockContext(items, { isX: true });
 
     plugin.setup!(ctx);
-    expect(ctx.dom.viewport.style.overflowX).toBe("visible");
-    expect(ctx.dom.viewport.style.overflowY).toBe("visible");
+    expect(ctx.dom.root.classList.contains("vlist--page")).toBe(true);
+    expect(ctx.dom.viewport.style.overflow).toBe("");
+    expect(ctx.dom.viewport.style.overflowX).toBe("");
+    expect(ctx.dom.viewport.style.overflowY).toBe("");
     cleanup();
   });
 

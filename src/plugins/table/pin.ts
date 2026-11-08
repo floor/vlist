@@ -198,17 +198,33 @@ export function columnPin<T extends VListItem = VListItem>(
       let lastLeftOffset = NaN;
       let lastRightOffset = NaN;
 
+      const paging = dom.root.classList.contains(`${classPrefix}--page`);
+      const room = (): number =>
+        Math.max(0, layout.totalWidth - (dom.viewport.clientWidth || ctx.getState().crossSize));
+
+      const movePageScroll = (intoViewport: boolean): void => {
+        if (!paging) return;
+        const from = intoViewport ? window.scrollX : dom.viewport.scrollLeft;
+        dom.viewport.scrollLeft = intoViewport ? Math.min(room(), Math.max(0, from)) : 0;
+        if (from) window.scrollTo(intoViewport ? 0 : from, window.scrollY);
+      };
+
       const syncPinOffsets = (): void => {
         const hasPins = leftOrder.length > 0 || rightOrder.length > 0;
+        const wasPinned = !Number.isNaN(lastLeftOffset);
         if (!hasPins) {
-          if (!Number.isNaN(lastLeftOffset)) {
-            lastLeftOffset = NaN;
-            lastRightOffset = NaN;
-            dom.root.classList.remove(rootPinnedClass);
-            dom.root.style.removeProperty("--vlist-table-pin-left");
-            dom.root.style.removeProperty("--vlist-table-pin-right");
-          }
+          if (!wasPinned) return;
+          movePageScroll(false);
+          lastLeftOffset = NaN;
+          lastRightOffset = NaN;
+          dom.root.classList.remove(rootPinnedClass);
+          dom.root.style.removeProperty("--vlist-table-pin-left");
+          dom.root.style.removeProperty("--vlist-table-pin-right");
           return;
+        }
+        if (!wasPinned) {
+          dom.root.classList.add(rootPinnedClass);
+          movePageScroll(true);
         }
         const scrollLeft = dom.viewport.scrollLeft;
         const viewportWidth = dom.viewport.clientWidth || ctx.getState().crossSize;
@@ -532,12 +548,24 @@ export function columnPin<T extends VListItem = VListItem>(
       dom.root.addEventListener("focusin", onRootFocusIn);
       dom.root.addEventListener("keydown", onRootKeyDownCapture, true);
 
+      const onWheel = (e: WheelEvent): void => {
+        if (!paging || Number.isNaN(lastLeftOffset)) return;
+        const delta = e.shiftKey ? e.deltaX || e.deltaY : e.deltaX;
+        if (!delta) return;
+        const next = Math.min(room(), Math.max(0, dom.viewport.scrollLeft + delta));
+        if (next === dom.viewport.scrollLeft) return;
+        dom.viewport.scrollLeft = next;
+        e.preventDefault();
+      };
+      dom.root.addEventListener("wheel", onWheel);
+
       // ── Cleanup ─────────────────────────────────────────────────
 
       ctx.hooks.onDestroy((): void => {
         dom.viewport.removeEventListener("scroll", onViewportScroll);
         dom.root.removeEventListener("focusin", onRootFocusIn);
         dom.root.removeEventListener("keydown", onRootKeyDownCapture, true);
+        dom.root.removeEventListener("wheel", onWheel);
         offResize();
         offColResize();
         dom.root.classList.remove(rootPinnedClass);
