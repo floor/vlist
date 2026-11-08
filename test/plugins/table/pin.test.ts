@@ -493,7 +493,7 @@ describe("columnPin — keyboard accessibility", () => {
         }),
       ],
     );
-    activeList = list;
+    activeList = list as VList<RowItem> & TableMethods<RowItem> & ColumnPinMethods;
 
     const root = container.querySelector<HTMLElement>(".vlist")!;
     const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;

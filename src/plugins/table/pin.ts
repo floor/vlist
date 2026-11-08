@@ -201,6 +201,8 @@ export function columnPin<T extends VListItem = VListItem>(
       const paging = dom.root.classList.contains(`${classPrefix}--page`);
       const room = (): number =>
         Math.max(0, layout.totalWidth - (dom.viewport.clientWidth || ctx.getState().crossSize));
+      // Same read as the table arrow keys: direction is fixed once the viewport exists.
+      const crossRTL = getComputedStyle(dom.viewport).direction === "rtl";
 
       const movePageScroll = (intoViewport: boolean): void => {
         const from = paging ? (intoViewport ? window.scrollX : dom.viewport.scrollLeft) : 0;
@@ -213,7 +215,7 @@ export function columnPin<T extends VListItem = VListItem>(
 
       const syncPinOffsets = (): void => {
         const hasPins = leftOrder.length > 0 || rightOrder.length > 0;
-        const wasPinned = !Number.isNaN(lastLeftOffset);
+        const wasPinned = lastLeftOffset === lastLeftOffset;
         if (!hasPins) {
           if (!wasPinned) return;
           movePageScroll(false);
@@ -224,8 +226,8 @@ export function columnPin<T extends VListItem = VListItem>(
           return;
         }
         if (!wasPinned) movePageScroll(true);
-        const scrollLeft = dom.viewport.scrollLeft;
         const viewportWidth = dom.viewport.clientWidth || ctx.getState().crossSize;
+        const scrollLeft = dom.viewport.scrollLeft + (crossRTL ? room() : 0);
         const leftOffset = leftOrder.length > 0 ? Math.max(0, scrollLeft) : 0;
         const rightOffset =
           rightOrder.length > 0 && viewportWidth > 0
@@ -493,7 +495,8 @@ export function columnPin<T extends VListItem = VListItem>(
         const viewportWidth = dom.viewport.clientWidth || ctx.getState().crossSize;
         if (viewportWidth <= 0 || layout.totalWidth <= viewportWidth) return;
 
-        const scrollLeft = dom.viewport.scrollLeft;
+        const o = crossRTL ? room() : 0;
+        const scrollLeft = dom.viewport.scrollLeft + o;
         const visibleStart = scrollLeft + leftWidth;
         const visibleEnd = scrollLeft + viewportWidth - rightWidth;
 
@@ -507,7 +510,7 @@ export function columnPin<T extends VListItem = VListItem>(
           );
         }
         if (nextScroll >= 0 && nextScroll !== scrollLeft) {
-          dom.viewport.scrollLeft = nextScroll;
+          dom.viewport.scrollLeft = nextScroll - o;
           syncPinOffsets();
         }
       };
