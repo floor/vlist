@@ -5,6 +5,8 @@
 
 // v2 Plugin
 export { table, type TablePluginConfig } from "./plugin";
+export { columnPin, type ColumnPinConfig, type ColumnPinMethods } from "./pin";
+export type { TableFeature, TableFeatureMethods } from "./feature";
 
 // Layout
 export { createTableLayout } from "./layout";
@@ -28,5 +30,6 @@ export type {
   ColumnResizeEvent,
   ColumnSortEvent,
   ColumnClickEvent,
+  ColumnPinEvent,
 } from "./types";
 export type { TableMethods } from "./plugin";

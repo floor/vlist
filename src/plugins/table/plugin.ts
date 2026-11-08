@@ -31,6 +31,7 @@ import type {
   ColumnSortEvent,
   ColumnClickEvent,
 } from "./types";
+import type { TableFeature, TableFeatureMethods } from "./feature";
 
 // =============================================================================
 // Config
@@ -38,7 +39,16 @@ import type {
 
 const EMPTY_ID_SET: Set<string | number> = new Set();
 
-export interface TablePluginConfig<T extends VListItem = VListItem> extends TableConfig<T> {}
+export interface TablePluginConfig<T extends VListItem = VListItem> extends TableConfig<T> {
+  /**
+   * Features mounted by this table, in array order. `columnPin()` is one.
+   * Each feature reads the others' hooks when it uses them, so order does
+   * not decide whether a lookup after setup can see a feature listed later.
+   * `attach` runs before this plugin is returned, which is before its hooks
+   * are compiled.
+   */
+  features?: readonly TableFeature<T>[];
+}
 
 // =============================================================================
 // Factory
@@ -60,6 +70,15 @@ export interface TableMethods<T extends VListItem = VListItem> {
   getSorts(): TableSort[];
 }
 
+export function table<
+  T extends VListItem,
+  const F extends readonly TableFeature<T>[],
+>(
+  config: Omit<TablePluginConfig<T>, "features"> & { features: F },
+): VListPlugin<T, TableMethods<T> & TableFeatureMethods<F>>;
+export function table<T extends VListItem = VListItem>(
+  config: TablePluginConfig<T>,
+): VListPlugin<T, TableMethods<T>>;
 export function table<T extends VListItem = VListItem>(
   config: TablePluginConfig<T>,
 ): VListPlugin<T, TableMethods<T>> {
@@ -311,7 +330,7 @@ export function table<T extends VListItem = VListItem>(
   // Plugin
   // =========================================================================
 
-  return {
+  const plugin: VListPlugin<T, TableMethods<T>> = {
     name: "table",
     priority: 10,
     // autosize measures items, then this plugin's setConfig(rowHeight)
@@ -461,14 +480,16 @@ export function table<T extends VListItem = VListItem>(
       // page() scrolls the window, so the column header sticks under the
       // caller's band instead of leaving with the document.
       if (dom.root.classList.contains(`${classPrefix}--page`)) {
-        const pad = Number.parseFloat(dom.root.style.getPropertyValue("--vlist-page-pad")) || 0;
-        tableHeader.element.style.position = "sticky";
-        tableHeader.element.style.top = `${pad}px`;
-        tableHeader.element.style.zIndex = "6";
+        const headerEl = tableHeader.element;
+        const pad = parseFloat(dom.root.style.getPropertyValue("--vlist-page-pad")) || 0;
+        headerEl.style.position = "sticky";
+        headerEl.style.top = `${pad}px`;
+        headerEl.style.zIndex = "6";
         // The header sits in a row group only as tall as itself. Sticky
         // cannot leave that box, so the group has to be the window pin.
-        // Its top follows --vlist-page-pad, which page() refreshes.
-        const rowgroup = tableHeader.element.parentElement;
+        // The group has no other inline style: header.ts leaves it bare,
+        // and page() writes top on the header element, not the group.
+        const rowgroup = headerEl.parentElement;
         if (rowgroup) {
           rowgroup.style.position = "sticky";
           rowgroup.style.zIndex = "6";
@@ -578,24 +599,20 @@ export function table<T extends VListItem = VListItem>(
       });
 
       // ── Keyboard horizontal scroll ─────────────────────────────
-      const crossRTL = getComputedStyle(dom.viewport).direction === 'rtl';
+      const crossRTL = getComputedStyle(dom.viewport).direction === "rtl";
       ctx.hooks.onKeydown((event: KeyboardEvent): void => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
         if (!tableLayout) return;
-
         const cols = tableLayout.columns;
         if (cols.length === 0) return;
-
         const viewportWidth = dom.viewport.clientWidth;
         if (tableLayout.totalWidth <= viewportWidth) return;
-
         const origin = crossRTL ? tableLayout.totalWidth - viewportWidth : 0;
         const scrollLeft = dom.viewport.scrollLeft + origin;
         const go = (x: number): void => {
           dom.viewport.scrollLeft = x - origin;
           event.preventDefault();
         };
-
         if (event.key === "ArrowRight") {
           for (let i = 0; i < cols.length; i++) {
             if (cols[i]!.offset > scrollLeft + 1) return go(cols[i]!.offset);
@@ -659,4 +676,9 @@ export function table<T extends VListItem = VListItem>(
       storedCtx = null;
     },
   };
+
+  // One call, and nothing else. Features wrap hooks here, before compile.
+  config.features?.forEach((feature) => feature.attach(plugin));
+
+  return plugin;
 }
