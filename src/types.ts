@@ -684,6 +684,9 @@ export interface VListEvents<T extends VListItem = VListItem> extends EventMap {
   /** Table column pinned or unpinned (`columnPin()` feature) */
   "column:pin": import("./plugins/table").ColumnPinEvent;
 
+  /** Table column reordered (`columnReorder()` feature) */
+  "column:reorder": import("./plugins/table").ColumnReorderEvent;
+
   /** Destroy — fired just before the instance is torn down */
   destroy: undefined;
 }

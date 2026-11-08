@@ -436,6 +436,33 @@
 }
 
 /* =============================================================================
+   Column Reordering (columnReorder feature)
+   ============================================================================= */
+
+.vlist--col-reordering,
+.vlist--col-reordering * {
+    cursor: grabbing !important;
+    user-select: none;
+}
+
+.vlist-table-header-cell--dragging {
+    opacity: 0.55;
+    background-color: var(--vlist-bg-hover, rgba(59, 130, 246, 0.08));
+}
+
+.vlist-table-drop-indicator {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background-color: var(--vlist-focus-ring, #3b82f6);
+    z-index: 7;
+    pointer-events: none;
+    will-change: transform;
+}
+
+/* =============================================================================
    Group Headers (withTable + withGroups)
    ============================================================================= */
 
