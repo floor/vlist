@@ -98,6 +98,13 @@ export interface TableColumn<T extends VListItem = VListItem> {
    * Pinned columns stay visible while unpinned columns scroll horizontally.
    */
   pin?: "left" | "right";
+
+  /**
+   * Whether this column can be reordered when `columnReorder()` is passed in
+   * `table({ features })` (default: `true`). Does nothing without `columnReorder()`.
+   * Set to `false` to lock a column in place.
+   */
+  reorderable?: boolean;
 }
 
 // =============================================================================
@@ -430,5 +437,20 @@ export interface ColumnPinEvent {
   pins: Record<string, "left" | "right">;
 
   /** Full resolved column key order (`[...left, ...unpinned, ...right]`) */
+  order: string[];
+}
+
+/** Payload for the `column:reorder` event. */
+export interface ColumnReorderEvent {
+  /** Moved column key */
+  key: string;
+
+  /** Previous resolved column index */
+  fromIndex: number;
+
+  /** New resolved column index */
+  toIndex: number;
+
+  /** Full resolved column key order after the move */
   order: string[];
 }
