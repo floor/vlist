@@ -205,12 +205,12 @@ export function columnPin<T extends VListItem = VListItem>(
       const crossRTL = getComputedStyle(dom.viewport).direction === "rtl";
 
       const movePageScroll = (intoViewport: boolean): void => {
-        const from = paging ? (intoViewport ? window.scrollX : dom.viewport.scrollLeft) : 0;
+        const from = paging ? (intoViewport ? scrollX : dom.viewport.scrollLeft) : 0;
         if (paging && !intoViewport) dom.viewport.scrollLeft = 0;
         dom.root.classList.toggle(rootPinnedClass, intoViewport);
         if (!paging) return;
         if (intoViewport) dom.viewport.scrollLeft = Math.min(room(), Math.max(0, from));
-        if (from) window.scrollTo(intoViewport ? 0 : from, window.scrollY);
+        if (from) scrollTo(intoViewport ? 0 : from, scrollY);
       };
 
       const syncPinOffsets = (): void => {
