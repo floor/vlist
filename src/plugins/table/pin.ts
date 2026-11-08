@@ -215,7 +215,7 @@ export function columnPin<T extends VListItem = VListItem>(
 
       const syncPinOffsets = (): void => {
         const hasPins = leftOrder.length > 0 || rightOrder.length > 0;
-        const wasPinned = lastLeftOffset === lastLeftOffset;
+        const wasPinned = !Number.isNaN(lastLeftOffset);
         if (!hasPins) {
           if (!wasPinned) return;
           movePageScroll(false);
@@ -548,7 +548,7 @@ export function columnPin<T extends VListItem = VListItem>(
       dom.root.addEventListener("keydown", onRootKeyDownCapture, true);
 
       dom.root.onwheel = (e: WheelEvent): void => {
-        if (!paging || lastLeftOffset !== lastLeftOffset) return;
+        if (!paging || Number.isNaN(lastLeftOffset)) return;
         const next = Math.min(
           room(),
           Math.max(0, dom.viewport.scrollLeft + (e.shiftKey ? e.deltaX || e.deltaY : e.deltaX)),
