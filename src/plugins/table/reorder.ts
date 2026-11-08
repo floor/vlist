@@ -216,12 +216,13 @@ export function columnReorder<T extends VListItem = VListItem>(
           rightOrder.splice(clampedTo - rightStart, 0, k!);
         } else {
           const baseCols = pinState.getBaseColumns();
+          const prev = baseCols.slice();
           const pins = pinState.getPins();
           let u = partLeftCount;
           for (let i = 0; i < baseCols.length; i++) {
-            if (!pins[baseCols[i]!.key] && u < rightStart) {
-              const col = cols[u++]!;
-              baseCols[i] = { ...col.def, width: col.width };
+            if (!pins[prev[i]!.key] && u < rightStart) {
+              const key = cols[u++]!.def.key;
+              baseCols[i] = prev.find((b) => b.key === key)!;
             }
           }
         }
