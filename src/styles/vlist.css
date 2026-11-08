@@ -240,6 +240,13 @@
     contain: layout style;
 }
 
+/* Autosize defers the content height during a native scroll. Paint
+   containment stays on those lists, so a row past the deferred height
+   cannot extend the scroll range. Other lists keep the rule above. */
+.vlist--autosize .vlist-content {
+    contain: layout style paint;
+}
+
 /* Individual item */
 .vlist-item,
 .vlist-group-header {
