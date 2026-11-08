@@ -11,6 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-11-08
+
+Scrolling stays steady while rows measure themselves.
+
+Who is affected: lists using `autosize()` that scroll natively (the default `scroll.mode`), when users drag the browser's scrollbar thumb.
+
+### Fixed
+
+- With `autosize()`, a fast drag of the native scrollbar thumb no longer leaves the pointer ahead of the thumb: the content height holds still while the scroll is in progress and settles once it ends, and rows measured above the viewport still keep the visible rows in place.
+
 ## [3.5.0] - 2026-11-07
 
 Table headers sort by more than one column.
@@ -2130,7 +2140,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.5.1...HEAD
+[3.5.1]: https://github.com/floor/vlist/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/floor/vlist/compare/v3.4.1...v3.5.0
 [3.4.1]: https://github.com/floor/vlist/compare/v3.4.0...v3.4.1
 [3.4.0]: https://github.com/floor/vlist/compare/v3.3.6...v3.4.0
