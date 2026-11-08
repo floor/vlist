@@ -451,6 +451,36 @@ it.serial("page table: pinning and unpinning hand horizontal scroll to the other
   expect(window.scrollX).toBe(80);
 }));
 
+it.serial("page table: pinning keeps a document scroll that would clamp once the viewport scrolls", scoped(scope => {
+  const { root, viewport, list } = widePageTable(scope, null);
+  // Chromium clamps window.scrollX to 0 once the pinned class shrinks the
+  // document, and clamps scrollTo while that class is still on.
+  let x = 150;
+  const wide = 601;
+  const clamped = (value: number): number => {
+    const max = root.classList.contains("vlist--table-pinned") ? 0 : wide;
+    return Math.max(0, Math.min(value, max));
+  };
+  Object.defineProperty(window, "scrollX", {
+    configurable: true,
+    get: () => { x = clamped(x); return x; },
+  });
+  Object.defineProperty(window, "scrollTo", {
+    configurable: true,
+    value: (left?: number | ScrollToOptions): void => {
+      x = clamped(typeof left === "number" ? left : x);
+    },
+  });
+
+  list.setColumnPin("name", "left");
+  expect(viewport.scrollLeft).toBe(150);
+  expect(window.scrollX).toBe(0);
+
+  list.setColumnPin("name", null);
+  expect(viewport.scrollLeft).toBe(0);
+  expect(window.scrollX).toBe(150);
+}));
+
 it.serial("page table: an unpinned table keeps document horizontal scroll", scoped(scope => {
   const { root, viewport } = widePageTable(scope, null);
   expect(viewport.style.overflow).toBe("");
