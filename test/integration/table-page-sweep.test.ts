@@ -5,6 +5,7 @@ import { createContainer } from "../helpers/factory";
 import { scoped, type TestScope, waitFor } from "../helpers/scope";
 import { createVList } from "../../src/core/create";
 import { table, type TableMethods } from "../../src/plugins/table/plugin";
+import { columnPin } from "../../src/plugins/table/pin";
 import { page } from "../../src/plugins/page/plugin";
 import { groups } from "../../src/plugins/groups/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
@@ -366,3 +367,24 @@ it.serial("page horizontal groups: sticky header pins to the start edge", scoped
   expect(sticky.style.left).toBe("16px");
   expect(f.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("16px");
 }));
+
+it.serial("page table: viewport keeps horizontal scroll enabled instead of inline overflow:visible", scoped(scope => {
+  const doc = documentModel(scope);
+  const f = doc.make([
+    table<Row>({
+      columns: [
+        { key: "id", label: "ID", width: 100, pin: "left" },
+        { key: "name", label: "Name", width: 200 },
+        { key: "value", label: "Value", width: 300 },
+      ],
+      rowHeight: 40,
+      headerHeight: TABLE_H,
+      fillWidth: false,
+      features: [columnPin()],
+    }),
+  ], 30);
+  const viewport = f.container.querySelector<HTMLElement>(".vlist-viewport")!;
+  expect(viewport.style.overflow).not.toBe("visible");
+  expect(["auto", "scroll", ""]).toContain(viewport.style.overflowX);
+}));
+
