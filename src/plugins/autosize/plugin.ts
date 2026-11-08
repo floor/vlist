@@ -481,6 +481,11 @@ export function autosize<T extends VListItem = VListItem>(
       // them. One listener pair per list, not per item. Unmeasured items are
       // still observed and need nothing here.
       const content = ctx.dom.content;
+      // Rows are absolute, so a row placed past a stale content height still
+      // adds to the viewport's scrollable overflow. That grows the native
+      // thumb's range the same way a height write does. Paint containment
+      // keeps the overflow inside the height this plugin publishes.
+      content.style.contain = "layout style paint";
       const onMediaEvent = (event: Event): void => {
         const target = event.target as Element | null;
         if (!target || target === content) return;
