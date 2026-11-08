@@ -91,7 +91,7 @@ export function columnPin<T extends VListItem = VListItem>(
         prevSetup?.call(plugin, ctx);
         const layout = ctx.hooks.get("_getTableLayout")?.() as TableLayout<T> | null | undefined;
         if (!layout) {
-          throw new Error("[vlist] columnPin: table() did not publish a layout");
+          throw new Error("[vlist] columnPin: no layout");
         }
         mount(ctx, layout);
       };
@@ -104,7 +104,7 @@ export function columnPin<T extends VListItem = VListItem>(
         | undefined;
 
       if (!baseUpdateColumns) {
-        throw new Error("[vlist] columnPin: table() did not publish updateColumns");
+        throw new Error("[vlist] columnPin: no columns");
       }
 
       const { dom, emitter } = ctx;
@@ -454,10 +454,7 @@ export function columnPin<T extends VListItem = VListItem>(
 
       // ── Scroll & Resize Listeners ───────────────────────────────
 
-      const onViewportScroll = (): void => {
-        syncPinOffsets();
-      };
-      dom.viewport.addEventListener("scroll", onViewportScroll, { passive: true });
+      dom.viewport.addEventListener("scroll", syncPinOffsets, { passive: true });
 
       const offResize = emitter.on("resize", () => syncPinOffsets());
       const offColResize = emitter.on(
@@ -562,7 +559,7 @@ export function columnPin<T extends VListItem = VListItem>(
       // ── Cleanup ─────────────────────────────────────────────────
 
       ctx.hooks.onDestroy((): void => {
-        dom.viewport.removeEventListener("scroll", onViewportScroll);
+        dom.viewport.removeEventListener("scroll", syncPinOffsets);
         dom.root.removeEventListener("focusin", onRootFocusIn);
         dom.root.removeEventListener("keydown", onRootKeyDownCapture, true);
         dom.root.onwheel = null;
