@@ -488,7 +488,10 @@ export function columnPin<T extends VListItem = VListItem>(
         if (col.offset < visibleStart) {
           nextScroll = Math.max(0, col.offset - leftWidth);
         } else if (col.offset + col.width > visibleEnd && visibleEnd > visibleStart) {
-          nextScroll = Math.max(0, col.offset + col.width - (viewportWidth - rightWidth));
+          nextScroll = Math.max(
+            0,
+            Math.min(col.offset - leftWidth, col.offset + col.width - (viewportWidth - rightWidth)),
+          );
         }
         if (nextScroll >= 0 && nextScroll !== scrollLeft) {
           dom.viewport.scrollLeft = nextScroll;
