@@ -93,9 +93,9 @@ export interface TableColumn<T extends VListItem = VListItem> {
   sortable?: boolean;
 
   /**
-   * Pin this column to the left or right edge.
-   * Pinned columns stay visible while the rest scroll horizontally.
-   * (Reserved for future use — not implemented in v1.)
+   * Initial pin side for this column (`"left"` or `"right"`).
+   * Does nothing unless `columnPin()` is passed in `table({ features })`.
+   * Pinned columns stay visible while unpinned columns scroll horizontally.
    */
   pin?: "left" | "right";
 }
@@ -413,4 +413,22 @@ export interface ColumnClickEvent {
 
   /** Original mouse event */
   event: MouseEvent;
+}
+
+/** Payload for the `column:pin` event. */
+export interface ColumnPinEvent {
+  /** Column key */
+  key: string;
+
+  /** Resolved column index after re-partitioning */
+  index: number;
+
+  /** New pin side, or `null` when the column was unpinned */
+  pin: "left" | "right" | null;
+
+  /** Current map of all pinned columns by key */
+  pins: Record<string, "left" | "right">;
+
+  /** Full resolved column key order (`[...left, ...unpinned, ...right]`) */
+  order: string[];
 }

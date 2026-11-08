@@ -251,9 +251,15 @@ it.serial("page table: column header stays under the page band", scoped(scope =>
   expect(header).not.toBeNull();
   expect(header!.style.position).toBe("sticky");
   expect(header!.style.top).toBe("30px");
+  // header.ts writes the height, and page() later writes top on this same
+  // element. Both have to survive together.
+  expect(header!.style.height).toBe(`${TABLE_H}px`);
   // The header's own sticky box is this row group. A static group only as
   // tall as the header carries the header off the window.
-  expect(header!.parentElement!.style.position).toBe("sticky");
+  const rowgroup = header!.parentElement!;
+  expect(rowgroup.style.position).toBe("sticky");
+  expect(rowgroup.style.zIndex).toBe("6");
+  expect(rowgroup.style.height).toBe(`${TABLE_H}px`);
   expect(f.list.element.style.getPropertyValue("--vlist-page-pad")).toBe("30px");
   f.list.scrollToIndex(60);
   expect(header!.style.position).toBe("sticky");
