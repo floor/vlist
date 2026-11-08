@@ -1,7 +1,7 @@
 /**
  * vlist — Release script
  *
- * The 3.x line releases from `main` and the 2.x line stays on `staging`.
+ * The 3.x line releases from `main` and the 2.x line stays on `v2`.
  * These tests pin the branch derivation, the explicit stable release of a
  * prerelease, and the README rewrite — so cutting 3.0.0 cannot fail at the
  * first guard again, and cannot happen by a bare `bun run release` either.
@@ -126,9 +126,9 @@ describe("compareVersions", () => {
 });
 
 describe("sourceBranchFor", () => {
-  it("sends 2.x through staging and 3.x through main", () => {
-    expect(sourceBranchFor("2.8.1")).toBe("staging");
-    expect(sourceBranchFor("2.8.2")).toBe("staging");
+  it("sends 2.x through v2 and 3.x through main", () => {
+    expect(sourceBranchFor("2.8.1")).toBe("v2");
+    expect(sourceBranchFor("2.8.2")).toBe("v2");
     expect(sourceBranchFor("3.0.0")).toBe("main");
     expect(sourceBranchFor("3.0.0-next.2")).toBe("main");
     expect(sourceBranchFor("4.0.0")).toBe("main");
@@ -138,20 +138,20 @@ describe("sourceBranchFor", () => {
 describe("resolveSourceBranch", () => {
   it("derives the branch when --from is omitted", () => {
     expect(resolveSourceBranch("3.0.0", null)).toBe("main");
-    expect(resolveSourceBranch("2.8.2", null)).toBe("staging");
+    expect(resolveSourceBranch("2.8.2", null)).toBe("v2");
   });
 
   it("accepts --from when it matches the derived branch", () => {
     expect(resolveSourceBranch("3.0.0", "main")).toBe("main");
-    expect(resolveSourceBranch("2.8.2", "staging")).toBe("staging");
+    expect(resolveSourceBranch("2.8.2", "v2")).toBe("v2");
   });
 
-  it("refuses to cut 3.x from staging or 2.x from main", () => {
-    expect(() => resolveSourceBranch("3.0.0", "staging")).toThrow(
-      "v3.0.0 releases from 'main', not 'staging'",
+  it("refuses to cut 3.x from v2 or 2.x from main", () => {
+    expect(() => resolveSourceBranch("3.0.0", "v2")).toThrow(
+      "v3.0.0 releases from 'main', not 'v2'",
     );
     expect(() => resolveSourceBranch("2.8.2", "main")).toThrow(
-      "v2.8.2 releases from 'staging', not 'main'",
+      "v2.8.2 releases from 'v2', not 'main'",
     );
   });
 });
@@ -162,14 +162,14 @@ describe("assertCurrentBranch", () => {
     expect(() => assertCurrentBranch("", "main", "3.3.5")).not.toThrow();
   });
 
-  it("retains the staging source guard for 2.x preparation", () => {
-    expect(() => assertCurrentBranch("staging", "staging", "2.8.2")).not.toThrow();
-    expect(() => assertCurrentBranch("feature", "staging", "2.8.2")).toThrow("Must be on staging");
+  it("retains the v2 source guard for 2.x preparation", () => {
+    expect(() => assertCurrentBranch("v2", "v2", "2.8.2")).not.toThrow();
+    expect(() => assertCurrentBranch("feature", "v2", "2.8.2")).toThrow("Must be on v2");
   });
 
-  it("names detached HEAD when the staging guard refuses", () => {
+  it("names detached HEAD when the v2 guard refuses", () => {
     expect(currentBranchLabel("")).toBe("detached HEAD");
-    expect(() => assertCurrentBranch("", "staging", "2.8.2")).toThrow("currently on 'detached HEAD'");
+    expect(() => assertCurrentBranch("", "v2", "2.8.2")).toThrow("currently on 'detached HEAD'");
   });
 });
 
@@ -234,10 +234,10 @@ describe("parseArgs", () => {
       dryRun: false,
       tag: false,
     });
-    expect(parseArgs(["--from", "staging", "patch"])).toEqual({
+    expect(parseArgs(["--from", "v2", "patch"])).toEqual({
       kind: "bump",
       bumpType: "patch",
-      from: "staging",
+      from: "v2",
       dryRun: false,
       tag: false,
     });
@@ -277,6 +277,14 @@ describe("parseArgs", () => {
       dryRun: true,
       tag: true,
     });
+  });
+
+  it("refuses --from staging with a one-line message naming v2", () => {
+    for (const argv of [["--from", "staging"], ["--from=staging"], ["2.9.9", "--from", "staging"]]) {
+      expect(() => parseArgs(argv)).toThrow(
+        "The 2.x release line was renamed from 'staging' to 'v2'; use --from v2",
+      );
+    }
   });
 
   it("rejects unknown flags, extra positionals, and a bare --from", () => {
@@ -713,7 +721,7 @@ describe("detectReleaseState", () => {
           number: 360,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "b626354e1d91e73ecbe4adbd2c81a49e4611c0bd",
@@ -736,7 +744,7 @@ describe("detectReleaseState", () => {
           number: 360,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
@@ -758,7 +766,7 @@ describe("detectReleaseState", () => {
           number: 360,
           title: "chore(release): v2.8.3",
           state: "OPEN",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           packageVersion: "2.8.3",
@@ -780,7 +788,7 @@ describe("detectReleaseState", () => {
           title: "chore(release): v2.8.3",
           state: "MERGED",
           headRefName: "chore/release-2.8.3",
-          baseRefName: "staging",
+          baseRefName: "v2",
           headRefOid: "111",
           mergeCommitOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
           packageVersion: "2.8.3",
@@ -812,7 +820,7 @@ describe("detectReleaseState", () => {
           title: "chore(release): v2.8.3",
           state: "OPEN",
           headRefName: "chore/release-2.8.3",
-          baseRefName: "staging",
+          baseRefName: "v2",
           headRefOid: "111",
           packageVersion: "2.8.3",
         },
@@ -846,7 +854,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
     number: 376,
     title: "chore(release): v2.8.3",
     state: "MERGED" as const,
-    headRefName: "staging",
+    headRefName: "v2",
     baseRefName: "main",
     headRefOid: HEAD,
     mergeCommitOid: MERGE,
@@ -859,7 +867,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
     title: "chore(release): v2.8.3",
     state: "MERGED" as const,
     headRefName: "chore/release-2.8.3",
-    baseRefName: "staging",
+    baseRefName: "v2",
     headRefOid: HEAD,
     mergeCommitOid: MERGE,
     packageVersion: "2.8.3",
@@ -869,7 +877,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
   describe("assertPinnedMerge", () => {
     const facts = (overrides: Record<string, unknown> = {}) => ({
       prNumber: 376,
-      description: "staging → main",
+      description: "v2 → main",
       headRefOid: HEAD,
       mergeCommitOid: MERGE,
       parents: [BASE, HEAD] as readonly string[] | null | undefined,
@@ -933,7 +941,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
       );
       const timeout = pinMergeTimeoutMessage(
         375,
-        "chore/release-2.8.3 → staging",
+        "chore/release-2.8.3 → v2",
         "2.8.3",
         HEAD,
       );
@@ -950,7 +958,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         "await-main-pr",
       ] as const;
       for (const state of states) {
-        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "staging", state });
+        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "v2", state });
         const merges = steps
           .map((s) => s.command)
           .filter((c): c is string => !!c && c.startsWith("gh pr merge"));
@@ -962,7 +970,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
     it("the plan prints the real head sha when the pull request is known", () => {
       const waiting = planRelease({
         targetVersion: "2.8.3",
-        sourceBranch: "staging",
+        sourceBranch: "v2",
         state: "await-main-pr",
         mainPr: mergedMainPr({ state: "OPEN", mergeCommitOid: undefined }),
       });
@@ -972,7 +980,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
 
       const sourcing = planRelease({
         targetVersion: "2.8.3",
-        sourceBranch: "staging",
+        sourceBranch: "v2",
         state: "await-source-pr",
         sourcePr: mergedSourcePr({ state: "OPEN", mergeCommitOid: undefined }),
       });
@@ -1068,14 +1076,14 @@ describe("planRelease", () => {
   it("plans create-source-pr: pushes release branch, never the source branch directly, and never tags without --tag", () => {
     const steps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "create-source-pr",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     const descriptions = steps.map((s) => s.description);
 
     // Verifies it cuts chore/release-2.8.3
-    expect(commands).toContain("git checkout -b chore/release-2.8.3 origin/staging");
+    expect(commands).toContain("git checkout -b chore/release-2.8.3 origin/v2");
     // The plan names the changelog roll, both READMEs, the size refresh, and the
     // refusals, so a dry run shows what the release will do (#383/#384 done by hand).
     expect(descriptions).toContain(
@@ -1093,15 +1101,15 @@ describe("planRelease", () => {
     expect(commands).toContain("git add package.json README.md npm-readme.md CHANGELOG.md");
     // Verifies it pushes chore/release-2.8.3
     expect(commands).toContain("git push origin chore/release-2.8.3");
-    // CRITICAL: Verifies it NEVER pushes staging directly!
-    expect(commands).not.toContain("git push origin staging");
-    // Verifies PR chore/release-2.8.3 -> staging is opened
+    // CRITICAL: Verifies it NEVER pushes v2 directly!
+    expect(commands).not.toContain("git push origin v2");
+    // Verifies PR chore/release-2.8.3 -> v2 is opened
     expect(
-      commands.some((c) => c?.includes("gh pr create --base staging --head chore/release-2.8.3")),
+      commands.some((c) => c?.includes("gh pr create --base v2 --head chore/release-2.8.3")),
     ).toBe(true);
-    // Verifies PR staging -> main is opened
+    // Verifies PR v2 -> main is opened
     expect(
-      commands.some((c) => c?.includes("gh pr create --base main --head staging")),
+      commands.some((c) => c?.includes("gh pr create --base main --head v2")),
     ).toBe(true);
     // Verifies NO tag commands without --tag
     expect(commands.some((c) => c?.startsWith("git tag"))).toBe(false);
@@ -1112,18 +1120,18 @@ describe("planRelease", () => {
   it("plans create-main-pr when resuming with package.json already bumped", () => {
     const steps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "create-main-pr",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
 
     // Does NOT cut chore/release-2.8.3 or push it again
-    expect(commands).not.toContain("git checkout -b chore/release-2.8.3 origin/staging");
+    expect(commands).not.toContain("git checkout -b chore/release-2.8.3 origin/v2");
     expect(commands).not.toContain("git push origin chore/release-2.8.3");
-    // Fetches staging and opens PR staging -> main
-    expect(commands).toContain("git fetch origin staging");
+    // Fetches v2 and opens PR v2 -> main
+    expect(commands).toContain("git fetch origin v2");
     expect(
-      commands.some((c) => c?.includes("gh pr create --base main --head staging")),
+      commands.some((c) => c?.includes("gh pr create --base main --head v2")),
     ).toBe(true);
     // Verifies NO tag commands without --tag
     expect(commands.some((c) => c?.startsWith("git tag"))).toBe(false);
@@ -1133,7 +1141,7 @@ describe("planRelease", () => {
   it("plans tag-release without --tag: prompts to run with --tag and issues no tag command", () => {
     const steps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "tag-release",
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
@@ -1144,7 +1152,7 @@ describe("planRelease", () => {
   it("plans tag-release with --tag: issues annotated tag and push commands", () => {
     const steps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "tag-release",
       tag: true,
       verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
@@ -1162,13 +1170,13 @@ describe("formatReleasePlan", () => {
   it("formats plan with state and numbered commands when --tag is passed", () => {
     const steps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "tag-release",
       tag: true,
       verifiedSha: "425ecd4b",
     });
-    const formatted = formatReleasePlan("2.8.3", "staging", "tag-release", steps);
-    expect(formatted).toContain("Release plan for v2.8.3 (from staging)");
+    const formatted = formatReleasePlan("2.8.3", "v2", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v2.8.3 (from v2)");
     expect(formatted).toContain("State: tag-release");
     expect(formatted).toContain("git tag -a v2.8.3");
   });
@@ -1176,12 +1184,12 @@ describe("formatReleasePlan", () => {
   it("formats plan prompting for --tag when no flag is passed", () => {
     const steps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "tag-release",
       verifiedSha: "425ecd4b",
     });
-    const formatted = formatReleasePlan("2.8.3", "staging", "tag-release", steps);
-    expect(formatted).toContain("Release plan for v2.8.3 (from staging)");
+    const formatted = formatReleasePlan("2.8.3", "v2", "tag-release", steps);
+    expect(formatted).toContain("Release plan for v2.8.3 (from v2)");
     expect(formatted).toContain("State: tag-release");
     expect(formatted).toContain("bun run release 2.8.3 --tag");
   });
@@ -1193,7 +1201,7 @@ describe("resolveNewVersion — re-entrancy", () => {
     expect(
       resolveNewVersion(
         "2.8.3",
-        { kind: "exact", version: "2.8.3", from: "staging", dryRun: false },
+        { kind: "exact", version: "2.8.3", from: "v2", dryRun: false },
         { allowSame: true },
       ),
     ).toBe("2.8.3");
@@ -1202,7 +1210,7 @@ describe("resolveNewVersion — re-entrancy", () => {
     expect(
       resolveNewVersion(
         "2.8.3",
-        { kind: "bump", bumpType: "patch", from: "staging", dryRun: false },
+        { kind: "bump", bumpType: "patch", from: "v2", dryRun: false },
         { isCurrentUntagged: true },
       ),
     ).toBe("2.8.3");
@@ -1212,7 +1220,7 @@ describe("resolveNewVersion — re-entrancy", () => {
     expect(
       resolveNewVersion(
         "2.8.2",
-        { kind: "exact", version: "2.8.2", from: "staging", dryRun: false },
+        { kind: "exact", version: "2.8.2", from: "v2", dryRun: false },
         { allowSame: true },
       ),
     ).toBe("2.8.2");
@@ -1226,15 +1234,15 @@ describe("pull request identification (fail-closed)", () => {
         number: 360,
         title: "chore(release): v2.8.2",
         state: "OPEN" as const,
-        headRefName: "staging",
+        headRefName: "v2",
         baseRefName: "main",
         headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
         mergedAt: null,
         packageVersion: "2.8.2",
       },
     ];
-    expect(selectPullRequest(candidates, "staging", "main", "2.8.3")).toBeNull();
-    expect(selectPullRequest(candidates, "staging", "main", "2.8.2")).toEqual(candidates[0]!);
+    expect(selectPullRequest(candidates, "v2", "main", "2.8.3")).toBeNull();
+    expect(selectPullRequest(candidates, "v2", "main", "2.8.2")).toEqual(candidates[0]!);
   });
 
   it("an old merged pull request for another version: does not attach", () => {
@@ -1243,7 +1251,7 @@ describe("pull request identification (fail-closed)", () => {
         number: 354,
         title: "chore(release): v2.8.1",
         state: "MERGED" as const,
-        headRefName: "staging",
+        headRefName: "v2",
         baseRefName: "main",
         headRefOid: "e16296a882831a7aebf2e1fe60609e834368ad91",
         mergedAt: "2026-10-02T22:56:04Z",
@@ -1251,7 +1259,7 @@ describe("pull request identification (fail-closed)", () => {
         packageVersion: "2.8.1",
       },
     ];
-    expect(selectPullRequest(candidates, "staging", "main", "2.8.3")).toBeNull();
+    expect(selectPullRequest(candidates, "v2", "main", "2.8.3")).toBeNull();
   });
 
   it("two candidates: stops and names all matching candidates", () => {
@@ -1261,7 +1269,7 @@ describe("pull request identification (fail-closed)", () => {
         title: "chore(release): v2.8.3",
         state: "OPEN" as const,
         headRefName: "chore/release-2.8.3",
-        baseRefName: "staging",
+        baseRefName: "v2",
         headRefOid: "aaa1",
         mergedAt: null,
         packageVersion: "2.8.3",
@@ -1271,15 +1279,15 @@ describe("pull request identification (fail-closed)", () => {
         title: "chore(release): v2.8.3",
         state: "OPEN" as const,
         headRefName: "chore/release-2.8.3",
-        baseRefName: "staging",
+        baseRefName: "v2",
         headRefOid: "aaa2",
         mergedAt: null,
         packageVersion: "2.8.3",
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
-    ).toThrow("Multiple matching pull requests found for chore/release-2.8.3 → staging: #400, #401");
+      selectPullRequest(candidates, "chore/release-2.8.3", "v2", "2.8.3"),
+    ).toThrow("Multiple matching pull requests found for chore/release-2.8.3 → v2: #400, #401");
   });
 
   it("a closed-unmerged candidate: stops and names the closed PR", () => {
@@ -1289,15 +1297,15 @@ describe("pull request identification (fail-closed)", () => {
         title: "chore(release): v2.8.3",
         state: "CLOSED" as const,
         headRefName: "chore/release-2.8.3",
-        baseRefName: "staging",
+        baseRefName: "v2",
         headRefOid: "deadbeef",
         mergedAt: null,
         packageVersion: "2.8.3",
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
-    ).toThrow("Pull request #399 (chore/release-2.8.3 → staging) was closed without merging");
+      selectPullRequest(candidates, "chore/release-2.8.3", "v2", "2.8.3"),
+    ).toThrow("Pull request #399 (chore/release-2.8.3 → v2) was closed without merging");
   });
 
   it("a candidate without headRefOid: stops and names the unreadable PR", () => {
@@ -1307,15 +1315,15 @@ describe("pull request identification (fail-closed)", () => {
         title: "chore(release): v2.8.3",
         state: "OPEN" as const,
         headRefName: "chore/release-2.8.3",
-        baseRefName: "staging",
+        baseRefName: "v2",
         headRefOid: "",
         mergedAt: null,
         packageVersion: "2.8.3",
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
-    ).toThrow("Pull request #402 (chore/release-2.8.3 → staging) returned no headRefOid from GitHub");
+      selectPullRequest(candidates, "chore/release-2.8.3", "v2", "2.8.3"),
+    ).toThrow("Pull request #402 (chore/release-2.8.3 → v2) returned no headRefOid from GitHub");
   });
 
   it("a candidate with unreadable packageVersion: stops and names the PR", () => {
@@ -1325,15 +1333,15 @@ describe("pull request identification (fail-closed)", () => {
         title: "chore(release): v2.8.3",
         state: "OPEN" as const,
         headRefName: "chore/release-2.8.3",
-        baseRefName: "staging",
+        baseRefName: "v2",
         headRefOid: "deadbeef",
         mergedAt: null,
         packageVersion: null,
       },
     ];
     expect(() =>
-      selectPullRequest(candidates, "chore/release-2.8.3", "staging", "2.8.3"),
-    ).toThrow("Could not determine package.json version for pull request #403 (chore/release-2.8.3 → staging) at commit deadbeef");
+      selectPullRequest(candidates, "chore/release-2.8.3", "v2", "2.8.3"),
+    ).toThrow("Could not determine package.json version for pull request #403 (chore/release-2.8.3 → v2) at commit deadbeef");
   });
 
   it("detects an unrelated open release PR on source branch as blocking", () => {
@@ -1342,14 +1350,14 @@ describe("pull request identification (fail-closed)", () => {
         number: 360,
         title: "chore(release): v2.8.2",
         state: "OPEN" as const,
-        headRefName: "staging",
+        headRefName: "v2",
         baseRefName: "main",
         headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
         mergedAt: null,
         packageVersion: "2.8.2",
       },
     ];
-    const blocking = detectBlockingPr(candidates, "staging", "2.8.3");
+    const blocking = detectBlockingPr(candidates, "v2", "2.8.3");
     expect(blocking).toEqual(candidates[0]!);
   });
 });
@@ -1735,7 +1743,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
@@ -1759,7 +1767,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
@@ -1782,7 +1790,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "bbbb111122223333444455556666777788889999",
@@ -1806,7 +1814,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 360,
           title: "chore(release): v2.8.2",
           state: "OPEN",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
           packageVersion: "2.8.2",
@@ -1843,7 +1851,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
@@ -1867,7 +1875,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
@@ -1891,7 +1899,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
@@ -1919,7 +1927,7 @@ describe("tag and branch verification (fail-closed)", () => {
           number: 370,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
@@ -1959,7 +1967,7 @@ describe("tag and branch verification (fail-closed)", () => {
         remoteBranchExists: true,
         sourcePr: null,
       }),
-    ).toThrow("gh pr create --base staging --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
+    ).toThrow("gh pr create --base v2 --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
     expect(() =>
       detectReleaseState({
         currentVersion: "2.8.2",
@@ -1972,18 +1980,18 @@ describe("tag and branch verification (fail-closed)", () => {
     ).toThrow("verify that origin/chore/release-2.8.3's package.json version is 2.8.3");
   });
 
-  it("remote release branch collision error targets staging for 2.x", () => {
+  it("remote release branch collision error targets v2 for 2.x", () => {
     expect(() =>
       detectReleaseState({
         currentVersion: "2.8.2",
         targetVersion: "2.8.3",
-        sourceBranch: "staging",
+        sourceBranch: "v2",
         remoteTagSha: null,
         localTagSha: null,
         remoteBranchExists: true,
         sourcePr: null,
       }),
-    ).toThrow("gh pr create --base staging --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
+    ).toThrow("gh pr create --base v2 --head chore/release-2.8.3 --title \"chore(release): v2.8.3\"");
   });
 
   it("interruption on release branch without commit: stops with instructions", () => {
@@ -2015,14 +2023,14 @@ describe("tag and branch verification (fail-closed)", () => {
 
     const plan = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       currentBranch: "chore/release-2.8.3",
       state,
       isReleaseBranchPushed: false,
     });
     const cmds = plan.map((p) => p.command).filter(Boolean);
     // Pushes existing branch, does NOT checkout -b or commit again
-    expect(cmds).not.toContain("git checkout -b chore/release-2.8.3 origin/staging");
+    expect(cmds).not.toContain("git checkout -b chore/release-2.8.3 origin/v2");
     expect(cmds).toContain("git push origin chore/release-2.8.3");
   });
 
@@ -2032,13 +2040,13 @@ describe("tag and branch verification (fail-closed)", () => {
         currentVersion: "2.8.2",
         targetVersion: "2.8.3",
         currentBranch: "chore/release-2.8.3",
-        sourceBranch: "staging",
+        sourceBranch: "v2",
         sourcePr: {
           number: 359,
           title: "chore(release): v2.8.3",
           state: "MERGED",
           headRefName: "chore/release-2.8.3",
-          baseRefName: "staging",
+          baseRefName: "v2",
           headRefOid: "111",
           packageVersion: "2.8.3",
         },
@@ -2047,14 +2055,14 @@ describe("tag and branch verification (fail-closed)", () => {
         localTagSha: null,
       }),
     ).toThrow(
-      "Pull request #359 into staging is merged, but origin/staging package.json is v2.8.2, not target v2.8.3",
+      "Pull request #359 into v2 is merged, but origin/v2 package.json is v2.8.2, not target v2.8.3",
     );
   });
 
   it("assertCurrentBranch accepts release branch of target version", () => {
-    expect(() => assertCurrentBranch("chore/release-2.8.3", "staging", "2.8.3")).not.toThrow();
-    expect(() => assertCurrentBranch("chore/release-2.8.2", "staging", "2.8.3")).toThrow(
-      "Must be on staging to release v2.8.3 (currently on 'chore/release-2.8.2')",
+    expect(() => assertCurrentBranch("chore/release-2.8.3", "v2", "2.8.3")).not.toThrow();
+    expect(() => assertCurrentBranch("chore/release-2.8.2", "v2", "2.8.3")).toThrow(
+      "Must be on v2 to release v2.8.3 (currently on 'chore/release-2.8.2')",
     );
   });
 });
@@ -2073,7 +2081,7 @@ describe("stop before the tag — ruled behavior", () => {
     for (const state of states) {
       const steps = planRelease({
         targetVersion: "2.8.3",
-        sourceBranch: "staging",
+        sourceBranch: "v2",
         state,
       });
       const commands = steps.map((s) => s.command).filter(Boolean);
@@ -2088,7 +2096,7 @@ describe("stop before the tag — ruled behavior", () => {
   it("with --tag flag on verified release: includes tag and push commands", () => {
     const tagSteps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "tag-release",
       tag: true,
       verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
@@ -2101,7 +2109,7 @@ describe("stop before the tag — ruled behavior", () => {
 
     const pushSteps = planRelease({
       targetVersion: "2.8.3",
-      sourceBranch: "staging",
+      sourceBranch: "v2",
       state: "push-local-tag",
       tag: true,
       verifiedSha: "425ecd4b9d6de757f5678a27df9da0fa7ec27b66",
@@ -2124,7 +2132,7 @@ describe("stop before the tag — ruled behavior", () => {
           number: 360,
           title: "chore(release): v2.8.3",
           state: "OPEN",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           packageVersion: "2.8.3",
@@ -2156,7 +2164,7 @@ describe("stop before the tag — ruled behavior", () => {
           number: 360,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
@@ -2180,7 +2188,7 @@ describe("stop before the tag — ruled behavior", () => {
           number: 360,
           title: "chore(release): v2.8.3",
           state: "MERGED",
-          headRefName: "staging",
+          headRefName: "v2",
           baseRefName: "main",
           headRefOid: "111",
           mergeCommitOid: "222",
@@ -2239,7 +2247,7 @@ describe("typed validators for gh and git responses (fail-closed)", () => {
     number: 360,
     title: "chore(release): v2.8.2",
     state: "MERGED",
-    headRefName: "staging",
+    headRefName: "v2",
     baseRefName: "main",
     headRefOid: "dccf137b59e8a9ffc907a37a859daaf7d1801110",
     mergedAt: "2026-10-09T12:00:00Z",
@@ -2515,7 +2523,7 @@ describe("table-driven declarative schema tests (fail-closed, generated from sch
     number: 360,
     title: "chore(release): v2.8.3",
     state: "MERGED",
-    headRefName: "staging",
+    headRefName: "v2",
     baseRefName: "main",
     headRefOid: "a".repeat(40),
     mergedAt: "2026-10-09T10:00:00Z",
@@ -2526,7 +2534,7 @@ describe("table-driven declarative schema tests (fail-closed, generated from sch
     number: 360,
     title: "chore(release): v2.8.3",
     state: "OPEN",
-    headRefName: "staging",
+    headRefName: "v2",
     baseRefName: "main",
     headRefOid: "a".repeat(40),
     mergedAt: null,
