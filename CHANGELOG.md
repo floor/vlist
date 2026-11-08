@@ -11,6 +11,26 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-11-08
+
+Tables pin and reorder columns.
+
+Who is affected: lists using `table()`. Nothing changes unless you pass a feature in the new `features` option.
+
+### Added
+
+- `table({ features: [...] })` takes optional table features. Each one is a separate import, so an app that does not use a feature does not download it.
+- `columnPin()` keeps columns fixed at the left or right edge while the others scroll horizontally. Set the side with `pin: "left" | "right"` on a column or with `columnPin({ pins })`; change it with `setColumnPin(key, side)` (`null` unpins, and the column returns to its original place) or with Shift+Alt+Left/Right on a focused header. `getColumnPins()` returns the current sides, and `column:pin` reports each change.
+- `columnReorder()` lets users drag a column header to a new place, with the table scrolling when the pointer nears an edge, or move the focused header with Alt+Left/Right. A move is announced to screen readers. `moveColumn()` and `getColumnOrder()` do the same from code, `column:reorder` reports each move, and `reorderable: false` locks a column. A pinned column moves only within its pinned group.
+
+### Changed
+
+- A plain `table()` is 17 bytes larger gzipped than in 3.5.1 (17121 bytes, budget unchanged): the `features` hook that every table carries adds 48 bytes, and simpler cell tracking in the header and rows saves 31.
+
+### Documentation
+
+- The snapshots guide now explains that a restore returns to the saved pixel position, so if rows above the saved one change size before the restore, a different row can end up at the top.
+
 ## [3.5.1] - 2026-11-08
 
 Scrolling stays steady while rows measure themselves.
@@ -2140,7 +2160,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.5.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.6.0...HEAD
+[3.6.0]: https://github.com/floor/vlist/compare/v3.5.1...v3.6.0
 [3.5.1]: https://github.com/floor/vlist/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/floor/vlist/compare/v3.4.1...v3.5.0
 [3.4.1]: https://github.com/floor/vlist/compare/v3.4.0...v3.4.1
