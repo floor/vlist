@@ -395,26 +395,28 @@ export function autosize<T extends VListItem = VListItem>(
         // Refresh the prefix sums over the measured range only
         refreshSizes(changedLow, changedHigh);
 
-        // Apply scroll correction for items above viewport
-        if (pendingScrollDelta) {
-          // The corrected position may exceed the previous native limit.
-          updateContentSize();
-          ctx.scroll.shiftBy(pendingScrollDelta);
-          pendingScrollDelta = 0;
-        }
-
         const isScrolling = engineState.scrollDirection !== 0;
         const nearEnd = engineState.totalItems > 0
           && engineState.prevRangeEnd >= engineState.totalItems - 1;
         const shouldPin = pinnedToEnd && !animatingToEnd;
+        // A native thumb drag maps each pointer step through the current
+        // content height. Publishing a new height while that drag is in
+        // progress grows the range under the pointer and the thumb lags it.
+        // The shift still runs, so a row above the viewport does not move
+        // the visible item; the height settles in onIdle. A smooth jump to
+        // the end is the exception: the browser clamps its target to the
+        // current height, and deferring the write leaves the jump short.
+        const publishSize = shouldPin || atEnd || nearEnd || animatingToEnd || !isScrolling;
 
-        // A smooth jump to the end re-reads its target every frame, but the
-        // browser clamps that write to the content element's current height.
-        // Deferring the height until idle leaves the jump short of the items
-        // measured along the way, which is the blank viewport on the second
-        // jump. Publish the height while the jump is in flight; still don't
-        // snap until the animation has finished, or the two fight.
-        if (shouldPin || atEnd || nearEnd || animatingToEnd || !isScrolling) {
+        if (pendingScrollDelta) {
+          // The corrected position may exceed the previous native limit, so
+          // the height has to land before the shift when this frame publishes.
+          if (publishSize) updateContentSize();
+          ctx.scroll.shiftBy(pendingScrollDelta);
+          pendingScrollDelta = 0;
+        }
+
+        if (publishSize) {
           updateContentSize();
           pendingContentSizeUpdate = false;
 
