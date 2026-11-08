@@ -11,6 +11,7 @@ import type { VListPlugin } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
 import type { VListItem } from "../../src/types";
 import { autosize } from "../../src/plugins/autosize/plugin";
+import { page } from "../../src/plugins/page/plugin";
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
@@ -201,12 +202,57 @@ describe("autosize() native scroll", () => {
     const content = container.querySelector(".vlist-content") as HTMLElement;
     cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
     ro.measureAll();
-    const published = content.style.height;
+    content.style.height = "100%";
     emitMode("synthetic");
     viewport.scrollTop = 800;
     viewport.dispatchEvent(new Event("scroll"));
     ro.measureAll();
-    expect(content.style.height).toBe(published);
+    expect(content.style.height).toBe("100%");
+    expect(content.parentElement?.parentElement?.classList.contains("vlist--autosize")).toBe(false);
+  });
+
+  it.serial("page scrolling stays native even when the mode option is synthetic", async () => {
+    for (const mode of ["native", "synthetic"] as const) {
+      const ro = captureResizeObserver();
+      const container = createContainer({ height: 200 });
+      const keys = ["innerHeight", "scrollY", "scrollTo"] as const;
+      const saved = keys.map((key) => [key, Object.getOwnPropertyDescriptor(window, key)] as const);
+      let y = 0;
+      let content: HTMLElement | undefined;
+      Object.defineProperty(window, "innerHeight", { configurable: true, get: () => 200 });
+      Object.defineProperty(window, "scrollY", { configurable: true, get: () => y });
+      Object.defineProperty(window, "scrollTo", { configurable: true, value: (options: ScrollToOptions): void => {
+        y = Math.max(0, Math.min(options.top ?? y, content ? parseFloat(content.style.height) - 200 : 0));
+      } });
+      const list = createVList({
+        container,
+        items: Array.from({ length: 100 }, (_, i) => ({ id: i, h: i === 17 ? 4000 : 40 })),
+        item: { estimatedHeight: 40, template },
+        scroll: { mode, idleTimeout: 40 },
+      }, [autosize(), page()]);
+      try {
+        await Promise.resolve();
+        expect(container.querySelector(".vlist")!.classList.contains("vlist--autosize")).toBe(true);
+        content = container.querySelector(".vlist-content") as HTMLElement;
+        const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+        viewport.getBoundingClientRect = () => new DOMRect(0, -y, 300, 200);
+        ro.measureAll();
+        y = 800;
+        window.dispatchEvent(new Event("scroll"));
+        const visible = firstVisible(content, y);
+        ro.measureAll();
+        const row = content.querySelector<HTMLElement>(`[data-index="${visible.index}"]`)!;
+        expect(translateY(row) - y).toBe(visible.offset);
+      } finally {
+        list.destroy();
+        container.remove();
+        ro.restore();
+        for (const [key, descriptor] of saved) {
+          if (descriptor) Object.defineProperty(window, key, descriptor);
+          else Reflect.deleteProperty(window, key);
+        }
+      }
+    }
   });
 
   it.serial("a deferred height settles once, follows setItems, and drops on destroy", async () => {

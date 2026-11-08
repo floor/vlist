@@ -307,7 +307,7 @@ describe("synthetic correction integration", () => {
     expect(list!.getScrollPosition()).toBe(2075); expect(completed).toBe(1);
   });
 
-  it("autosize measurement above the viewport keeps a synthetic fling moving", () => {
+  it("autosize measurement above the viewport keeps a synthetic fling moving", async () => {
     const original = globalThis.ResizeObserver;
     let measure!: ResizeObserverCallback;
     const observed = new Set<Element>();
@@ -331,6 +331,8 @@ describe("synthetic correction integration", () => {
       measure([{ target: above!, borderBoxSize: [{ blockSize: 80, inlineSize: 300 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);
       expect(list.getScrollPosition()).toBeCloseTo(before + 30, 8);
       expect(ctx.dom.content.style.height).toBe("100%");
+      await Promise.resolve();
+      expect(ctx.dom.root.classList.contains("vlist--autosize")).toBe(false);
       ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
       frame(72);
       expect(list.getScrollPosition()).toBeGreaterThan(before + 30);

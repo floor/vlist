@@ -300,18 +300,22 @@ export function autosize<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       isX = ctx.config.axis.primary === "x";
       sizeProp = isX ? "width" : "height";
-      // The partial height below only exists so a native scroll can land a
-      // correction the browser would otherwise clamp. Synthetic content stays
-      // at 100%. `auto` starts native and can swap later, so follow the event
-      // rather than the config captured at setup.
-      let nativeExtent = ctx.config.scrollMode !== "synthetic";
-      const offScrollMode = ctx.emitter.on("scroll:mode", (event) => {
-        nativeExtent = event.mode === "native";
-      });
-      ctx.hooks.onDestroy(offScrollMode);
+      // Paint containment is for a native scroller only. The synthetic handler
+      // sizes the content at 100% during attach, which is done before this
+      // turn ends. page() keeps a pixel height and never emits scroll:mode,
+      // even when the option says synthetic, so the option alone is not the
+      // source.
       const autosizeClass = `${ctx.config.classPrefix}--autosize`;
-      ctx.dom.root.classList.add(autosizeClass);
+      const extentIsNative = (): boolean =>
+        ctx.dom.content.style[isX ? "width" : "height"].endsWith("px");
+      const syncAutosizeClass = (): void => {
+        ctx.dom.root.classList.toggle(autosizeClass, extentIsNative());
+      };
+      if (ctx.config.scrollMode === "synthetic") queueMicrotask(syncAutosizeClass);
+      else ctx.dom.root.classList.add(autosizeClass);
+      const offScrollMode = ctx.emitter.on("scroll:mode", syncAutosizeClass);
       ctx.hooks.onDestroy(() => {
+        offScrollMode();
         ctx.dom.root.classList.remove(autosizeClass);
       });
       if (gap === 0) gap = ctx.config.gap;
@@ -431,12 +435,18 @@ export function autosize<T extends VListItem = VListItem>(
           // the anchor is not clamped back by the old height.
           if (publishSize) {
             updateContentSize();
-          } else if (nativeExtent) {
+          } else {
             const axis = isX ? "width" : "height";
-            const published = parseFloat(storedCtx!.dom.content.style[axis]);
-            const needed = scroll.getPixelEquivalent() + pendingScrollDelta + engineState.containerSize;
-            if (!(published >= needed)) {
-              storedCtx!.dom.content.style[axis] = Math.min(needed, MAX_VIRTUAL_SIZE) + "px";
+            const raw = storedCtx!.dom.content.style[axis];
+            // A percentage is the synthetic stage. parseFloat("100%") is 100,
+            // and writing pixels there builds a native range. A native list,
+            // including page(), publishes a px height.
+            if (raw.endsWith("px")) {
+              const published = parseFloat(raw);
+              const needed = scroll.getPixelEquivalent() + pendingScrollDelta + engineState.containerSize;
+              if (!(published >= needed)) {
+                storedCtx!.dom.content.style[axis] = Math.min(needed, MAX_VIRTUAL_SIZE) + "px";
+              }
             }
           }
           ctx.scroll.shiftBy(pendingScrollDelta);
