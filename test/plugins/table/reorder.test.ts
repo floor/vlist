@@ -1070,4 +1070,27 @@ describe("columnReorder — pinned partition clamping with columnPin()", () => {
     );
     expect(list.getColumnOrder()).toEqual(["B", "A", "D", "C", "F", "E"]);
   });
+
+  it("preserves resized widths of unpinned columns after reordering and then changing column pins", () => {
+    const { list } = createReorderTable(
+      makeColumns({
+        A: { pin: "left" },
+        F: { pin: "right" },
+      }),
+      undefined,
+      true,
+    );
+
+    // Resize unpinned B from 100px to 180px, then reorder unpinned B and C
+    list.resizeColumn("B", 180);
+    expect(list.getColumnWidths().B).toBe(180);
+
+    list.moveColumn("B", 2);
+    expect(list.getColumnOrder()).toEqual(["A", "C", "B", "D", "E", "F"]);
+    expect(list.getColumnWidths().B).toBe(180);
+
+    // Pinning D to left must preserve B's resized 180px width
+    list.setColumnPin("D", "left");
+    expect(list.getColumnWidths().B).toBe(180);
+  });
 });
