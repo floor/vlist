@@ -1157,4 +1157,52 @@ describe("columnReorder — pinned partition clamping with columnPin()", () => {
       globalThis.ResizeObserver = OrigRO;
     }
   });
+
+  it("maps pointer drag coordinates using the RTL origin offset in dir='rtl'", () => {
+    // 6 columns * 100px = 600px totalWidth, viewportWidth = 400px -> RTL origin = 200px
+    const { list, root, viewport } = createReorderTable(
+      makeColumns({
+        A: { pin: "left" },
+        F: { pin: "right" },
+      }),
+      undefined,
+      true,
+    );
+    root.dir = "rtl";
+    root.style.direction = "rtl";
+    viewport.style.direction = "rtl";
+
+    let raw = 0;
+    Object.defineProperty(viewport, "scrollLeft", {
+      configurable: true,
+      get: () => raw,
+      set: (v: number) => {
+        raw = Math.max(-200, Math.min(0, v));
+      },
+    });
+
+    // At scrollLeft = 0 in RTL, physical visible window is [200..600]:
+    // Unpinned D (offset 300..400) is at localX [100..200]; E (offset 400..500) is at localX [200..300].
+    // Dragging D from clientX = 150 right to clientX = 280 (over E) should move D to index 4 (after E).
+    const cellD = root.querySelector<HTMLElement>(
+      '.vlist-table-header-cell[data-column-key="D"]',
+    )!;
+    cellD.setPointerCapture = mock(() => {});
+    cellD.releasePointerCapture = mock(() => {});
+
+    cellD.dispatchEvent(
+      new PointerEvent("pointerdown", { clientX: 150, button: 0, pointerId: 1, bubbles: true } as any),
+    );
+    cellD.dispatchEvent(
+      new PointerEvent("pointermove", { clientX: 160, pointerId: 1, bubbles: true } as any),
+    );
+    cellD.dispatchEvent(
+      new PointerEvent("pointermove", { clientX: 280, pointerId: 1, bubbles: true } as any),
+    );
+    cellD.dispatchEvent(
+      new PointerEvent("pointerup", { clientX: 280, pointerId: 1, bubbles: true } as any),
+    );
+
+    expect(list.getColumnOrder()).toEqual(["A", "B", "C", "E", "D", "F"]);
+  });
 });
