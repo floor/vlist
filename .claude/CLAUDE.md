@@ -35,7 +35,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
-- `bun run release [patch|minor|major|<version>] [--from main|staging]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `main`, 2.x from `staging`.
+- `bun run release [patch|minor|major|<version>] [--from main|v2]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `main`, 2.x from `v2`.
 
 ## Project Structure
 
@@ -191,7 +191,7 @@ Conventional Commits: `type(scope): description`
 ## Git Workflow
 
 **Integration and release branch is `main`.** Work on feature branches cut from
-`main` and propose every change through a PR into `main`. `staging` remains
+`main` and propose every change through a PR into `main`. `v2` remains
 the frozen 2.x maintenance branch.
 
 - ❌ **NEVER commit or push directly to `main`** — it is protected
@@ -214,7 +214,7 @@ git branch --show-current  # a feature branch, never commit directly to `main`
 ## CI/CD
 
 ### CI (`ci.yml`)
-Runs on pushes and PRs targeting `main` or 2.x `staging`:
+Runs on pushes and PRs targeting `main` or 2.x `v2`:
 - Typecheck, Test, Test `--concurrent`, Coverage threshold (85%), Build, Bundle size, Heap growth —
   **every gate runs even when an earlier one is red**, and the final `Gate` step fails the job
   naming each red one. Read the `Gate` step's log, not the first red step
@@ -236,9 +236,9 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major|<version>] [--from main|staging]` prepares
-3.x from `main` and 2.x from `staging`. A 3.x release has one release PR into
-`main`; 2.x retains its staging-to-main promotion. `--from` confirms the line.
+`bun run release [patch|minor|major|<version>] [--from main|v2]` prepares
+3.x from `main` and 2.x from `v2`. A 3.x release has one release PR into
+`main`; 2.x retains its v2-to-main promotion. `--from` confirms the line.
 
 1. Commit notes under `[Unreleased]`: a theme, Who is affected, and entries.
 2. From a clean worktree, run the release command. It fetches the source and

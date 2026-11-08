@@ -394,7 +394,7 @@ chore(deps): update dev dependencies
 ## Pull Requests
 
 1. Fork the repository
-2. Create a feature branch from `staging`: `git checkout -b feat/my-feature`
+2. Create a feature branch from `main`: `git checkout -b feat/my-feature`
 3. Make your changes following the standards above
 4. Ensure all checks pass:
    ```bash
@@ -402,7 +402,7 @@ chore(deps): update dev dependencies
    bun run typecheck # No type errors
    bun run build     # Builds cleanly
    ```
-5. Open a PR against `staging`
+5. Open a PR against `main`
 6. Describe what changed and why
 
 ### PR Checklist

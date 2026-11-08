@@ -45,8 +45,8 @@ test('stable publication removes the npm next dist-tag with a soft-fail warning 
   expect(steps.some((step) => (step as { run?: string }).run?.includes('check-dist-tags'))).toBe(false);
 });
 
-test('CI targets main and 2.x staging, with no retired integration branch', () => {
+test('CI targets main and 2.x v2, with no retired integration branch', () => {
   const ci = Bun.YAML.parse(readFileSync(resolve(import.meta.dir, '../../.github/workflows/ci.yml'), 'utf8')) as { on: { push: { branches: string[] }; pull_request: { branches: string[] } } };
-  expect(ci.on.push.branches).toEqual(['main', 'staging']);
-  expect(ci.on.pull_request.branches).toEqual(['main', 'staging']);
+  expect(ci.on.push.branches).toEqual(['main', 'v2']);
+  expect(ci.on.pull_request.branches).toEqual(['main', 'v2']);
 });

@@ -21,8 +21,8 @@ API must never ship in a patch — that's exactly the surprise SemVer prevents.
 reach it through reviewed PRs; never push directly to `main`. The retired
 integration branch is no longer part of release preparation or publication.
 
-2.x remains frozen maintenance on `staging`: its release branch merges into
-`staging`, then a pinned `staging → main` PR carries the release onto `main`.
+2.x remains frozen maintenance on `v2`: its release branch merges into
+`v2`, then a pinned `v2 → main` PR carries the release onto `main`.
 Its version cannot be cut from the 3.x line.
 
 Within a line, a patch is `fix` / `perf` / `docs` only. The moment a `feat`
@@ -72,8 +72,8 @@ script never checks out an integration branch held by another worktree.
    and the production site dispatch.
 
 Use `--dry-run` to print the plan without changing files, branches, PRs or
-tags. `--from main|staging` confirms the derived release line; it cannot send
-3.x through staging. A worktree on a feature branch or detached HEAD can
+tags. `--from main|v2` confirms the derived release line; it cannot send
+3.x through `v2`. A worktree on a feature branch or detached HEAD can
 prepare or tag a 3.x release; preparation always starts from remote main,
 not from unmerged feature changes. Existing release branches must be resumed
 in the worktree holding them; the script never forces a checkout.
@@ -86,10 +86,10 @@ its remote package version and release commit, open the PR into `main` using
 the script's diagnostic, then resume. An unfinished local release branch is
 refused. This is not a fallback after a size failure.
 
-**2.x maintenance.** Use `--from staging` for a 2.x version. Its release PR
-goes into staging and is followed by the existing staging-to-main PR. Both
+**2.x maintenance.** Use `--from v2` for a 2.x version. Its release PR
+goes into `v2` and is followed by the existing v2-to-main PR. Both
 merges must be pinned merge commits. Source ref updates are fetched without
-checking out staging; tagging uses the same verified main SHA and leaves
+checking out `v2`; tagging uses the same verified main SHA and leaves
 the current worktree unchanged.
 
 **npm tags.** A stable publish moves `latest` and removes any `next`
@@ -132,12 +132,12 @@ with `npm publish --tag next` and creates a GitHub prerelease. Users install it
 with `npm install vlist@next`.
 
 1. **Branch** — cut it from the branch that holds the work (`main` for 3.x), not
-   from `staging`. `bun run release` does not apply.
+   from `v2`. `bun run release` does not apply.
 2. **Prep** — set `package.json` to `X.Y.Z-next.N`, move the `[Unreleased]`
    entries into a `[X.Y.Z-next.N] - <date>` section of `CHANGELOG.md`, and update
    the version line in `README.md` and `npm-readme.md`. Commit
    `chore(release): vX.Y.Z-next.N` and push the branch.
-3. **Verify** — CI runs on pushes and PRs to `main` and 2.x `staging`.
+3. **Verify** — CI runs on pushes and PRs to `main` and 2.x `v2`.
    Verify the exact tag candidate from a clean export: `bun install --frozen-lockfile`,
    `bun run typecheck`, `bun test`, `bun run scripts/coverage.ts --threshold 85`,
    `bun run build --types`, `bun run size`, `npm pack --dry-run`. A local run
@@ -155,5 +155,5 @@ and `git tag -d vX.Y.Z-next.N`), and tag the fixed commit with the same version.
 
 **Promotion** — the final `X.Y.Z` is cut from `main` with
 `bun run release X.Y.Z` (a release PR into `main` for 3.x); stable publication
-moves `latest` and removes the `next` dist-tag. Do not merge into `staging` first;
-`staging` is the 2.x maintenance line.
+moves `latest` and removes the `next` dist-tag. Do not merge into `v2` first;
+`v2` is the 2.x maintenance line.

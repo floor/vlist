@@ -94,11 +94,11 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
 }
 
 
-for (const source of ["main", "staging"] as const) {
+for (const source of ["main", "v2"] as const) {
   const version = source === "main" ? "3.3.5" : "2.8.3";
   const previous = source === "main" ? "3.3.4" : "2.8.2";
   const branch = `chore/release-${version}`;
-  it(`prepares ${source === "main" ? "one main PR" : "the two staging PRs"}, waits for pinned merges, and stops before tagging`, () => {
+  it(`prepares ${source === "main" ? "one main PR" : "the two v2 PRs"}, waits for pinned merges, and stops before tagging`, () => {
     const root = mkdtempSync(join(tmpdir(), "vlist-release-prepare-"));
     const repo = join(root, "caller");
     const remote = join(root, "remote.git");
@@ -120,8 +120,8 @@ for (const source of ["main", "staging"] as const) {
       git(repo, "add", ".");
       git(repo, "commit", "-m", "release notes on main");
       git(repo, "remote", "add", "origin", remote);
-      if (source === "staging") git(repo, "branch", "staging");
-      git(repo, "push", "origin", "main", ...(source === "staging" ? ["staging"] : []));
+      if (source === "v2") git(repo, "branch", "v2");
+      git(repo, "push", "origin", "main", ...(source === "v2" ? ["v2"] : []));
       git(repo, "checkout", "-b", "feature");
       git(repo, "worktree", "add", held, "main");
       writeFileSync(join(repo, "private-feature.txt"), "not merged");
@@ -131,7 +131,7 @@ for (const source of ["main", "staging"] as const) {
       }
       git(repo, "add", ".");
       git(repo, "commit", "-m", "unmerged feature");
-      if (source === "staging") git(repo, "checkout", "staging");
+      if (source === "v2") git(repo, "checkout", "v2");
       const commandsFile = join(root, "commands.jsonl");
       const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
       const preload = join(root, "github-operator-fixture.ts");
@@ -149,18 +149,18 @@ for (const source of ["main", "staging"] as const) {
     appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
     if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
     if (command.startsWith("gh pr list")) return "[]";
-    if (command.startsWith("gh pr create --base staging --head " + branch)) {
-      const operator = ${JSON.stringify(join(root, "held-staging"))};
-      executeFile("git", ["worktree", "add", operator, "staging"], { stdio: "pipe" });
+    if (command.startsWith("gh pr create --base v2 --head " + branch)) {
+      const operator = ${JSON.stringify(join(root, "held-v2"))};
+      executeFile("git", ["worktree", "add", operator, "v2"], { stdio: "pipe" });
       const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
-      executeFile("git", ["-C", operator, "merge", "--no-ff", branch, "-m", "operator staging merge"], { stdio: "pipe" });
-      executeFile("git", ["-C", operator, "push", "origin", "staging"], { stdio: "pipe" });
+      executeFile("git", ["-C", operator, "merge", "--no-ff", branch, "-m", "operator v2 merge"], { stdio: "pipe" });
+      executeFile("git", ["-C", operator, "push", "origin", "v2"], { stdio: "pipe" });
       const oid = executeFile("git", ["-C", operator, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
       sourcePr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
       return "https://github.com/floor/vlist/pull/503";
     }
-    if (command.startsWith("gh pr create --base main --head " + (source === "main" ? branch : "staging"))) {
-      const head = source === "main" ? branch : "staging";
+    if (command.startsWith("gh pr create --base main --head " + (source === "main" ? branch : "v2"))) {
+      const head = source === "main" ? branch : "v2";
       const headRefOid = executeFile("git", ["rev-parse", head], { encoding: "utf8" }).trim();
       executeFile("git", ["-C", held, "merge", "--no-ff", head, "-m", "operator main merge"], { stdio: "pipe" });
       executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });

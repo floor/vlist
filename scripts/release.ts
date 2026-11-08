@@ -2,11 +2,11 @@
 /**
  * vlist release script
  *
- * Usage: bun run release [patch|minor|major|<version>] [--from main|staging] [--dry-run] [--tag]
+ * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag]
  *
  * What it does:
  *   1. Resolves the source branch from the version being released
- *      (`main` for 3.x, `staging` for 2.x) and verifies a clean working tree
+ *      (`main` for 3.x, `v2` for 2.x) and verifies a clean working tree
  *   2. Creates a release branch `chore/release-X.Y.Z` cut from the source branch
  *   3. Bumps the version in package.json (patch by default). A prerelease is
  *      never bumped: its stable release is named explicitly, so a bare
@@ -15,7 +15,7 @@
  *   5. Rolls release notes and compare links into a dated changelog section
  *   6. Commits `chore(release): vX.Y.Z` and pushes the release branch (never source directly)
  *   7. Creates a PR chore/release-X.Y.Z → <source> and waits for it to merge
- *   8. For 2.x only, promotes staging → main through a second pinned PR
+ *   8. For 2.x only, promotes v2 → main through a second pinned PR
  *   9. Verifies merge commit, package.json, and passing check runs on main
  *  10. Stops before the tag by default; with explicit --tag, creates annotated tag and pushes
  */
@@ -46,9 +46,9 @@ export type BumpType = "patch" | "minor" | "major";
 
 /**
  * Integration branch from which a release branch is cut.
- * `main` is the 3.x line; `staging` is frozen 2.x maintenance.
+ * `main` is the 3.x line; `v2` is frozen 2.x maintenance.
  */
-export type ReleaseBranch = "main" | "staging";
+export type ReleaseBranch = "main" | "v2";
 
 export type ReleaseArgs =
   | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined }
@@ -135,9 +135,9 @@ export interface ParsedVersion {
 }
 
 export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
-export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "staging"];
+export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
-export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|staging] [--dry-run] [--tag]";
+export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag]";
 
 const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
@@ -221,7 +221,7 @@ export const bumpVersion = (version: string, part: BumpType): string => {
 };
 
 export const sourceBranchFor = (version: string): ReleaseBranch =>
-  parseVersion(version).major >= 3 ? "main" : "staging";
+  parseVersion(version).major >= 3 ? "main" : "v2";
 
 export const resolveSourceBranch = (
   version: string,
@@ -927,6 +927,9 @@ export const formatReleasePlan = (
 // =============================================================================
 
 const takeFromValue = (value: string | undefined): ReleaseBranch => {
+  if (value === "staging") {
+    throw new Error("The 2.x release line was renamed from 'staging' to 'v2'; use --from v2");
+  }
   if (value === undefined || !isReleaseBranch(value)) {
     throw new Error(USAGE);
   }
@@ -2060,7 +2063,7 @@ const main = async (): Promise<void> => {
     const initialSource: ReleaseBranch =
       args.kind === "exact"
         ? resolveSourceBranch(args.version, args.from)
-        : (args.from ?? (currentBranch === "staging" ? "staging" : "main"));
+        : (args.from ?? (currentBranch === "v2" ? "v2" : "main"));
     const onReleaseBranch =
       args.kind === "exact"
         ? currentBranch === releaseBranchFor(args.version)
