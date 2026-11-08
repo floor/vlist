@@ -330,6 +330,7 @@ describe("synthetic correction integration", () => {
       expect(above).toBeDefined();
       measure([{ target: above!, borderBoxSize: [{ blockSize: 80, inlineSize: 300 }] } as unknown as ResizeObserverEntry], {} as ResizeObserver);
       expect(list.getScrollPosition()).toBeCloseTo(before + 30, 8);
+      expect(ctx.dom.content.style.height).toBe("100%");
       ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
       frame(72);
       expect(list.getScrollPosition()).toBeGreaterThan(before + 30);

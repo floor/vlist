@@ -179,6 +179,36 @@ describe("autosize() native scroll", () => {
     expect(viewport.scrollTop).toBe(4760);
   });
 
+  it.serial("a list that has swapped to synthetic does not take a partial pixel height", () => {
+    const ro = captureResizeObserver();
+    const container = createContainer({ height: 200 });
+    let emitMode!: (mode: "native" | "synthetic") => void;
+    const probe: VListPlugin<Row> = {
+      name: "mode-probe",
+      priority: 100,
+      setup(ctx) {
+        emitMode = (mode) => ctx.emitter.emit("scroll:mode", { mode });
+      },
+    };
+    const items: Row[] = Array.from({ length: 100 }, (_, i) => ({ id: i, h: i === 17 ? 4000 : 40 }));
+    const list = createVList({
+      container,
+      items,
+      item: { estimatedHeight: 40, template },
+      scroll: { idleTimeout: 40 },
+    }, [autosize(), probe]);
+    const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+    ro.measureAll();
+    const published = content.style.height;
+    emitMode("synthetic");
+    viewport.scrollTop = 800;
+    viewport.dispatchEvent(new Event("scroll"));
+    ro.measureAll();
+    expect(content.style.height).toBe(published);
+  });
+
   it.serial("a deferred height settles once, follows setItems, and drops on destroy", async () => {
     for (const mode of ["idle", "replace", "destroy"] as const) {
       const ro = captureResizeObserver();

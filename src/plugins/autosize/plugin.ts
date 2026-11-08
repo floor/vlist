@@ -300,6 +300,15 @@ export function autosize<T extends VListItem = VListItem>(
       engineState = ctx.getState();
       isX = ctx.config.axis.primary === "x";
       sizeProp = isX ? "width" : "height";
+      // The partial height below only exists so a native scroll can land a
+      // correction the browser would otherwise clamp. Synthetic content stays
+      // at 100%. `auto` starts native and can swap later, so follow the event
+      // rather than the config captured at setup.
+      let nativeExtent = ctx.config.scrollMode !== "synthetic";
+      const offScrollMode = ctx.emitter.on("scroll:mode", (event) => {
+        nativeExtent = event.mode === "native";
+      });
+      ctx.hooks.onDestroy(offScrollMode);
       if (gap === 0) gap = ctx.config.gap;
 
       // Read estimated size from the current sizeCache before replacing it.
@@ -417,7 +426,7 @@ export function autosize<T extends VListItem = VListItem>(
           // the anchor is not clamped back by the old height.
           if (publishSize) {
             updateContentSize();
-          } else {
+          } else if (nativeExtent) {
             const axis = isX ? "width" : "height";
             const published = parseFloat(storedCtx!.dom.content.style[axis]);
             const needed = scroll.getPixelEquivalent() + pendingScrollDelta + engineState.containerSize;
