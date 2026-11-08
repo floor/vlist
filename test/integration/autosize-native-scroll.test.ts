@@ -290,4 +290,26 @@ describe("autosize() native scroll", () => {
     await Bun.sleep(80);
     expect(content.style.height).toBe(steady);
   });
+
+  it("paint containment is marked on autosize lists only", () => {
+    const container = createContainer({ height: 200 });
+    const plain = createVList({
+      container,
+      items: [{ id: 0, h: 40 }],
+      item: { height: 40, template },
+    });
+    const plainRoot = container.querySelector(".vlist") as HTMLElement;
+    expect(plainRoot.classList.contains("vlist--autosize")).toBe(false);
+    plain.destroy();
+    const list = createVList({
+      container,
+      items: [{ id: 0, h: 40 }],
+      item: { estimatedHeight: 40, template },
+    }, [autosize()]);
+    const root = container.querySelector(".vlist") as HTMLElement;
+    expect(root.classList.contains("vlist--autosize")).toBe(true);
+    list.destroy();
+    expect(root.classList.contains("vlist--autosize")).toBe(false);
+    container.remove();
+  });
 });

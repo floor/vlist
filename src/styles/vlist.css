@@ -233,12 +233,17 @@
     background-color: var(--vlist-scrollbar-thumb-hover-color);
 }
 
-/* Content container (sets total height + contains items directly in v2).
-   Paint containment keeps an absolute row that sits past a deferred
-   height from extending the viewport's scrollable overflow. */
+/* Content container (sets total height + contains items directly in v2) */
 .vlist-content {
     position: relative;
     width: 100%;
+    contain: layout style;
+}
+
+/* Autosize defers the content height during a native scroll. Paint
+   containment stays on those lists, so a row past the deferred height
+   cannot extend the scroll range. Other lists keep the rule above. */
+.vlist--autosize .vlist-content {
     contain: layout style paint;
 }
 

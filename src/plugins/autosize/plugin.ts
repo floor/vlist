@@ -309,6 +309,11 @@ export function autosize<T extends VListItem = VListItem>(
         nativeExtent = event.mode === "native";
       });
       ctx.hooks.onDestroy(offScrollMode);
+      const autosizeClass = `${ctx.config.classPrefix}--autosize`;
+      ctx.dom.root.classList.add(autosizeClass);
+      ctx.hooks.onDestroy(() => {
+        ctx.dom.root.classList.remove(autosizeClass);
+      });
       if (gap === 0) gap = ctx.config.gap;
 
       // Read estimated size from the current sizeCache before replacing it.
