@@ -220,7 +220,8 @@ export function columnReorder<T extends VListItem = VListItem>(
           let u = partLeftCount;
           for (let i = 0; i < baseCols.length; i++) {
             if (!pins[baseCols[i]!.key] && u < rightStart) {
-              baseCols[i] = cols[u++]!.def;
+              const col = cols[u++]!;
+              baseCols[i] = { ...col.def, width: col.width };
             }
           }
         }

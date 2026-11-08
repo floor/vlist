@@ -1092,5 +1092,18 @@ describe("columnReorder — pinned partition clamping with columnPin()", () => {
     // Pinning D to left must preserve B's resized 180px width
     list.setColumnPin("D", "left");
     expect(list.getColumnWidths().B).toBe(180);
+
+    // Resizing C and pinned A without reordering also survives subsequent pin/unpin
+    list.resizeColumn("C", 160);
+    list.resizeColumn("A", 140);
+    list.setColumnPin("C", "right");
+    expect(list.getColumnWidths().C).toBe(160);
+    expect(list.getColumnWidths().B).toBe(180);
+    expect(list.getColumnWidths().A).toBe(140);
+
+    list.setColumnPin("A", null);
+    expect(list.getColumnWidths().A).toBe(140);
+    expect(list.getColumnWidths().B).toBe(180);
+    expect(list.getColumnWidths().C).toBe(160);
   });
 });
