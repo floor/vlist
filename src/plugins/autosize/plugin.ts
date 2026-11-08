@@ -19,6 +19,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
+import { MAX_VIRTUAL_SIZE } from "../../constants";
 
 // =============================================================================
 // Config
@@ -409,9 +410,21 @@ export function autosize<T extends VListItem = VListItem>(
         const publishSize = shouldPin || atEnd || nearEnd || animatingToEnd || !isScrolling;
 
         if (pendingScrollDelta) {
-          // The corrected position may exceed the previous native limit, so
-          // the height has to land before the shift when this frame publishes.
-          if (publishSize) updateContentSize();
+          // The corrected position may exceed the previous native limit.
+          // Publish the whole height when this frame is allowed to. While a
+          // scroll is in progress, publish only the pixels the shift needs,
+          // so a native thumb does not take on the full measured range and
+          // the anchor is not clamped back by the old height.
+          if (publishSize) {
+            updateContentSize();
+          } else {
+            const axis = isX ? "width" : "height";
+            const published = parseFloat(storedCtx!.dom.content.style[axis]);
+            const needed = scroll.getPixelEquivalent() + pendingScrollDelta + engineState.containerSize;
+            if (!(published >= needed)) {
+              storedCtx!.dom.content.style[axis] = Math.min(needed, MAX_VIRTUAL_SIZE) + "px";
+            }
+          }
           ctx.scroll.shiftBy(pendingScrollDelta);
           pendingScrollDelta = 0;
         }
@@ -481,11 +494,6 @@ export function autosize<T extends VListItem = VListItem>(
       // them. One listener pair per list, not per item. Unmeasured items are
       // still observed and need nothing here.
       const content = ctx.dom.content;
-      // Rows are absolute, so a row placed past a stale content height still
-      // adds to the viewport's scrollable overflow. That grows the native
-      // thumb's range the same way a height write does. Paint containment
-      // keeps the overflow inside the height this plugin publishes.
-      content.style.contain = "layout style paint";
       const onMediaEvent = (event: Event): void => {
         const target = event.target as Element | null;
         if (!target || target === content) return;

@@ -7,6 +7,7 @@ import { registerDOM, unregisterDOM } from "../helpers/dom";
 import { capturePrototypeGeometry } from "../helpers/geometry";
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
 import { createVList } from "../../src/core/create";
+import type { VListPlugin } from "../../src/core/types";
 import { createContainer } from "../helpers/factory";
 import type { VListItem } from "../../src/types";
 import { autosize } from "../../src/plugins/autosize/plugin";
@@ -143,6 +144,98 @@ describe("autosize() native scroll", () => {
     expect(settled).not.toBe(steady);
     await Bun.sleep(80);
     expect(content.style.height).toBe(settled);
+  });
+
+  it.serial("a correction past the published height keeps the anchor", () => {
+    const ro = captureResizeObserver();
+    const container = createContainer({ height: 200 });
+    const items: Row[] = Array.from({ length: 100 }, (_, i) => ({ id: i, h: i === 17 ? 4000 : 40 }));
+    const list = createVList({
+      container,
+      items,
+      item: { estimatedHeight: 40, template },
+      scroll: { idleTimeout: 40 },
+    }, [autosize()]);
+    const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+    const content = container.querySelector(".vlist-content") as HTMLElement;
+    cleanup = () => { list.destroy(); container.remove(); ro.restore(); };
+    let applied = 0;
+    Object.defineProperty(viewport, "scrollTop", {
+      configurable: true,
+      get: () => applied,
+      set: (value: number) => {
+        applied = Math.max(0, Math.min(value, parseFloat(content.style.height) - 200));
+      },
+    });
+    ro.measureAll();
+    viewport.scrollTop = 800;
+    viewport.dispatchEvent(new Event("scroll"));
+    const visible = firstVisible(content, viewport.scrollTop);
+    ro.measureAll();
+    expect(rowOffset(content, viewport, visible.index)).toBe(visible.offset);
+    // Room for the shift only. The full measured total is 7960px, and
+    // publishing that would grow the native thumb's range mid-drag.
+    expect(content.style.height).toBe("4960px");
+    expect(viewport.scrollTop).toBe(4760);
+  });
+
+  it.serial("a deferred height settles once, follows setItems, and drops on destroy", async () => {
+    for (const mode of ["idle", "replace", "destroy"] as const) {
+      const ro = captureResizeObserver();
+      const container = createContainer({ height: 200 });
+      let calls = 0;
+      const counter: VListPlugin<Row> = {
+        name: "height-counter",
+        priority: 100,
+        setup(ctx) {
+          const original = ctx.render.contentSize;
+          ctx.render.contentSize = (size: number): void => {
+            calls += 1;
+            original(size);
+          };
+        },
+      };
+      const list = createVList({
+        container,
+        items: Array.from({ length: 100 }, (_, i) => ({ id: i, h: 80 })),
+        item: { estimatedHeight: 40, template },
+        scroll: { idleTimeout: 40 },
+      }, [autosize(), counter]);
+      try {
+        const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+        const content = container.querySelector(".vlist-content") as HTMLElement;
+        ro.measureAll();
+        const before = content.style.height;
+        calls = 0;
+        viewport.scrollTop = 1600;
+        viewport.dispatchEvent(new Event("scroll"));
+        ro.measureAll();
+        expect(content.style.height).toBe(before);
+        expect(calls).toBe(0);
+        if (mode === "replace") {
+          list.setItems(Array.from({ length: 100 }, (_, i) => ({ id: i + 1000, h: 40 })));
+          expect(content.style.height).toBe("4000px");
+        } else if (mode === "destroy") {
+          list.destroy();
+        }
+        await Bun.sleep(80);
+        if (mode === "idle") {
+          expect(calls).toBe(1);
+          expect(content.style.height).not.toBe(before);
+          await Bun.sleep(80);
+          expect(calls).toBe(1);
+        } else if (mode === "replace") {
+          expect(content.style.height).toBe("4000px");
+        } else {
+          expect(calls).toBe(0);
+          expect(container.childElementCount).toBe(0);
+        }
+      } finally {
+        list.destroy();
+        container.remove();
+        ro.restore();
+      }
+    }
   });
 
   it.serial("fixed heights keep the same content size across the same scroll", async () => {
