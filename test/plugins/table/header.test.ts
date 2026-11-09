@@ -1090,6 +1090,176 @@ describe("createTableHeader - keyboard navigation", () => {
     expect(onResize).toHaveBeenCalledWith(0, 190);
   });
 
+  it("should resize column wider with Shift+ArrowRight", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("name", { width: 200, resizable: true }),
+      col("value", { width: 200 }),
+    ]);
+    header.rebuild(layout);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    header.element.dispatchEvent(event);
+
+    expect(onResize).toHaveBeenCalledWith(0, 210);
+    expect(event.defaultPrevented).toBe(true);
+    header.destroy();
+    root.remove();
+  });
+
+  it("should resize column narrower with Shift+ArrowLeft", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("name", { width: 200, resizable: true }),
+      col("value", { width: 200 }),
+    ]);
+    header.rebuild(layout);
+
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowLeft",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    header.element.dispatchEvent(event);
+
+    expect(onResize).toHaveBeenCalledWith(0, 190);
+    expect(event.defaultPrevented).toBe(true);
+    header.destroy();
+    root.remove();
+  });
+
+  // Serial: focus and document.activeElement are process globals.
+  it.serial("resizes the focused cell on Shift+ArrowLeft/Right without moving roving tabindex or document.activeElement", () => {
+    const { root } = createTestDOM();
+    const onResize = mock((index: number, newWidth: number) => {
+      layout.resizeColumn(index, newWidth);
+      header.update(layout);
+    });
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("a", { width: 150, resizable: true }),
+      col("b", { width: 200, resizable: true }),
+      col("c", { width: 150, resizable: true }),
+    ]);
+    try {
+      header.rebuild(layout);
+      const scrollContainer = header.element.firstChild as HTMLElement;
+      const cell0 = scrollContainer.children[0] as HTMLElement;
+      const cell1 = scrollContainer.children[1] as HTMLElement;
+      const cell2 = scrollContainer.children[2] as HTMLElement;
+
+      cell1.focus();
+      cell1.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+      expect(document.activeElement).toBe(cell1);
+      expect([cell0, cell1, cell2].map((c) => c.getAttribute("tabindex"))).toEqual(["-1", "0", "-1"]);
+
+      cell1.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(onResize).toHaveBeenLastCalledWith(1, 210);
+      expect(document.activeElement).toBe(cell1);
+      expect([cell0, cell1, cell2].map((c) => c.getAttribute("tabindex"))).toEqual(["-1", "0", "-1"]);
+
+      cell1.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(onResize).toHaveBeenLastCalledWith(1, 200);
+      expect(document.activeElement).toBe(cell1);
+      expect([cell0, cell1, cell2].map((c) => c.getAttribute("tabindex"))).toEqual(["-1", "0", "-1"]);
+    } finally {
+      header.destroy();
+      root.remove();
+    }
+  });
+
+  it("does not resize or move focus on Shift+Alt+ArrowLeft/Right when columnPin is not mounted", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("a", { width: 200, resizable: true }),
+      col("b", { width: 200, resizable: true }),
+    ]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+    const cell1 = scrollContainer.children[1] as HTMLElement;
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      shiftKey: true,
+      altKey: true,
+      bubbles: true,
+    }));
+
+    expect(onResize).not.toHaveBeenCalled();
+    expect(cell0.getAttribute("tabindex")).toBe("0");
+    expect(cell1.getAttribute("tabindex")).toBe("-1");
+    header.destroy();
+    root.remove();
+  });
+
+  // Serial: focus and document.activeElement are process globals.
+  it.serial("leaves Shift+ArrowLeft/Right and ArrowLeft/Right to an <input> inside a header cell", () => {
+    const { root } = createTestDOM();
+    const onResize = mock(() => {});
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = "filter";
+    const header = createTableHeader<TestItem>(root, 40, "vlist", onResize);
+    const layout = createResolvedLayout([
+      col("name", { width: 200, resizable: true, header: () => input }),
+      col("value", { width: 200, resizable: true }),
+    ]);
+    try {
+      header.rebuild(layout);
+      const scrollContainer = header.element.firstChild as HTMLElement;
+      const cell0 = scrollContainer.children[0] as HTMLElement;
+      const cell1 = scrollContainer.children[1] as HTMLElement;
+
+      input.focus();
+      expect(document.activeElement).toBe(input);
+
+      for (const shiftKey of [true, false]) {
+        for (const key of ["ArrowRight", "ArrowLeft"]) {
+          const event = new KeyboardEvent("keydown", {
+            key,
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+          });
+          input.dispatchEvent(event);
+          expect(event.defaultPrevented).toBe(false);
+        }
+      }
+
+      expect(onResize).not.toHaveBeenCalled();
+      expect(document.activeElement).toBe(input);
+      expect(cell0.getAttribute("tabindex")).toBe("0");
+      expect(cell1.getAttribute("tabindex")).toBe("-1");
+    } finally {
+      header.destroy();
+      root.remove();
+    }
+  });
+
   it("should not resize non-resizable columns", () => {
     const { root } = createTestDOM();
     const onResize = mock(() => {});
