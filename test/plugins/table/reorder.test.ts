@@ -1070,4 +1070,91 @@ describe("columnReorder — pinned partition clamping with columnPin()", () => {
     );
     expect(list.getColumnOrder()).toEqual(["B", "A", "D", "C", "F", "E"]);
   });
+
+  it("preserves resized widths of unpinned columns after reordering and then changing column pins", () => {
+    const { list } = createReorderTable(
+      makeColumns({
+        A: { pin: "left" },
+        F: { pin: "right" },
+      }),
+      undefined,
+      true,
+    );
+
+    // Resize unpinned B from 100px to 180px, then reorder unpinned B and C
+    list.resizeColumn("B", 180);
+    expect(list.getColumnWidths().B).toBe(180);
+
+    list.moveColumn("B", 2);
+    expect(list.getColumnOrder()).toEqual(["A", "C", "B", "D", "E", "F"]);
+    expect(list.getColumnWidths().B).toBe(180);
+
+    // Pinning D to left must preserve B's resized 180px width
+    list.setColumnPin("D", "left");
+    expect(list.getColumnWidths().B).toBe(180);
+
+    // Resizing C and pinned A without reordering also survives subsequent pin/unpin
+    list.resizeColumn("C", 160);
+    list.resizeColumn("A", 140);
+    list.setColumnPin("C", "right");
+    expect(list.getColumnWidths().C).toBe(160);
+    expect(list.getColumnWidths().B).toBe(180);
+    expect(list.getColumnWidths().A).toBe(140);
+
+    list.setColumnPin("A", null);
+    expect(list.getColumnWidths().A).toBe(140);
+    expect(list.getColumnWidths().B).toBe(180);
+    expect(list.getColumnWidths().C).toBe(160);
+  });
+
+  it("keeps flexible (width-less) unpinned columns flexible across reorder, pin, and container resize", async () => {
+    const byTarget = new WeakMap<Element, ResizeObserverCallback>();
+    const OrigRO = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class WrappingRO extends OrigRO {
+      private readonly _cb: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) {
+        super(cb);
+        this._cb = cb;
+      }
+      override observe(target: Element, options?: ResizeObserverOptions): void {
+        byTarget.set(target, this._cb);
+        super.observe(target, options);
+      }
+    };
+
+    try {
+      // Fixed columns sum to 250px (A=50, B=100, C=100); D has no width (flexible -> 400 - 250 = 150px)
+      const cols: TableColumn<RowItem>[] = [
+        { key: "A", label: "Col A", width: 50, pin: "left" },
+        { key: "B", label: "Col B", width: 100 },
+        { key: "C", label: "Col C", width: 100 },
+        { key: "D", label: "Col D" },
+      ];
+      const { list, viewport } = createReorderTable(cols, undefined, true);
+      await new Promise((r) => setTimeout(r, 5));
+
+      expect(list.getColumnWidths().D).toBe(150);
+
+      // Reorder unpinned columns and change pin
+      list.moveColumn("B", 2);
+      list.setColumnPin("C", "right");
+      expect(list.getColumnWidths().D).toBe(150);
+
+      // Grow container from 400px to 700px -> flexible D must grow from 150px to 450px (700 - 250)
+      const cb = byTarget.get(viewport)!;
+      expect(cb).toBeDefined();
+      cb(
+        [
+          {
+            target: viewport,
+            contentRect: { width: 700, height: 300 } as DOMRectReadOnly,
+          } as unknown as ResizeObserverEntry,
+        ],
+        {} as ResizeObserver,
+      );
+      expect(list.getColumnWidths().D).toBe(450);
+    } finally {
+      globalThis.ResizeObserver = OrigRO;
+    }
+  });
 });
