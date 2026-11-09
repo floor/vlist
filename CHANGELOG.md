@@ -11,6 +11,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.6.2] - 2026-11-10
+
+Resize a focused column header with Shift+Left/Right.
+
+Who is affected: keyboard users of `table()`. Nothing changes for pointer users.
+
+### Added
+
+- On a focused table header, Shift+Left/Right now resizes the column, the same as Ctrl+Left/Right (Cmd on macOS). Shift+Alt+Left/Right still pins the column when `columnPin()` is used, and Shift+Up/Down still extends a row selection.
+
+### Changed
+
+- `table()` is 17121 → 17134 bytes gzipped, `table()` + `columnPin()` is 19130 → 19138 bytes gzipped, and `table()` + `columnReorder()` is 19397 → 19408 bytes gzipped (budgets unchanged).
+
 ## [3.6.1] - 2026-11-09
 
 Pinned and reordered table columns work in more layouts.
@@ -2178,7 +2192,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.6.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.6.2...HEAD
+[3.6.2]: https://github.com/floor/vlist/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/floor/vlist/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/floor/vlist/compare/v3.5.1...v3.6.0
 [3.5.1]: https://github.com/floor/vlist/compare/v3.5.0...v3.5.1
