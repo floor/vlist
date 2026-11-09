@@ -1,0 +1,139 @@
+/**
+ * A focused unpinned column that is wider than the gap between the pin
+ * bands stays clear of the left pin. Clearance that aligns the column's
+ * right edge scrolls its left edge under the left pin.
+ */
+
+import { registerDOM, unregisterDOM } from "../../helpers/dom";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "bun:test";
+import { capturePrototypeGeometry } from "../../helpers/geometry";
+import { createVList } from "../../../src/core/create";
+import { table } from "../../../src/plugins/table/plugin";
+import { columnPin, type ColumnPinMethods } from "../../../src/plugins/table/pin";
+import type { VList } from "../../../src/core/types";
+import type { VListItem } from "../../../src/types";
+import type { TableColumn } from "../../../src/plugins/table/types";
+import type { TableMethods } from "../../../src/plugins/table/plugin";
+
+let geometry: ReturnType<typeof capturePrototypeGeometry>;
+
+beforeAll(() => {
+  registerDOM();
+  geometry = capturePrototypeGeometry();
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+    get() {
+      return 300;
+    },
+    configurable: true,
+  });
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    get() {
+      return 400;
+    },
+    configurable: true,
+  });
+});
+
+afterAll(() => {
+  geometry.restore();
+  unregisterDOM();
+});
+afterAll(() => geometry.assertRestored());
+
+interface Row extends VListItem {
+  id: number;
+  wide: string;
+}
+
+let activeList: VList<Row> | null = null;
+let activeContainer: HTMLElement | null = null;
+
+afterEach(() => {
+  activeList?.destroy();
+  activeList = null;
+  activeContainer?.remove();
+  activeContainer = null;
+});
+
+describe("columnPin — focused column wider than the pin gap", () => {
+  it("keeps the focused column's left edge clear of the left pin", () => {
+    // Viewport 400. Left pin 100, two right pins 100 + 100, free gap 100.
+    // The focused column is 140, so it cannot sit fully inside the gap.
+    // Its left edge still has to stay at or after the left pin.
+    const columns: TableColumn<Row>[] = [
+      { key: "id", label: "ID", width: 100, pin: "left" },
+      { key: "wide", label: "Wide", width: 140 },
+      { key: "rightA", label: "Right A", width: 100, pin: "right" },
+      { key: "rightB", label: "Right B", width: 100, pin: "right" },
+    ];
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const items: Row[] = [{ id: 1, wide: "wide" }];
+    const list = createVList(
+      {
+        container,
+        items,
+        item: { height: 36, template: (item: Row) => item.wide },
+      },
+      [table<Row>({
+        columns,
+        rowHeight: 36,
+        headerHeight: 40,
+        fillWidth: false,
+        features: [columnPin<Row>()],
+      })],
+    ) as VList<Row> & TableMethods<Row> & ColumnPinMethods;
+    activeList = list;
+
+    const root = container.querySelector<HTMLElement>(".vlist")!;
+    const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+    const wide = root.querySelector<HTMLElement>('.vlist-table-header-cell[data-column-key="wide"]')!;
+    wide.focus();
+
+    const leftPinWidth = 100;
+    const wideOffset = 100;
+    expect(viewport.scrollLeft).toBe(0);
+    expect(wideOffset).toBeGreaterThanOrEqual(viewport.scrollLeft + leftPinWidth);
+  });
+
+  it("aligns a right-obscured wide column's start edge with the left pin instead of sliding under it", () => {
+    // Viewport 400. Left pin 100, right pins 200 -> gap is [scrollLeft + 100, scrollLeft + 200] (100px wide).
+    // "wide2" is at offset 240 with width 140 (240..380). Focusing "wide2" from scrollLeft = 0
+    // must scroll to 240 - 100 = 140 (start edge aligned with left pin), not 380 - 200 = 180.
+    const columns: TableColumn<Row>[] = [
+      { key: "id", label: "ID", width: 100, pin: "left" },
+      { key: "wide1", label: "Wide 1", width: 140 },
+      { key: "wide2", label: "Wide 2", width: 140 },
+      { key: "rightA", label: "Right A", width: 100, pin: "right" },
+      { key: "rightB", label: "Right B", width: 100, pin: "right" },
+    ];
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    activeContainer = container;
+    const items: Row[] = [{ id: 1, wide: "wide" }];
+    const list = createVList(
+      {
+        container,
+        items,
+        item: { height: 36, template: (item: Row) => item.wide },
+      },
+      [table<Row>({
+        columns,
+        rowHeight: 36,
+        headerHeight: 40,
+        fillWidth: false,
+        features: [columnPin<Row>()],
+      })],
+    ) as VList<Row> & TableMethods<Row> & ColumnPinMethods;
+    activeList = list;
+
+    const root = container.querySelector<HTMLElement>(".vlist")!;
+    const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+    const wide2 = root.querySelector<HTMLElement>('.vlist-table-header-cell[data-column-key="wide2"]')!;
+    wide2.focus();
+
+    expect(viewport.scrollLeft).toBe(140);
+    expect(240).toBeGreaterThanOrEqual(viewport.scrollLeft + 100);
+  });
+});
