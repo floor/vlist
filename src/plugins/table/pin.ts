@@ -198,18 +198,32 @@ export function columnPin<T extends VListItem = VListItem>(
       let lastLeftOffset = NaN;
       let lastRightOffset = NaN;
 
+      const paging = dom.root.classList.contains(`${classPrefix}--page`);
+      const room = (): number =>
+        Math.max(0, layout.totalWidth - (dom.viewport.clientWidth || ctx.getState().crossSize));
+
+      const movePageScroll = (intoViewport: boolean): void => {
+        const from = paging ? (intoViewport ? window.scrollX : dom.viewport.scrollLeft) : 0;
+        if (paging && !intoViewport) dom.viewport.scrollLeft = 0;
+        dom.root.classList.toggle(rootPinnedClass, intoViewport);
+        if (!paging) return;
+        if (intoViewport) dom.viewport.scrollLeft = Math.min(room(), Math.max(0, from));
+        if (from) window.scrollTo(intoViewport ? 0 : from, window.scrollY);
+      };
+
       const syncPinOffsets = (): void => {
         const hasPins = leftOrder.length > 0 || rightOrder.length > 0;
+        const wasPinned = !Number.isNaN(lastLeftOffset);
         if (!hasPins) {
-          if (!Number.isNaN(lastLeftOffset)) {
-            lastLeftOffset = NaN;
-            lastRightOffset = NaN;
-            dom.root.classList.remove(rootPinnedClass);
-            dom.root.style.removeProperty("--vlist-table-pin-left");
-            dom.root.style.removeProperty("--vlist-table-pin-right");
-          }
+          if (!wasPinned) return;
+          movePageScroll(false);
+          lastLeftOffset = NaN;
+          lastRightOffset = NaN;
+          dom.root.style.removeProperty("--vlist-table-pin-left");
+          dom.root.style.removeProperty("--vlist-table-pin-right");
           return;
         }
+        if (!wasPinned) movePageScroll(true);
         const scrollLeft = dom.viewport.scrollLeft;
         const viewportWidth = dom.viewport.clientWidth || ctx.getState().crossSize;
         const leftOffset = leftOrder.length > 0 ? Math.max(0, scrollLeft) : 0;
@@ -218,7 +232,6 @@ export function columnPin<T extends VListItem = VListItem>(
             ? Math.min(0, scrollLeft + viewportWidth - layout.totalWidth)
             : 0;
         if (leftOffset === lastLeftOffset && rightOffset === lastRightOffset) return;
-        dom.root.classList.add(rootPinnedClass);
         if (leftOffset !== lastLeftOffset) {
           lastLeftOffset = leftOffset;
           dom.root.style.setProperty("--vlist-table-pin-left", `${leftOffset}px`);
@@ -496,7 +509,6 @@ export function columnPin<T extends VListItem = VListItem>(
         if (nextScroll >= 0 && nextScroll !== scrollLeft) {
           dom.viewport.scrollLeft = nextScroll;
           syncPinOffsets();
-          dom.viewport.dispatchEvent(new Event("scroll"));
         }
       };
 
@@ -532,12 +544,25 @@ export function columnPin<T extends VListItem = VListItem>(
       dom.root.addEventListener("focusin", onRootFocusIn);
       dom.root.addEventListener("keydown", onRootKeyDownCapture, true);
 
+      dom.root.onwheel = (e: WheelEvent): void => {
+        if (!paging || lastLeftOffset !== lastLeftOffset) return;
+        const next = Math.min(
+          room(),
+          Math.max(0, dom.viewport.scrollLeft + (e.shiftKey ? e.deltaX || e.deltaY : e.deltaX)),
+        );
+        if (next !== dom.viewport.scrollLeft) {
+          dom.viewport.scrollLeft = next;
+          e.preventDefault();
+        }
+      };
+
       // ── Cleanup ─────────────────────────────────────────────────
 
       ctx.hooks.onDestroy((): void => {
         dom.viewport.removeEventListener("scroll", onViewportScroll);
         dom.root.removeEventListener("focusin", onRootFocusIn);
         dom.root.removeEventListener("keydown", onRootKeyDownCapture, true);
+        dom.root.onwheel = null;
         offResize();
         offColResize();
         dom.root.classList.remove(rootPinnedClass);

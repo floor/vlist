@@ -64,12 +64,11 @@ export function page<T extends VListItem = VListItem>(
       dom.root.style.height = "auto";
       dom.root.classList.add(`${cfg.classPrefix}--page`);
 
-      if (isX) {
-        dom.viewport.style.overflowX = "visible";
-        dom.viewport.style.overflowY = "visible";
-      } else {
-        dom.viewport.style.overflow = "visible";
-      }
+      // Core writes an inline overflow. Clear it so `.vlist--page > .vlist-viewport`
+      // owns the used value; an inline value would beat that rule.
+      dom.viewport.style.overflowX = "";
+      dom.viewport.style.overflowY = "";
+      dom.viewport.style.overflow = "";
 
       dom.viewport.classList.remove(`${cfg.classPrefix}-viewport--custom-scrollbar`);
 

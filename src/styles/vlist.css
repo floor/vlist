@@ -528,6 +528,12 @@
     overflow-y: hidden;
 }
 
+/* page() scrolls the window. This follows the horizontal rule so a horizontal
+   page list stays visible on both axes instead of picking up overflow-x: auto. */
+.vlist--page > .vlist-viewport {
+    overflow: visible;
+}
+
 /* Content container — width is set dynamically, height fills parent */
 .vlist--horizontal .vlist-content {
     height: 100%;
