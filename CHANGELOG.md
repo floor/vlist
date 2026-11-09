@@ -11,6 +11,24 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-11-09
+
+Pinned and reordered table columns work in more layouts.
+
+Who is affected: tables using `columnPin()` or `columnReorder()`, including tables inside `page()` and right-to-left tables.
+
+### Fixed
+
+- A focused column wider than the space between the left and right pinned columns now lines its start up with the left pin, so the left pin no longer covers its label.
+- A resized column keeps its width when it is moved and then pinned or unpinned. Columns without a width stay flexible.
+- In a `page()` table, pinned columns now stay in place while the other columns scroll sideways. While a column is pinned, the table scrolls horizontally on its own (Shift+wheel or a horizontal wheel); unpinning hands that offset back to the page. A vertical wheel still scrolls the page.
+- In a right-to-left table (`dir="rtl"`), pinned columns now stay at their edges while the other columns scroll, and dragging a header drops it on the column under the pointer.
+
+### Changed
+
+- `page()` no longer sets the viewport's overflow as an inline style; `vlist.css` sets it (`.vlist--page > .vlist-viewport`). If your own CSS sets an overflow on that element, it now applies; set `overflow: visible` there to keep the old behaviour.
+- `page()` is 11805 → 11800 bytes gzipped, `table()` + `columnPin()` is 18938 → 19130 bytes gzipped, and `table()` + `columnReorder()` is 19292 → 19397 bytes gzipped (budgets unchanged).
+
 ## [3.6.0] - 2026-11-08
 
 Tables pin and reorder columns.
@@ -2160,7 +2178,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.6.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.6.1...HEAD
+[3.6.1]: https://github.com/floor/vlist/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/floor/vlist/compare/v3.5.1...v3.6.0
 [3.5.1]: https://github.com/floor/vlist/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/floor/vlist/compare/v3.4.1...v3.5.0
