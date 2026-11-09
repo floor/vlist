@@ -102,6 +102,9 @@ export function columnReorder<T extends VListItem = VListItem>(
     const dropIndicatorClass = `${classPrefix}-table-drop-indicator`;
     const reorderLiveClass = `${classPrefix}-table-reorder-live`;
     const scrollEvent = new Event("scroll");
+    // RTL scrollLeft is negative. Physical position is scrollLeft + this origin.
+    const origin = (width: number): number =>
+      getComputedStyle(dom.viewport).direction === "rtl" ? Math.max(0, layout.totalWidth - width) : 0;
 
     let liveEl: HTMLElement | null = null;
 
@@ -347,12 +350,13 @@ export function columnReorder<T extends VListItem = VListItem>(
 
       const viewportWidth = dragViewportWidth;
       const localX = clientX - dragViewportLeft;
+      const physical = dom.viewport.scrollLeft + origin(viewportWidth);
       const tableX =
         partKind === "left"
           ? localX
           : partKind === "right"
             ? localX + layout.totalWidth - viewportWidth
-            : localX + dom.viewport.scrollLeft;
+            : localX + physical;
 
       let targetIdx = dragSourceIndex;
       for (let i = partMin; i <= partMax; i++) {
@@ -381,7 +385,7 @@ export function columnReorder<T extends VListItem = VListItem>(
           ? boundaryTableX
           : partKind === "right"
             ? boundaryTableX - (layout.totalWidth - viewportWidth)
-            : boundaryTableX - dom.viewport.scrollLeft;
+            : boundaryTableX - physical;
 
       const indicatorX = Math.max(0, Math.min(viewportWidth - 2, rawIndicatorX));
       if (indicatorX !== lastIndicatorX) {
@@ -402,15 +406,14 @@ export function columnReorder<T extends VListItem = VListItem>(
 
       const localX = dragLastX - dragViewportLeft;
       const maxScrollLeft = Math.max(0, layout.totalWidth - viewportWidth);
+      const o = origin(viewportWidth);
+      const at = dom.viewport.scrollLeft + o;
 
       let delta = 0;
-      if (localX < EDGE_ZONE && dom.viewport.scrollLeft > 0) {
+      if (localX < EDGE_ZONE && at > 0) {
         const ratio = Math.min(1, Math.max(0, (EDGE_ZONE - localX) / EDGE_ZONE));
         delta = -Math.ceil(ratio * MAX_SCROLL_SPEED);
-      } else if (
-        localX > viewportWidth - EDGE_ZONE &&
-        dom.viewport.scrollLeft < maxScrollLeft
-      ) {
+      } else if (localX > viewportWidth - EDGE_ZONE && at < maxScrollLeft) {
         const ratio = Math.min(
           1,
           Math.max(0, (localX - (viewportWidth - EDGE_ZONE)) / EDGE_ZONE),
@@ -419,12 +422,9 @@ export function columnReorder<T extends VListItem = VListItem>(
       }
 
       if (delta !== 0) {
-        const nextScroll = Math.max(
-          0,
-          Math.min(maxScrollLeft, dom.viewport.scrollLeft + delta),
-        );
-        if (nextScroll !== dom.viewport.scrollLeft) {
-          dom.viewport.scrollLeft = nextScroll;
+        const nextScroll = Math.max(0, Math.min(maxScrollLeft, at + delta));
+        if (nextScroll !== at) {
+          dom.viewport.scrollLeft = nextScroll - o;
           dom.viewport.dispatchEvent(scrollEvent);
           updateDropTarget(dragLastX);
           scrollRafId = requestAnimationFrame(stepEdgeAutoScroll);

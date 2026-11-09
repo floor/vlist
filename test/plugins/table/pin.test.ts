@@ -468,4 +468,63 @@ describe("columnPin — keyboard accessibility", () => {
     expect(list.getColumnPins()).toEqual({ C: "right" });
     expect(getHeaderOrder(root)[9]).toBe("C");
   });
+
+  it("computes physical --vlist-table-pin-left and --vlist-table-pin-right offsets across negative scrollLeft in dir='rtl'", () => {
+    // 10 columns * 100px = 1000px totalWidth, viewportWidth = 400px -> origin = 600px
+    const container = document.createElement("div");
+    container.dir = "rtl";
+    container.style.direction = "rtl";
+    document.body.appendChild(container);
+    activeContainer = container;
+
+    const list = createVList<RowItem>(
+      {
+        container,
+        items: makeItems(10),
+        item: { height: 40, template: (item) => item.A },
+      },
+      [
+        table<RowItem>({
+          columns: makeColumns({ A: "left", J: "right" }),
+          rowHeight: 40,
+          headerHeight: 40,
+          fillWidth: false,
+          features: [columnPin<RowItem>()],
+        }),
+      ],
+    );
+    activeList = list as VList<RowItem> & TableMethods<RowItem> & ColumnPinMethods;
+
+    const root = container.querySelector<HTMLElement>(".vlist")!;
+    const viewport = container.querySelector<HTMLElement>(".vlist-viewport")!;
+    viewport.style.direction = "rtl";
+
+    let raw = 0;
+    Object.defineProperty(viewport, "scrollLeft", {
+      configurable: true,
+      get: () => raw,
+      set: (v: number) => {
+        raw = Math.max(-600, Math.min(0, v));
+      },
+    });
+
+    // At scrollLeft = 0 (right edge of 1000px table in 400px RTL viewport):
+    // physical visible window is [600..1000], so left pin offset = +600px, right pin offset = 0px
+    viewport.scrollLeft = 0;
+    viewport.dispatchEvent(new Event("scroll"));
+    expect(root.style.getPropertyValue("--vlist-table-pin-left")).toBe("600px");
+    expect(root.style.getPropertyValue("--vlist-table-pin-right")).toBe("0px");
+
+    // At scrollLeft = -250: physical window is [350..750] -> left = 350px, right = -250px
+    viewport.scrollLeft = -250;
+    viewport.dispatchEvent(new Event("scroll"));
+    expect(root.style.getPropertyValue("--vlist-table-pin-left")).toBe("350px");
+    expect(root.style.getPropertyValue("--vlist-table-pin-right")).toBe("-250px");
+
+    // At scrollLeft = -600 (left edge of table): physical window is [0..400] -> left = 0px, right = -600px
+    viewport.scrollLeft = -600;
+    viewport.dispatchEvent(new Event("scroll"));
+    expect(root.style.getPropertyValue("--vlist-table-pin-left")).toBe("0px");
+    expect(root.style.getPropertyValue("--vlist-table-pin-right")).toBe("-600px");
+  });
 });

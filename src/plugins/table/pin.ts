@@ -91,7 +91,7 @@ export function columnPin<T extends VListItem = VListItem>(
         prevSetup?.call(plugin, ctx);
         const layout = ctx.hooks.get("_getTableLayout")?.() as TableLayout<T> | null | undefined;
         if (!layout) {
-          throw new Error("[vlist] columnPin: table() did not publish a layout");
+          throw new Error("[vlist] columnPin: no layout");
         }
         mount(ctx, layout);
       };
@@ -104,7 +104,7 @@ export function columnPin<T extends VListItem = VListItem>(
         | undefined;
 
       if (!baseUpdateColumns) {
-        throw new Error("[vlist] columnPin: table() did not publish updateColumns");
+        throw new Error("[vlist] columnPin: no columns");
       }
 
       const { dom, emitter } = ctx;
@@ -201,14 +201,16 @@ export function columnPin<T extends VListItem = VListItem>(
       const paging = dom.root.classList.contains(`${classPrefix}--page`);
       const room = (): number =>
         Math.max(0, layout.totalWidth - (dom.viewport.clientWidth || ctx.getState().crossSize));
+      // Same read as the table arrow keys: direction is fixed once the viewport exists.
+      const crossRTL = getComputedStyle(dom.viewport).direction === "rtl";
 
       const movePageScroll = (intoViewport: boolean): void => {
-        const from = paging ? (intoViewport ? window.scrollX : dom.viewport.scrollLeft) : 0;
+        const from = paging ? (intoViewport ? scrollX : dom.viewport.scrollLeft) : 0;
         if (paging && !intoViewport) dom.viewport.scrollLeft = 0;
         dom.root.classList.toggle(rootPinnedClass, intoViewport);
         if (!paging) return;
         if (intoViewport) dom.viewport.scrollLeft = Math.min(room(), Math.max(0, from));
-        if (from) window.scrollTo(intoViewport ? 0 : from, window.scrollY);
+        if (from) scrollTo(intoViewport ? 0 : from, scrollY);
       };
 
       const syncPinOffsets = (): void => {
@@ -224,8 +226,8 @@ export function columnPin<T extends VListItem = VListItem>(
           return;
         }
         if (!wasPinned) movePageScroll(true);
-        const scrollLeft = dom.viewport.scrollLeft;
         const viewportWidth = dom.viewport.clientWidth || ctx.getState().crossSize;
+        const scrollLeft = dom.viewport.scrollLeft + (crossRTL ? room() : 0);
         const leftOffset = leftOrder.length > 0 ? Math.max(0, scrollLeft) : 0;
         const rightOffset =
           rightOrder.length > 0 && viewportWidth > 0
@@ -452,10 +454,7 @@ export function columnPin<T extends VListItem = VListItem>(
 
       // ── Scroll & Resize Listeners ───────────────────────────────
 
-      const onViewportScroll = (): void => {
-        syncPinOffsets();
-      };
-      dom.viewport.addEventListener("scroll", onViewportScroll, { passive: true });
+      dom.viewport.addEventListener("scroll", syncPinOffsets, { passive: true });
 
       const offResize = emitter.on("resize", () => syncPinOffsets());
       const offColResize = emitter.on(
@@ -493,7 +492,8 @@ export function columnPin<T extends VListItem = VListItem>(
         const viewportWidth = dom.viewport.clientWidth || ctx.getState().crossSize;
         if (viewportWidth <= 0 || layout.totalWidth <= viewportWidth) return;
 
-        const scrollLeft = dom.viewport.scrollLeft;
+        const o = crossRTL ? room() : 0;
+        const scrollLeft = dom.viewport.scrollLeft + o;
         const visibleStart = scrollLeft + leftWidth;
         const visibleEnd = scrollLeft + viewportWidth - rightWidth;
 
@@ -507,7 +507,7 @@ export function columnPin<T extends VListItem = VListItem>(
           );
         }
         if (nextScroll >= 0 && nextScroll !== scrollLeft) {
-          dom.viewport.scrollLeft = nextScroll;
+          dom.viewport.scrollLeft = nextScroll - o;
           syncPinOffsets();
         }
       };
@@ -545,7 +545,7 @@ export function columnPin<T extends VListItem = VListItem>(
       dom.root.addEventListener("keydown", onRootKeyDownCapture, true);
 
       dom.root.onwheel = (e: WheelEvent): void => {
-        if (!paging || lastLeftOffset !== lastLeftOffset) return;
+        if (!paging || Number.isNaN(lastLeftOffset)) return;
         const next = Math.min(
           room(),
           Math.max(0, dom.viewport.scrollLeft + (e.shiftKey ? e.deltaX || e.deltaY : e.deltaX)),
@@ -559,7 +559,7 @@ export function columnPin<T extends VListItem = VListItem>(
       // ── Cleanup ─────────────────────────────────────────────────
 
       ctx.hooks.onDestroy((): void => {
-        dom.viewport.removeEventListener("scroll", onViewportScroll);
+        dom.viewport.removeEventListener("scroll", syncPinOffsets);
         dom.root.removeEventListener("focusin", onRootFocusIn);
         dom.root.removeEventListener("keydown", onRootKeyDownCapture, true);
         dom.root.onwheel = null;
