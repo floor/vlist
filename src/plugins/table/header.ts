@@ -320,13 +320,13 @@ export const createTableHeader = <T extends VListItem = VListItem>(
 
     if (key === "ArrowRight" || key === "ArrowLeft") {
       const dir = key === "ArrowRight" ? 1 : -1;
-      if (e.ctrlKey || e.metaKey) {
+      if ((e.ctrlKey || e.metaKey || e.shiftKey) && !e.altKey) {
         const col = currentLayout?.getColumn(focusedCellIndex);
         if (col?.resizable) {
           onResize(focusedCellIndex, col.width + dir * RESIZE_STEP);
           e.preventDefault();
         }
-      } else {
+      } else if (!e.altKey) {
         const next = focusedCellIndex + dir;
         if (next >= 0 && next < cells.length) {
           moveFocusToCell(next);

@@ -10,10 +10,13 @@
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { createVList } from "../../../src/core/create";
-import { table } from "../../../src/plugins/table/plugin";
+import { table, type TableMethods } from "../../../src/plugins/table/plugin";
+import { columnPin, type ColumnPinMethods } from "../../../src/plugins/table/pin";
+import { selection, type SelectionMethods } from "../../../src/plugins/selection/plugin";
 import { autosize } from "../../../src/plugins/autosize/plugin";
+import type { VList } from "../../../src/core/types";
 import type { VListItem } from "../../../src/types";
-import type { TableColumn } from "../../../src/plugins/table/types";
+import type { TableColumn, ColumnResizeEvent, ColumnPinEvent } from "../../../src/plugins/table/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 import type { PluginTestContext } from "../../helpers/plugin-context";
 
@@ -1602,4 +1605,206 @@ describe("table — multi-column sort (#20)", () => {
 
     t.cleanup();
   });
+});
+
+// =============================================================================
+// Shift+ArrowLeft/Right Header Resize with columnPin() & selection() (#25)
+// =============================================================================
+
+describe("table — Shift+ArrowLeft/Right header resize (#25)", () => {
+  // Serial: focus and document.activeElement are process globals.
+  it.serial("Shift+ArrowLeft/Right resizes the focused header while Shift+Alt+ArrowLeft/Right pins without resizing", () => {
+    const container = document.createElement("div");
+    Object.defineProperty(container, "clientHeight", { value: 300, configurable: true });
+    Object.defineProperty(container, "clientWidth", { value: 600, configurable: true });
+    document.body.appendChild(container);
+
+    const resizeEvents: ColumnResizeEvent[] = [];
+    const pinEvents: ColumnPinEvent[] = [];
+    const list = createVList<TestItem>(
+      {
+        container,
+        items: createTestItems(10),
+        item: { height: 40, template: () => "" },
+      },
+      [
+        table({
+          columns: [
+            { key: "name", label: "Name", width: 200 },
+            { key: "email", label: "Email", width: 250 },
+            { key: "role", label: "Role", width: 150 },
+          ],
+          rowHeight: 40,
+          features: [columnPin()],
+        }),
+      ],
+    ) as VList<TestItem> & TableMethods<TestItem> & ColumnPinMethods;
+
+    list.on("column:resize" as never, ((ev: ColumnResizeEvent) => resizeEvents.push(ev)) as never);
+    list.on("column:pin" as never, ((ev: ColumnPinEvent) => pinEvents.push(ev)) as never);
+
+    try {
+      const cell0 = list.element.querySelector<HTMLElement>(
+        '.vlist-table-header-cell[data-column-key="name"]',
+      )!;
+      cell0.focus();
+      expect(document.activeElement).toBe(cell0);
+
+      // Shift+ArrowRight widens column "name" by +10px and does not pin
+      cell0.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(resizeEvents).toHaveLength(1);
+      expect(resizeEvents[0]).toEqual({
+        key: "name",
+        index: 0,
+        previousWidth: 200,
+        width: 210,
+      });
+      expect(pinEvents).toHaveLength(0);
+      expect(list.getColumnPins()).toEqual({});
+      expect(document.activeElement).toBe(cell0);
+
+      // Shift+ArrowLeft narrows column "name" back to 200px and does not pin
+      cell0.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(resizeEvents).toHaveLength(2);
+      expect(resizeEvents[1]!.width).toBe(200);
+      expect(pinEvents).toHaveLength(0);
+
+      // Shift+Alt+ArrowRight pins column "name" to the right without resizing
+      cell0.dispatchEvent(new KeyboardEvent("keydown", {
+        key: "ArrowRight",
+        shiftKey: true,
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+      expect(pinEvents).toHaveLength(1);
+      expect(pinEvents[0]!.key).toBe("name");
+      expect(pinEvents[0]!.pin).toBe("right");
+      expect(list.getColumnPins()).toEqual({ name: "right" });
+      expect(resizeEvents).toHaveLength(2);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  for (const mode of ["single", "multiple"] as const) {
+    // Serial: focus and document.activeElement are process globals.
+    it.serial(`Shift+ArrowLeft/Right on a header resizes without changing ${mode} selection, and body Shift+ArrowUp/Down range select in multiple mode stays intact`, () => {
+      const container = document.createElement("div");
+      Object.defineProperty(container, "clientHeight", { value: 300, configurable: true });
+      Object.defineProperty(container, "clientWidth", { value: 600, configurable: true });
+      document.body.appendChild(container);
+
+      const resizeEvents: ColumnResizeEvent[] = [];
+      const list = createVList<TestItem>(
+        {
+          container,
+          items: createTestItems(10),
+          item: { height: 40, template: () => "" },
+        },
+        [
+          table({
+            columns: [
+              { key: "name", label: "Name", width: 200 },
+              { key: "email", label: "Email", width: 300 },
+              { key: "role", label: "Role", width: 100 },
+            ],
+            rowHeight: 40,
+          }),
+          selection({ mode }),
+        ],
+      ) as VList<TestItem> & TableMethods<TestItem> & SelectionMethods<TestItem>;
+
+      list.on("column:resize" as never, ((ev: ColumnResizeEvent) => resizeEvents.push(ev)) as never);
+
+      try {
+        // Select row 0 in the body
+        list.select(0);
+        expect(list.getSelected()).toEqual([0]);
+
+        // Focus header cell 0 and resize via Shift+ArrowRight / Shift+ArrowLeft
+        const cell0 = list.element.querySelector<HTMLElement>(
+          '.vlist-table-header-cell[data-column-key="name"]',
+        )!;
+        cell0.focus();
+        expect(document.activeElement).toBe(cell0);
+
+        cell0.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "ArrowRight",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }));
+        expect(resizeEvents).toHaveLength(1);
+        expect(resizeEvents[0]!.width).toBe(210);
+        expect(list.getSelected()).toEqual([0]);
+        expect(document.activeElement).toBe(cell0);
+
+        cell0.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "ArrowLeft",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }));
+        expect(resizeEvents).toHaveLength(2);
+        expect(resizeEvents[1]!.width).toBe(200);
+        expect(list.getSelected()).toEqual([0]);
+
+        // ArrowDown returns focus from the header to the grid body
+        cell0.dispatchEvent(new KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true,
+          cancelable: true,
+        }));
+        expect(document.activeElement).toBe(list.element);
+
+        if (mode === "multiple") {
+          // Move row focus to row 0, then extend selection with Shift+ArrowDown and toggle back with Shift+ArrowUp
+          list.element.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "Home",
+            bubbles: true,
+            cancelable: true,
+          }));
+          list.element.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "ArrowDown",
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+          }));
+          expect(list.getSelected()).toEqual([0, 1]);
+
+          list.element.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "ArrowDown",
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+          }));
+          expect(list.getSelected()).toEqual([0, 1, 2]);
+
+          list.element.dispatchEvent(new KeyboardEvent("keydown", {
+            key: "ArrowUp",
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+          }));
+          expect(list.getSelected()).toEqual([0, 2]);
+          expect(resizeEvents).toHaveLength(2);
+        }
+      } finally {
+        list.destroy();
+        container.remove();
+      }
+    });
+  }
 });
