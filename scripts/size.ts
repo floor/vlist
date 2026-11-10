@@ -38,7 +38,9 @@ type PluginName = (typeof ALL_PLUGINS)[number];
 
 const KNOWN_DEPS: Partial<Record<PluginName, readonly PluginName[]>> = {
   // selection does a dynamic getMethod("getGroupLayout") lookup — string only, no import
-  selection: ["groups"],
+  // It also subscribes to data's load:end event to claim its placeholder ids
+  // for every loaded item — the event name is a string, no import either.
+  selection: ["groups", "data"],
   // groups does dynamic getMethod lookups for grid/masonry — string only, no import
   groups: ["grid", "masonry"],
 };
