@@ -71,6 +71,10 @@ export function snapshots<T extends VListItem = VListItem>(
       const sizeCache = ctx.sizes.cache;
       const state = ctx.getState();
 
+      // Hook lookup shared by capture and both restore paths.
+      const readDataTotal = (): number | undefined =>
+        (ctx.hooks.get("_getTotal") as (() => number) | undefined)?.();
+
       // ── getScrollSnapshot ──────────────────────────────────────
 
       const getScrollSnapshot = (): ScrollSnapshot => {
@@ -118,10 +122,8 @@ export function snapshots<T extends VListItem = VListItem>(
           if (di >= 0) snap.dataIndex = di;
         }
 
-        const getDataTotal = ctx.hooks.get("_getTotal") as
-          | (() => number)
-          | undefined;
-        if (getDataTotal) snap.dataTotal = getDataTotal();
+        const dataTotal = readDataTotal();
+        if (dataTotal !== undefined) snap.dataTotal = dataTotal;
 
         if (selectedIds?.length) snap.selectedIds = selectedIds;
 
@@ -175,62 +177,59 @@ export function snapshots<T extends VListItem = VListItem>(
         const dataToLayout = ctx.hooks.get("_dataToLayoutIndex") as
           | ((dataIndex: number) => number)
           | undefined;
-        let resolvedIndex = index;
-        if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
-          resolvedIndex = dataToLayout
-            ? dataToLayout(snapshot.dataIndex)
-            : snapshot.dataIndex;
-        } else if (dataToLayout) {
-          resolvedIndex = dataToLayout(index);
-        }
-
-        const safeIndex = Math.max(0, Math.min(resolvedIndex, effectiveTotal - 1));
-
-        const currentItemSize = sizeCache.getSize(safeIndex);
-        const resolvedOffset = snapshot.offsetRatio !== undefined
-          ? snapshot.offsetRatio * currentItemSize
-          : Math.min(offsetInItem, currentItemSize);
-
-        const currentDataTotal = (ctx.hooks.get("_getTotal") as (() => number) | undefined)?.();
-        const totalMatch = snapshot.total === effectiveTotal
-          || (currentDataTotal !== undefined && snapshot.dataTotal === currentDataTotal);
+        const validDataIndex = snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0
+          ? snapshot.dataIndex
+          : undefined;
+        const rowOffset = (i: number): number => {
+          const rowSize = sizeCache.getSize(i);
+          const within = Number.isFinite(snapshot.offsetRatio)
+            ? snapshot.offsetRatio! * rowSize
+            : Math.min(offsetInItem, rowSize);
+          return sizeCache.getOffset(i) + within;
+        };
+        const scrollToClamped = (pos: number): number => {
+          const clamped = Math.max(0, Math.min(pos, Math.max(0, state.totalSize - state.containerSize)));
+          ctx.scroll.to(clamped);
+          return clamped;
+        };
 
         // Anchor mode: the saved row decides the position, never the saved
         // pixels, so a row above it that changed size cannot move it off the
         // top. A row that is gone falls back to the saved pixels.
         const resolveAnchor = (): number | undefined => {
-          const ordinal = snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0
-            ? snapshot.dataIndex
-            : dataToLayout ? undefined : index;
-          const dataTotal = (ctx.hooks.get("_getTotal") as (() => number) | undefined)?.();
+          const ordinal = validDataIndex ?? (dataToLayout ? undefined : index);
+          const dataTotal = readDataTotal();
           if (ordinal !== undefined && (dataTotal === undefined || ordinal < dataTotal)) {
             const layoutIndex = dataToLayout ? dataToLayout(ordinal) : ordinal;
             if (layoutIndex >= 0 && layoutIndex < sizeCache.getTotal()) {
-              const rowSize = sizeCache.getSize(layoutIndex);
-              const within = snapshot.offsetRatio !== undefined && Number.isFinite(snapshot.offsetRatio)
-                ? snapshot.offsetRatio * rowSize
-                : Math.min(offsetInItem, rowSize);
-              return sizeCache.getOffset(layoutIndex) + within;
+              return rowOffset(layoutIndex);
             }
           }
-          const raw = snapshot.scrollTop;
-          return raw !== undefined && Number.isFinite(raw) ? raw : undefined;
+          return Number.isFinite(snapshot.scrollTop) ? snapshot.scrollTop : undefined;
         };
 
         let scrollPosition: number | undefined;
 
         if (anchorMode) {
           scrollPosition = resolveAnchor();
-        } else if (snapshot.scrollTop !== undefined && totalMatch) {
-          scrollPosition = snapshot.scrollTop;
         } else {
-          scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;
+          const currentDataTotal = readDataTotal();
+          if (
+            snapshot.scrollTop !== undefined
+            && (snapshot.total === effectiveTotal
+              || (currentDataTotal !== undefined && snapshot.dataTotal === currentDataTotal))
+          ) {
+            scrollPosition = snapshot.scrollTop;
+          } else {
+            const resolvedIndex = validDataIndex !== undefined
+              ? (dataToLayout ? dataToLayout(validDataIndex) : validDataIndex)
+              : (dataToLayout ? dataToLayout(index) : index);
+            scrollPosition = rowOffset(Math.max(0, Math.min(resolvedIndex, effectiveTotal - 1)));
+          }
         }
 
-        const maxScroll = Math.max(0, state.totalSize - state.containerSize);
         if (scrollPosition !== undefined) {
-          scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
-          ctx.scroll.to(scrollPosition);
+          scrollPosition = scrollToClamped(scrollPosition);
         }
 
         if (restoreSelection && selectedIds?.length) {
@@ -275,10 +274,7 @@ export function snapshots<T extends VListItem = VListItem>(
                   // against the cache the load left behind, then stop.
                   if (anchorMode) {
                     const settled = resolveAnchor();
-                    if (settled !== undefined) {
-                      const max = Math.max(0, state.totalSize - state.containerSize);
-                      ctx.scroll.to(Math.max(0, Math.min(settled, max)));
-                    }
+                    if (settled !== undefined) scrollToClamped(settled);
                   }
                   settle(true);
                 }, () => settle(false));
