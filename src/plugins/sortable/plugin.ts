@@ -132,13 +132,16 @@ export function sortable<T extends VListItem = VListItem>(
   // Helpers
   // =========================================================================
 
+  let toData = (i: number): number => i;
+  let toLayout = (i: number): number => i;
+
   const findItemElement = (target: HTMLElement): HTMLElement | null => {
     return target.closest("[data-index]") as HTMLElement | null;
   };
 
   const getIndex = (el: HTMLElement): number => {
     const attr = el.dataset.index;
-    return attr === undefined ? -1 : +attr;
+    return attr === undefined ? -1 : toData(+attr);
   };
 
   const createGhost = (sourceEl: HTMLElement): HTMLElement => {
@@ -171,7 +174,6 @@ export function sortable<T extends VListItem = VListItem>(
     ghost.style.top = `${parseFloat(ghost.style.top) + y - rect.top}px`;
   };
   const placeGhost = (): void => moveGhostTo(pointerCurrentX - ghostOffsetX, pointerCurrentY - ghostOffsetY);
-  const updateGhostPosition = placeGhost;
 
   const computeDropIndex = (): number => {
     const totalItems = engineState.totalItems;
@@ -184,57 +186,56 @@ export function sortable<T extends VListItem = VListItem>(
       : pointerCurrentY - ghostOffsetY - viewportRect.top + scrollPos;
     const ghostBottom = ghostTop + draggedItemSize;
 
-    const dragEnd = sizeCache.getOffset(dragIndex) + sizeCache.getSize(dragIndex);
+    const dragLayout = toLayout(dragIndex);
+    const dragEnd = sizeCache.getOffset(dragLayout) + sizeCache.getSize(dragLayout);
 
     if (ghostBottom > dragEnd) {
       const rawIndex = sizeCache.indexAtOffset(ghostBottom);
       const mid = sizeCache.getOffset(rawIndex) + sizeCache.getSize(rawIndex) / 2;
       const result = ghostBottom > mid ? rawIndex : rawIndex - 1;
-      return Math.min(Math.max(result, dragIndex), totalItems - 1);
+      const d = toData(result);
+      return Math.min(Math.max(d < 0 ? toData(result - 1) : d, dragIndex), totalItems - 1);
     }
 
-    const dragStart = sizeCache.getOffset(dragIndex);
+    const dragStart = sizeCache.getOffset(dragLayout);
     if (ghostTop < dragStart) {
       const rawIndex = sizeCache.indexAtOffset(ghostTop);
       const mid = sizeCache.getOffset(rawIndex) + sizeCache.getSize(rawIndex) / 2;
       const result = ghostTop < mid ? rawIndex : rawIndex + 1;
-      return Math.max(Math.min(result, dragIndex), 0);
+      const d = toData(result);
+      return Math.max(Math.min(d < 0 ? toData(result + 1) : d, dragIndex), 0);
     }
 
     return dragIndex;
   };
 
+  const placeRow = (el: HTMLElement, idx: number, shift = 0): void => {
+    el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(toLayout(idx)) + shift - scroll.getRenderOrigin())}px)`;
+  };
+
+  const shiftFor = (idx: number): number =>
+    dropIndex > dragIndex
+      ? idx > dragIndex && idx <= dropIndex ? -draggedItemSize : 0
+      : idx >= dropIndex && idx < dragIndex ? draggedItemSize : 0;
+
   const applyShifts = (): void => {
     const children = contentEl.children;
-    const shiftPx = draggedItemSize;
-
     for (let i = 0; i < children.length; i++) {
       const itemEl = children[i] as HTMLElement;
       const idx = getIndex(itemEl);
       if (idx < 0 || idx === dragIndex) continue;
-
-      let shift = 0;
-      if (dropIndex > dragIndex) {
-        if (idx > dragIndex && idx <= dropIndex) shift = -shiftPx;
-      } else if (dropIndex < dragIndex) {
-        if (idx >= dropIndex && idx < dragIndex) shift = shiftPx;
-      }
-
-      const baseOffset = sizeCache.getOffset(idx);
-      const finalOffset = Math.round(baseOffset + shift - scroll.getRenderOrigin());
       itemEl.style.transition = shiftTransition;
-      itemEl.style.transform = `${prop}(${finalOffset}px)`;
+      placeRow(itemEl, idx, shiftFor(idx));
     }
   };
 
-  const clearShifts = (): void => {
+  const clearShifts = (clearSource = false): void => {
     const children = contentEl.children;
     for (let i = 0; i < children.length; i++) {
       const itemEl = children[i] as HTMLElement;
+      if (clearSource) itemEl.classList.remove(dragSourceClass);
       const idx = getIndex(itemEl);
-      if (idx >= 0) {
-        itemEl.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx) - scroll.getRenderOrigin())}px)`;
-      }
+      if (idx >= 0) placeRow(itemEl, idx);
       itemEl.style.transition = "";
     }
   };
@@ -280,8 +281,9 @@ export function sortable<T extends VListItem = VListItem>(
       ? viewportEl.clientWidth
       : viewportEl.clientHeight;
     const scrollPos = scroll.getPixelEquivalent();
-    const itemTop = sizeCache.getOffset(index);
-    const itemBottom = itemTop + sizeCache.getSize(index);
+    const li = toLayout(index);
+    const itemTop = sizeCache.getOffset(li);
+    const itemBottom = itemTop + sizeCache.getSize(li);
 
     if (itemTop < scrollPos) {
       storedCtx.scroll.to(Math.max(0, itemTop));
@@ -318,7 +320,7 @@ export function sortable<T extends VListItem = VListItem>(
     if (!storedCtx) return "";
     const item = itemAt(index);
     if (!item) return "";
-    const el = contentEl.querySelector(`[data-index="${index}"]`) as HTMLElement | null;
+    const el = contentEl.querySelector(`[data-index="${toLayout(index)}"]`) as HTMLElement | null;
     const text = el?.textContent?.trim();
     return text || String(item.id);
   };
@@ -413,16 +415,7 @@ export function sortable<T extends VListItem = VListItem>(
     ghost = null;
     draggedElement = null;
 
-    const children = contentEl.children;
-    for (let i = 0; i < children.length; i++) {
-      const el = children[i] as HTMLElement;
-      el.classList.remove(dragSourceClass);
-      const idx = getIndex(el);
-      if (idx >= 0) {
-        el.style.transform = `${prop}(${Math.round(sizeCache.getOffset(idx) - scroll.getRenderOrigin())}px)`;
-      }
-      el.style.transition = "";
-    }
+    clearShifts(true);
 
     stopEdgeScroll();
     rootEl.classList.remove(sortingClass);
@@ -487,7 +480,7 @@ export function sortable<T extends VListItem = VListItem>(
 
     const viewportRect = viewportEl.getBoundingClientRect();
     const scrollPos = scroll.getPixelEquivalent();
-    const targetOffset = sizeCache.getOffset(toIndex);
+    const targetOffset = sizeCache.getOffset(toLayout(toIndex));
     const duration = shiftDuration > 0 ? shiftDuration : 150;
 
     // The slot's position in client space -- then the same feedback as
@@ -584,7 +577,7 @@ export function sortable<T extends VListItem = VListItem>(
     rootEl.classList.add(sortingClass);
     document.body.style.cursor = "grabbing";
 
-    draggedItemSize = sizeCache.getSize(dragIndex);
+    draggedItemSize = sizeCache.getSize(toLayout(dragIndex));
 
     if (draggedElement) {
       ghost = createGhost(draggedElement);
@@ -691,7 +684,7 @@ export function sortable<T extends VListItem = VListItem>(
       if (touchClaimed) event.stopPropagation();
       event.preventDefault();
       // startDrag placed the ghost for this move already.
-      if (!starting) updateGhostPosition();
+      if (!starting) placeGhost();
       if (!inEdgeZone) {
         updateDropPosition();
       } else if (isPointerOutsideViewport()) {
@@ -955,6 +948,10 @@ export function sortable<T extends VListItem = VListItem>(
       rootEl = ctx.dom.root;
       classPrefix = ctx.config.classPrefix;
       isX = ctx.config.axis.primary === "x";
+      const l2d = ctx.hooks.get("_layoutToDataIndex") as ((i: number) => number) | undefined;
+      const d2l = ctx.hooks.get("_dataToLayoutIndex") as ((i: number) => number) | undefined;
+      if (l2d) toData = l2d;
+      if (d2l) toLayout = d2l;
 
       prop = isX ? "translateX" : "translateY";
       shiftTransition = shiftDuration > 0
@@ -975,25 +972,23 @@ export function sortable<T extends VListItem = VListItem>(
       // stopImmediatePropagation prevents selection from processing keys
       rootEl.addEventListener("keydown", onKeydown);
 
-      // ── ARIA instructions ──
+      // ── ARIA instructions & live region ──
+      const srStyle =
+        "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
+        "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
       instructionsId = `${classPrefix}-sort-instructions`;
       instructionsEl = document.createElement("div");
       instructionsEl.id = instructionsId;
-      instructionsEl.style.cssText =
-        "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
-        "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+      instructionsEl.style.cssText = srStyle;
       instructionsEl.textContent =
         "Press Space to reorder. Use arrow keys to move, Space to drop, Escape to cancel.";
       rootEl.appendChild(instructionsEl);
 
-      // ── Live region for announcements ──
       liveRegion = document.createElement("div");
       liveRegion.setAttribute("role", "status");
       liveRegion.setAttribute("aria-live", "assertive");
       liveRegion.setAttribute("aria-atomic", "true");
-      liveRegion.style.cssText =
-        "position:absolute;width:1px;height:1px;padding:0;margin:-1px;" +
-        "overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0";
+      liveRegion.style.cssText = srStyle;
       rootEl.appendChild(liveRegion);
 
       // ── Cleanup ──
@@ -1056,14 +1051,7 @@ export function sortable<T extends VListItem = VListItem>(
               draggedElement = el;
             } else {
               el.classList.remove(dragSourceClass);
-              let shift = 0;
-              if (dropIndex > dragIndex) {
-                if (idx > dragIndex && idx <= dropIndex) shift = -draggedItemSize;
-              } else if (dropIndex < dragIndex) {
-                if (idx >= dropIndex && idx < dragIndex) shift = draggedItemSize;
-              }
-              const finalOffset = Math.round(sizeCache.getOffset(idx) + shift - scroll.getRenderOrigin());
-              el.style.transform = `${prop}(${finalOffset}px)`;
+              placeRow(el, idx, shiftFor(idx));
             }
           }
         }
