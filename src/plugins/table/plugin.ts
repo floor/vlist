@@ -32,6 +32,8 @@ import type {
   ColumnClickEvent,
 } from "./types";
 import type { TableFeature, TableFeatureMethods } from "./feature";
+import type { ColumnPinMethods } from "./pin";
+import type { ColumnReorderMethods } from "./reorder";
 
 // =============================================================================
 // Config
@@ -76,6 +78,35 @@ export function table<
 >(
   config: Omit<TablePluginConfig<T>, "features"> & { features: F },
 ): VListPlugin<T, TableMethods<T> & TableFeatureMethods<F>>;
+export function table<T extends VListItem = VListItem>(
+  config: Omit<TablePluginConfig<T>, "features"> & {
+    features:
+      | readonly [
+          TableFeature<T, ColumnPinMethods>,
+          TableFeature<T, ColumnReorderMethods>,
+          ...(readonly TableFeature<T>[]),
+        ]
+      | readonly [
+          TableFeature<T, ColumnReorderMethods>,
+          TableFeature<T, ColumnPinMethods>,
+          ...(readonly TableFeature<T>[]),
+        ];
+  },
+): VListPlugin<T, TableMethods<T> & ColumnPinMethods & ColumnReorderMethods>;
+export function table<T extends VListItem = VListItem>(
+  config: Omit<TablePluginConfig<T>, "features"> & {
+    features:
+      | readonly [TableFeature<T, ColumnPinMethods>, ...(readonly TableFeature<T>[])]
+      | readonly [...(readonly TableFeature<T>[]), TableFeature<T, ColumnPinMethods>];
+  },
+): VListPlugin<T, TableMethods<T> & ColumnPinMethods>;
+export function table<T extends VListItem = VListItem>(
+  config: Omit<TablePluginConfig<T>, "features"> & {
+    features:
+      | readonly [TableFeature<T, ColumnReorderMethods>, ...(readonly TableFeature<T>[])]
+      | readonly [...(readonly TableFeature<T>[]), TableFeature<T, ColumnReorderMethods>];
+  },
+): VListPlugin<T, TableMethods<T> & ColumnReorderMethods>;
 export function table<T extends VListItem = VListItem>(
   config: TablePluginConfig<T>,
 ): VListPlugin<T, TableMethods<T>>;
