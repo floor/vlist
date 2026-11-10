@@ -1137,6 +1137,8 @@ function makeGroupHeader(groupIndex: number, key: string): GroupTestItem {
   };
 }
 
+const isGroupHeaderItem = (item: GroupTestItem): boolean => item.__groupHeader === true;
+
 function makeGroupedItems(): GroupTestItem[] {
   // Layout: [headerA, item0, item1, item2, headerB, item3, item4, item5]
   return [
@@ -1184,7 +1186,7 @@ function createGroupedRenderer() {
 
   // Configure group header detection + template
   renderer.setGroupHeaderFn(
-    (item) => !!(item as any).__groupHeader,
+    isGroupHeaderItem,
     (key, _groupIndex) => `<span class="group-label">${key}</span>`,
   );
 
@@ -1436,7 +1438,7 @@ describe("group headers", () => {
       // element is the one the pool hands back for the header, so a stale id
       // would make the header claim to be the data row it used to be.
       renderer.setGroupHeaderFn(
-        (item) => !!(item as any).__groupHeader,
+        isGroupHeaderItem,
         (key) => `<span class="group-label">${key}</span>`,
       );
       renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
@@ -1605,7 +1607,7 @@ describe("group headers", () => {
 
       // Enable group headers
       renderer.setGroupHeaderFn(
-        (item) => !!(item as any).__groupHeader,
+        isGroupHeaderItem,
         (key) => `<span>${key}</span>`,
       );
 
@@ -1949,7 +1951,7 @@ describe("striped", () => {
       );
 
       renderer.setGroupHeaderFn(
-        (item) => !!(item as any).__groupHeader,
+        isGroupHeaderItem,
         (key, _groupIndex) => `<span class="group-label">${key}</span>`,
       );
 

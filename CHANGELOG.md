@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- A table row recycled from a data row into a group header no longer keeps the data row's id.
+
 ## [3.7.1] - 2026-11-10
 
 Alt+Home and Alt+End move a focused table column to the first or last position.
