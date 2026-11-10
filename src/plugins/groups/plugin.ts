@@ -653,7 +653,10 @@ export function groups<T extends VListItem = VListItem>(
       let firstShift = Infinity;
       const minG = Math.min(prevGroupCount, newGroups.length);
       for (let g = 0; g < minG; g++) {
-        if (newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex) {
+        if (
+          newGroups[g]!.headerLayoutIndex !== prevGroups[g]!.headerLayoutIndex ||
+          newGroups[g]!.key !== prevGroups[g]!.key
+        ) {
           firstShift = Math.min(newGroups[g]!.headerLayoutIndex, prevGroups[g]!.headerLayoutIndex);
           break;
         }
@@ -795,36 +798,29 @@ export function groups<T extends VListItem = VListItem>(
       // Intercept sizeCache.rebuild so groups can map between data indices
       // and layout indices (which include group header pseudo-entries).
       let tableMode = false;
-      let lastTableLoadedCount = -1;
       ctx.hooks.method("_setSizeCacheBase", (fn: (n: number) => void): void => {
         origSizeCacheRebuild = fn;
       });
 
       origSizeCacheRebuild = sizeCache.rebuild;
       sizeCache.rebuild = (n: number): void => {
+        lastRebuildLoadedCount = -1;
         if (tableMode) {
-          if (!getLoadedCount) {
-            getLoadedCount = (getMethod?.("_getLoadedCount") as (() => number) | undefined) ?? null;
+          lastDataCount = n;
+          if (!getLoadedItem) {
+            getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
           }
-          const loaded = getLoadedCount?.() ?? 0;
-          if (n !== lastDataCount || loaded !== lastTableLoadedCount) {
-            lastDataCount = n;
-            lastTableLoadedCount = loaded;
-            if (!getLoadedItem) {
-              getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
-            }
-            layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.items.all()[i] as T | undefined));
-            engineState.totalItems = layout.totalEntries;
-            if (stickyHeader) {
-              stickyHeader.refresh();
-              stickyHeader.update(scroll.getPixelEquivalent());
-            }
+          layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.items.all()[i] as T | undefined));
+          engineState.totalItems = layout.totalEntries;
+          if (stickyHeader) {
+            stickyHeader.refresh();
+            stickyHeader.update(scroll.getPixelEquivalent());
           }
         }
         origSizeCacheRebuild(layout.totalEntries);
       };
 
-      sizeCache.rebuild(layout.totalEntries);
+      origSizeCacheRebuild(layout.totalEntries);
       rebuildGridPositions();
       // The public list.total is the consumer-facing count, not the engine's
       // render count: engineState.totalItems carries the layout entries, and
