@@ -833,6 +833,149 @@ describe("columnReorder — keyboard Alt+Arrow and shortcut coexistence", () => 
     expect(document.activeElement).toBe(cellD);
   });
 
+  it("moves focused column to first or last position on Alt+Home and Alt+End while keeping focus on the moved column (#487)", () => {
+    const { list, root } = createReorderTable(makeColumns());
+    const events: ColumnReorderEvent[] = [];
+    list.on("column:reorder", (ev) => events.push(ev));
+
+    const cellA = root.querySelector<HTMLElement>(
+      '.vlist-table-header-cell[data-column-key="A"]',
+    )!;
+    cellA.focus();
+    expect(document.activeElement).toBe(cellA);
+
+    // Alt+End on A (index 0) moves A to index 5 (last position) and keeps focus on A
+    cellA.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "End",
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(list.getColumnOrder()).toEqual(["B", "C", "D", "E", "F", "A"]);
+    expect(getHeaderOrder(root)).toEqual(["B", "C", "D", "E", "F", "A"]);
+    expect(document.activeElement).toBe(cellA);
+    expect(cellA.getAttribute("tabindex")).toBe("0");
+    expect(
+      Array.from(root.querySelectorAll<HTMLElement>('.vlist-table-header-cell[tabindex="0"]')),
+    ).toEqual([cellA]);
+    expect(events[events.length - 1]).toEqual({
+      key: "A",
+      fromIndex: 0,
+      toIndex: 5,
+      order: ["B", "C", "D", "E", "F", "A"],
+    });
+
+    // Subsequent Alt+ArrowLeft moves the still-focused A one step left (to index 4, before F)
+    cellA.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "ArrowLeft",
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(list.getColumnOrder()).toEqual(["B", "C", "D", "E", "A", "F"]);
+    expect(document.activeElement).toBe(cellA);
+
+    // Alt+Home on A (index 4) moves A back to index 0 (first position) and keeps focus on A
+    cellA.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Home",
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(list.getColumnOrder()).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(getHeaderOrder(root)).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(document.activeElement).toBe(cellA);
+    expect(cellA.getAttribute("tabindex")).toBe("0");
+
+    // Plain End / Home without Alt still move focus only without reordering
+    cellA.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "End",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    const cellF = root.querySelector<HTMLElement>(
+      '.vlist-table-header-cell[data-column-key="F"]',
+    )!;
+    expect(document.activeElement).toBe(cellF);
+    expect(list.getColumnOrder()).toEqual(["A", "B", "C", "D", "E", "F"]);
+
+    cellF.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Home",
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(document.activeElement).toBe(cellA);
+    expect(list.getColumnOrder()).toEqual(["A", "B", "C", "D", "E", "F"]);
+  });
+
+  it("clamps Alt+Home and Alt+End to the column's pin partition and keeps focus on locked columns", () => {
+    const { list, root } = createReorderTable(
+      makeColumns({
+        A: { pin: "left" },
+        B: { pin: "left" },
+        E: { reorderable: false },
+        F: { pin: "right" },
+      }),
+      undefined,
+      true,
+    );
+
+    // Unpinned C (index 2) on Alt+End moves to end of unpinned partition (index 4, after E), not into right-pinned F
+    const cellC = root.querySelector<HTMLElement>(
+      '.vlist-table-header-cell[data-column-key="C"]',
+    )!;
+    cellC.focus();
+    cellC.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "End",
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(list.getColumnOrder()).toEqual(["A", "B", "D", "E", "C", "F"]);
+    expect(document.activeElement).toBe(cellC);
+
+    // Alt+Home on C (index 4) moves C back to start of unpinned partition (index 2, after B)
+    cellC.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Home",
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(list.getColumnOrder()).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(document.activeElement).toBe(cellC);
+
+    // Locked E (reorderable: false) on Alt+Home / Alt+End does not move and does not lose focus
+    const cellE = root.querySelector<HTMLElement>(
+      '.vlist-table-header-cell[data-column-key="E"]',
+    )!;
+    cellE.focus();
+    cellE.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Home",
+        altKey: true,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    expect(list.getColumnOrder()).toEqual(["A", "B", "C", "D", "E", "F"]);
+    expect(document.activeElement).toBe(cellE);
+    expect(cellE.getAttribute("tabindex")).toBe("0");
+  });
+
   it("does not swallow Alt+Arrow in capture phase on locked columns (reorderable: false or disabled) and announces that the column is locked", () => {
     const { list, root } = createReorderTable(
       makeColumns({ A: { reorderable: false } }),

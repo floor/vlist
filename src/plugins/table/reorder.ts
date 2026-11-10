@@ -548,11 +548,12 @@ export function columnReorder<T extends VListItem = VListItem>(
       e.preventDefault();
     };
 
-    // ── Keyboard Alt+ArrowLeft / Alt+ArrowRight ─────────────────
+    // ── Keyboard Alt+ArrowLeft / Alt+ArrowRight / Alt+Home / Alt+End ──
 
     const onRootKeyDownCapture = (e: KeyboardEvent): void => {
       if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return;
-      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      const k = e.key;
+      if (k !== "ArrowLeft" && k !== "ArrowRight" && k !== "Home" && k !== "End") return;
 
       const target = e.target as HTMLElement | null;
       if (!target) return;
@@ -577,8 +578,14 @@ export function columnReorder<T extends VListItem = VListItem>(
       e.preventDefault();
       e.stopPropagation();
 
-      const dir = e.key === "ArrowRight" ? 1 : -1;
-      moveColumn(fromIndex, fromIndex + dir);
+      moveColumn(
+        fromIndex,
+        k === "Home"
+          ? 0
+          : k === "End"
+            ? cols.length - 1
+            : fromIndex + (k === "ArrowRight" ? 1 : -1),
+      );
     };
 
     dom.root.addEventListener("pointerdown", onHeaderPointerDown);
