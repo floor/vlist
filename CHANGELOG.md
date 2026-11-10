@@ -11,6 +11,23 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.6.4] - 2026-11-10
+
+Selections and drag-to-reorder keep working with loading data, group headers and very large lists.
+
+Who is affected: lists using `selection()` with `data()` loading, `sortable()` with `groups()`, or very large lists using `a11y()`.
+
+### Fixed
+
+- With `data()` loading rows in chunks, `selectAll()` called before the first chunk arrives now selects the rows as they load.
+- A row selected before it has loaded (by click, Space or focus) stays selected when it loads, including rows that load off-screen, and `getSelectedItems()` returns it.
+- In a grouped list with `sortable()`, dragging a row across a group header moves it in data order, every row can be reached, and group headers can no longer be dragged. After `setItems()` with the reordered data, the groups follow.
+- With `a11y()` on a very large list, shrinking it no longer leaves keyboard focus on a row that no longer exists, and End then ArrowUp while the scroll mode switches lands on the right row.
+
+### Changed
+
+- The base (`vlist`) is 10674 → 10678 bytes gzipped, `vlist/synthetic` is 13345 → 13347, `vlist/synthetic` + `carousel()` is 18742 → 18744, `vlist/synthetic` + `sortable()` is 17080 → 17073, `createStats()` is 10904 → 10907, `vlist/synthetic` + `createStats()` is 13567 → 13569, `vlist/native` is 10680 → 10684, `a11y()` is 12678 → 12688, `selection()` is 14131 → 14226, `data()` is 15591 → 15601, `sortable()` is 14433 → 14365, `groups()` is 16475 → 16456, `page()` is 11800 → 11802, `snapshots()` is 11846 → 11849, `transition()` is 12707 → 12710, `autosize()` is 12468 → 12471, `grid()` is 13445 → 13446, `table()` + `columnPin()` is 19138 → 19139, `table()` + `columnReorder()` is 19408 → 19409, `masonry()` is 15288 → 15290, `tree()` is 16204 → 16206, `search()` is 14264 → 14265, `carousel()` is 16399 → 16401, `vlist/vue` is 10849 → 10853, `vlist/svelte` is 10751 → 10754, `vlist/solid` is 10814 → 10817, and `vlist/react` is 10865 → 10869 bytes gzipped (budgets unchanged).
+
 ## [3.6.3] - 2026-11-10
 
 A wide table in `page()` keeps its header over every column.
@@ -2202,7 +2219,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.6.3...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.6.4...HEAD
+[3.6.4]: https://github.com/floor/vlist/compare/v3.6.3...v3.6.4
 [3.6.3]: https://github.com/floor/vlist/compare/v3.6.2...v3.6.3
 [3.6.2]: https://github.com/floor/vlist/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/floor/vlist/compare/v3.6.0...v3.6.1
