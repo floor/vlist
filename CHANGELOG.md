@@ -28,7 +28,7 @@ Who is affected: lists using `snapshots()` that opt in to the new option; TypeSc
 
 ### Changed
 
-- The `snapshots()` bundle is 11849 → 12000 bytes gzipped (budget 12032), `table()` is 17134 → 17135, and `table()` + `columnReorder()` is 19409 → 19412 (the two table rows moved by measurement only; their emitted JavaScript is identical); every other bundle is unchanged and all budgets are unchanged.
+- The `snapshots()` bundle is 11849 → 12000 bytes gzipped (budget 12032), `table()` is 17134 → 17135, and `table()` + `columnReorder()` is 19409 → 19412 (the table code is unchanged; the minifier renamed local variables after the type-only imports, which moved the gzip measurement); every other bundle is unchanged and all budgets are unchanged.
 
 ## [3.6.4] - 2026-11-10
 
