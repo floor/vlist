@@ -134,12 +134,12 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | **Base (`vlist`)** | 27.2 KB | 10.4 KB |
 | `vlist/synthetic` (deprecated) | 34.1 KB | 13.0 KB |
 | `vlist/native` (alias) | 27.2 KB | 10.4 KB |
-| `a11y()` | 32.6 KB | 12.4 KB |
-| `selection()` | 37.4 KB | 13.9 KB |
+| `a11y()` | 32.5 KB | 12.4 KB |
+| `selection()` | 37.5 KB | 13.9 KB |
 | `data()` | 40.8 KB | 15.2 KB |
 | `scrollbar()` | 35.3 KB | 13.3 KB |
-| `sortable()` | 39.2 KB | 14.0 KB |
-| `groups()` | 43.7 KB | 16.1 KB |
+| `sortable()` | 38.8 KB | 14.0 KB |
+| `groups()` | 43.6 KB | 16.1 KB |
 | `page()` | 30.3 KB | 11.5 KB |
 | `snapshots()` | 30.8 KB | 11.7 KB |
 | `transition()` | 33.9 KB | 12.4 KB |
@@ -153,7 +153,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `search()` | 36.5 KB | 13.9 KB |
 | `carousel()` | 43.4 KB | 16.0 KB |
 | `vlist/synthetic` + `carousel()` | 49.5 KB | 18.3 KB |
-| `vlist/synthetic` + `sortable()` | 46.1 KB | 16.7 KB |
+| `vlist/synthetic` + `sortable()` | 45.7 KB | 16.7 KB |
 | `vlist/vue` `useVList` | 27.6 KB | 10.6 KB |
 | `vlist/svelte` `vlist` | 27.4 KB | 10.5 KB |
 | `vlist/solid` `createVList` | 27.5 KB | 10.6 KB |
