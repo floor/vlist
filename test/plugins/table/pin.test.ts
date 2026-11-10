@@ -135,7 +135,7 @@ function createPinnedTable(
       fillWidth: false,
       features: [...featuresBeforePin, columnPin<RowItem>(pinConfig)],
     })],
-  ) as unknown as VList<RowItem> & TableMethods<RowItem> & ColumnPinMethods;
+  );
 
   activeList = list;
   const root = container.querySelector<HTMLElement>(".vlist")!;
