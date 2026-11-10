@@ -425,7 +425,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   const scrollAdapter: ScrollAdapter = createScrollAdapter({
     sizeCache,
-    getPixel: () => state.scrollPosition,
+    getPixel: () => clampedWrite ?? state.scrollPosition,
     setPixel: writeScroll,
     getRenderOrigin: () => state.baseOffset,
     getContainerSize: () => state.containerSize,
@@ -756,7 +756,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   /** Swap the input handler in place; the list, plugins and position stay. */
   function swapInput(pixels: number): void {
-    const position = clampedWrite ?? state.scrollPosition;
+    const position = scrollAdapter.getPixelEquivalent();
     pending = false;
     scrollHandler!.detach();
     bar?.destroy();
@@ -1255,7 +1255,7 @@ export function createCore<T extends VListItem = VListItem>(
     },
 
     getScrollPosition(): number {
-      return scrollAdapter.getPixelEquivalent();
+      return state.scrollPosition;
     },
 
     on: emitter.on.bind(emitter) as VList<T>["on"],
