@@ -54,6 +54,15 @@
     overflow-y: visible;
 }
 
+/* The sticky header row group is only as wide as the root by default, so a
+   table wider than the root clips its header at the root's edge while the body
+   rows scroll past it on the document. Size the group to the table's full
+   width; min-width keeps a narrow table's header full width. */
+.vlist--page.vlist--table:not(.vlist--table-pinned) > [role="rowgroup"] {
+    width: max-content;
+    min-width: 100%;
+}
+
 /* =============================================================================
    Scrollbar positioning in table mode
    The custom scrollbar track and hover zone are positioned relative to the
