@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.6.3** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
+**v3.6.4** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -268,10 +268,10 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `vlist/synthetic` (deprecated) | 34.1 KB | 13.0 KB |
 | `vlist/native` (alias) | 27.2 KB | 10.4 KB |
 | `a11y()` | 32.6 KB | 12.4 KB |
-| `selection()` | 37.4 KB | 13.8 KB |
+| `selection()` | 37.4 KB | 13.9 KB |
 | `data()` | 40.8 KB | 15.2 KB |
 | `scrollbar()` | 35.3 KB | 13.3 KB |
-| `sortable()` | 39.2 KB | 14.1 KB |
+| `sortable()` | 39.2 KB | 14.0 KB |
 | `groups()` | 43.7 KB | 16.1 KB |
 | `page()` | 30.3 KB | 11.5 KB |
 | `snapshots()` | 30.5 KB | 11.6 KB |
@@ -293,7 +293,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `vlist/react` `useVList` | 27.6 KB | 10.6 KB |
 | `vlist/react` + `grid()` | 35.3 KB | 13.3 KB |
 
-Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,674 bytes gzipped**, within the 10.6 KB budget (10,844 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,345 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
+Sizes are tree-shaken totals from `bun run size`, not additive plugin costs. Plugin rows include the native default factory plus that plugin; framework rows add the entry, with the framework itself external. The base is **10,678 bytes gzipped**, within the 10.6 KB budget (10,844 bytes). `bun run size` fails if a scenario fails to build, an unused plugin leaks into a bundle, or any published size exceeds its gzip budget. Synthetic input is **13,347 bytes** before plugins; with `scroll.mode`, a `vlist` list downloads the driver and its scrollbar as `synthetic-driver.js` (6.2 KB gzipped) only when it goes synthetic. The alias row measures the same source factory; the distributed alias re-exports it without duplicating the implementation.
 
 Bundlephobia's badge measures the package's root entry, which re-exports every plugin, minified and gzipped as one bundle. With a tree-shaking bundler, an app that imports named exports from `vlist` bundles the base (**10.4 KB gzipped**) and the features it uses; the table's rows are each a combined size, not amounts to add up.
 
