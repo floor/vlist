@@ -18,6 +18,10 @@ import type { VListPlugin, PluginContext } from "../../core/types";
 export interface SnapshotsPluginConfig {
   restore?: ScrollSnapshot;
   autoSave?: string;
+  /** Which saved position restore uses. "legacy" (default) restores the saved
+   *  pixels when the item count matches; "anchor" restores the saved row and
+   *  its offset within the row, whatever the saved pixels were. */
+  restorePosition?: "legacy" | "anchor";
 }
 
 // =============================================================================
@@ -50,6 +54,7 @@ export function snapshots<T extends VListItem = VListItem>(
   config?: SnapshotsPluginConfig,
 ): VListPlugin<T, SnapshotsMethods> {
   const autoSaveKey = config?.autoSave;
+  const anchorMode = config?.restorePosition === "anchor";
 
   const restoreSnapshot = config?.restore
     ?? (autoSaveKey ? readSnapshot(autoSaveKey) : undefined);
@@ -65,6 +70,10 @@ export function snapshots<T extends VListItem = VListItem>(
       const { emitter, scroll } = ctx;
       const sizeCache = ctx.sizes.cache;
       const state = ctx.getState();
+
+      // Hook lookup shared by capture and both restore paths.
+      const readDataTotal = (): number | undefined =>
+        (ctx.hooks.get("_getTotal") as (() => number) | undefined)?.();
 
       // ── getScrollSnapshot ──────────────────────────────────────
 
@@ -107,14 +116,14 @@ export function snapshots<T extends VListItem = VListItem>(
               di = layoutToData(i);
               if (di >= 0) break;
             }
+            // The fraction was measured against the header, not this row.
+            if (di >= 0 && anchorMode) snap.offsetRatio = 0;
           }
           if (di >= 0) snap.dataIndex = di;
         }
 
-        const getDataTotal = ctx.hooks.get("_getTotal") as
-          | (() => number)
-          | undefined;
-        if (getDataTotal) snap.dataTotal = getDataTotal();
+        const dataTotal = readDataTotal();
+        if (dataTotal !== undefined) snap.dataTotal = dataTotal;
 
         if (selectedIds?.length) snap.selectedIds = selectedIds;
 
@@ -168,38 +177,60 @@ export function snapshots<T extends VListItem = VListItem>(
         const dataToLayout = ctx.hooks.get("_dataToLayoutIndex") as
           | ((dataIndex: number) => number)
           | undefined;
-        let resolvedIndex = index;
-        if (snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0) {
-          resolvedIndex = dataToLayout
-            ? dataToLayout(snapshot.dataIndex)
-            : snapshot.dataIndex;
-        } else if (dataToLayout) {
-          resolvedIndex = dataToLayout(index);
-        }
+        const validDataIndex = snapshot.dataIndex !== undefined && snapshot.dataIndex >= 0
+          ? snapshot.dataIndex
+          : undefined;
+        const rowOffset = (i: number): number => {
+          const rowSize = sizeCache.getSize(i);
+          const within = Number.isFinite(snapshot.offsetRatio)
+            ? snapshot.offsetRatio! * rowSize
+            : Math.min(offsetInItem, rowSize);
+          return sizeCache.getOffset(i) + within;
+        };
+        const scrollToClamped = (pos: number): number => {
+          const clamped = Math.max(0, Math.min(pos, Math.max(0, state.totalSize - state.containerSize)));
+          ctx.scroll.to(clamped);
+          return clamped;
+        };
 
-        const safeIndex = Math.max(0, Math.min(resolvedIndex, effectiveTotal - 1));
+        // Anchor mode: the saved row decides the position, never the saved
+        // pixels, so a row above it that changed size cannot move it off the
+        // top. A row that is gone falls back to the saved pixels.
+        const resolveAnchor = (): number | undefined => {
+          const ordinal = validDataIndex ?? (dataToLayout ? undefined : index);
+          const dataTotal = readDataTotal();
+          if (ordinal !== undefined && (dataTotal === undefined || ordinal < dataTotal)) {
+            const layoutIndex = dataToLayout ? dataToLayout(ordinal) : ordinal;
+            if (layoutIndex >= 0 && layoutIndex < sizeCache.getTotal()) {
+              return rowOffset(layoutIndex);
+            }
+          }
+          return Number.isFinite(snapshot.scrollTop) ? snapshot.scrollTop : undefined;
+        };
 
-        const currentItemSize = sizeCache.getSize(safeIndex);
-        const resolvedOffset = snapshot.offsetRatio !== undefined
-          ? snapshot.offsetRatio * currentItemSize
-          : Math.min(offsetInItem, currentItemSize);
+        let scrollPosition: number | undefined;
 
-        const currentDataTotal = (ctx.hooks.get("_getTotal") as (() => number) | undefined)?.();
-        const totalMatch = snapshot.total === effectiveTotal
-          || (currentDataTotal !== undefined && snapshot.dataTotal === currentDataTotal);
-
-        let scrollPosition: number;
-
-        if (snapshot.scrollTop !== undefined && totalMatch) {
-          scrollPosition = snapshot.scrollTop;
+        if (anchorMode) {
+          scrollPosition = resolveAnchor();
         } else {
-          scrollPosition = sizeCache.getOffset(safeIndex) + resolvedOffset;
+          const currentDataTotal = readDataTotal();
+          if (
+            snapshot.scrollTop !== undefined
+            && (snapshot.total === effectiveTotal
+              || (currentDataTotal !== undefined && snapshot.dataTotal === currentDataTotal))
+          ) {
+            scrollPosition = snapshot.scrollTop;
+          } else {
+            const resolvedIndex = validDataIndex !== undefined
+              ? (dataToLayout ? dataToLayout(validDataIndex) : validDataIndex)
+              : (dataToLayout ? dataToLayout(index) : index);
+            scrollPosition = rowOffset(Math.max(0, Math.min(resolvedIndex, effectiveTotal - 1)));
+          }
         }
 
-        const maxScroll = Math.max(0, state.totalSize - state.containerSize);
-        scrollPosition = Math.max(0, Math.min(scrollPosition, maxScroll));
-
-        ctx.scroll.to(scrollPosition);
+        if (scrollPosition !== undefined) {
+          scrollPosition = scrollToClamped(scrollPosition);
+        }
 
         if (restoreSelection && selectedIds?.length) {
           const selectFn = ctx.hooks.get("select") as
@@ -235,10 +266,18 @@ export function snapshots<T extends VListItem = VListItem>(
             let polls = 0;
             const pollUntilReady = (): void => {
               if (state.containerSize > 0) {
-                if (Math.abs(scroll.getPixelEquivalent() - scrollPosition) > 1) {
+                if (scrollPosition !== undefined && Math.abs(scroll.getPixelEquivalent() - scrollPosition) > 1) {
                   ctx.scroll.to(scrollPosition);
                 }
-                loadVisibleFn().then(() => settle(true), () => settle(false));
+                loadVisibleFn().then(() => {
+                  // The loaded sizes can move the anchor: resolve it once more
+                  // against the cache the load left behind, then stop.
+                  if (anchorMode) {
+                    const settled = resolveAnchor();
+                    if (settled !== undefined) scrollToClamped(settled);
+                  }
+                  settle(true);
+                }, () => settle(false));
               } else if (++polls < 10) {
                 requestAnimationFrame(pollUntilReady);
               } else {

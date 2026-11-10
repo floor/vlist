@@ -9,6 +9,7 @@
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, mock } from "bun:test";
 import { snapshots } from "../../../src/plugins/snapshots/plugin";
+import type { SnapshotsPluginConfig } from "../../../src/plugins/snapshots/plugin";
 import type { VListItem, ScrollSnapshot } from "../../../src/types";
 import { createPluginMockContext } from "../../helpers/plugin-context";
 
@@ -58,6 +59,13 @@ interface MockOptions {
   virtualSize?: number;
   actualSize?: number;
   sizeCacheTotal?: number;
+  /**
+   * Per-index row sizes in px. The array is shared by reference, so a test can
+   * grow, shrink, insert or drop rows between capture and restore. When set,
+   * `totalItems` defaults to `sizes.length` and the mock models a variable
+   * size cache (`isVariable() === true`).
+   */
+  sizes?: number[];
   /** Pre-register methods on ctx before setup runs */
   extraMethods?: Record<string, Function>;
 }
@@ -79,14 +87,16 @@ function createMockContext(options: MockOptions = {}): {
   cleanup: () => void;
 } {
   const {
-    totalItems = 100,
     containerSize = 500,
     scrollTop = 0,
     itemHeight = 48,
     virtualSize,
     sizeCacheTotal,
+    sizes,
     extraMethods = {},
   } = options;
+
+  const totalItems = options.totalItems ?? sizes?.length ?? 100;
 
   const computedActualSize = options.actualSize ?? totalItems * itemHeight;
   const computedVirtualSize = virtualSize ?? computedActualSize;
@@ -110,6 +120,32 @@ function createMockContext(options: MockOptions = {}): {
   engineState.containerSize = containerSize;
   engineState.totalSize = computedVirtualSize;
 
+  const rowSize = (index: number): number =>
+    sizes ? sizes[index] ?? 0 : itemHeight;
+  const rowOffset = (index: number): number => {
+    if (!sizes) return index * itemHeight;
+    let offset = 0;
+    for (let i = 0; i < index && i < sizes.length; i++) offset += sizes[i] ?? 0;
+    return offset;
+  };
+  const totalRowSize = (): number => {
+    if (!sizes) return currentSizeCacheTotal * itemHeight;
+    let total = 0;
+    for (let i = 0; i < sizes.length; i++) total += sizes[i] ?? 0;
+    return total;
+  };
+
+  // With a mutable sizes array the geometry changes between capture and
+  // restore; keep state.totalSize (which the plugin clamps against) in step
+  // with it. Writes are ignored: the sum of `sizes` is always the truth.
+  if (sizes) {
+    Object.defineProperty(engineState, "totalSize", {
+      configurable: true,
+      get: totalRowSize,
+      set: () => {},
+    });
+  }
+
   // Override sizeCache with a more faithful mock that respects sizeCacheTotal
   const contentSizeHistory: number[] = [];
   const sizeCacheRebuildCalls: number[] = [];
@@ -119,18 +155,27 @@ function createMockContext(options: MockOptions = {}): {
       currentSizeCacheTotal = newTotal;
       sizeCacheRebuildCalls.push(newTotal);
     }),
-    getOffset: (index: number) => index * itemHeight,
-    getSize: (_index: number) => itemHeight,
-    getTotalSize: () => currentSizeCacheTotal * itemHeight,
-    getTotal: () => currentSizeCacheTotal,
+    getOffset: (index: number) => rowOffset(index),
+    getSize: (index: number) => rowSize(index),
+    getTotalSize: () => totalRowSize(),
+    getTotal: () => (sizes ? sizes.length : currentSizeCacheTotal),
     indexAtOffset: (offset: number) => {
+      if (sizes) {
+        let pos = 0;
+        for (let i = 0; i < sizes.length; i++) {
+          const row = sizes[i] ?? 0;
+          if (pos + row > offset) return i;
+          pos += row;
+        }
+        return Math.max(0, sizes.length - 1);
+      }
       if (currentSizeCacheTotal === 0 || itemHeight === 0) return 0;
       return Math.max(
         0,
         Math.min(Math.floor(offset / itemHeight), currentSizeCacheTotal - 1),
       );
     },
-    isVariable: () => false,
+    isVariable: () => !!sizes,
   };
 
   // Replace the sizeCache on ctx with our tracked version
@@ -2198,5 +2243,531 @@ describe("snapshots - restoreScroll returns a Promise", () => {
 
     expect(reloadFn).toHaveBeenCalled();
     cleanup();
+  });
+});
+
+// =============================================================================
+// snapshots — restorePosition "anchor"
+// =============================================================================
+
+describe("snapshots - restorePosition anchor", () => {
+  /** 20 rows; row `index` is `size` px unless overridden. */
+  const uniform = (count: number, size = 40): number[] =>
+    Array.from({ length: count }, () => size);
+
+  it("defaults to the legacy path byte-for-byte (record and restore)", async () => {
+    // 1. The saved record is the same object as before: no new fields.
+    const source = createMockContext({
+      totalItems: 100,
+      itemHeight: 48,
+      scrollTop: 500,
+      containerSize: 500,
+    });
+    snapshots<TestItem>().setup!(source.ctx);
+    const capture = source.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    expect(capture()).toEqual({
+      index: 10,
+      offsetInItem: 20,
+      total: 100,
+      scrollTop: 500,
+      offsetRatio: 20 / 48,
+    });
+    source.cleanup();
+
+    // 2. No option and an explicit "legacy" write the same pixels.
+    const snapshot: ScrollSnapshot = {
+      index: 10,
+      offsetInItem: 20,
+      total: 100,
+      scrollTop: 500,
+    };
+    for (const config of [undefined, { restorePosition: "legacy" as const }]) {
+      const dest = createMockContext({
+        totalItems: 100,
+        itemHeight: 48,
+        containerSize: 500,
+      });
+      snapshots<TestItem>(config).setup!(dest.ctx);
+      const restore = dest.methods.get("restoreScroll") as (
+        s: ScrollSnapshot,
+      ) => Promise<void>;
+      await restore(snapshot);
+      expect(dest.scrollCalls).toEqual([500]);
+      dest.cleanup();
+    }
+  });
+
+  it("puts the saved row at the top when a row above it grows (the bug)", async () => {
+    // Capture at row 10's top, then rows above the fold grow by 50 px.
+    const source = createMockContext({
+      sizes: uniform(40),
+      scrollTop: 400,
+      containerSize: 500,
+    });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(source.ctx);
+    const capture = source.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = capture();
+    expect(snapshot).toMatchObject({ index: 10, offsetInItem: 0, total: 40 });
+    source.cleanup();
+
+    // Destination: row 0 grew 40 → 90 px, same item count.
+    const sizes = uniform(40);
+    sizes[0] = 90;
+
+    // Legacy: the saved pixels land 50 px into row 10's new span.
+    const legacy = createMockContext({ sizes, containerSize: 500 });
+    snapshots<TestItem>().setup!(legacy.ctx);
+    const restoreLegacy = legacy.methods.get("restoreScroll") as (
+      s: ScrollSnapshot,
+    ) => Promise<void>;
+    await restoreLegacy(snapshot);
+    expect(legacy.scrollCalls).toEqual([400]);
+    legacy.cleanup();
+
+    // Anchor: row 10 is at its offset in today's geometry.
+    const dest = createMockContext({ sizes, containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    const restore = dest.methods.get("restoreScroll") as (
+      s: ScrollSnapshot,
+    ) => Promise<void>;
+    await restore(snapshot);
+    expect(dest.scrollCalls).toEqual([450]);
+    dest.cleanup();
+  });
+
+  it("scales the within-row fraction to today's row size (810 → 820)", async () => {
+    const sourceSizes = uniform(10, 100);
+    sourceSizes[5] = 810; // scrollTop 905 = row 5 offset 500 + 405 (ratio 0.5)
+    const source = createMockContext({
+      sizes: sourceSizes,
+      scrollTop: 905,
+      containerSize: 500,
+    });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(source.ctx);
+    const capture = source.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = capture();
+    expect(snapshot).toMatchObject({
+      index: 5,
+      offsetInItem: 405,
+      offsetRatio: 0.5,
+      scrollTop: 905,
+    });
+    source.cleanup();
+
+    const sizes = uniform(10, 100);
+    sizes[5] = 820;
+
+    const legacy = createMockContext({ sizes, containerSize: 500 });
+    snapshots<TestItem>().setup!(legacy.ctx);
+    await (legacy.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)(
+      snapshot,
+    );
+    expect(legacy.scrollCalls).toEqual([905]);
+    legacy.cleanup();
+
+    const dest = createMockContext({ sizes, containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    await (dest.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)(
+      snapshot,
+    );
+    // 500 + 0.5 × 820 = 910, not the saved 905.
+    expect(dest.scrollCalls).toEqual([910]);
+    dest.cleanup();
+  });
+
+  it("ignores the saved scrollTop even when the item count matches", async () => {
+    // Same count, changed sizes: a matching total used to mean "trust the
+    // pixels" — the anchor takes the row instead.
+    const sizes = uniform(10, 100);
+    sizes[0] = 150;
+    sizes[5] = 820;
+    const snapshot: ScrollSnapshot = {
+      index: 5,
+      offsetInItem: 405,
+      offsetRatio: 0.5,
+      total: 10,
+      scrollTop: 905,
+      dataIndex: 5,
+    };
+
+    const legacy = createMockContext({ sizes, containerSize: 500 });
+    snapshots<TestItem>().setup!(legacy.ctx);
+    await (legacy.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)(
+      snapshot,
+    );
+    expect(legacy.scrollCalls).toEqual([905]);
+    legacy.cleanup();
+
+    const dest = createMockContext({ sizes, containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    await (dest.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)(
+      snapshot,
+    );
+    // Row 5 now starts at 150 + 4 × 100 = 550; 550 + 410 = 960.
+    expect(dest.scrollCalls).toEqual([960]);
+    dest.cleanup();
+  });
+
+  it("restores the saved data ordinal through the layout translator", async () => {
+    // A grouped list: two header pseudo-rows shift layout past data.
+    const sizes = uniform(40);
+    const dest = createMockContext({ sizes, containerSize: 500 });
+    dest.methods.set("_dataToLayoutIndex", (d: number) => (d < 0 ? -1 : d + 2));
+    dest.methods.set("_layoutToDataIndex", (l: number) => l - 2);
+    dest.methods.set("_getTotal", () => 20);
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    const restore = dest.methods.get("restoreScroll") as (
+      s: ScrollSnapshot,
+    ) => Promise<void>;
+
+    // Saved data ordinal 3 → layout 5; the saved layout index (10) is stale.
+    await restore({
+      index: 10,
+      offsetInItem: 0,
+      offsetRatio: 0,
+      total: 22,
+      dataIndex: 3,
+      dataTotal: 20,
+      scrollTop: 400,
+    });
+    // Saved ordinal 7 → layout 9: the ordinal moved, so the row did.
+    await restore({
+      index: 10,
+      offsetInItem: 0,
+      offsetRatio: 0,
+      total: 22,
+      dataIndex: 7,
+      dataTotal: 20,
+      scrollTop: 400,
+    });
+    expect(dest.scrollCalls).toEqual([200, 360]);
+    dest.cleanup();
+  });
+
+  it("falls back to the saved pixels when the anchored row is gone", async () => {
+    const sizes = uniform(100);
+    const snapshot: ScrollSnapshot = {
+      index: 10,
+      offsetInItem: 0,
+      offsetRatio: 0,
+      total: 100,
+      dataIndex: 100, // ordinal is at the old data total
+      dataTotal: 100,
+      scrollTop: 1234,
+    };
+
+    const dest = createMockContext({ sizes, containerSize: 500 });
+    dest.methods.set("_getTotal", () => 100);
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    await (dest.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)(
+      snapshot,
+    );
+    // Clamping the ordinal to 99 would write 3500 instead.
+    expect(dest.scrollCalls).toEqual([1234]);
+    dest.cleanup();
+
+    // No saved pixels: no scroll write at all, and the promise settles.
+    const noPixels = createMockContext({ sizes: uniform(100), containerSize: 500 });
+    noPixels.methods.set("_getTotal", () => 100);
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(noPixels.ctx);
+    await expect(
+      (noPixels.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+        index: 10,
+        offsetInItem: 0,
+        total: 100,
+        dataIndex: 100,
+        dataTotal: 100,
+      }),
+    ).resolves.toBeUndefined();
+    expect(noPixels.scrollCalls).toEqual([]);
+    noPixels.cleanup();
+  });
+
+  it("falls back when the translator yields an index past the cache", async () => {
+    const dest = createMockContext({ sizes: uniform(40), containerSize: 500 });
+    dest.methods.set("_dataToLayoutIndex", () => 500);
+    dest.methods.set("_getTotal", () => 20);
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    await (dest.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+      index: 3,
+      offsetInItem: 0,
+      total: 20,
+      dataIndex: 3,
+      dataTotal: 20,
+      scrollTop: 700,
+    });
+    expect(dest.scrollCalls).toEqual([700]);
+    dest.cleanup();
+  });
+
+  it("captures a header-at-top as the first data row below it", async () => {
+    // Layout: [header 30 px, row0..row19 40 px]; data = layout − 1.
+    const sizes = [30, ...uniform(20)];
+    const makeContext = (): ReturnType<typeof createMockContext> => {
+      const mock = createMockContext({ sizes, scrollTop: 10, containerSize: 500 });
+      mock.methods.set("_layoutToDataIndex", (l: number) => l - 1);
+      mock.methods.set("_dataToLayoutIndex", (d: number) => d + 1);
+      mock.methods.set("_getTotal", () => 20);
+      return mock;
+    };
+
+    const source = makeContext();
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(source.ctx);
+    const capture = source.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    const snapshot = capture();
+    // The fraction belonged to the header, not to data row 0.
+    expect(snapshot).toMatchObject({ index: 0, dataIndex: 0, offsetRatio: 0 });
+    source.cleanup();
+
+    const dest = makeContext();
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(dest.ctx);
+    await (dest.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)(
+      snapshot,
+    );
+    // Data row 0 sits below the 30 px header.
+    expect(dest.scrollCalls).toEqual([30]);
+    dest.cleanup();
+
+    // Legacy capture keeps the header fraction (unchanged behaviour).
+    const legacySource = makeContext();
+    snapshots<TestItem>().setup!(legacySource.ctx);
+    const legacyCapture = legacySource.methods.get("getScrollSnapshot") as () => ScrollSnapshot;
+    expect(legacyCapture().offsetRatio).toBeCloseTo(10 / 30);
+    legacySource.cleanup();
+  });
+
+  it("re-resolves the anchor after the visible range loads", async () => {
+    // Empty destination bootstrapped from the saved total; the load replaces
+    // placeholder heights with the real ones above the anchor.
+    const sizes: number[] = [];
+    const { ctx, methods, engineState, scrollCalls, cleanup } = createMockContext({
+      sizes,
+      totalItems: 0,
+      containerSize: 500,
+    });
+    methods.set("_setTotal", (total: number) => {
+      engineState.totalItems = total;
+      for (let i = 0; i < total; i++) sizes.push(40);
+    });
+    const loadVisibleFn = mock(async () => {
+      // Real sizes come back for the ten rows above the anchor.
+      for (let i = 0; i < 10; i++) sizes[i] = 60;
+    });
+    methods.set("loadVisibleRange", loadVisibleFn);
+
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(ctx);
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    await restore({
+      index: 10,
+      offsetInItem: 0,
+      offsetRatio: 0,
+      total: 40,
+      scrollTop: 400,
+    });
+
+    expect(loadVisibleFn).toHaveBeenCalledTimes(1);
+    // First the placeholder anchor (400), then the re-resolved one (600).
+    expect(scrollCalls).toEqual([400, 600]);
+    cleanup();
+  });
+
+  it("settles the restore promise when the visible-range load rejects", async () => {
+    const sizes = uniform(40);
+    const { ctx, methods, scrollCalls, cleanup } = createMockContext({
+      sizes,
+      containerSize: 500,
+    });
+    methods.set("loadVisibleRange", mock(async () => {
+      throw new DOMException("aborted", "AbortError");
+    }));
+
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(ctx);
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    await expect(
+      restore({ index: 10, offsetInItem: 0, offsetRatio: 0, total: 40, scrollTop: 400 }),
+    ).resolves.toBeUndefined();
+    // Only the pre-load write; the rejected load skips the re-resolve.
+    expect(scrollCalls).toEqual([400]);
+    cleanup();
+  });
+
+  it("re-resolves once to the saved pixels when the load drops the row", async () => {
+    const sizes = uniform(40, 200);
+    const { ctx, methods, engineState, scrollCalls, cleanup } = createMockContext({
+      sizes,
+      containerSize: 500,
+    });
+    methods.set("_getTotal", () => sizes.length);
+    methods.set("loadVisibleRange", mock(async () => {
+      // The data source shrank to five rows while we restored.
+      sizes.length = 0;
+      for (let i = 0; i < 5; i++) sizes.push(200);
+      engineState.totalItems = 5;
+    }));
+
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(ctx);
+    const restore = methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>;
+    await restore({
+      index: 10,
+      offsetInItem: 0,
+      offsetRatio: 0,
+      total: 40,
+      scrollTop: 500,
+    });
+
+    // Pre-load anchor (row 10 at 2000), then the raw fallback once.
+    expect(scrollCalls).toEqual([2000, 500]);
+    cleanup();
+  });
+
+  it("auto-restores from sessionStorage in anchor mode and lifts the guard", async () => {
+    const key = "test-anchor-autosave";
+    sessionStorage.removeItem(key);
+    const sizes = uniform(40);
+    sizes[0] = 90;
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({ index: 10, offsetInItem: 0, offsetRatio: 0, total: 20, scrollTop: 400 }),
+    );
+
+    const { ctx, methods, engineState, scrollCalls, cleanup } = createMockContext({
+      sizes,
+      containerSize: 500,
+    });
+    methods.set("_setTotal", (total: number) => {
+      engineState.totalItems = total;
+    });
+
+    snapshots<TestItem>({ autoSave: key, restorePosition: "anchor" }).setup!(ctx);
+    await flushAsync();
+
+    expect(scrollCalls).toEqual([450]);
+    const stored = JSON.parse(sessionStorage.getItem(key)!);
+    // The save guard lifted; the new record is the restored position.
+    expect(stored.scrollTop).toBe(450);
+    sessionStorage.removeItem(key);
+    cleanup();
+  });
+
+  it("restores selection and focus on the anchor path; restoreSelection=false opts out", async () => {
+    const sizes = uniform(40);
+    const selectFn = mock(() => {});
+    const focusFn = mock(() => {});
+    const { ctx, methods, scrollCalls, cleanup } = createMockContext({
+      sizes,
+      containerSize: 500,
+    });
+    methods.set("select", selectFn);
+    methods.set("_focusById", focusFn);
+
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(ctx);
+    const restore = methods.get("restoreScroll") as (
+      s: ScrollSnapshot,
+      restoreSelection?: boolean,
+    ) => Promise<void>;
+    const snapshot: ScrollSnapshot = {
+      index: 10,
+      offsetInItem: 0,
+      offsetRatio: 0,
+      total: 20,
+      selectedIds: [3, 7],
+      focusedId: 7,
+    };
+
+    await restore(snapshot);
+    expect(scrollCalls).toEqual([400]);
+    expect(selectFn).toHaveBeenCalledWith(3, 7);
+    expect(focusFn).toHaveBeenCalledWith(7, "preserve");
+
+    selectFn.mockClear();
+    await restore(snapshot, false);
+    expect(scrollCalls).toEqual([400, 400]);
+    expect(selectFn).not.toHaveBeenCalled();
+    cleanup();
+  });
+
+  it("handles edge inputs without writing a NaN position", async () => {
+    // Non-finite ratio falls back to the saved offset, clamped to the row.
+    const nanRatio = createMockContext({ sizes: uniform(20), containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(nanRatio.ctx);
+    await (nanRatio.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+      index: 3,
+      offsetInItem: 12,
+      offsetRatio: Number.NaN,
+      total: 20,
+    });
+    expect(nanRatio.scrollCalls).toEqual([132]);
+    nanRatio.cleanup();
+
+    // A zero-size row restores to its offset.
+    const zeroRow = uniform(20);
+    zeroRow[3] = 0;
+    const zero = createMockContext({ sizes: zeroRow, containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(zero.ctx);
+    await (zero.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+      index: 3,
+      offsetInItem: 0,
+      offsetRatio: 0.5,
+      total: 20,
+    });
+    expect(zero.scrollCalls).toEqual([120]);
+    zero.cleanup();
+
+    // A negative ordinal is treated as absent and the layout index anchors.
+    const negative = createMockContext({ sizes: uniform(20), containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(negative.ctx);
+    await (negative.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+      index: 4,
+      offsetInItem: 0,
+      total: 20,
+      dataIndex: -1,
+    });
+    expect(negative.scrollCalls).toEqual([160]);
+    negative.cleanup();
+
+    // A wholly negative saved index cannot anchor: saved pixels, else nothing.
+    const negativeIndex = createMockContext({ sizes: uniform(20), containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(negativeIndex.ctx);
+    await (negativeIndex.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+      index: -1,
+      offsetInItem: 0,
+      total: 20,
+      scrollTop: 55,
+    });
+    expect(negativeIndex.scrollCalls).toEqual([55]);
+    negativeIndex.cleanup();
+
+    // Existing NaN guards hold in anchor mode too.
+    const nanGuard = createMockContext({ sizes: uniform(20), containerSize: 500 });
+    snapshots<TestItem>({ restorePosition: "anchor" }).setup!(nanGuard.ctx);
+    await expect(
+      (nanGuard.methods.get("restoreScroll") as (s: ScrollSnapshot) => Promise<void>)({
+        index: Number.NaN,
+        offsetInItem: 0,
+        total: 20,
+        scrollTop: 55,
+      }),
+    ).resolves.toBeUndefined();
+    expect(nanGuard.scrollCalls).toEqual([]);
+    nanGuard.cleanup();
+  });
+
+  it("keeps old config and record literals compiling (type test)", () => {
+    // Compiled by `bun run typecheck`: the new option is optional and additive.
+    const none: SnapshotsPluginConfig = {};
+    const legacy: SnapshotsPluginConfig = { restorePosition: "legacy" };
+    const anchor: SnapshotsPluginConfig = { restorePosition: "anchor" };
+    expect(none.restorePosition).toBeUndefined();
+    expect(legacy.restorePosition).toBe("legacy");
+    expect(anchor.restorePosition).toBe("anchor");
+
+    // Old snapshot literals and the boolean restoreSelection argument stand.
+    const snapshot: ScrollSnapshot = { index: 1, offsetInItem: 0, total: 2 };
+    const plugin = snapshots<TestItem>({ restore: snapshot });
+    expect(plugin.name).toBe("snapshots");
+
+    // @ts-expect-error — only "legacy" and "anchor" are valid positions
+    const invalid: SnapshotsPluginConfig = { restorePosition: "middle" };
+    expect(invalid).toBeDefined();
   });
 });
