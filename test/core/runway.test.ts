@@ -8,6 +8,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { setupDOM, teardownDOM } from "../helpers/dom";
 import { createTestItems, createContainer, simpleTemplate } from "../helpers/factory";
 import type { TestItem } from "../helpers/factory";
+import { flushRAF } from "../helpers/timers";
 import { createVList as createNative } from "../../src/native";
 import { createCore } from "../../src/core/create";
 import { createRunwayHandler } from "../../src/core/runway";
@@ -325,6 +326,26 @@ function renderSnapshot(c: HTMLElement): string[] {
   return snap.sort();
 }
 
+/**
+ * Await animation frames until the scroll position has held still for three
+ * frames, then return it. The rAF shim is setTimeout(0), so each await lets
+ * pending frames run; a fixed real-time sleep instead sampled whatever the
+ * event loop had reached, which on a loaded CI runner was mid-animation
+ * (expected 330, received 272.9). Settling on unchanged frames reads the
+ * value the animation actually ends on.
+ */
+async function waitForSettledScroll(list: VList<TestItem>): Promise<number> {
+  let last = list.getScrollPosition();
+  let stable = 0;
+  for (let frame = 0; frame < 600 && stable < 3; frame++) {
+    await flushRAF();
+    const pos = list.getScrollPosition();
+    stable = pos === last ? stable + 1 : 0;
+    last = pos;
+  }
+  return last;
+}
+
 describe("runway — wrap mode", () => {
   it("sizes content to the full runway even when the real list fits within it", () => {
     // 5 items × 50px = 250px — would degenerate to native sizing in non-wrap mode,
@@ -434,12 +455,11 @@ describe("runway — wrap mode", () => {
       (current as unknown as { jump(px: number): void }).jump(home + lapSize - 20); // 480, about to leave the home lap
 
       (current as unknown as { smoothJump(px: number, duration: number): void }).smoothJump(home + lapSize + 80, 64);
-      await new Promise((r) => setTimeout(r, 120));
 
       // Folded back into the home lap; the extra 80px past the boundary remains.
       // Without shifting from/dest mid-animation, the next tick would apply the
       // pre-fold dest and jump a whole lap.
-      expect(current.getScrollPosition()).toBe(home + 80);
+      expect(await waitForSettledScroll(current)).toBe(home + 80);
     } finally {
       current.destroy();
       host.remove();
