@@ -124,23 +124,22 @@ export function a11y<T extends VListItem = VListItem>(
       const _focusEvt = { id: 0 as string | number, index: 0 };
       const _selEvt = { selected: [] as Array<string | number>, items: [] as T[] };
 
+      const syncFocus = (): void => {
+        const t = getTotal();
+        if (focusIdx >= t) focusIdx = t - 1;
+        if (!focusVis || focusIdx < 0) return;
+        const li = toLayoutIndex(focusIdx);
+        if (li === activeLayoutIdx) return;
+        activeLayoutIdx = li;
+        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${li}`);
+      };
+
       ctx.render.setStateFn((_i: number, is: ItemState): void => {
+        syncFocus();
         // `_i` is the render index, one header per group under groups().
         const di = _i >= 0 ? toDataIndex(_i) : -1;
         is.selected = di >= 0 && selIdx === di;
-        const focused = di >= 0 && focusVis && focusIdx === di;
-        is.focused = focused;
-        // The id is written when focus moves. A layout that re-groups under a
-        // still focus — a setItems that inserts a header above the item — moves
-        // the item to another layout index while the attribute still names the
-        // old one, which now paints its neighbour. This pass already re-derives
-        // the ring from the data index; derive the id from the ring the same
-        // way. The compare is reached only on the focused row — once a frame —
-        // and the id is only built on the frame that actually moved.
-        if (focused && _i !== activeLayoutIdx) {
-          activeLayoutIdx = _i;
-          dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${_i}`);
-        }
+        is.focused = di >= 0 && focusVis && focusIdx === di;
       });
 
       // tree() treats a state function as an external focus owner and then
@@ -159,13 +158,7 @@ export function a11y<T extends VListItem = VListItem>(
       // moves the item to another layout index while the attribute still names
       // the old one. The compare is two numbers; the id is built only on the
       // frame the index actually moved.
-      ctx.hooks.method("_syncFocusState", (): void => {
-        if (!focusVis) return;
-        const li = toLayoutIndex(focusIdx);
-        if (li === activeLayoutIdx) return;
-        activeLayoutIdx = li;
-        dom.content.setAttribute("aria-activedescendant", `${classPrefix}-item-${li}`);
-      });
+      ctx.hooks.method("_syncFocusState", syncFocus);
       ctx.hooks.method("_getFocusedId", (): string | number | undefined => {
         if (focusIdx < 0) return undefined;
         return getItem(focusIdx)?.id;
