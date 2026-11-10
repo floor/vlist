@@ -1137,6 +1137,8 @@ function makeGroupHeader(groupIndex: number, key: string): GroupTestItem {
   };
 }
 
+const isGroupHeaderItem = (item: GroupTestItem): boolean => item.__groupHeader === true;
+
 function makeGroupedItems(): GroupTestItem[] {
   // Layout: [headerA, item0, item1, item2, headerB, item3, item4, item5]
   return [
@@ -1184,7 +1186,7 @@ function createGroupedRenderer() {
 
   // Configure group header detection + template
   renderer.setGroupHeaderFn(
-    (item) => !!(item as any).__groupHeader,
+    isGroupHeaderItem,
     (key, _groupIndex) => `<span class="group-label">${key}</span>`,
   );
 
@@ -1422,6 +1424,31 @@ describe("group headers", () => {
 
       container.remove();
     });
+
+    it("should drop the row id when a data row is recycled into a group header", () => {
+      const { renderer, container } = createGroupedRenderer();
+      const items = makeGroupedItems();
+
+      // First render with groups off: index 0 is a data row and carries an id.
+      renderer.setGroupHeaderFn(null, null);
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+      expect(renderer.getElement(0)!.id).toBe("vlist-item-0");
+
+      // Turn groups on: index 0 flips to a group header. The released data-row
+      // element is the one the pool hands back for the header, so a stale id
+      // would make the header claim to be the data row it used to be.
+      renderer.setGroupHeaderFn(
+        isGroupHeaderItem,
+        (key) => `<span class="group-label">${key}</span>`,
+      );
+      renderer.render(items, { start: 0, end: 7 }, EMPTY_SET, -1);
+
+      const headerEl = renderer.getElement(0)!;
+      expect(headerEl.classList.contains("vlist-table-group-header")).toBe(true);
+      expect(headerEl.hasAttribute("id")).toBe(false);
+
+      container.remove();
+    });
   });
 
   describe("updateItem with group headers", () => {
@@ -1580,7 +1607,7 @@ describe("group headers", () => {
 
       // Enable group headers
       renderer.setGroupHeaderFn(
-        (item) => !!(item as any).__groupHeader,
+        isGroupHeaderItem,
         (key) => `<span>${key}</span>`,
       );
 
@@ -1924,7 +1951,7 @@ describe("striped", () => {
       );
 
       renderer.setGroupHeaderFn(
-        (item) => !!(item as any).__groupHeader,
+        isGroupHeaderItem,
         (key, _groupIndex) => `<span class="group-label">${key}</span>`,
       );
 
