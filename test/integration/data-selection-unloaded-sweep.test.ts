@@ -79,11 +79,14 @@ describe("data() + selection() — selecting items before load, then loading the
       read: ({ offset, limit }) =>
         new Promise((resolve) => {
           reads.push(() => {
-            const items: TestItem[] = Array.from({ length: limit }, (_, i) => ({
+            // String ids at runtime; `TestItem` pins them to number, so the
+            // array carries the shape the template needs and the id the
+            // assertions name.
+            const items = Array.from({ length: limit }, (_, i) => ({
               id: `item-${offset + i + 1}`,
               name: `Item ${offset + i + 1}`,
               value: offset + i + 1,
-            }));
+            })) as unknown as TestItem[];
             resolve({ items, total: 100, hasMore: offset + limit < 100 });
           });
         }),
@@ -130,11 +133,14 @@ describe("data() + selection() — selecting items before load, then loading the
       read: ({ offset, limit }) =>
         new Promise((resolve) => {
           reads.push(() => {
-            const items: TestItem[] = Array.from({ length: limit }, (_, i) => ({
+            // String ids at runtime; `TestItem` pins them to number, so the
+            // array carries the shape the template needs and the id the
+            // assertions name.
+            const items = Array.from({ length: limit }, (_, i) => ({
               id: `item-${offset + i + 1}`,
               name: `Item ${offset + i + 1}`,
               value: offset + i + 1,
-            }));
+            })) as unknown as TestItem[];
             resolve({ items, total: 100, hasMore: offset + limit < 100 });
           });
         }),
