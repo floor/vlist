@@ -983,6 +983,29 @@ describe("createTableHeader - keyboard navigation", () => {
     expect(cell2.getAttribute("tabindex")).toBe("0");
   });
 
+  it("should not move focus on Alt+Home or Alt+End when columnReorder is not mounted", () => {
+    const { root } = createTestDOM();
+    const header = createTableHeader<TestItem>(root, 40, "vlist", mock());
+    const layout = createResolvedLayout([col("a"), col("b"), col("c")]);
+    header.rebuild(layout);
+
+    const scrollContainer = header.element.firstChild as HTMLElement;
+    const cell0 = scrollContainer.children[0] as HTMLElement;
+    const cell1 = scrollContainer.children[1] as HTMLElement;
+    const cell2 = scrollContainer.children[2] as HTMLElement;
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(cell1.getAttribute("tabindex")).toBe("0");
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "End", altKey: true, bubbles: true }));
+    expect(cell1.getAttribute("tabindex")).toBe("0");
+    expect(cell2.getAttribute("tabindex")).toBe("-1");
+
+    header.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", altKey: true, bubbles: true }));
+    expect(cell1.getAttribute("tabindex")).toBe("0");
+    expect(cell0.getAttribute("tabindex")).toBe("-1");
+  });
+
   it("should trigger sort on Enter for sortable columns", () => {
     const { root } = createTestDOM();
     const onSort = mock(() => {});

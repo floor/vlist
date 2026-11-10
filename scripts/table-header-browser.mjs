@@ -16,10 +16,10 @@ import {pinPage, settle} from './browser-page.mjs';
 const root=resolve(import.meta.dir,'../dist');
 const html=`<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css"><style>body{margin:20px}#host{width:420px;height:320px}</style><div id="host"></div>
 <script type="module">
-import {createVList} from '/index.js';import {table} from '/index.js';
+import {createVList,table,columnReorder} from '/index.js';
 const button=document.createElement('button');button.id='label-button';button.type='button';button.textContent='Menu';
 window.buttonClicks=0;button.addEventListener('click',()=>{window.buttonClicks++;});
-const list=createVList({container:'#host',items:Array.from({length:60},(_,id)=>({id,name:'Name '+id,value:'Value '+id})),item:{height:32,template:i=>'<span>'+i.name+'</span>'}},[table({rowHeight:32,columns:[{key:'name',label:button,width:200,sortable:true},{key:'value',label:'Value',width:260,sortable:true}]})]);
+const list=createVList({container:'#host',items:Array.from({length:60},(_,id)=>({id,name:'Name '+id,value:'Value '+id})),item:{height:32,template:i=>'<span>'+i.name+'</span>'}},[table({rowHeight:32,columns:[{key:'name',label:button,width:200,sortable:true},{key:'value',label:'Value',width:260,sortable:true}],features:[columnReorder()]})]);
 window.list=list;window.events=[];
 list.on('column:click',e=>events.push({type:'click',key:e.key,index:e.index,eventType:e.event&&e.event.type,isMouse:e.event instanceof MouseEvent}));
 list.on('column:sort',e=>events.push({type:'sort',key:e.key,index:e.index,direction:e.direction}));
@@ -135,6 +135,29 @@ try {
    console.log('PASS updateColumns keeps one tab stop after a real click',JSON.stringify({columns:count,rebuilt,clicked}));
  }
 
- console.log('SUMMARY',JSON.stringify({passes:8}));
+ // #487: Alt+End and Alt+Home in columnReorder() move the focused column to the
+ // last / first position and keep focus on it, instead of jumping focus only.
+ await page.evaluate(()=>list.updateColumns(['a','b','c','d'].map(key=>({key,label:key.toUpperCase(),width:90,sortable:true}))));
+ await settle(page);
+ await clickHeader('a');
+ const reorderState=()=>page.evaluate(()=>({
+   order:list.getColumnOrder(),
+   headers:[...document.querySelectorAll('.vlist-table-header-cell')].map(c=>c.dataset.columnKey),
+   tabs:[...document.querySelectorAll('.vlist-table-header-cell')].map(c=>c.getAttribute('tabindex')),
+   focused:document.activeElement?.dataset.columnKey??null,
+ }));
+ assert.deepEqual(await reorderState(),{order:['a','b','c','d'],headers:['a','b','c','d'],tabs:['0','-1','-1','-1'],focused:'a'});
+ await page.keyboard.down('Alt');await page.keyboard.press('End');await page.keyboard.up('Alt');await settle(page);
+ const afterAltEnd=await reorderState();
+ assert.deepEqual(afterAltEnd,{order:['b','c','d','a'],headers:['b','c','d','a'],tabs:['-1','-1','-1','0'],focused:'a'},`Alt+End moves the focused column to the last position and keeps focus on it, got ${JSON.stringify(afterAltEnd)}`);
+ await page.keyboard.down('Alt');await page.keyboard.press('ArrowLeft');await page.keyboard.up('Alt');await settle(page);
+ const afterAltLeft=await reorderState();
+ assert.deepEqual(afterAltLeft,{order:['b','c','a','d'],headers:['b','c','a','d'],tabs:['-1','-1','0','-1'],focused:'a'},`subsequent Alt+ArrowLeft moves the still-focused column one step left, got ${JSON.stringify(afterAltLeft)}`);
+ await page.keyboard.down('Alt');await page.keyboard.press('Home');await page.keyboard.up('Alt');await settle(page);
+ const afterAltHome=await reorderState();
+ assert.deepEqual(afterAltHome,{order:['a','b','c','d'],headers:['a','b','c','d'],tabs:['0','-1','-1','-1'],focused:'a'},`Alt+Home moves the focused column to the first position and keeps focus on it, got ${JSON.stringify(afterAltHome)}`);
+ console.log('PASS Alt+End and Alt+Home move the focused column to the last/first position and keep focus on it',JSON.stringify({afterAltEnd,afterAltLeft,afterAltHome}));
+
+ console.log('SUMMARY',JSON.stringify({passes:9}));
  await page.close();
 } finally {await browser?.close();server.stop(true);}
