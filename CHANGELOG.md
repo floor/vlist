@@ -11,6 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.6.3] - 2026-11-10
+
+A wide table in `page()` keeps its header over every column.
+
+Who is affected: tables using `page()` that are wider than their container and have no pinned column.
+
+### Fixed
+
+- In a `page()` table wider than its container, the header now spans every column and moves with them when the page scrolls sideways. Before, the columns past the container's edge had no header above them. Tables with a pinned column already worked.
+
 ## [3.6.2] - 2026-11-10
 
 Resize a focused column header with Shift+Left/Right.
@@ -2192,7 +2202,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.6.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.6.3...HEAD
+[3.6.3]: https://github.com/floor/vlist/compare/v3.6.2...v3.6.3
 [3.6.2]: https://github.com/floor/vlist/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/floor/vlist/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/floor/vlist/compare/v3.5.1...v3.6.0
