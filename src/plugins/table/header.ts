@@ -338,8 +338,10 @@ export const createTableHeader = <T extends VListItem = VListItem>(
     }
 
     if (key === "Home" || key === "End") {
-      moveFocusToCell(key === "Home" ? 0 : cells.length - 1);
-      e.preventDefault();
+      if (!e.altKey) {
+        moveFocusToCell(key === "Home" ? 0 : cells.length - 1);
+        e.preventDefault();
+      }
       e.stopPropagation();
       return;
     }
