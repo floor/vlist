@@ -19,7 +19,7 @@ Who is affected: tables using `page()` that are wider than their container and h
 
 ### Fixed
 
-- In a `page()` table wider than its container, the header now spans every column and moves with them when the page scrolls sideways. Before, the columns past the container's right edge had no header above them. Tables with a pinned column already worked.
+- In a `page()` table wider than its container, the header now spans every column and moves with them when the page scrolls sideways. Before, the columns past the container's edge had no header above them. Tables with a pinned column already worked.
 
 ## [3.6.2] - 2026-11-10
 
