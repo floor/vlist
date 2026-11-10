@@ -271,7 +271,7 @@ export function data<T extends VListItem = VListItem>(
             ctx.render.ifNeeded();
           }
         },
-        onItemsLoaded: (loadedItems) => {
+        onItemsLoaded: (loadedItems, offset) => {
           // A successful load means connectivity is back — drop any pending
           // retry and reset the backoff window.
           resetRetry();
@@ -280,7 +280,7 @@ export function data<T extends VListItem = VListItem>(
             // loaded count changed) — just commit the size and render.
             ctx.render.contentSize(sizeCache.getTotalSize());
             forceRender();
-            emitter.emit("load:end", { items: loadedItems, total: dataManager.getTotal() });
+            emitter.emit("load:end", { items: loadedItems, offset, total: dataManager.getTotal() });
           }
         },
         onLoadError: (error) => {

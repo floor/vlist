@@ -140,6 +140,27 @@ export function selection<T extends VListItem = VListItem>(
   };
 
   /**
+   * Select, or toggle, whatever a layout index stands for. A row whose item
+   * has not loaded yet stands for its data-space placeholder id — the same id
+   * `doSelectRange` records — so a click or key on it is kept and claimed when
+   * the chunk arrives, instead of being dropped. No-op when the index names no
+   * item at all: past the data total, or with no async store.
+   */
+  const atLayout = (layoutIdx: number, toggle: boolean): void => {
+    const item = getDataItemAtLayout(layoutIdx);
+    if (item) {
+      toggle ? doToggle(item.id, item) : doSelect(item.id, item);
+      return;
+    }
+    if (!loadedItemFn) return;
+    const di = toDataIndex(layoutIdx);
+    if (di < 0 || di >= getDataTotalFn()) return;
+    const ph = PLACEHOLDER_ID_PREFIX + di;
+    if (toggle && state.selected.has(ph)) doDeselect(ph);
+    else doSelect(ph);
+  };
+
+  /**
    * Keep state.focusedIndex and the data index it stands for in step.
    *
    * Runs in the render state pass, once per visible row per commit — the pass
@@ -238,7 +259,14 @@ export function selection<T extends VListItem = VListItem>(
     // layout count. The engine's total is not it under groups — with ten items
     // in two groups this looped to ten and stopped two entries short, quietly
     // selecting eight.
-    const total = getTotalFn();
+    //
+    // With no layout translator the two spaces coincide, and there the engine
+    // total lags an async adapter: before the first chunk commits it is still
+    // 0 while the adapter has already declared its total, so select-all
+    // selected nothing. The data total is the published answer; with no async
+    // store it defaults to the engine total, so that branch costs nothing
+    // where nothing changed.
+    const total = l2dFn ? getTotalFn() : getDataTotalFn();
     if (total > 0) doSelectRange(0, total - 1);
   }
 
@@ -278,7 +306,6 @@ export function selection<T extends VListItem = VListItem>(
     });
   }
 
-  let hitItem: T | null = null;
   let hitIndex = -1;
 
   return {
@@ -369,18 +396,12 @@ export function selection<T extends VListItem = VListItem>(
       // ── Helpers ────────────────────────────────────────────────
 
       const findItemFromEvent = (event: MouseEvent): boolean => {
-        hitItem = null;
         hitIndex = -1;
         const el = (event.target as HTMLElement).closest("[data-index]") as HTMLElement | null;
         if (!el) return false;
         const layoutIdx = parseInt(el.dataset.index ?? "-1", 10);
         if (layoutIdx < 0) return false;
         if (isGHFn?.(layoutIdx)) return false;
-        const di = toDataIndex(layoutIdx);
-        if (di < 0) return false;
-        const item = getDataItemAtLayout(layoutIdx);
-        if (!item) return false;
-        hitItem = item;
         hitIndex = layoutIdx;
         return true;
       };
@@ -485,11 +506,7 @@ export function selection<T extends VListItem = VListItem>(
         lastSelectedIndex = hitIndex;
         const focusTarget = dom.content.getAttribute("tabindex") !== null ? dom.content : dom.root;
         focusTarget.focus(focusPreventScroll);
-        if (mode === "single") {
-          doSelect(hitItem!.id, hitItem!);
-        } else {
-          doToggle(hitItem!.id, hitItem!);
-        }
+        atLayout(hitIndex, mode !== "single");
         emitSelectionChange();
       });
 
@@ -592,11 +609,8 @@ export function selection<T extends VListItem = VListItem>(
                 break;
               }
               if (state.focusedIndex >= 0) {
-                const item = getDataItemAtLayout(state.focusedIndex);
-                if (item) {
-                  doToggle(item.id, item);
-                  lastSelectedIndex = state.focusedIndex;
-                }
+                atLayout(state.focusedIndex, true);
+                lastSelectedIndex = state.focusedIndex;
                 state.focusVisible = true;
                 selectionChanged = true;
                 handled = true;
@@ -640,8 +654,7 @@ export function selection<T extends VListItem = VListItem>(
           if (event.shiftKey && mode === "multiple" && !selectionChanged && focusMoved) {
             const isArrow = event.key === "ArrowUp" || event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "ArrowRight";
             if (isArrow) {
-              const destItem = getDataItemAtLayout(state.focusedIndex);
-              if (destItem) doToggle(destItem.id, destItem);
+              atLayout(state.focusedIndex, true);
               lastSelectedIndex = state.focusedIndex;
               selectionChanged = true;
             }
@@ -662,8 +675,7 @@ export function selection<T extends VListItem = VListItem>(
 
           // Follow focus: auto-select on movement
           if (followFocus && mode === "single" && !selectionChanged && focusMoved && state.focusedIndex >= 0) {
-            const item = getDataItemAtLayout(state.focusedIndex);
-            if (item) doSelect(item.id, item);
+            atLayout(state.focusedIndex, false);
             selectionChanged = true;
           }
 
@@ -741,8 +753,7 @@ export function selection<T extends VListItem = VListItem>(
         if (total === 0) return;
         moveFocus(state, delta, total, resolvedConfig.reverse);
         if (isGHFn) state.focusedIndex = skipHeaders(state.focusedIndex, delta, total);
-        const item = getDataItemAtLayout(state.focusedIndex);
-        if (item) doSelect(item.id, item);
+        atLayout(state.focusedIndex, false);
         // Selection first so a synchronous reveal render already has the
         // new selected state. Reveal is a layout-aware operation with one
         // owner: nav.reveal (carousel, current virtual lap, no wrap), else
@@ -813,6 +824,24 @@ export function selection<T extends VListItem = VListItem>(
           }
         }
       });
+
+      // ── Loaded chunks: claim placeholders for every loaded item ──
+      // The render state pass only claims the rows it paints. A selection made
+      // before the items arrived therefore kept placeholder ids for every
+      // loaded item off screen: getSelected() reported ids that no longer
+      // stand for anything, and getSelectedItems() silently skipped those
+      // items. A chunk reports its data offset, so each item's placeholder id
+      // is known without a lookup.
+      const offLoadEnd = emitter.on("load:end", ({ items, offset }): void => {
+        if (offset === undefined) return;
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item && claimPlaceholderSelection(state.selected, offset + i, item.id)) {
+            selectedItemCache.set(item.id, item);
+          }
+        }
+      });
+      ctx.hooks.onDestroy(offLoadEnd);
     },
 
     destroy(): void {
