@@ -11,6 +11,20 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-11-10
+
+Alt+Home and Alt+End move a focused table column to the first or last position.
+
+Who is affected: tables using `columnReorder()` with keyboard column reordering.
+
+### Fixed
+
+- In a `table()` with `columnReorder()`, Alt+Home and Alt+End on a focused header move that column to the first or last position and keep focus on it, the same as Alt+Left and Alt+Right move it one step; before, they only moved focus to the first or last header.
+
+### Changed
+
+- `table()` is 17135 → 17136 bytes gzipped, `table()` + `columnPin()` is 19139 → 19142, and `table()` + `columnReorder()` is 19412 → 19455 (budgets unchanged).
+
 ## [3.7.0] - 2026-11-10
 
 Snapshots can restore the row you were reading, and table features are fully typed.
@@ -2238,7 +2252,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.7.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.7.1...HEAD
+[3.7.1]: https://github.com/floor/vlist/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/floor/vlist/compare/v3.6.4...v3.7.0
 [3.6.4]: https://github.com/floor/vlist/compare/v3.6.3...v3.6.4
 [3.6.3]: https://github.com/floor/vlist/compare/v3.6.2...v3.6.3
