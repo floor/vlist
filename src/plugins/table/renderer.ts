@@ -95,7 +95,7 @@ export interface TableRendererInstance<T extends VListItem = VListItem> {
 // Element Pool (row-level)
 // =============================================================================
 
-const RESET_ATTRS = ["data-id", "data-index", "aria-selected", "aria-rowindex", "role"];
+const RESET_ATTRS = ["data-id", "data-index", "aria-selected", "aria-rowindex", "role", "id"];
 
 const createElementPool = (): { acquire: () => HTMLElement; release: (el: HTMLElement) => void; clear: () => void } => {
   const pool: HTMLElement[] = [];
