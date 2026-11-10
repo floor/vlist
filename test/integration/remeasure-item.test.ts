@@ -610,8 +610,12 @@ describe("remeasureItem — scroll limits", () => {
 
 type SizePairing = "core" | "table" | "groups" | "table + groups";
 
-function buildPairing(pairing: SizePairing, extra: VListPlugin<TestItem>[] = []) {
-  const heights: number[] = [];
+function buildPairing(
+  pairing: SizePairing,
+  extra: VListPlugin<TestItem>[] = [],
+  seedHeights: number[] = [],
+) {
+  const heights: number[] = [...seedHeights];
   const container = createContainer({ width: 300, height: 500 });
   const size = (index: number): number => heights[index] ?? 40;
   const plugins: VListPlugin<TestItem>[] = [];
@@ -760,6 +764,39 @@ for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
   });
 }
 
+// The saved row, not the saved pixels: the list is built again with taller
+// rows above it, so only an anchor restore can land it at the top.
+for (const pairing of ["core", "table", "groups", "table + groups"] as const) {
+  it(`remeasureItem — ${pairing} + snapshots: "anchor" follows the row across a rebuild`, async () => {
+    const source = buildPairing(pairing, [snapshots()]);
+    let snapshot;
+    try {
+      await Promise.resolve();
+      source.list.scrollToIndex(20, "start");
+      snapshot = (source.list as VList<TestItem> & SnapshotsMethods).getScrollSnapshot();
+      expect(typeof snapshot.scrollTop).toBe("number");
+    } finally { source.dispose(); }
+
+    // Rows 0-3 measured 90 px while the list was gone: +200 px above the row.
+    const dest = buildPairing(
+      pairing,
+      [snapshots({ restorePosition: "anchor" })],
+      [90, 90, 90, 90],
+    );
+    try {
+      await Promise.resolve();
+      await (dest.list as VList<TestItem> & SnapshotsMethods).restoreScroll(snapshot);
+      expect(dest.list.getScrollPosition()).toBe(snapshot.scrollTop! + 200);
+      const el = dest.item(20)!;
+      const numbers = el.style.transform.match(/-?\d+(?:\.\d+)?px/g)!;
+      const offset = parseFloat(
+        numbers[el.style.transform.startsWith("translate3d") ? 1 : 0]!,
+      );
+      expect(dest.list.getScrollPosition()).toBe(offset);
+    } finally { dest.dispose(); }
+  });
+}
+
 it("remeasureItem — horizontal: updates widths and preserves the scrolled anchor", () => {
   const heights: number[] = [];
   const container = createContainer();
@@ -877,13 +914,13 @@ for (const horizontal of [false, true]) {
   });
 }
 
-// Minor: restore currently prefers saved pixels when the item count matches.
-// Choosing anchor-first restore changes that contract; detecting stale geometry
-// across saved/recreated lists needs additional snapshot metadata.
-it.todo("remeasureItem — snapshots: an older snapshot follows its anchor after resizing", async () => {
-  const f = buildPairing("core", [snapshots()]);
+// The legacy default still prefers the saved pixels when the item count
+// matches; "anchor" opts into the older snapshot following its row.
+it("remeasureItem — snapshots: an older snapshot follows its anchor after resizing", async () => {
+  const f = buildPairing("core", [snapshots({ restorePosition: "anchor" })]);
   const list = f.list as VList<TestItem> & SnapshotsMethods;
   try {
+    await Promise.resolve();
     list.scrollToIndex(20, "start");
     const snapshot = list.getScrollSnapshot();
     f.heights[3] = 90;
