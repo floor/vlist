@@ -11,6 +11,25 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-11-10
+
+Snapshots can restore the row you were reading, and table features are fully typed.
+
+Who is affected: lists using `snapshots()` that opt in to the new option; TypeScript users of `table()` with features.
+
+### Added
+
+- `snapshots({ restorePosition: "anchor" })` restores the row that was at the top and the offset inside it, instead of the saved pixel position, so a restore lands on the same row even when rows above it changed size before the restore. The default is unchanged, and saved snapshots keep their shape.
+- `TableColumn` is exported from `vlist`.
+
+### Fixed
+
+- `table<Row>({ features: [...] })` with an explicit row type keeps the feature methods (`setColumnPin()`, `moveColumn()`, …) on the list's type, the same as without the type argument.
+
+### Changed
+
+- The `snapshots()` bundle is 11849 → 12000 bytes gzipped (budget 12032), `table()` is 17134 → 17135, and `table()` + `columnReorder()` is 19409 → 19412 (the table code is unchanged; the minifier renamed local variables after the type-only imports, which moved the gzip measurement); every other bundle is unchanged and all budgets are unchanged.
+
 ## [3.6.4] - 2026-11-10
 
 Selections and drag-to-reorder keep working with loading data, group headers and very large lists.
@@ -2219,7 +2238,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.6.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.7.0...HEAD
+[3.7.0]: https://github.com/floor/vlist/compare/v3.6.4...v3.7.0
 [3.6.4]: https://github.com/floor/vlist/compare/v3.6.3...v3.6.4
 [3.6.3]: https://github.com/floor/vlist/compare/v3.6.2...v3.6.3
 [3.6.2]: https://github.com/floor/vlist/compare/v3.6.1...v3.6.2
