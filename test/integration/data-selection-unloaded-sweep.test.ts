@@ -5,7 +5,18 @@ import { createVList } from "../../src/core/create";
 import { createContainer, simpleTemplate, type TestItem } from "../helpers/factory";
 import { data as dataPlugin } from "../../src/plugins/data/plugin";
 import { selection } from "../../src/plugins/selection/plugin";
-import type { VListAdapter } from "../../src/types";
+import type { VListItem, VListAdapter } from "../../src/types";
+
+/** Fixture item with string ids, matching what the adapters below return. */
+interface StringIdItem extends VListItem {
+  id: string;
+  name: string;
+  value: number;
+}
+
+/** Same markup as `simpleTemplate`, typed for the string-id fixtures. */
+const stringIdTemplate = (item: StringIdItem): string =>
+  `<div class="item">${item.name}</div>`;
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
 
@@ -52,11 +63,11 @@ describe("data() + selection() — selecting items before load, then loading the
         }),
     };
 
-    const list = createVList<TestItem>(
+    const list = createVList(
       { container, item: { height: 40, template: simpleTemplate } },
       [
-        dataPlugin({ adapter, total: 100, storage: { chunkSize: 50 } }),
-        selection({ mode: "multiple" }),
+        dataPlugin<TestItem>({ adapter, total: 100, storage: { chunkSize: 50 } }),
+        selection<TestItem>({ mode: "multiple" }),
       ],
     );
     try {
@@ -64,8 +75,8 @@ describe("data() + selection() — selecting items before load, then loading the
       expect(list.total).toBe(100);
 
       // Selecting all before the initial read resolves should select all 100 items.
-      (list as any).selectAll();
-      expect((list as any).getSelected().length).toBe(100);
+      list.selectAll();
+      expect(list.getSelected().length).toBe(100);
     } finally {
       list.destroy();
       container.remove();
@@ -75,41 +86,38 @@ describe("data() + selection() — selecting items before load, then loading the
   it.serial("replaces placeholder selection IDs for all loaded items in a chunk (including off-screen items) and includes them in getSelectedItems()", async () => {
     const container = createContainer({ width: 300, height: 400 });
     const reads: Array<() => void> = [];
-    const adapter: VListAdapter<TestItem> = {
+    const adapter: VListAdapter<StringIdItem> = {
       read: ({ offset, limit }) =>
         new Promise((resolve) => {
           reads.push(() => {
-            // String ids at runtime; `TestItem` pins them to number, so the
-            // array carries the shape the template needs and the id the
-            // assertions name.
-            const items = Array.from({ length: limit }, (_, i) => ({
+            const items: StringIdItem[] = Array.from({ length: limit }, (_, i) => ({
               id: `item-${offset + i + 1}`,
               name: `Item ${offset + i + 1}`,
               value: offset + i + 1,
-            })) as unknown as TestItem[];
+            }));
             resolve({ items, total: 100, hasMore: offset + limit < 100 });
           });
         }),
     };
 
-    const list = createVList<TestItem>(
-      { container, item: { height: 40, template: simpleTemplate } },
+    const list = createVList(
+      { container, item: { height: 40, template: stringIdTemplate } },
       [
-        dataPlugin({ adapter, total: 100, storage: { chunkSize: 50 } }),
-        selection({ mode: "multiple" }),
+        dataPlugin<StringIdItem>({ adapter, total: 100, storage: { chunkSize: 50 } }),
+        selection<StringIdItem>({ mode: "multiple" }),
       ],
     );
     try {
       await Promise.resolve();
-      (list as any).setTotal(100);
-      (list as any).selectAll();
-      expect((list as any).getSelected().length).toBe(100);
+      list.setTotal(100);
+      list.selectAll();
+      expect(list.getSelected().length).toBe(100);
 
       // Resolve chunk 0 (indices 0..49 = 50 items loaded, while viewport renders only 0..13).
       reads[0]!();
       await tick(30);
 
-      const selected: Array<string | number> = (list as any).getSelected();
+      const selected = list.getSelected();
       const stalePlaceholdersInLoadedChunk = selected.filter(
         (id) =>
           typeof id === "string" &&
@@ -118,7 +126,7 @@ describe("data() + selection() — selecting items before load, then loading the
       );
       expect(stalePlaceholdersInLoadedChunk).toEqual([]);
 
-      const selectedItems: TestItem[] = (list as any).getSelectedItems();
+      const selectedItems = list.getSelectedItems();
       expect(selectedItems.length).toBe(50);
     } finally {
       list.destroy();
@@ -129,28 +137,25 @@ describe("data() + selection() — selecting items before load, then loading the
   it.serial("allows clicking an unloaded placeholder row and claims its real item ID once loaded", async () => {
     const container = createContainer({ width: 300, height: 400 });
     const reads: Array<() => void> = [];
-    const adapter: VListAdapter<TestItem> = {
+    const adapter: VListAdapter<StringIdItem> = {
       read: ({ offset, limit }) =>
         new Promise((resolve) => {
           reads.push(() => {
-            // String ids at runtime; `TestItem` pins them to number, so the
-            // array carries the shape the template needs and the id the
-            // assertions name.
-            const items = Array.from({ length: limit }, (_, i) => ({
+            const items: StringIdItem[] = Array.from({ length: limit }, (_, i) => ({
               id: `item-${offset + i + 1}`,
               name: `Item ${offset + i + 1}`,
               value: offset + i + 1,
-            })) as unknown as TestItem[];
+            }));
             resolve({ items, total: 100, hasMore: offset + limit < 100 });
           });
         }),
     };
 
-    const list = createVList<TestItem>(
-      { container, item: { height: 40, template: simpleTemplate } },
+    const list = createVList(
+      { container, item: { height: 40, template: stringIdTemplate } },
       [
-        dataPlugin({ adapter, total: 100, storage: { chunkSize: 50 } }),
-        selection({ mode: "multiple" }),
+        dataPlugin<StringIdItem>({ adapter, total: 100, storage: { chunkSize: 50 } }),
+        selection<StringIdItem>({ mode: "multiple" }),
       ],
     );
     try {
@@ -172,8 +177,8 @@ describe("data() + selection() — selecting items before load, then loading the
       for (const r of reads.slice(1)) r();
       await tick(30);
 
-      expect((list as any).getSelected()).toEqual(["item-61"]);
-      expect((list as any).getSelectedItems().map((it: TestItem) => it.id)).toEqual(["item-61"]);
+      expect(list.getSelected()).toEqual(["item-61"]);
+      expect(list.getSelectedItems().map((it) => it.id)).toEqual(["item-61"]);
     } finally {
       list.destroy();
       container.remove();
