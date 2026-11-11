@@ -211,7 +211,7 @@ export function table<T extends VListItem = VListItem>(
     // indices and an activation in that window lands one item off (#396).
     // Nothing is on screen before the task ends, so hold the first paint until
     // groups() says its accessor is in place; its force() paints then.
-    const layoutPending = storedCtx.hooks.get?.("_groupsLayoutPending") as (() => boolean) | undefined;
+    const layoutPending = storedCtx.hooks.get("_groupsLayoutPending") as (() => boolean) | undefined;
     if (layoutPending?.()) return;
 
     // Update aria-rowcount when item count changes (+1 for header row)
@@ -285,7 +285,7 @@ export function table<T extends VListItem = VListItem>(
     if (!layoutToDataResolved) {
       layoutToDataResolved = true;
       layoutToDataFn =
-        (storedCtx.hooks.get?.("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
+        (storedCtx.hooks.get("_layoutToDataIndex") as ((i: number) => number) | undefined) ?? null;
     }
 
     if (layoutToDataFn) {
@@ -618,8 +618,12 @@ export function table<T extends VListItem = VListItem>(
       ctx.hooks.method("_getTableLayout", () => tableLayout);
       ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
 
-      ctx.hooks.method("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
-        tableRenderer = newRenderer;
+      ctx.hooks.method("_wrapTableRenderer", (
+        wrap: (
+          prev: TableRendererInstance<T> | null,
+        ) => TableRendererInstance<T> | null,
+      ) => {
+        tableRenderer = wrap(tableRenderer);
       });
 
       ctx.hooks.method("_updateTableForGroups", (

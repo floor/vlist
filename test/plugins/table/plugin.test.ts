@@ -1361,16 +1361,16 @@ describe("table - Integration", () => {
     cleanup();
   });
 
-  it("should expose _replaceTableRenderer method", () => {
+  it("should expose _wrapTableRenderer method", () => {
     const plugin = table({ columns: testColumns, rowHeight: 40 });
     const { ctx, methods, cleanup } = createTableMockContext();
 
     plugin.setup!(ctx);
 
-    const replaceRenderer = methods.get("_replaceTableRenderer") as Function;
+    const replaceRenderer = methods.get("_wrapTableRenderer") as Function;
     expect(replaceRenderer).toBeDefined();
 
-    // Should accept a mock renderer
+    // Should accept a wrapper around the current renderer
     const mockRenderer = {
       render: () => {},
       updateColumnLayout: () => {},
@@ -1381,7 +1381,7 @@ describe("table - Integration", () => {
       updateItemClasses: () => {},
       getElement: () => undefined,
     };
-    expect(() => replaceRenderer(mockRenderer)).not.toThrow();
+    expect(() => replaceRenderer(() => mockRenderer)).not.toThrow();
 
     cleanup();
   });

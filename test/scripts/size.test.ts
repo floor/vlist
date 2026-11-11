@@ -17,7 +17,7 @@ import {
 
 describe("size gate", () => {
   it("budgets every measured scenario", () => {
-    expect(SCENARIO_DEFS.length).toBe(30);
+    expect(SCENARIO_DEFS.length).toBe(31);
     for (const scenario of SCENARIO_DEFS) {
       expect(BUDGET_BYTES[scenario.name]).toBeGreaterThan(0);
     }
@@ -56,6 +56,7 @@ describe("size gate", () => {
       table: kb(16.77),
       "table + columnPin": kb(18.7),
       "table + columnReorder": kb(19.03),
+      "table + rowAttributes": kb(17.44),
       masonry: kb(15.08),
       tree: kb(15.94),
       search: kb(13.94),
