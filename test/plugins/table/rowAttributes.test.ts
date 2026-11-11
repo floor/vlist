@@ -246,6 +246,36 @@ describe("rowAttributes — attribute values", () => {
 });
 
 // =============================================================================
+// Optional record fields
+// =============================================================================
+
+describe("rowAttributes — optional record fields", () => {
+  it("compiles the conditional class and attrs form, and the absent fields decorate nothing", () => {
+    const items = makeItems(3);
+    // Under `exactOptionalPropertyTypes`, `class: cond ? "x" : undefined`
+    // only compiles if the field admits `undefined`; this file is typechecked
+    // by `tsconfig.test.json`, so this callback is the regression test.
+    const fn = (item: RowItem): RowAttributes => ({
+      class: item.id === 2 ? "row-warn" : undefined,
+      attrs:
+        item.id === 2
+          ? { "data-state": "warn", "data-flag": item.A === "A2" ? "x" : undefined }
+          : undefined,
+    });
+    const { root } = build({ items, features: [rowAttributes(fn)] });
+
+    const warn = rowAt(root, 1)!;
+    expect(warn.classList.contains("row-warn")).toBe(true);
+    expect(warn.getAttribute("data-state")).toBe("warn");
+    expect(warn.hasAttribute("data-flag")).toBe(false);
+
+    const plain = rowAt(root, 0)!;
+    expect(plain.classList.contains("row-warn")).toBe(false);
+    expect(plain.hasAttribute("data-state")).toBe(false);
+  });
+});
+
+// =============================================================================
 // Pool recycling
 // =============================================================================
 
