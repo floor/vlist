@@ -190,6 +190,62 @@ describe("rowAttributes — mount", () => {
 });
 
 // =============================================================================
+// Attribute values
+// =============================================================================
+
+describe("rowAttributes — attribute values", () => {
+  it("sets true to an empty value, numbers to their string, and null, undefined or false removes", () => {
+    let clearing = false;
+    const { list, root } = build({
+      items: makeItems(3),
+      features: [
+        rowAttributes((item) => {
+          if (item.id === 1) return { attrs: { "data-flag": true, "data-count": 3 } };
+          if (item.id !== 2) return undefined;
+          return clearing
+            ? {
+                attrs: {
+                  "data-keep": "k",
+                  "data-null": null,
+                  "data-undef": undefined,
+                  "data-false": false,
+                },
+              }
+            : {
+                attrs: {
+                  "data-keep": "k",
+                  "data-null": "n",
+                  "data-undef": "u",
+                  "data-false": "f",
+                },
+              };
+        }),
+      ],
+    });
+
+    const first = rowAt(root, 0)!;
+    expect(first.getAttribute("data-flag")).toBe("");
+    expect(first.getAttribute("data-count")).toBe("3");
+
+    const second = rowAt(root, 1)!;
+    expect(second.getAttribute("data-keep")).toBe("k");
+    expect(second.getAttribute("data-null")).toBe("n");
+    expect(second.getAttribute("data-undef")).toBe("u");
+    expect(second.getAttribute("data-false")).toBe("f");
+
+    // The same names with a removing value drop what the last record set;
+    // the name that is still named keeps its value.
+    clearing = true;
+    list.updateItem(2, { A: "changed" });
+    const cleared = rowAt(root, 1)!;
+    expect(cleared.getAttribute("data-keep")).toBe("k");
+    expect(cleared.hasAttribute("data-null")).toBe(false);
+    expect(cleared.hasAttribute("data-undef")).toBe(false);
+    expect(cleared.hasAttribute("data-false")).toBe(false);
+  });
+});
+
+// =============================================================================
 // Pool recycling
 // =============================================================================
 

@@ -3,10 +3,12 @@
  *
  * Opt-in per-row classes and attributes for `table({ features: [rowAttributes(fn)] })`.
  * The callback returns `{ class, attrs }` for a row; the feature wraps the
- * table renderer and applies the record after every row touch:
+ * table renderer and applies the record after every paint:
  * - `render()` — decorate every data row in the rendered range
- * - `updateItem()` — re-run the callback for the updated row
- * - `updateItemClasses()` — re-apply the memoized class only (state change)
+ *
+ * The table plugin drives every row change through `render()` (a selection
+ * flip, an `updateItem()` call or a scroll all end in a repaint), so the
+ * renderer's `updateItem()` / `updateItemClasses()` methods are not overridden.
  *
  * The table renderer owns row classes (it rewrites `className` wholesale on a
  * selection or focus change) and releases pooled rows without knowing which
@@ -94,8 +96,6 @@ export function rowAttributes<T extends VListItem = VListItem>(
       const prevSetup = plugin.setup;
       plugin.setup = (ctx: PluginContext<T>): void => {
         prevSetup?.call(plugin, ctx);
-        const layout = ctx.hooks.get("_getTableLayout")?.();
-        if (!layout) return;
         const replaceRenderer = ctx.hooks.get("_wrapTableRenderer") as
           | ((
               wrap: (
@@ -118,13 +118,13 @@ function wrapRenderer<T extends VListItem>(
   fn: (item: T, index: number) => RowAttributes | void,
 ): TableRendererInstance<T> {
   /**
-   * Apply the record for one row. The callback runs when forced or when the
-   * element now carries a different item or index; otherwise the attributes
-   * are still on the element untouched by the renderer.
+   * Apply the record for one row. The callback runs when the element now
+   * carries a different item or index; otherwise what the last record wrote
+   * is still on the element, untouched by the renderer.
    */
-  const decorate = (el: MemoRow<T>, index: number, item: T, force: boolean): void => {
+  const decorate = (el: MemoRow<T>, index: number, item: T): void => {
     let memo = el.__vlistRowAttrs;
-    if (force || !memo || memo.item !== item || memo.index !== index) {
+    if (!memo || memo.item !== item || memo.index !== index) {
       const record = fn(item, index);
       const attrs = record?.attrs;
       const names: string[] = [];
@@ -183,32 +183,10 @@ function wrapRenderer<T extends VListItem>(
         continue;
       }
       if (el.getAttribute("role") === DATA_ROW_ROLE) {
-        decorate(el, i, item, false);
+        decorate(el, i, item);
       }
     }
   };
 
-  const updateItem: TableRendererInstance<T>["updateItem"] = (
-    index,
-    item,
-    isSelected,
-    isFocused,
-  ): void => {
-    base.updateItem(index, item, isSelected, isFocused);
-    const el = base.getElement(index) as MemoRow<T> | undefined;
-    if (el && el.getAttribute("role") === DATA_ROW_ROLE) decorate(el, index, item, true);
-  };
-
-  const updateItemClasses: TableRendererInstance<T>["updateItemClasses"] = (
-    index,
-    isSelected,
-    isFocused,
-  ): void => {
-    base.updateItemClasses(index, isSelected, isFocused);
-    const el = base.getElement(index) as MemoRow<T> | undefined;
-    const record = el?.__vlistRowAttrs?.record;
-    if (el && record?.class) el.classList.add(...classNames(record.class));
-  };
-
-  return { ...base, render, updateItem, updateItemClasses };
+  return { ...base, render };
 }
