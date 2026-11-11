@@ -1141,6 +1141,7 @@ export const SIZE_ROW_SCENARIOS: readonly { readonly label: string; readonly sce
   { label: "`table()`", scenario: "table" },
   { label: "`table()` + `columnPin()`", scenario: "table + columnPin" },
   { label: "`table()` + `columnReorder()`", scenario: "table + columnReorder" },
+  { label: "`table()` + `rowAttributes()`", scenario: "table + rowAttributes" },
   { label: "`masonry()`", scenario: "masonry" },
   { label: "`tree()`", scenario: "tree" },
   { label: "`search()`", scenario: "search" },
