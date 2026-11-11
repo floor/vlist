@@ -1370,7 +1370,7 @@ describe("table - Integration", () => {
     const replaceRenderer = methods.get("_replaceTableRenderer") as Function;
     expect(replaceRenderer).toBeDefined();
 
-    // Should accept a mock renderer
+    // Should accept a wrapper around the current renderer
     const mockRenderer = {
       render: () => {},
       updateColumnLayout: () => {},
@@ -1381,7 +1381,7 @@ describe("table - Integration", () => {
       updateItemClasses: () => {},
       getElement: () => undefined,
     };
-    expect(() => replaceRenderer(mockRenderer)).not.toThrow();
+    expect(() => replaceRenderer(() => mockRenderer)).not.toThrow();
 
     cleanup();
   });

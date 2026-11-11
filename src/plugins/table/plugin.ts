@@ -618,8 +618,12 @@ export function table<T extends VListItem = VListItem>(
       ctx.hooks.method("_getTableLayout", () => tableLayout);
       ctx.hooks.method("_getTableHeaderHeight", () => headerHeight);
 
-      ctx.hooks.method("_replaceTableRenderer", (newRenderer: TableRendererInstance<T>) => {
-        tableRenderer = newRenderer;
+      ctx.hooks.method("_replaceTableRenderer", (
+        wrap: (
+          prev: TableRendererInstance<T> | null,
+        ) => TableRendererInstance<T> | null,
+      ) => {
+        tableRenderer = wrap(tableRenderer);
       });
 
       ctx.hooks.method("_updateTableForGroups", (

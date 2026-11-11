@@ -25,7 +25,7 @@ const entry = `${root}/src/index.ts`;
 const ALL_PLUGINS = [
   "a11y", "selection", "data", "scrollbar", "sortable",
   "groups", "page", "snapshots", "transition",
-  "autosize", "grid", "table", "columnPin", "columnReorder", "masonry", "tree", "search",
+  "autosize", "grid", "table", "columnPin", "columnReorder", "rowAttributes", "masonry", "tree", "search",
 ] as const;
 
 type PluginName = (typeof ALL_PLUGINS)[number];
@@ -62,6 +62,7 @@ const PLUGIN_MARKERS: Record<PluginName, readonly string[]> = {
   table:      ["--table", "column:resize", "column:sort"],
   columnPin:  ["column:pin", "--pin-left", "setColumnPin"],
   columnReorder: ["column:reorder", "--col-reordering", "moveColumn"],
+  rowAttributes: ['"rowAttributes"'],
   groups:     ["--grouped", "getGroupLayout"],
   data:       ["load:start", "load:end"],
   masonry:    ["--masonry", "getMasonryLayout", "updateMasonry"],
@@ -94,6 +95,7 @@ export const SCENARIO_DEFS = [
   { name: "table",             imports: ["createVList", "table"] },
   { name: "table + columnPin", imports: ["createVList", "table", "columnPin"] },
   { name: "table + columnReorder", imports: ["createVList", "table", "columnReorder"] },
+  { name: "table + rowAttributes", imports: ["createVList", "table", "rowAttributes"] },
   { name: "masonry",           imports: ["createVList", "masonry"] },
   { name: "tree",              imports: ["createVList", "tree"] },
   { name: "search",            imports: ["createVList", "search"] },
@@ -214,6 +216,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   // Measured 19292 gzipped on this branch. +1% is 19485, so the pin is the
   // smallest kb() value at or above it.
   "table + columnReorder": kb(19.03),
+  // Measured 17674 gzipped on this branch. +1% is 17850.74, so the pin is the
+  // smallest kb() value at or above it: kb(17.44) = 17858.
+  "table + rowAttributes": kb(17.44),
   masonry: kb(15.08),
   tree: kb(15.94),
   search: kb(13.94),

@@ -7,6 +7,7 @@
 export { table, type TablePluginConfig } from "./plugin";
 export { columnPin, type ColumnPinConfig, type ColumnPinMethods } from "./pin";
 export { columnReorder, type ColumnReorderConfig, type ColumnReorderMethods } from "./reorder";
+export { rowAttributes } from "./rowAttributes";
 export type { TableFeature, TableFeatureMethods } from "./feature";
 
 // Layout
@@ -23,6 +24,7 @@ export type {
   TableConfig,
   TableColumn,
   TableSort,
+  RowAttributes,
   TableFillMode,
   TableLayout,
   TableHeader,

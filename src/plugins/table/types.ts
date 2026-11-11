@@ -214,6 +214,31 @@ export interface TableSort {
 }
 
 // =============================================================================
+// Row Attributes
+// =============================================================================
+
+/**
+ * Extra classes and attributes for one table row, returned by the
+ * `rowAttributes()` callback.
+ *
+ * - `class` is added after the table's own classes on a data row, so the
+ *   built-in state classes (`--selected`, `--focused`, striping) always win
+ *   over it.
+ * - `attrs` are set on the row element. A `null`, `undefined` or `false`
+ *   value removes the attribute; `true` sets it to `""`.
+ *
+ * The table owns `id`, `role`, `data-index`, `data-id`, `aria-rowindex` and
+ * `aria-selected`; a record that names one never overrides it. Group-header
+ * rows are never decorated.
+ */
+export interface RowAttributes {
+  /** Extra class names for the row */
+  class?: string;
+  /** Attributes to set on the row element */
+  attrs?: Record<string, string | number | boolean | null | undefined>;
+}
+
+// =============================================================================
 // Resolved Column (internal — widths computed)
 // =============================================================================
 
