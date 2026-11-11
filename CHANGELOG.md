@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- `rowAttributes()` adds classes and attributes to table rows through `table({ features: [rowAttributes(fn)] })`. The callback returns `{ class, attrs }` for an item; a `null`, `undefined` or `false` attribute value removes it, and `true` sets it to `""`. Group-header rows are never decorated, and the table's own row names (`id`, `role`, `data-index`, `data-id`, `aria-rowindex`, `aria-selected`) always win. Opt-in: a plain table pays nothing.
+
+### Changed
+
+- `table()` is 17139 → 17141 bytes gzipped, `table()` + `columnPin()` is 19145 → 19148, and `table()` + `columnReorder()` is 19457 → 19461 from the internal hook that lets a feature wrap the table renderer, and the new `table()` + `rowAttributes()` bundle measures 17674 (budgets unchanged).
+
 ## [3.7.2] - 2026-11-11
 
 A table row recycled into a group header no longer keeps a stale id.
