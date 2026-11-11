@@ -11,9 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.7.2] - 2026-11-11
+
+A table row recycled into a group header no longer keeps a stale id.
+
+Who is affected: tables using `groups()` where rows are recycled between data rows and group headers.
+
 ### Fixed
 
 - A table row recycled from a data row into a group header no longer keeps the data row's id.
+
+### Changed
+
+- `table()` is 17136 → 17139 bytes gzipped, `table()` + `columnPin()` is 19142 → 19145, and `table()` + `columnReorder()` is 19455 → 19457 (budgets unchanged).
 
 ## [3.7.1] - 2026-11-10
 
@@ -2256,7 +2266,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.7.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.7.2...HEAD
+[3.7.2]: https://github.com/floor/vlist/compare/v3.7.1...v3.7.2
 [3.7.1]: https://github.com/floor/vlist/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/floor/vlist/compare/v3.6.4...v3.7.0
 [3.6.4]: https://github.com/floor/vlist/compare/v3.6.3...v3.6.4
