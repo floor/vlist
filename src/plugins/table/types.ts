@@ -233,9 +233,9 @@ export interface TableSort {
  */
 export interface RowAttributes {
   /** Extra class names for the row */
-  class?: string;
+  class?: string | undefined;
   /** Attributes to set on the row element */
-  attrs?: Record<string, string | number | boolean | null | undefined>;
+  attrs?: Record<string, string | number | boolean | null | undefined> | undefined;
 }
 
 // =============================================================================
