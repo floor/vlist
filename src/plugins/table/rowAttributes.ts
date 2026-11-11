@@ -96,14 +96,14 @@ export function rowAttributes<T extends VListItem = VListItem>(
         prevSetup?.call(plugin, ctx);
         const layout = ctx.hooks.get("_getTableLayout")?.();
         if (!layout) return;
-        const replace = ctx.hooks.get("_replaceTableRenderer") as
+        const replaceRenderer = ctx.hooks.get("_wrapTableRenderer") as
           | ((
               wrap: (
                 prev: TableRendererInstance<T> | null,
               ) => TableRendererInstance<T> | null,
             ) => void)
           | undefined;
-        replace?.((base) => base && wrapRenderer(base, fn));
+        replaceRenderer?.((base) => base && wrapRenderer(base, fn));
       };
     },
   };
