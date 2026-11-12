@@ -11,13 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-11-12
+
+Tables can decorate each row with classes and attributes through an opt-in feature, and every framework adapter now types the table features.
+
+Who is affected: tables that opt in to `rowAttributes()`; nothing changes for other lists.
+
 ### Added
 
-- `rowAttributes()` adds classes and attributes to table rows through `table({ features: [rowAttributes(fn)] })`. The callback returns `{ class, attrs }` for an item; a `null`, `undefined` or `false` attribute value removes it, and `true` sets it to `""`. Group-header rows are never decorated, and the table's own row names (`id`, `role`, `data-index`, `data-id`, `aria-rowindex`, `aria-selected`) always win. Opt-in: a plain table pays nothing.
+- `table({ features: [rowAttributes(fn)] })`: `fn(item, index)` returns the classes and attributes a row carries while it shows that item; they are removed when the row is recycled, and the renderer's own attributes (`id`, `role`, `data-index`, `data-id`, `aria-rowindex`, `aria-selected`) always win. Base `table()` bundles do not grow for lists that do not opt in.
 
 ### Changed
 
-- The internal hook that lets a feature wrap the table renderer trims to nothing in the shipped table bundles: `table()` is 17139 → 17137 bytes gzipped against 3.7.2, and `table()` + `columnPin()` (19145) and `table()` + `columnReorder()` (19457) are unchanged; the new `table()` + `rowAttributes()` bundle measures 17573 (budgets unchanged).
+- `table()` is 17139 → 17137 bytes gzipped, `table()` + `columnPin()` is 19145 → 19145, and `table()` + `columnReorder()` is 19457 → 19457; the new `table()` + `rowAttributes()` bundle measures 17573 bytes gzipped against its 17858-byte budget (budgets unchanged).
 
 ## [3.7.2] - 2026-11-11
 
@@ -2274,7 +2280,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.7.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.0...HEAD
+[3.8.0]: https://github.com/floor/vlist/compare/v3.7.2...v3.8.0
 [3.7.2]: https://github.com/floor/vlist/compare/v3.7.1...v3.7.2
 [3.7.1]: https://github.com/floor/vlist/compare/v3.7.0...v3.7.1
 [3.7.0]: https://github.com/floor/vlist/compare/v3.6.4...v3.7.0
