@@ -21,6 +21,7 @@
  */
 
 import type { Range, VListItem } from "../../types";
+import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 import type { PluginContext, VListPlugin } from "../../core/types";
 import type { TableRendererInstance } from "./renderer";
 import type { TableFeature } from "./feature";
@@ -46,6 +47,10 @@ const GROUP_HEADER_ROLE = "presentation";
 
 /** Split a `class` string, dropping empty names (`classList.add` rejects ""). */
 const classNames = (value: string): string[] => value.split(/\s+/).filter(Boolean);
+
+/** A row whose item has not loaded yet: `data()` paints it with a generated id. */
+const isPlaceholder = (item: VListItem): boolean =>
+  String(item.id).startsWith(PLACEHOLDER_ID_PREFIX);
 
 // =============================================================================
 // Per-element memo
@@ -83,8 +88,10 @@ type MemoRow<T extends VListItem> = HTMLElement & {
  *
  * The callback runs when a row is mounted for an item or its item/index
  * changes — not on selection or focus changes. Group-header rows are never
- * decorated. The reserved names `id`, `role`, `data-index`, `data-id`,
- * `aria-rowindex` and `aria-selected` are ignored.
+ * decorated. A placeholder row (an item `data()` has not loaded yet) is not
+ * decorated either: the record is applied once when the item arrives. The
+ * reserved names `id`, `role`, `data-index`, `data-id`, `aria-rowindex` and
+ * `aria-selected` are ignored.
  */
 export function rowAttributes<T extends VListItem = VListItem>(
   fn: (item: T, index: number) => RowAttributes | void,
@@ -118,11 +125,29 @@ function wrapRenderer<T extends VListItem>(
   fn: (item: T, index: number) => RowAttributes | void,
 ): TableRendererInstance<T> {
   /**
+   * Drop what a previous item's record wrote on an element that is no longer
+   * that item — a data row released and re-acquired as a group header, or an
+   * element now showing an unloaded item. The memo goes with it, so the
+   * callback runs once when a real item lands.
+   */
+  const strip = (el: MemoRow<T>): void => {
+    const memo = el.__vlistRowAttrs;
+    if (!memo) return;
+    for (const name of memo.names) el.removeAttribute(name);
+    delete el.__vlistRowAttrs;
+  };
+
+  /**
    * Apply the record for one row. The callback runs when the element now
    * carries a different item or index; otherwise what the last record wrote
-   * is still on the element, untouched by the renderer.
+   * is still on the element, untouched by the renderer. A placeholder carries
+   * no item of its own, so it is never decorated.
    */
   const decorate = (el: MemoRow<T>, index: number, item: T): void => {
+    if (isPlaceholder(item)) {
+      strip(el);
+      return;
+    }
     let memo = el.__vlistRowAttrs;
     if (!memo || memo.item !== item || memo.index !== index) {
       const record = fn(item, index);
@@ -153,18 +178,6 @@ function wrapRenderer<T extends VListItem>(
     }
   };
 
-  /**
-   * A data row released and re-acquired as a group header keeps its element
-   * (and so its expando) but was never a data row in this frame: drop what a
-   * previous data row wrote before the header reuses it.
-   */
-  const stripHeader = (el: MemoRow<T>): void => {
-    const memo = el.__vlistRowAttrs;
-    if (!memo) return;
-    for (const name of memo.names) el.removeAttribute(name);
-    delete el.__vlistRowAttrs;
-  };
-
   const render: TableRendererInstance<T>["render"] = (
     items: T[],
     range: Range,
@@ -179,7 +192,11 @@ function wrapRenderer<T extends VListItem>(
       const el = base.getElement(i) as MemoRow<T> | undefined;
       if (!el) continue;
       if (el.getAttribute("role") === GROUP_HEADER_ROLE) {
-        stripHeader(el);
+        // A data row released and re-acquired as a group header keeps its
+        // element (and so its expando) but was never a data row in this
+        // frame: drop what a previous data row wrote before the header
+        // reuses it.
+        strip(el);
         continue;
       }
       if (el.getAttribute("role") === DATA_ROW_ROLE) {

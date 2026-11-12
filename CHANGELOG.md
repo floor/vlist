@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+A placeholder row no longer gets a record built from an item that has not loaded.
+
+Who is affected: tables using `rowAttributes()` with `data()`.
+
+### Fixed
+
+- `rowAttributes()` no longer runs for placeholder rows; the callback runs once when the item loads.
+
 ## [3.8.0] - 2026-11-12
 
 Tables can decorate each row with classes and attributes through an opt-in feature, and every framework adapter now types the table features.

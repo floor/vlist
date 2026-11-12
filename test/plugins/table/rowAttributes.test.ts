@@ -8,7 +8,7 @@
  * - Selection: the user class survives the state pass; the callback does not re-run
  * - updateItem: re-runs the callback and removes attributes the new record drops
  * - Reserved names: built-ins win
- * - Placeholders: decorated, built-in placeholder class kept
+ * - Placeholders: never decorated; the callback runs once when the item loads
  * - Composition with columnPin() and columnReorder() in both feature orders
  * - clear()/destroy() with the feature mounted
  */
@@ -499,25 +499,43 @@ describe("rowAttributes — reserved names", () => {
 // =============================================================================
 
 describe("rowAttributes — placeholders", () => {
-  it("decorates a placeholder row and keeps its built-in class", () => {
-    const items: RowItem[] = [
-      { id: 1, A: "A0" },
-      { id: "__placeholder_1", A: "loading" },
-    ];
-    const { root } = build({
-      items,
+  it("gives a placeholder row nothing, then runs the callback once when the item loads", () => {
+    const calls: Array<string | number> = [];
+    const item1: RowItem = { id: 1, A: "A0" };
+    const item2: RowItem = { id: 2, A: "A1" };
+    const { list, root } = build({
+      items: [item1, item2],
       features: [
-        rowAttributes((item) => ({
-          class: "row-loading",
-          attrs: { "data-loading": String(item.id) },
-        })),
+        rowAttributes((item) => {
+          calls.push(item.id);
+          return { class: "row-user", attrs: { "data-owner": String(item.id) } };
+        }),
       ],
     });
 
-    const row = rowAt(root, 1)!;
-    expect(row.classList.contains("vlist-item--placeholder")).toBe(true);
-    expect(row.classList.contains("row-loading")).toBe(true);
-    expect(row.getAttribute("data-loading")).toBe("__placeholder_1");
+    const before = rowAt(root, 1)!;
+    expect(before.classList.contains("row-user")).toBe(true);
+    expect(before.getAttribute("data-owner")).toBe("2");
+    expect(calls).toEqual([1, 2]);
+
+    // Item 2 is gone until its chunk lands: the row becomes a placeholder and
+    // must carry nothing from item 2's record, while keeping its built-in
+    // placeholder class.
+    list.setItems([item1, { id: "__placeholder_1", A: "loading" }]);
+    const placeholder = rowAt(root, 1)!;
+    expect(placeholder.classList.contains("vlist-item--placeholder")).toBe(true);
+    expect(placeholder.classList.contains("row-user")).toBe(false);
+    expect(placeholder.hasAttribute("data-owner")).toBe(false);
+    expect(calls).toEqual([1, 2]);
+
+    // The item lands: the callback runs once for it, not once per paint.
+    list.setItems([item1, { id: 3, A: "A2" }]);
+    const loaded = rowAt(root, 1)!;
+    expect(loaded.classList.contains("vlist-item--placeholder")).toBe(false);
+    expect(loaded.classList.contains("row-user")).toBe(true);
+    expect(loaded.getAttribute("data-owner")).toBe("3");
+    expect(calls).toEqual([1, 2, 3]);
+    expect(calls.filter((id) => id === 3)).toHaveLength(1);
   });
 });
 

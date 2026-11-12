@@ -23,7 +23,7 @@ import { createVList } from "../../../src/core/create";
 import { table } from "../../../src/plugins/table/plugin";
 import { rowAttributes } from "../../../src/plugins/table/rowAttributes";
 import { data } from "../../../src/plugins/data";
-import type { VListItem } from "../../../src/types";
+import type { VListItem, AdapterResponse } from "../../../src/types";
 import type { TableColumn } from "../../../src/plugins/table/types";
 
 type RowItem = VListItem & { id: number | string; name: string };
@@ -57,10 +57,14 @@ describe("rowAttributes — data() placeholders", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
 
-    const pending: Array<{ offset: number; limit: number; res: (value: unknown) => void }> = [];
+    const pending: Array<{
+      offset: number;
+      limit: number;
+      res: (value: AdapterResponse<RowItem>) => void;
+    }> = [];
     const adapter = {
       read: ({ offset, limit }: { offset: number; limit: number }) =>
-        new Promise((res) => pending.push({ offset, limit, res })),
+        new Promise<AdapterResponse<RowItem>>((res) => pending.push({ offset, limit, res })),
     };
 
     const calls: Array<string | number> = [];
@@ -118,7 +122,7 @@ describe("rowAttributes — data() placeholders", () => {
         .filter((el) => !el.classList.contains("vlist-item--placeholder") && Number.isFinite(Number(el.dataset.id)));
       expect(loaded.length).toBeGreaterThan(0);
       for (const el of loaded) {
-        expect(el.getAttribute("data-owner")).toBe(el.dataset.id);
+        expect(el.getAttribute("data-owner")).toBe(el.getAttribute("data-id"));
         expect(el.classList.contains("row-user")).toBe(true);
         expect(staleIds.includes(el.dataset.id)).toBe(false);
       }
