@@ -11,13 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-A table's group header hands the whole row to a custom group template.
+## [3.8.2] - 2026-11-13
 
-Who is affected: tables that use `groups()` with a custom header template that lays out its own children.
+Table group headers now give a custom group template the full row width.
+
+Who is affected: tables using `groups()` with a custom group header template.
 
 ### Fixed
 
 - Table group header content and the template root inside it now span the full row width, so custom group templates can lay out label and count across the row.
+
+### Changed
+
+- `table()` (17137), `table()` + `columnPin()` (19145), `table()` + `columnReorder()` (19457), and `table()` + `rowAttributes()` (17601, budget 17858) are unchanged in bytes gzipped (budgets unchanged).
 
 ## [3.8.1] - 2026-11-13
 
@@ -2302,7 +2308,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.1...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.2...HEAD
+[3.8.2]: https://github.com/floor/vlist/compare/v3.8.1...v3.8.2
 [3.8.1]: https://github.com/floor/vlist/compare/v3.8.0...v3.8.1
 [3.8.0]: https://github.com/floor/vlist/compare/v3.7.2...v3.8.0
 [3.7.2]: https://github.com/floor/vlist/compare/v3.7.1...v3.7.2
