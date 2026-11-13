@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+A table's group header hands the whole row to a custom group template.
+
+Who is affected: tables that use `groups()` with a custom header template that lays out its own children.
+
+### Fixed
+
+- Table group header content and the template root inside it now span the full row width, so custom group templates can lay out label and count across the row.
+
 ## [3.8.1] - 2026-11-13
 
 A table row that is still a placeholder is no longer decorated by `rowAttributes()`.

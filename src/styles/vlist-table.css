@@ -503,7 +503,17 @@
     gap: 12px;
     padding: 0 16px;
     height: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     background: var(--vlist-group-header-bg, #f3f4f6);
+}
+
+/* The template's root fills the content box, so a template that lays out its
+   own children (a label and a count with justify-content: space-between, say)
+   has the whole row to distribute across. */
+.vlist-table-group-header-content > * {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 /* Row borders — group headers already have a top border */
