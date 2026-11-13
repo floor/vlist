@@ -13,7 +13,10 @@
  * native scrollbar system so the horizontal bar stays (only the vertical one is
  * replaced by the custom scrollbar), but the base stylesheet's
  * `scrollbar-width: none` overrode it in Chrome 121+. This gate reads the
- * cascade, and on a platform whose scrollbars take layout space, the bar.
+ * cascade, and on a platform whose scrollbars take layout space, the bar. No
+ * platform measured so far takes it: this machine's headless Chrome 157 and the
+ * CI runner both paint overlay scrollbars, so that one check reports SKIP there
+ * and the summary counts it as a skip, not a pass.
  */
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
@@ -122,6 +125,9 @@ const server=Bun.serve({hostname:'127.0.0.1',port:0,fetch(req){
 }});
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const within=(actual,expected,tolerance=1)=>Math.abs(actual-expected)<=tolerance;
+let passes=0;
+let skips=0;
+const pass=(msg,extra)=>{passes++;console.log('PASS',msg,extra===undefined?'':JSON.stringify(extra));};
 let browser;
 try {
  const driver=process.env.VLIST_BROWSER_DRIVER??resolve(import.meta.dir,'browser-driver.mjs');
@@ -139,7 +145,7 @@ try {
  assert(m.labelVisible&&m.countVisible,`label and count visible at scrollLeft 0: ${JSON.stringify({label:m.label,count:m.countBox,viewport:m.viewport})}`);
  assert(m.countAfterLabel,'the count stays after the label');
  assert(m.viewport.scrollWidth>m.viewport.clientWidth,'the columns overflow the viewport (the reporter’s setup)');
- console.log('PASS pinned at scrollLeft 0: content spans the visible viewport, label left, count right',JSON.stringify({content:m.content,label:m.label,count:m.countBox,viewport:{clientWidth:m.viewport.clientWidth,scrollWidth:m.viewport.scrollWidth}}));
+ pass('pinned at scrollLeft 0: content spans the visible viewport, label left, count right',{content:m.content,label:m.label,count:m.countBox,viewport:{clientWidth:m.viewport.clientWidth,scrollWidth:m.viewport.scrollWidth}});
 
  // ── Still pinned after scrolling right ─────────────────────────────
  await page.evaluate(()=>setScroll('#host',300));await settle(page);
@@ -147,7 +153,7 @@ try {
  assert(m.viewport.scrollLeft>200,`scrolled right: scrollLeft ${m.viewport.scrollLeft}`);
  assert(within(m.content.x,m.viewport.x),`content stays at the viewport's left edge while scrolled: content ${m.content.x}, viewport ${m.viewport.x}`);
  assert(m.labelVisible&&m.countVisible,`label and count visible after scrolling: ${JSON.stringify({label:m.label,count:m.countBox,viewport:m.viewport})}`);
- console.log('PASS still pinned after scrolling right',JSON.stringify({scrollLeft:m.viewport.scrollLeft,contentLeft:m.content.x,viewportLeft:m.viewport.x}));
+ pass('still pinned after scrolling right',{scrollLeft:m.viewport.scrollLeft,contentLeft:m.content.x,viewportLeft:m.viewport.x});
 
  // ── Pinning follows a container resize ─────────────────────────────
  await page.evaluate(()=>resizeHost(900));await settle(page);await wait(150);
@@ -155,7 +161,7 @@ try {
  assert(within(m.content.w,m.viewport.clientWidth),`after the container grew: content ${m.content.w}, visible width ${m.viewport.clientWidth}`);
  assert(m.countVisible,'the count stays visible after the container resize');
  await page.evaluate(()=>resizeHost(640));await settle(page);await wait(150);
- console.log('PASS content width follows a container resize',JSON.stringify({from:638,to:m.viewport.clientWidth,content:m.content.w}));
+ pass('content width follows a container resize',{from:638,to:m.viewport.clientWidth,content:m.content.w});
 
  // ── Pinning follows a column resize (content keeps the visible width) ─
  await page.evaluate(()=>{list.resizeColumn('name',420);setScroll('#host',0);});await settle(page);await wait(100);
@@ -163,14 +169,14 @@ try {
  assert(within(m.content.w,m.viewport.clientWidth),`after a column resize: content ${m.content.w}, visible width ${m.viewport.clientWidth}`);
  assert(m.countVisible,'the count stays visible after a column resize');
  await page.evaluate(()=>{list.resizeColumn('name',260);});await settle(page);await wait(100);
- console.log('PASS content width survives a column resize',JSON.stringify({content:m.content.w,clientWidth:m.viewport.clientWidth}));
+ pass('content width survives a column resize',{content:m.content.w,clientWidth:m.viewport.clientWidth});
 
  // ── Pinning survives a column reorder ──────────────────────────────
  await page.evaluate(()=>{list.moveColumn(0,1);setScroll('#host',0);});await settle(page);await wait(100);
  m=await page.evaluate(()=>measure());
  assert(within(m.content.w,m.viewport.clientWidth),`after a column reorder: content ${m.content.w}, visible width ${m.viewport.clientWidth}`);
  assert(m.labelVisible&&m.countVisible,'label and count stay visible after a column reorder');
- console.log('PASS content width survives a column reorder',JSON.stringify({order:await page.evaluate(()=>list.getColumnOrder()),content:m.content.w}));
+ pass('content width survives a column reorder',{order:await page.evaluate(()=>list.getColumnOrder()),content:m.content.w});
 
  // ── Pinned columns sit in their rows, not over the group header ───
  await page.evaluate(()=>setScroll('#pin-host',280));await settle(page);await wait(100);
@@ -179,7 +185,7 @@ try {
  assert(within(pin.contentWidth,pin.clientWidth),`pinned table: content ${pin.contentWidth} spans the visible width ${pin.clientWidth}`);
  assert(pin.countVisible&&pin.countAfterLabel,`pinned table: count visible after the label: ${JSON.stringify(pin)}`);
  assert(pin.countHit,`pinned table: the count receives the hit at its centre, not a pinned cell: ${JSON.stringify(pin)}`);
- console.log('PASS pinned columns do not cover the group header content',JSON.stringify(pin));
+ pass('pinned columns do not cover the group header content',pin);
 
  // ── The content width is the content box, gutter padding excluded ──
  const gut=await page.evaluate(()=>gutterInfo());
@@ -188,13 +194,13 @@ try {
  assert(within(gut.contentWidth,gut.clientWidth-gut.padding),`content ${gut.contentWidth} spans the viewport content box ${gut.clientWidth-gut.padding} (clientWidth ${gut.clientWidth}, padding ${gut.padding})`);
  assert(within(gut.contentRight,gut.contentBoxRight),`content right ${gut.contentRight} ends at the content box edge ${gut.contentBoxRight}: it must not run under the custom scrollbar gutter`);
  assert(gut.countVisible,`the count stays visible inside the gutter host: ${JSON.stringify(gut)}`);
- console.log('PASS content width is the viewport content box, custom-scrollbar gutter excluded',JSON.stringify(gut));
+ pass('content width is the viewport content box, custom-scrollbar gutter excluded',gut);
 
  // ── The sticky group header's own count stays inside its container ──
  const st=await page.evaluate(()=>stickyInfo());
  assert(st.exists,'the sticky host renders a sticky group header');
  assert(st.countVisible,`sticky group header: the count stays inside the container: ${JSON.stringify(st)}`);
- console.log('PASS sticky group header keeps its count inside the container',JSON.stringify(st));
+ pass('sticky group header keeps its count inside the container',st);
 
  // ── The native horizontal scrollbar is left enabled ────────────────
  assert.equal(m.scrollbarWidth,'auto',`the table viewport leaves the native scrollbar system enabled: scrollbar-width ${m.scrollbarWidth}`);
@@ -204,10 +210,11 @@ try {
  if(classic){
    assert(m.viewport.offsetHeight-m.viewport.clientHeight>0,`horizontal native scrollbar takes layout space: offsetHeight ${m.viewport.offsetHeight}, clientHeight ${m.viewport.clientHeight}`);
    assert.equal(m.viewport.offsetWidth-m.viewport.clientWidth,0,'the vertical native bar stays hidden');
-   console.log('PASS native horizontal scrollbar present, vertical hidden',JSON.stringify({horizontal:m.viewport.offsetHeight-m.viewport.clientHeight,vertical:m.viewport.offsetWidth-m.viewport.clientWidth}));
+   pass('native horizontal scrollbar present, vertical hidden',{horizontal:m.viewport.offsetHeight-m.viewport.clientHeight,vertical:m.viewport.offsetWidth-m.viewport.clientWidth});
  }else{
+   skips++;
    console.log('SKIP native scrollbar layout space: this platform paints overlay scrollbars (a plain overflow box takes none either)');
  }
- console.log('SUMMARY',JSON.stringify({passes:9,classicScrollbars:classic}));
+ console.log('SUMMARY',JSON.stringify({passes,skips,classicScrollbars:classic}));
  await page.close();
 } finally {await browser?.close();server.stop(true);}
