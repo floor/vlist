@@ -6,6 +6,8 @@
 
 import { registerDOM, unregisterDOM } from "../../helpers/dom";
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { createTableRenderer, type TableRendererInstance } from "../../../src/plugins/table/renderer";
 import { createTableLayout } from "../../../src/plugins/table/layout";
 import { createSizeCache } from "../../../src/rendering/sizes";
@@ -1697,6 +1699,42 @@ describe("group headers", () => {
 
       container.remove();
     });
+  });
+});
+
+// =============================================================================
+// Group Header Content — Stylesheet
+// =============================================================================
+
+describe("group header content stylesheet", () => {
+  // happy-dom applies no stylesheets and lays nothing out, so the flex rules
+  // that hand a custom group template the whole row are asserted on the source
+  // stylesheet here; the "before"/"after" captures on the pull request measure
+  // the real boxes in Chromium.
+  const css = readFileSync(
+    resolve(import.meta.dir, "../../../src/styles/vlist-table.css"),
+    "utf8",
+  );
+  const declarations = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rule = css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`));
+    expect(rule).not.toBeNull();
+    return rule![1]!;
+  };
+
+  it("should let the content box fill the group header row", () => {
+    const body = declarations(".vlist-table-group-header-content");
+    expect(body).toContain("flex: 1 1 auto");
+    expect(body).toContain("min-width: 0");
+  });
+
+  it("should let the template root inside the content box fill it", () => {
+    // The content box is itself a flex container, so without this the single
+    // template root keeps shrinking to its content and a template that uses
+    // justify-content: space-between has no row to spread across.
+    const body = declarations(".vlist-table-group-header-content > *");
+    expect(body).toContain("flex: 1 1 auto");
+    expect(body).toContain("min-width: 0");
   });
 });
 
