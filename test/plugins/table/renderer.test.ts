@@ -1722,10 +1722,40 @@ describe("group header content stylesheet", () => {
     return rule![1]!;
   };
 
-  it("should let the content box fill the group header row", () => {
+  it("should pin the content box to the visible viewport width", () => {
     const body = declarations(".vlist-table-group-header-content");
-    expect(body).toContain("flex: 1 1 auto");
+    // The row spans the table's scroll width; the content does not. It is as
+    // wide as the visible viewport and sticky at its left edge, so a
+    // right-aligned count is on screen at any scrollLeft. 100cqw is the
+    // viewport content-box width, so the gutter padding and a native scrollbar
+    // are already excluded; min() keeps it inside a row narrower than the
+    // viewport (fillWidth: false), whose paint containment clips past its own
+    // edge.
+    expect(body).toContain("position: sticky");
+    expect(body).toContain("left: 0");
+    expect(body).toContain("width: min(100%, 100cqw)");
+    expect(body).toContain("flex: 0 0 auto");
+    expect(body).toContain("box-sizing: border-box");
     expect(body).toContain("min-width: 0");
+  });
+
+  it("should make the viewport the size container the content measures against", () => {
+    // Without this 100cqw falls back to the small viewport width (like vw), not
+    // the table's visible width: the pinning above would overshoot a narrow
+    // table host. The browser gate reads the resolved container from a live
+    // page.
+    const body = declarations(".vlist--table .vlist-viewport");
+    expect(body).toContain("container-type: inline-size");
+  });
+
+  it("should keep a template's count inside the sticky group header", () => {
+    // The sticky slot is width: 100% from the plugin. With content-box sizing
+    // its 16px side padding would push the template's right-aligned count past
+    // the container's right edge, where the sticky header's overflow: hidden
+    // clips it (the same clipped-count symptom, in the sticky copy).
+    const body = declarations(".vlist--table.vlist--grouped .vlist-sticky-header .sticky-group");
+    expect(body).toContain("box-sizing: border-box");
+    expect(body).toContain("padding: 0 16px");
   });
 
   it("should let the template root inside the content box fill it", () => {

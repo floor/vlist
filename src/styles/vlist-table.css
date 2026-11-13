@@ -19,6 +19,13 @@
     min-height: 0; /* allow flex to shrink below intrinsic height */
     height: auto; /* override height:100% from base */
     overflow: auto;
+    /* A size container, so the group header content below can be as wide as
+       the visible area without the script measuring it: 100cqw is this
+       element's content-box width, which already excludes the custom
+       scrollbar's gutter padding and the native scrollbar's space. The
+       viewport's width comes from the root either way, so inline-size
+       containment changes no layout of its own. */
+    container-type: inline-size;
 }
 
 /* Header is in flex flow — no absolute positioning needed */
@@ -496,14 +503,30 @@
     pointer-events: none;*/
 }
 
-/* Group header content container */
+/* Group header content container.
+   The row spans the table's full scroll width so its background and borders
+   cover every column, but the content is pinned to the visible viewport: a
+   count at the row's right edge would otherwise sit past the last visible
+   column and never be seen once the columns overflow. sticky left keeps it at
+   the viewport's left edge at any scrollLeft, inside the row's full width.
+   100cqw is the width of the viewport content box (the .vlist--table
+   .vlist-viewport size container): the visible width, so a scrolled table
+   keeps the count at the right edge of what the user can see, in a page()
+   table as well. Nothing measures it in script. */
 .vlist-table-group-header-content {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 0 16px;
     height: 100%;
-    flex: 1 1 auto;
+    box-sizing: border-box;
+    position: sticky;
+    left: 0;
+    /* The visible width, never wider than the row: with fillWidth: false the
+       columns can be narrower than the viewport, and the row's paint
+       containment clips anything past its own right edge. */
+    width: min(100%, 100cqw);
+    flex: 0 0 auto;
     min-width: 0;
     background: var(--vlist-group-header-bg, #f3f4f6);
 }
@@ -538,6 +561,10 @@
     gap: 12px;
     height: 100%;
     color: var(--vlist-text-muted, #9ca3af);
+    /* The slot is width: 100% from the plugin; with content-box sizing its
+       16px side padding pushes a template's right-aligned count past the
+       container's right edge, where the sticky header's overflow clips it. */
+    box-sizing: border-box;
 }
 
 .vlist--table.vlist--grouped .vlist-viewport {
