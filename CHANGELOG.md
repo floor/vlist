@@ -11,13 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-A placeholder row no longer gets a record built from an item that has not loaded.
+## [3.8.1] - 2026-11-13
 
-Who is affected: tables using `rowAttributes()` with `data()`.
+A table row that is still a placeholder is no longer decorated by `rowAttributes()`.
+
+Who is affected: tables using `rowAttributes()` together with `data()` loading.
 
 ### Fixed
 
-- `rowAttributes()` no longer runs for placeholder rows; the callback runs once when the item loads.
+- `rowAttributes()` no longer runs for placeholder rows; the callback runs once when the row's item has loaded, so no placeholder values reach the row's classes or attributes.
+
+### Changed
+
+- `table()` + `rowAttributes()` is 17573 → 17601 bytes gzipped; `table()` (17137), `table()` + `columnPin()` (19145), and `table()` + `columnReorder()` (19457) are unchanged (budgets unchanged).
 
 ## [3.8.0] - 2026-11-12
 
@@ -2288,7 +2294,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.0...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.1...HEAD
+[3.8.1]: https://github.com/floor/vlist/compare/v3.8.0...v3.8.1
 [3.8.0]: https://github.com/floor/vlist/compare/v3.7.2...v3.8.0
 [3.7.2]: https://github.com/floor/vlist/compare/v3.7.1...v3.7.2
 [3.7.1]: https://github.com/floor/vlist/compare/v3.7.0...v3.7.1
