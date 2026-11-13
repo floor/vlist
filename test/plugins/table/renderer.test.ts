@@ -1768,6 +1768,34 @@ describe("group header content stylesheet", () => {
   });
 });
 
+describe("table scrollbar stylesheet", () => {
+  // Chrome 121+ applies scrollbar-width over ::-webkit-scrollbar, so the base
+  // stylesheet's `scrollbar-width: none` hid the horizontal bar table mode
+  // re-enables. These assert the override that puts the scrollbar system back,
+  // and the guard that keeps it off Firefox, which cannot hide one axis. The
+  // browser gate reads the same cascade from a live page.
+  const css = readFileSync(
+    resolve(import.meta.dir, "../../../src/styles/vlist-table.css"),
+    "utf8",
+  );
+
+  it("should re-enable the native scrollbar system in table mode", () => {
+    const guard = css.match(/@supports selector\(::-webkit-scrollbar\)\s*\{([\s\S]*?)\n\}/);
+    expect(guard).not.toBeNull();
+    expect(guard![1]).toContain(".vlist--table .vlist-viewport--custom-scrollbar");
+    expect(guard![1]).toContain("scrollbar-width: auto");
+  });
+
+  it("should hide only the vertical native bar", () => {
+    const rule = css.match(
+      /\.vlist--table \.vlist-viewport--custom-scrollbar::-webkit-scrollbar\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule![1]).toContain("display: block");
+    expect(rule![1]).toContain("width: 0");
+  });
+});
+
 // =============================================================================
 // Striped Tests
 // =============================================================================

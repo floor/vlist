@@ -91,8 +91,18 @@
    the horizontal one must remain visible for column navigation.
    WebKit: re-enable the scrollbar system and zero-out only the vertical width
    so the horizontal bar stays visible at its normal height.
-   Firefox: scrollbar-width cannot hide a single axis, so both native scrollbars
-   remain hidden; horizontal scrolling is available via trackpad or keyboard. */
+   The base stylesheet hides both bars with scrollbar-width: none, which Chrome
+   121+ applies over ::-webkit-scrollbar. Put scrollbar-width back to auto here
+   so the re-enabled system is the one that paints; the @supports guard keeps
+   that off Firefox, where scrollbar-width cannot hide a single axis and both
+   native scrollbars stay hidden (horizontal scrolling is available via
+   trackpad or keyboard). */
+@supports selector(::-webkit-scrollbar) {
+    .vlist--table .vlist-viewport--custom-scrollbar {
+        scrollbar-width: auto;
+    }
+}
+
 .vlist--table .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
     display: block;
     width: 0; /* vertical scrollbar: hidden (custom replaces it) */
