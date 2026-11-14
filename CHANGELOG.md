@@ -20,7 +20,7 @@ Who is affected: tables using `groups()` whose columns are wider than the contai
 ### Fixed
 
 - A table's group header content is now as wide as the visible viewport and pinned to its left edge, so a right-aligned count stays on screen at any horizontal scroll position and after a resize — in the ordinary rows and in `groups()`'s sticky copy.
-- With `scrollbar()`, the native horizontal scrollbar is visible again when the columns overflow; only the vertical bar is replaced by the custom scrollbar.
+- With `scrollbar()`, the native horizontal scrollbar is visible again when the columns overflow in Chromium and WebKit browsers; only the vertical bar is replaced by the custom scrollbar. Firefox, which cannot hide a single axis, keeps both native bars hidden as before.
 
 ### Changed
 
