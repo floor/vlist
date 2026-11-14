@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.3] - 2026-11-14
+
 Table group headers stay inside the visible area when the columns overflow, and table mode keeps the native horizontal scrollbar.
 
 Who is affected: tables using `groups()` whose columns are wider than the container, and tables using `scrollbar()` with horizontal overflow.
@@ -19,6 +21,10 @@ Who is affected: tables using `groups()` whose columns are wider than the contai
 
 - A table's group header content is now as wide as the visible viewport and pinned to its left edge, so a right-aligned count stays on screen at any horizontal scroll position and after a resize — in the ordinary rows and in `groups()`'s sticky copy.
 - With `scrollbar()`, the native horizontal scrollbar is visible again when the columns overflow; only the vertical bar is replaced by the custom scrollbar.
+
+### Changed
+
+- `table()` (17137), `table()` + `columnPin()` (19145), `table()` + `columnReorder()` (19457), and `table()` + `rowAttributes()` (17601, budget 17858) are unchanged in bytes gzipped (budgets unchanged); `dist/vlist-table.css` grew by 227 bytes minified (13714 → 13941).
 
 ## [3.8.2] - 2026-11-13
 
@@ -2317,7 +2323,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.2...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.3...HEAD
+[3.8.3]: https://github.com/floor/vlist/compare/v3.8.2...v3.8.3
 [3.8.2]: https://github.com/floor/vlist/compare/v3.8.1...v3.8.2
 [3.8.1]: https://github.com/floor/vlist/compare/v3.8.0...v3.8.1
 [3.8.0]: https://github.com/floor/vlist/compare/v3.7.2...v3.8.0
