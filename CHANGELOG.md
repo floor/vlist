@@ -11,9 +11,19 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.4] - 2026-11-15
+
+A focused table row keeps its focus ring across pinned columns.
+
+Who is affected: tables using `columnPin()` with keyboard focus; nothing changes for other lists.
+
 ### Fixed
 
 - A pinned column no longer hides the focused row's focus ring: the ring now runs across the pinned cells too, and stays on the visible edge — left or right — while the table is scrolled.
+
+### Changed
+
+- `table()` (17137), `table()` + `columnPin()` (19145), `table()` + `columnReorder()` (19457), and `table()` + `rowAttributes()` (17601, budget 17858) are unchanged in bytes gzipped (budgets unchanged); `dist/vlist-table.css` grew by 848 bytes minified (13941 → 14789).
 
 ## [3.8.3] - 2026-11-14
 
@@ -2327,7 +2337,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.3...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.4...HEAD
+[3.8.4]: https://github.com/floor/vlist/compare/v3.8.3...v3.8.4
 [3.8.3]: https://github.com/floor/vlist/compare/v3.8.2...v3.8.3
 [3.8.2]: https://github.com/floor/vlist/compare/v3.8.1...v3.8.2
 [3.8.1]: https://github.com/floor/vlist/compare/v3.8.0...v3.8.1
