@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- A pinned column no longer hides the focused row's focus ring: the ring now runs across the pinned cells too, and stays on the visible edge — left or right — while the table is scrolled.
+
 ## [3.8.3] - 2026-11-14
 
 Table group headers stay inside the visible area when the columns overflow, and table mode keeps the native horizontal scrollbar.
