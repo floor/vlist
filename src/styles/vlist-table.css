@@ -472,6 +472,41 @@
     border-left: 1px solid var(--vlist-border, #e5e7eb);
 }
 
+/* Focused row ring over pinned cells (floor/vlist#116 item 3).
+   The row's outline is painted a level below a pinned cell's opaque background,
+   so it disappears over the pinned columns, and its outer vertical stays on the
+   row box, out of view once the row scrolls under the pin. Each pinned cell in
+   the focused row therefore carries its own segment of the ring — top and bottom
+   on all of them, the outer vertical on the outermost — 2px, inside the cell
+   box, in the outline's colour and place (its -2px offset). */
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left,
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right {
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6);
+}
+
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left:first-child {
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 2px 0 0 0 var(--vlist-focus-ring, #3b82f6);
+}
+
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right:last-child {
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset -2px 0 0 0 var(--vlist-focus-ring, #3b82f6);
+}
+
+/* A row's 1px bottom border lies outside its cells, so a cell's bottom segment
+   ends where the outline's does not: 1px there, and the outline's last, uncovered
+   pixel completes the same 2px band instead of the ring turning 3px thick. */
+.vlist--table-row-borders {
+    --vlist-pin-ring-bottom: -1px;
+}
+
 /* =============================================================================
    Column Reordering (columnReorder feature)
    ============================================================================= */

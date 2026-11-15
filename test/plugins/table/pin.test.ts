@@ -299,6 +299,29 @@ describe("columnPin — partitioning and unpin restoration (#116)", () => {
     list.setColumnPin("NON_EXISTENT", "left");
     expect(getHeaderOrder(root)).toEqual(["C", "A", "B", "D", "E", "F", "G", "H", "I", "J"]);
   });
+
+  it("puts the outermost pinned cells first and last in the row, where the focused ring is painted (#116)", () => {
+    // The row's focus ring is an outline on the row box, painted under a
+    // pinned cell's opaque background and scrolled away at the row's outer
+    // edge. The stylesheet carries the ring on the pinned cells themselves and
+    // puts its outer verticals on `:first-child` and `:last-child`; that only
+    // lands on the right cells because the partition renders the left-pinned
+    // columns first and the right-pinned ones last.
+    const { list, root } = createPinnedTable(makeColumns());
+    list.setColumnPin("B", "left");
+    list.setColumnPin("I", "right");
+
+    const row = root.querySelector<HTMLElement>('.vlist-table-row[data-index="0"]')!;
+    const cells = Array.from(row.children) as HTMLElement[];
+    expect(cells).toHaveLength(10);
+    expect(cells.every((cell) => cell.classList.contains("vlist-table-cell"))).toBe(true);
+    expect(row.firstElementChild!.classList.contains("vlist-table-cell--pin-left")).toBe(true);
+    expect(row.lastElementChild!.classList.contains("vlist-table-cell--pin-right")).toBe(true);
+    expect(cells.slice(1, 9).some((cell) =>
+      cell.classList.contains("vlist-table-cell--pin-left") ||
+      cell.classList.contains("vlist-table-cell--pin-right"),
+    )).toBe(false);
+  });
 });
 
 // =============================================================================

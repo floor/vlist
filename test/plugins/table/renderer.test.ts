@@ -1797,6 +1797,87 @@ describe("table scrollbar stylesheet", () => {
 });
 
 // =============================================================================
+// Focused Row Ring — Stylesheet
+// =============================================================================
+
+describe("focused row ring stylesheet", () => {
+  // happy-dom applies no stylesheets and paints nothing, so the rules that
+  // keep the focused row's ring visible over a pinned column are asserted on
+  // the source stylesheet here; scripts/table-focus-ring-pin-browser.mjs reads
+  // the pixels in Chromium (left pin, both pins, RTL, scroll start and end).
+  const css = readFileSync(
+    resolve(import.meta.dir, "../../../src/styles/vlist-table.css"),
+    "utf8",
+  );
+  // The rule that starts with `selector` — the selector list may continue on
+  // the following lines.
+  const declarations = (selector: string): string => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rule = css.match(new RegExp(`${escaped}[^{]*\\{([^}]*)\\}`));
+    expect(rule).not.toBeNull();
+    return rule![1]!;
+  };
+
+  it("should paint the ring's top and bottom edges on every pinned cell", () => {
+    // The row outline is under the pinned cell's opaque z-index 2 background,
+    // so the cell carries its own segment of the ring, 2px inside its box
+    // like the outline's -2px offset. The bottom offset is a variable because
+    // a bordered row's bottom border lies outside its cells.
+    const body = declarations(".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left,");
+    expect(body).toContain("inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6)");
+    expect(body).toContain(
+      "inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6)",
+    );
+  });
+
+  it("should paint the outer vertical on the outermost left-pinned cell", () => {
+    // When the row scrolls under the pin, the outline's left edge stays on the
+    // row box, out of view; the first child is the outermost pinned cell.
+    const body = declarations(
+      ".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left:first-child",
+    );
+    expect(body).toContain("inset 2px 0 0 0 var(--vlist-focus-ring, #3b82f6)");
+    expect(body).toContain("inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6)");
+  });
+
+  it("should paint the outer vertical on the outermost right-pinned cell", () => {
+    const body = declarations(
+      ".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right:last-child",
+    );
+    expect(body).toContain("inset -2px 0 0 0 var(--vlist-focus-ring, #3b82f6)");
+    expect(body).toContain("inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6)");
+  });
+
+  it("should keep the bottom segment 1px in a bordered row, where the outline completes it", () => {
+    // A bordered row's bottom border is outside its cells, so the outline's
+    // bottom band is only covered to its last pixel. A 2px cell segment there
+    // would make the ring 3px thick over the pinned column.
+    const rule = css.match(/\.vlist--table-row-borders\s*\{\s*(--vlist-pin-ring-bottom:[^;}]*)/);
+    expect(rule).not.toBeNull();
+    expect(rule![1]!.replace(/\s+/g, " ").trim()).toBe("--vlist-pin-ring-bottom: -1px");
+  });
+
+  it("should not paint a ring on the pinned cells of an unfocused row", () => {
+    // Only the focused row carries the segments; a selector without
+    // `vlist-item--focused` would put a ring on every row's pin.
+    const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({
+      selector: m[1]!.trim(),
+      body: m[2]!,
+    }));
+    const ringRules = rules.filter(
+      (r) => r.body.includes("box-shadow") && /--pin-(?:left|right)/.test(r.selector),
+    );
+    expect(ringRules).toHaveLength(3);
+    for (const rule of ringRules) {
+      for (const selector of rule.selector.split(",")) {
+        expect(selector.trim()).toContain(".vlist-item--focused");
+        expect(selector.trim()).toMatch(/--pin-(?:left|right)/);
+      }
+    }
+  });
+});
+
+// =============================================================================
 // Striped Tests
 // =============================================================================
 
