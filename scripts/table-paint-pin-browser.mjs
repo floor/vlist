@@ -14,8 +14,7 @@
  * 4. A click that selects the row starts a colour transition on the row and on
  *    each pinned cell, left and right.
  *
- * The coordinator wires this script into `test:browser` after merge;
- * package.json is left untouched here.
+ * `test:browser` runs this script, which is what the CI browser job runs.
  */
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
