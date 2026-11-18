@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.6] - 2026-11-18
+
+Tables with `scrollbar()` and pinned columns display the right scrollbars, focus rings, and fades in Chromium and Firefox.
+
 Who is affected: tables using `scrollbar()` whose columns overflow the viewport, and tables with pinned columns.
 
 ### Fixed
@@ -2353,7 +2357,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.5...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.6...HEAD
+[3.8.6]: https://github.com/floor/vlist/compare/v3.8.5...v3.8.6
 [3.8.5]: https://github.com/floor/vlist/compare/v3.8.4...v3.8.5
 [3.8.4]: https://github.com/floor/vlist/compare/v3.8.3...v3.8.4
 [3.8.3]: https://github.com/floor/vlist/compare/v3.8.2...v3.8.3
