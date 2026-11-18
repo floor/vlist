@@ -1793,6 +1793,37 @@ describe("table scrollbar stylesheet", () => {
     expect(rule).not.toBeNull();
     expect(rule![1]).toContain("display: block");
     expect(rule![1]).toContain("width: 0");
+    expect(rule![1]).toContain("height: 16px");
+  });
+
+  it("should show both native bars in Firefox, which cannot hide one axis", () => {
+    const guard = css.match(
+      /@supports \(-moz-appearance: none\) and \(not \(selector\(::-webkit-scrollbar\)\)\)\s*\{([\s\S]*?)\n\}/,
+    );
+    expect(guard).not.toBeNull();
+    expect(guard![1]).toContain(".vlist--table .vlist-viewport--custom-scrollbar");
+    expect(guard![1]).toContain("scrollbar-width: thin");
+  });
+});
+
+describe("pinned cell fade stylesheet", () => {
+  // The row fades background-color. A pinned cell's opaque background used to
+  // swap in one step, so it snapped over that fade. The tint is a colour
+  // custom property, which transitions, painted as a gradient over the opaque
+  // background so content scrolling underneath stays hidden.
+  const css = readFileSync(
+    resolve(import.meta.dir, "../../../src/styles/vlist-table.css"),
+    "utf8",
+  );
+
+  it("should fade a pinned cell by a colour variable, with the row", () => {
+    expect(css).toContain("@property --vlist-pin-tint");
+    expect(css).toContain('syntax: "<color>"');
+    expect(css).toContain(
+      "background-image: linear-gradient(var(--vlist-pin-tint), var(--vlist-pin-tint))",
+    );
+    expect(css).toContain("transition: --vlist-pin-tint");
+    expect(css).toContain(".vlist--scrolling .vlist-table-cell--pin-left");
   });
 });
 
@@ -1857,6 +1888,27 @@ describe("focused row ring stylesheet", () => {
     expect(rule![1]!.replace(/\s+/g, " ").trim()).toBe("--vlist-pin-ring-bottom: -1px");
   });
 
+  it("should draw the pin separator under the focus ring", () => {
+    // A border paints above an inset shadow. The focused pin makes that
+    // border transparent and repeats the edge as the last shadow, so the
+    // ring, listed first, stays on top. The 1px border remains.
+    const left = declarations(
+      ".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left-last",
+    );
+    const ring = "inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6)";
+    const leftEdge = "inset -1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb))";
+    expect(left.indexOf(ring)).toBeGreaterThanOrEqual(0);
+    expect(left.indexOf(leftEdge)).toBeGreaterThan(left.indexOf(ring));
+    expect(left).toContain("border-right-color: transparent");
+
+    const right = declarations(
+      ".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right-first",
+    );
+    const rightEdge = "inset 1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb))";
+    expect(right.indexOf(rightEdge)).toBeGreaterThan(right.indexOf(ring));
+    expect(right).toContain("border-left-color: transparent");
+  });
+
   it("should not paint a ring on the pinned cells of an unfocused row", () => {
     // Only the focused row carries the segments; a selector without
     // `vlist-item--focused` would put a ring on every row's pin.
@@ -1867,7 +1919,9 @@ describe("focused row ring stylesheet", () => {
     const ringRules = rules.filter(
       (r) => r.body.includes("box-shadow") && /--pin-(?:left|right)/.test(r.selector),
     );
-    expect(ringRules).toHaveLength(3);
+    // Three paint the ring. Four more, still only on the focused row, redraw
+    // the pin separator as the lowest shadow so that border cannot cover it.
+    expect(ringRules).toHaveLength(7);
     for (const rule of ringRules) {
       for (const selector of rule.selector.split(",")) {
         expect(selector.trim()).toContain(".vlist-item--focused");

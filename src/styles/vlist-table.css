@@ -86,17 +86,22 @@
     height: calc(100% - var(--vlist-table-header-height, 0px));
 }
 
-/* In table mode, the viewport scrolls both vertically (rows) and horizontally
-   (columns). The custom scrollbar replaces only the vertical native scrollbar —
-   the horizontal one must remain visible for column navigation.
-   WebKit: re-enable the scrollbar system and zero-out only the vertical width
-   so the horizontal bar stays visible at its normal height.
-   The base stylesheet hides both bars with scrollbar-width: none, which Chrome
-   121+ applies over ::-webkit-scrollbar. Put scrollbar-width back to auto here
-   so the re-enabled system is the one that paints; the @supports guard keeps
-   that off Firefox, where scrollbar-width cannot hide a single axis and both
-   native scrollbars stay hidden (horizontal scrolling is available via
-   trackpad or keyboard). */
+/* In table mode the viewport scrolls both ways. scrollbar() replaces only the
+   vertical bar; the horizontal bar stays native so overflowing columns can
+   still be reached.
+   The base stylesheet sets scrollbar-width: none, which hides both axes, and
+   Chrome 121+ ignores ::-webkit-scrollbar while that is set. Chromium and
+   WebKit (Chrome 157, headed): where ::-webkit-scrollbar exists, put
+   scrollbar-width back to auto so the webkit rules paint, then give the
+   vertical bar no thickness and the horizontal bar a real height. The
+   per-axis pseudo ::-webkit-scrollbar:vertical computes empty in that Chrome,
+   so the thickness is set on ::-webkit-scrollbar itself. Chrome 157 reports
+   width 0 and height 16px. On macOS the bars are overlay, so both gutters
+   stay 0 and the vertical thumb does not take a column.
+   Firefox (no ::-webkit-scrollbar, so the block above stays off) cannot hide
+   one axis. scrollbar-width: thin shows both bars: the horizontal bar is
+   visible, and the thin native vertical bar sits under the custom thumb.
+   scrollbar-width: none would hide the horizontal bar with the vertical one. */
 @supports selector(::-webkit-scrollbar) {
     .vlist--table .vlist-viewport--custom-scrollbar {
         scrollbar-width: auto;
@@ -105,7 +110,14 @@
 
 .vlist--table .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
     display: block;
-    width: 0; /* vertical scrollbar: hidden (custom replaces it) */
+    width: 0; /* vertical: hidden, custom scrollbar() replaces it */
+    height: 16px; /* horizontal: native bar when columns overflow */
+}
+
+@supports (-moz-appearance: none) and (not (selector(::-webkit-scrollbar))) {
+    .vlist--table .vlist-viewport--custom-scrollbar {
+        scrollbar-width: thin;
+    }
 }
 
 .vlist--table .vlist-content {
@@ -416,10 +428,28 @@
     );
 }
 
+/* The row fades its background-color. A pinned cell is opaque, so that fade
+   never shows through, and a background-image swap (hover, stripe, selection)
+   snaps. A registered colour transitions, and the gradient paints it over the
+   solid background that hides whatever scrolls underneath. */
+@property --vlist-pin-tint {
+    syntax: "<color>";
+    inherits: true;
+    initial-value: transparent;
+}
+
 .vlist-table-cell--pin-left,
 .vlist-table-cell--pin-right {
     z-index: 2;
     background-color: var(--vlist-bg, #ffffff);
+    background-image: linear-gradient(var(--vlist-pin-tint), var(--vlist-pin-tint));
+    transition: --vlist-pin-tint var(--vlist-transition-duration, 150ms)
+        var(--vlist-transition-timing, ease-in-out);
+}
+
+.vlist--scrolling .vlist-table-cell--pin-left,
+.vlist--scrolling .vlist-table-cell--pin-right {
+    transition: none;
 }
 
 .vlist-table-cell--pin-left {
@@ -432,44 +462,34 @@
 
 .vlist-table-row.vlist-item--odd .vlist-table-cell--pin-left,
 .vlist-table-row.vlist-item--odd .vlist-table-cell--pin-right {
-    background-image: linear-gradient(
-        var(--vlist-bg-striped, var(--vlist-bg-hover, rgba(0, 0, 0, 0.02))),
-        var(--vlist-bg-striped, var(--vlist-bg-hover, rgba(0, 0, 0, 0.02)))
-    );
+    --vlist-pin-tint: var(--vlist-bg-striped, var(--vlist-bg-hover, rgba(0, 0, 0, 0.02)));
 }
 
 .vlist--selectable .vlist-table-row:hover .vlist-table-cell--pin-left,
 .vlist--selectable .vlist-table-row:hover .vlist-table-cell--pin-right {
-    background-image: linear-gradient(
-        var(--vlist-bg-hover, rgba(0, 0, 0, 0.04)),
-        var(--vlist-bg-hover, rgba(0, 0, 0, 0.04))
-    );
+    --vlist-pin-tint: var(--vlist-bg-hover, rgba(0, 0, 0, 0.04));
 }
 
 .vlist-table-row.vlist-item--selected .vlist-table-cell--pin-left,
 .vlist-table-row.vlist-item--selected .vlist-table-cell--pin-right {
-    background-image: linear-gradient(
-        var(--vlist-bg-selected, rgba(59, 130, 246, 0.12)),
-        var(--vlist-bg-selected, rgba(59, 130, 246, 0.12))
-    );
+    --vlist-pin-tint: var(--vlist-bg-selected, rgba(59, 130, 246, 0.12));
 }
 
 .vlist--selectable .vlist-table-row.vlist-item--selected:hover .vlist-table-cell--pin-left,
 .vlist--selectable .vlist-table-row.vlist-item--selected:hover .vlist-table-cell--pin-right {
-    background-image: linear-gradient(
-        var(--vlist-bg-selected-hover, rgba(59, 130, 246, 0.18)),
-        var(--vlist-bg-selected-hover, rgba(59, 130, 246, 0.18))
-    );
+    --vlist-pin-tint: var(--vlist-bg-selected-hover, rgba(59, 130, 246, 0.18));
 }
 
 .vlist-table-header-cell--pin-left-last,
 .vlist-table-cell--pin-left-last {
-    border-right: 1px solid var(--vlist-border, #e5e7eb);
+    --vlist-pin-edge: var(--vlist-border, #e5e7eb);
+    border-right: 1px solid var(--vlist-pin-edge);
 }
 
 .vlist-table-header-cell--pin-right-first,
 .vlist-table-cell--pin-right-first {
-    border-left: 1px solid var(--vlist-border, #e5e7eb);
+    --vlist-pin-edge: var(--vlist-border, #e5e7eb);
+    border-left: 1px solid var(--vlist-pin-edge);
 }
 
 /* Focused row ring over pinned cells (floor/vlist#116 item 3).
@@ -498,6 +518,44 @@
         inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
         inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
         inset -2px 0 0 0 var(--vlist-focus-ring, #3b82f6);
+}
+
+/* The pin separator is a border, and a border paints above an inset shadow, so
+   the last left pin's 1px edge covers the focus ring. While the row is focused
+   the border colour goes transparent (the 1px stays, so the cell does not
+   shift) and the same edge is drawn as the last, lowest shadow, under the ring.
+   The :first-child / :last-child rules above are less specific than these, so
+   a single pinned column keeps both its outer ring and this edge. */
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left-last {
+    border-right-color: transparent;
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset -1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb));
+}
+
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left-last:first-child {
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 2px 0 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset -1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb));
+}
+
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right-first {
+    border-left-color: transparent;
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb));
+}
+
+.vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right-first:last-child {
+    box-shadow:
+        inset 0 2px 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 0 var(--vlist-pin-ring-bottom, -2px) 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset -2px 0 0 0 var(--vlist-focus-ring, #3b82f6),
+        inset 1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb));
 }
 
 /* A row's 1px bottom border lies outside its cells, so a cell's bottom segment
@@ -667,14 +725,16 @@
 [data-theme-mode="dark"] .vlist-table-cell--pin-left-last,
 .dark .vlist-table-header-cell--pin-left-last,
 .dark .vlist-table-cell--pin-left-last {
-    border-right-color: var(--vlist-border, #374151);
+    --vlist-pin-edge: var(--vlist-border, #374151);
+    border-right-color: var(--vlist-pin-edge);
 }
 
 [data-theme-mode="dark"] .vlist-table-header-cell--pin-right-first,
 [data-theme-mode="dark"] .vlist-table-cell--pin-right-first,
 .dark .vlist-table-header-cell--pin-right-first,
 .dark .vlist-table-cell--pin-right-first {
-    border-left-color: var(--vlist-border, #374151);
+    --vlist-pin-edge: var(--vlist-border, #374151);
+    border-left-color: var(--vlist-pin-edge);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -725,14 +785,30 @@
         .vlist-table-header-cell--pin-left-last,
     :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"])
         .vlist-table-cell--pin-left-last {
-        border-right-color: var(--vlist-border, #374151);
+        --vlist-pin-edge: var(--vlist-border, #374151);
+        border-right-color: var(--vlist-pin-edge);
     }
 
     :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"])
         .vlist-table-header-cell--pin-right-first,
     :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"])
         .vlist-table-cell--pin-right-first {
-        border-left-color: var(--vlist-border, #374151);
+        --vlist-pin-edge: var(--vlist-border, #374151);
+        border-left-color: var(--vlist-pin-edge);
+    }
+
+    /* The scheme rule above is more specific than the focused pin rule, so the
+       separator colour has to be cleared again or it covers the ring. */
+    :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"])
+        .vlist-table-row.vlist-item--focused
+        > .vlist-table-cell--pin-left-last {
+        border-right-color: transparent;
+    }
+
+    :root:not([data-theme-mode="light"]):not([data-theme-mode="dark"])
+        .vlist-table-row.vlist-item--focused
+        > .vlist-table-cell--pin-right-first {
+        border-left-color: transparent;
     }
 }
 
