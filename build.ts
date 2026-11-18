@@ -1,7 +1,7 @@
 // build.ts - Build vlist library
-import { $ } from "bun";
 import { readFileSync, writeFileSync, rmSync, mkdirSync, mkdtempSync } from "fs";
 import { resolve } from "path";
+import { emitDeclarations } from "./scripts/emit-declarations";
 import { versionStamp } from "./scripts/version-stamp";
 import { lazyDriver, DRIVER_FILE } from "./scripts/lazy-driver";
 import { sharedCore } from "./scripts/shared-core";
@@ -250,12 +250,7 @@ export async function build(options: BuildOptions = {}): Promise<void> {
   // Generate type declarations (optional — pass --types or used in prepublishOnly)
   if (emitTypes) {
     const dtsStart = performance.now();
-    const tsc = await $`bunx tsc -p tsconfig.build.json --outDir ${dist}`.quiet().nothrow();
-    if (tsc.exitCode !== 0) {
-      console.error("\nTypeScript declaration generation failed:\n");
-      console.error(tsc.stderr.toString());
-      process.exit(1);
-    }
+    emitDeclarations(dist);
     const dtsTime = performance.now() - dtsStart;
     console.log(
       `  Types       ${dtsTime.toFixed(0).padStart(6)}ms  dist/**/*.d.ts`,

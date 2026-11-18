@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- TypeScript now resolves vlist’s package types with `moduleResolution: "node16"` or `"nodenext"` (#511).
+
 ## [3.8.4] - 2026-11-15
 
 A focused table row keeps its focus ring across pinned columns.
