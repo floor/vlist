@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.5] - 2026-11-18
+
+TypeScript projects using Node16 or NodeNext now resolve vlist's types.
+
 ### Fixed
 
 - TypeScript now resolves vlist’s package types with `moduleResolution: "node16"` or `"nodenext"` (#511).
@@ -2341,7 +2345,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.4...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.5...HEAD
+[3.8.5]: https://github.com/floor/vlist/compare/v3.8.4...v3.8.5
 [3.8.4]: https://github.com/floor/vlist/compare/v3.8.3...v3.8.4
 [3.8.3]: https://github.com/floor/vlist/compare/v3.8.2...v3.8.3
 [3.8.2]: https://github.com/floor/vlist/compare/v3.8.1...v3.8.2
