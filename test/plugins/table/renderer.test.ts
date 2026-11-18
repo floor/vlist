@@ -1889,9 +1889,17 @@ describe("focused row ring stylesheet", () => {
   });
 
   it("should draw the pin separator under the focus ring", () => {
-    // A border paints above an inset shadow. The focused pin makes that
-    // border transparent and repeats the edge as the last shadow, so the
-    // ring, listed first, stays on top. The 1px border remains.
+    // A border paints above an inset shadow and outside the padding edge, so
+    // the separator is the border-box's own 1px shadow. The ring is listed
+    // first and covers that pixel; the resting rule draws the same edge with
+    // no border width.
+    const resting = declarations(".vlist-table-header-cell--pin-left-last,");
+    expect(resting).toContain("border-right-width: 0");
+    expect(resting).toContain("inset -1px 0 0 0 var(--vlist-pin-edge)");
+    const restingRight = declarations(".vlist-table-header-cell--pin-right-first,");
+    expect(restingRight).toContain("border-left-width: 0");
+    expect(restingRight).toContain("inset 1px 0 0 0 var(--vlist-pin-edge)");
+
     const left = declarations(
       ".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-left-last",
     );
@@ -1899,14 +1907,12 @@ describe("focused row ring stylesheet", () => {
     const leftEdge = "inset -1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb))";
     expect(left.indexOf(ring)).toBeGreaterThanOrEqual(0);
     expect(left.indexOf(leftEdge)).toBeGreaterThan(left.indexOf(ring));
-    expect(left).toContain("border-right-color: transparent");
 
     const right = declarations(
       ".vlist-table-row.vlist-item--focused > .vlist-table-cell--pin-right-first",
     );
     const rightEdge = "inset 1px 0 0 0 var(--vlist-pin-edge, var(--vlist-border, #e5e7eb))";
     expect(right.indexOf(rightEdge)).toBeGreaterThan(right.indexOf(ring));
-    expect(right).toContain("border-left-color: transparent");
   });
 
   it("should not paint a ring on the pinned cells of an unfocused row", () => {
@@ -1917,10 +1923,13 @@ describe("focused row ring stylesheet", () => {
       body: m[2]!,
     }));
     const ringRules = rules.filter(
-      (r) => r.body.includes("box-shadow") && /--pin-(?:left|right)/.test(r.selector),
+      (r) =>
+        r.body.includes("box-shadow") &&
+        r.body.includes("--vlist-focus-ring") &&
+        /--pin-(?:left|right)/.test(r.selector),
     );
     // Three paint the ring. Four more, still only on the focused row, redraw
-    // the pin separator as the lowest shadow so that border cannot cover it.
+    // the separator as the lowest shadow so the ring covers that edge pixel.
     expect(ringRules).toHaveLength(7);
     for (const rule of ringRules) {
       for (const selector of rule.selector.split(",")) {

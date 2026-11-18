@@ -9,8 +9,10 @@
  *    is 0.
  * 2. Columns that overflow still get a native horizontal bar (webkit height
  *    16px, and a horizontal gutter when the engine uses classic scrollbars).
- * 3. The last left pin's separator does not cover the focus ring: the top pixel
- *    of that edge is the ring, the middle pixel is still the separator.
+ * 3. The pin separator does not break the focus ring. The boundary pixel and
+ *    the pixel on either side are the ring at the top of the edge; the middle
+ *    of the boundary is still the separator. Checked for a single left pin, a
+ *    single right pin, and more than one pin on each side.
  * 4. A click that selects the row starts a colour transition on the row and on
  *    each pinned cell, left and right.
  *
@@ -26,11 +28,13 @@ const html = `<!doctype html><meta charset="utf-8">
 <style>
   body { margin: 8px; }
   .host { width: 454px; height: 280px; margin-bottom: 12px; }
+  #rights { height: 160px; }
   .ref { width: 454px; height: 80px; overflow: scroll; }
   .ref i { display: block; width: 790px; height: 200px; }
 </style>
 <div id="left" class="host"></div>
 <div id="both" class="host"></div>
+<div id="rights" class="host"></div>
 <div class="ref"><i></i></div>
 <script type="module">
 import { createVList, table, columnPin, scrollbar, selection } from "/index.js";
@@ -55,6 +59,7 @@ const make = (host, pins) => createVList({
 window.lists = {
   left: make("#left", { name: "left", size: "left" }),
   both: make("#both", { name: "left", kind: "right" }),
+  rights: make("#rights", { modified: "right", kind: "right" }),
 };
 window.bars = (host) => {
   const vp = document.querySelector(host + " .vlist-viewport");
@@ -79,20 +84,42 @@ window.focusRow = (host) => {
   root.focus();
   return root.contains(document.activeElement);
 };
-window.edgeGeometry = (host) => {
+const shadowColor = (el) => {
+  const colors = [...getComputedStyle(el).boxShadow.matchAll(/rgba?\\([^)]+\\)/g)];
+  return colors.length ? colors[colors.length - 1][0] : "";
+};
+window.boundaries = (host) => {
   const row = document.querySelector(host + " .vlist-table-row.vlist-item--focused");
-  const pin = row && row.querySelector(".vlist-table-cell--pin-left-last");
-  if (!pin) return null;
+  if (!row) return [];
   const rr = row.getBoundingClientRect();
-  const pr = pin.getBoundingClientRect();
-  const edge = getComputedStyle(document.querySelector(host + " .vlist-table-header-cell--pin-left-last")).borderRightColor;
-  return {
-    ring: getComputedStyle(row).outlineColor,
-    edge,
-    x: Math.round(pr.right) - 1,
-    top: Math.round(rr.top),
-    mid: Math.round((pr.top + pr.bottom) / 2),
-  };
+  const ring = getComputedStyle(row).outlineColor;
+  const top = Math.round(rr.top);
+  const out = [];
+  const left = row.querySelector(".vlist-table-cell--pin-left-last");
+  if (left) {
+    const pr = left.getBoundingClientRect();
+    out.push({
+      side: "left",
+      x: Math.round(pr.right) - 1,
+      top,
+      mid: Math.round((pr.top + pr.bottom) / 2),
+      ring,
+      edge: shadowColor(left),
+    });
+  }
+  const right = row.querySelector(".vlist-table-cell--pin-right-first");
+  if (right) {
+    const pr = right.getBoundingClientRect();
+    out.push({
+      side: "right",
+      x: Math.round(pr.left),
+      top,
+      mid: Math.round((pr.top + pr.bottom) / 2),
+      ring,
+      edge: shadowColor(right),
+    });
+  }
+  return out;
 };
 window.paint = (host) => {
   const row = document.querySelector(host + " .vlist-table-row");
@@ -156,7 +183,7 @@ try {
   browser = await (await import(resolve(driver))).launchBrowser();
   console.log(await browser.version());
   const page = await browser.newPage();
-  await pinPage(page, { width: 760, height: 800 });
+  await pinPage(page, { width: 760, height: 980 });
   await page.goto(server.url.href);
   await page.waitForFunction(() => window.ready);
   await settle(page);
@@ -175,22 +202,29 @@ try {
     pass(host + ": one vertical thumb, native horizontal bar", bars);
   }
 
-  const focused = await page.evaluate(() => window.focusRow("#left"));
-  assert.equal(focused, true, "the table takes focus");
-  await page.keyboard.press("ArrowDown");
-  await settle(page, "#left");
-  const edge = await page.evaluate(() => window.edgeGeometry("#left"));
-  assert.ok(edge, "a focused row has a last left-pinned cell");
-  // The separator is the pixel just inside the border box. Its top is the ring;
-  // its middle is still the separator, so the edge was not removed.
-  const x = edge.x - 1;
-  const px = await sample(page, [
-    { name: "top", x, y: edge.top },
-    { name: "mid", x, y: edge.mid },
-  ]);
-  assert.equal(px.top, rgb(edge.ring), "the ring paints above the pin separator at the top of the edge: " + JSON.stringify({ px, edge }));
-  assert.equal(px.mid, rgb(edge.edge), "the separator still paints in the middle of that edge: " + JSON.stringify({ px, edge }));
-  pass("focus ring above the last left pin's border", { px, ring: edge.ring, edge: edge.edge });
+  for (const host of ["#left", "#both", "#rights"]) {
+    const focused = await page.evaluate((host) => window.focusRow(host), host);
+    assert.equal(focused, true, host + " takes focus");
+    await page.keyboard.press("ArrowDown");
+    await settle(page, host);
+    const boundaries = await page.evaluate((host) => window.boundaries(host), host);
+    assert.ok(boundaries.length > 0, host + " has a pin boundary");
+    for (const edge of boundaries) {
+      const px = await sample(page, [
+        { name: "in", x: edge.x - 1, y: edge.top },
+        { name: "boundary", x: edge.x, y: edge.top },
+        { name: "out", x: edge.x + 1, y: edge.top },
+        { name: "mid", x: edge.x, y: edge.mid },
+      ]);
+      const ring = rgb(edge.ring);
+      const detail = JSON.stringify({ px, edge });
+      assert.equal(px.boundary, ring, host + " " + edge.side + " boundary pixel is the ring: " + detail);
+      assert.equal(px.in, ring, host + " " + edge.side + " inner neighbour is the ring: " + detail);
+      assert.equal(px.out, ring, host + " " + edge.side + " outer neighbour is the ring: " + detail);
+      assert.equal(px.mid, rgb(edge.edge), host + " " + edge.side + " separator remains at mid-edge: " + detail);
+      pass(host + " " + edge.side + " ring is continuous through the pin edge", { px, ring, edge: edge.edge });
+    }
+  }
 
   const cell = await page.$("#both .vlist-table-row .vlist-table-cell--pin-right");
   assert.ok(cell, "a right-pinned cell to click");
@@ -207,7 +241,7 @@ try {
   pass("click fades the row and both pinned cells", paint);
 
   console.log("SUMMARY", JSON.stringify({ passes }));
-  assert.equal(passes, 4);
+  assert.equal(passes, 7);
 } finally {
   await browser?.close();
   server.stop(true);

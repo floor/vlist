@@ -16,12 +16,8 @@ Who is affected: tables using `scrollbar()` whose columns overflow the viewport,
 ### Fixed
 
 - With `scrollbar()`, Chromium and WebKit keep a single vertical thumb, the custom one, and show the native horizontal bar when columns overflow. Firefox cannot hide one axis, so it shows a thin native bar on both axes: the horizontal bar is visible, and the thin vertical bar sits under the custom thumb (#514).
-- A focused row's ring paints above the border of the last left-pinned column and the first right-pinned column, instead of that border covering the ring (#514).
-- Hovering or selecting a row fades the pinned cells with the row, on the left and on the right, instead of the pinned background snapping while the row fades underneath (#514).
-
-### Changed
-
-- `table()` (17137), `table()` + `columnPin()` (19145), `table()` + `columnReorder()` (19457), and `table()` + `rowAttributes()` (17601, budget 17858) are unchanged in bytes gzipped (budgets unchanged); `dist/vlist-table.css` grew by 2110 bytes minified (14789 → 16899).
+- A focused row's ring runs through the edge of the last left-pinned column and the first right-pinned column. The separator stays visible along that edge, under the ring (#514).
+- Hovering or selecting a row fades the pinned cells with the row, on the left and on the right, instead of the pinned background snapping while the row fades underneath. Engines without registered custom properties (`@property`) still paint the tint; they do not fade it (#514).
 
 ## [3.8.5] - 2026-11-18
 
