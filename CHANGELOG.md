@@ -15,6 +15,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 - `motionBlur` on `createVList`: a directional smear while scrolling faster than 15 px/ms. Off by default, so a list that does not set it builds no filter and does no per-frame work. The trail matches the vlist.io velocity-loading example: a one-axis gaussian, offset along the scroll, at 0.7 alpha, drawn behind the row. Placeholders take it unless `target` is `"items"` (#125).
 
+### Changed
+
+- Base bundle is 10678 → 11652 bytes gzipped (+974), past the 10844 budget. The other scenarios grew by about the same amount, because the smear lives in core. Budgets were not moved.
+
 ## [3.8.6] - 2026-11-18
 
 Tables with `scrollbar()` and pinned columns display the right scrollbars, focus rings, and fades in Chromium and Firefox.
