@@ -366,6 +366,25 @@ export interface VList<T extends VListItem = VListItem> {
 // CreateVList Configuration
 // =============================================================================
 
+/**
+ * Directional smear while scrolling fast. Off unless `motionBlur` is set.
+ * The trail is a one-axis gaussian, offset along the scroll, at 0.7 alpha
+ * behind the row — the same graph as the vlist.io velocity-loading example.
+ */
+export interface MotionBlurConfig {
+  /**
+   * Velocity, in px/ms, above which the `{prefix}--fast` class is added.
+   * The sample must also be reliable. Default `15`.
+   */
+  threshold?: number;
+  /** Cap on the gaussian spread, in px. Default `12`. */
+  max?: number;
+  /**
+   * Which rows take the filter. `"placeholders"` (the default) or `"items"`.
+   */
+  target?: "placeholders" | "items";
+}
+
 export interface CreateVListConfig<T extends VListItem = VListItem> {
   container: HTMLElement | string;
   item: ItemConfig<T>;
@@ -377,6 +396,11 @@ export interface CreateVListConfig<T extends VListItem = VListItem> {
   reverse?: boolean;
   ariaLabel?: string;
   scroll?: ScrollConfig;
+  /**
+   * Directional smear on fast scroll. Off by default: no SVG, no listener,
+   * no per-frame work. `true` uses the defaults.
+   */
+  motionBlur?: boolean | MotionBlurConfig;
   /** Defer initial render to the next animation frame. */
   defer?: boolean;
 }

@@ -126,6 +126,7 @@ export type {
   PluginMethods,
   PluginContext,
   CreateVListConfig,
+  MotionBlurConfig,
   CompiledHooks,
   ResolvedConfig,
   DOMStructure,

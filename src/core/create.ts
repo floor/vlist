@@ -35,6 +35,7 @@ import { render, createRenderConfig } from "./pipeline";
 import { createEmitter, type Emitter } from "../events";
 import type { VListEvents } from "../types";
 import { createVelocityTracker, updateVelocityTracker, MIN_RELIABLE_SAMPLES } from "./velocity";
+import { createMotionBlur } from "./motion-blur";
 
 // =============================================================================
 // Config Validation
@@ -62,6 +63,18 @@ function validateRawConfig<T extends VListItem>(raw: CreateVListConfig<T>): void
   const scroll = raw.scroll as { mode?: string; runway?: unknown } | undefined;
   if (scroll?.runway !== undefined || !/^(auto|native|synthetic)?$/.test(scroll?.mode ?? "")) {
     throw new Error('vlist: scroll.mode is "auto", "native" or "synthetic" (bounded mode and scroll.runway were removed in 3.0)');
+  }
+
+  const motion = raw.motionBlur;
+  if (motion && typeof motion === "object") {
+    assertSize("motionBlur.threshold", motion.threshold, true);
+    assertSize("motionBlur.max", motion.max);
+    const target = motion.target;
+    if (target !== undefined && target !== "placeholders" && target !== "items") {
+      throw new Error(`vlist: motionBlur.target must be "placeholders" or "items", got ${String(target)}`);
+    }
+  } else if (motion !== undefined && motion !== false && motion !== true) {
+    throw new Error(`vlist: motionBlur must be a boolean or an object, got ${String(motion)}`);
   }
 }
 
@@ -278,6 +291,7 @@ export function createCore<T extends VListItem = VListItem>(
 
   const container = resolveContainer(rawConfig.container);
   const dom = createDOMStructure(container, config.classPrefix, isX, rawConfig.ariaLabel);
+  const motion = createMotionBlur(dom.root, config.classPrefix, config.axis.primary, rawConfig.motionBlur);
 
   // ── Scroll config: scrollbar & gutter CSS classes ──────────────
 
@@ -646,6 +660,13 @@ export function createCore<T extends VListItem = VListItem>(
 
   const idleTimeout = rawConfig.scroll?.idleTimeout ?? SCROLL_IDLE_TIMEOUT;
 
+  function publishVelocity(velocity: number, reliable: boolean): void {
+    _velEvt.velocity = velocity;
+    _velEvt.reliable = reliable;
+    emitter.emit("velocity:change", _velEvt);
+    if (motion) motion.onVelocity(velocity, reliable, state.scrollDirection);
+  }
+
   function emitScrollEvents(): void {
     _scrollEvt.scrollPosition = state.scrollPosition;
     if (isX) {
@@ -656,9 +677,7 @@ export function createCore<T extends VListItem = VListItem>(
     emitter.emit("scroll", _scrollEvt);
 
     updateVelocityTracker(velocityTracker, state.scrollPosition);
-    _velEvt.velocity = velocityTracker.velocity;
-    _velEvt.reliable = velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES;
-    emitter.emit("velocity:change", _velEvt);
+    publishVelocity(velocityTracker.velocity, velocityTracker.sampleCount >= MIN_RELIABLE_SAMPLES);
 
     if (state.startIndex !== prevEmittedStart || state.prevRangeEnd !== prevEmittedEnd) {
       prevEmittedStart = state.startIndex;
@@ -795,9 +814,7 @@ export function createCore<T extends VListItem = VListItem>(
     // spares are no longer the next frame's jump.
     trimPool();
     runIdleHooks(hooks.idle);
-    _velEvt.velocity = 0;
-    _velEvt.reliable = false;
-    emitter.emit("velocity:change", _velEvt);
+    publishVelocity(0, false);
     _idleEvt.scrollPosition = state.scrollPosition;
     emitter.emit("scroll:idle", _idleEvt);
     if (pending) syncContentSize();
@@ -1269,6 +1286,7 @@ export function createCore<T extends VListItem = VListItem>(
         isScrolling = false;
         dom.root.classList.remove(scrollingClass);
       }
+      motion?.destroy();
       if (initialRafId !== null) { cancelAnimationFrame(initialRafId); initialRafId = null; }
       if (forceIdleTimer !== null) { clearTimeout(forceIdleTimer); forceIdleTimer = null; }
       scrollHandler!.detach();

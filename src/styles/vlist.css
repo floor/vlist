@@ -365,6 +365,35 @@
     background-color: var(--vlist-placeholder-bg-strong);
 }
 
+/* Fast-scroll smear (motionBlur). The filter graph is one SVG per list;
+   --vlist-motion-filter is that filter's url, set once. Replaced rows are untouched. */
+.vlist[data-vlist-motion="placeholders"] .vlist-item--placeholder {
+    transition: filter 0.15s ease;
+}
+
+.vlist--fast[data-vlist-motion="placeholders"] .vlist-item--placeholder {
+    contain: none;
+    overflow: visible;
+    z-index: 2;
+    background-color: transparent;
+    filter: var(--vlist-motion-filter);
+    animation: none;
+}
+
+.vlist--fast[data-vlist-motion="items"] .vlist-item {
+    contain: none;
+    overflow: visible;
+    z-index: 2;
+    filter: var(--vlist-motion-filter);
+    animation: none;
+}
+
+.vlist-motion-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+}
+
 /* Combined selected + focused */
 .vlist-item.vlist-item--selected.vlist-item--focused {
     outline-color: var(--vlist-border-selected);

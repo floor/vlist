@@ -636,6 +636,7 @@ Full configuration reference → **[vlist.io](https://vlist.io)**
 | `orientation` | `'vertical'` | `'vertical'` or `'horizontal'` scroll direction |
 | `padding` | `0` | Content inset — number, `[v, h]`, or `[top, right, bottom, left]` |
 | `reverse` | `false` | The list reads bottom-up (chat UIs): a view sitting at the end stays there as `appendItems` adds to it, `prependItems` holds the visible rows in place as older history loads above them, arrow keys invert, and `transition()` animates from the bottom. Item order is yours to supply; the layout itself is not reversed. `masonry()` and `table()` reject it |
+| `motionBlur` | off | Directional smear while scrolling faster than 15 px/ms. `true`, or `{ threshold: 15, max: 12, target }` where `target` is `"placeholders"` or `"items"`. Off builds no filter. The trail is a one-axis gaussian, offset along the scroll, at 0.7 alpha behind the row |
 
 ## Styling
 
