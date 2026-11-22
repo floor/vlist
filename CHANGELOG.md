@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Skeleton bars and the fade-in now apply to grid and masonry cells while async data loads.
+
+Who is affected: lists using `grid()` or `masonry()` together with `data()`. Nothing changes for other lists.
+
+### Fixed
+
+- Skeleton bars and the fade-in now apply to grid and masonry cells while async data loads.
+
 ## [3.8.7] - 2026-11-22
 
 Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri).

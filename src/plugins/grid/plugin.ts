@@ -22,6 +22,7 @@ import type { VListItem, ItemTemplate, ItemState } from "../../types";
 import type { VListPlugin, PluginContext, ElementPool } from "../../core/types";
 import type { SizeCache } from "../../core/sizes";
 import type { EngineState } from "../../core/state";
+import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 import { createGridLayout } from "./layout";
 import { rowContentWritten } from "../../core/dom";
 import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
@@ -100,6 +101,22 @@ export function grid<T extends VListItem = VListItem>(
   let gridItemClass = "";
   let selClass = "";
   let focClass = "";
+  let placeholderClass = "";
+  let replacedClass = "";
+
+  // Same transition the core pipeline uses: the class is added when a
+  // placeholder id is replaced by a real id, and removed after 300ms.
+  function markPlaceholder(el: HTMLElement, oldId: string | null, newId: string): void {
+    const wasPlaceholder = oldId !== null && oldId.startsWith(PLACEHOLDER_ID_PREFIX);
+    const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+    if (oldId !== newId && wasPlaceholder !== isPlaceholder) {
+      el.classList.toggle(placeholderClass, isPlaceholder);
+    }
+    if (wasPlaceholder && !isPlaceholder) {
+      el.classList.add(replacedClass);
+      setTimeout(() => { el.classList.remove(replacedClass); }, 300);
+    }
+  }
 
   // Mutable range objects — reused across frames
   const itemRange = { start: 0, end: -1 };
@@ -260,9 +277,11 @@ export function grid<T extends VListItem = VListItem>(
 
       if (tracked === undefined) {
         const el = pool.acquire();
+        const itemId = String(item.id);
         el.className = gridItemClass;
         el.setAttribute("data-index", String(i));
-        el.setAttribute("data-id", String(item.id));
+        el.setAttribute("data-id", itemId);
+        markPlaceholder(el, null, itemId);
         // Core sets role on every item and the position attributes only for an
         // interactive list. Grid replaces the render pipeline, so none of that
         // reached a grid row: they carried no role at all.
@@ -277,9 +296,12 @@ export function grid<T extends VListItem = VListItem>(
         rendered.set(i, tracked);
         contentElement.appendChild(el);
       } else if (tracked.lastItem !== item) {
-        tracked.el.setAttribute("data-id", String(item.id));
+        const oldId = tracked.el.getAttribute("data-id");
+        const newId = String(item.id);
+        tracked.el.setAttribute("data-id", newId);
         tracked.lastItem = item;
         applyTemplate(tracked.el, item, i);
+        markPlaceholder(tracked.el, oldId, newId);
       } else if (isf) {
         // Existing element, same item — refresh selection state only.
         isf(i, itemState);
@@ -389,6 +411,8 @@ export function grid<T extends VListItem = VListItem>(
       gridItemClass = `${classPrefix}-item ${classPrefix}-grid-item`;
       selClass = `${classPrefix}-item--selected`;
       focClass = `${classPrefix}-item--focused`;
+      placeholderClass = `${classPrefix}-item--placeholder`;
+      replacedClass = `${classPrefix}-item--replaced`;
 
       // Padding offsets for item positioning
       crossPadStart = ctx.config.crossPadStart;

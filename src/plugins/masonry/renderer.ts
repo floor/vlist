@@ -26,6 +26,7 @@ import type {
 } from "../../types";
 
 import type { ItemPlacement } from "./types";
+import { PLACEHOLDER_ID_PREFIX } from "../../constants";
 import { rowContentWritten } from "../../core/dom";
 import { sortRenderedDOM } from "../../rendering/sort";
 
@@ -218,6 +219,21 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
   const groupHeaderClass = `${classPrefix}-group-header`;
   const selectedClass = `${classPrefix}-item--selected`;
   const focusedClass = `${classPrefix}-item--focused`;
+  const placeholderClass = `${classPrefix}-item--placeholder`;
+  const replacedClass = `${classPrefix}-item--replaced`;
+
+  // Same transition the core pipeline uses. Class strings are built once.
+  function markPlaceholder(el: HTMLElement, oldId: string | null, newId: string): void {
+    const wasPlaceholder = oldId !== null && oldId.startsWith(PLACEHOLDER_ID_PREFIX);
+    const isPlaceholder = newId.startsWith(PLACEHOLDER_ID_PREFIX);
+    if (oldId !== newId && wasPlaceholder !== isPlaceholder) {
+      el.classList.toggle(placeholderClass, isPlaceholder);
+    }
+    if (wasPlaceholder && !isPlaceholder) {
+      el.classList.add(replacedClass);
+      setTimeout(() => { el.classList.remove(replacedClass); }, 300);
+    }
+  }
 
   /**
    * Apply template result to element
@@ -293,9 +309,11 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
     element.className = isGH ? groupHeaderClass : baseClass;
 
     // Set data attributes
+    const itemId = String(item.id);
     element.dataset.index = String(itemIndex);
-    element.dataset.id = String(item.id);
+    element.dataset.id = itemId;
     element.dataset.lane = String(placement.lane);
+    if (!isGH) markPlaceholder(element, null, itemId);
 
     if (isGH) {
       element.setAttribute("role", "presentation");
@@ -432,8 +450,12 @@ export const createMasonryRenderer = <T extends VListItem = VListItem>(
           const result = template(item, itemIndex, state);
           applyTemplate(existing.element, result);
 
-          // Update data attributes
-          existing.element.dataset.id = String(item.id);
+          const oldId = existing.element.getAttribute("data-id");
+          const newId = String(item.id);
+          existing.element.dataset.id = newId;
+          if (!(item as { __groupHeader?: boolean }).__groupHeader) {
+            markPlaceholder(existing.element, oldId, newId);
+          }
 
           existing.lastItem = item;
 
