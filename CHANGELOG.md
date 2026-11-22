@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Grid cells loaded by `data()` show the same skeleton and fade as list rows.
+
+Who is affected: lists using `grid()` together with `data()`. Nothing changes for other lists.
+
+### Fixed
+
+- A grid cell whose item has not loaded gets `vlist-item--placeholder`, and the cell fades in when the item arrives, the same as a list row.
+
 ## [3.8.7] - 2026-11-22
 
 Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri).
