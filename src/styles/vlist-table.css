@@ -138,7 +138,6 @@
     display: flex;
     align-items: stretch;
     box-sizing: border-box;
-    will-change: scroll-position;
     contain: layout style;
     background-color: var(--vlist-bg, #ffffff);
     border-bottom: 1px solid var(--vlist-border, #e5e7eb);
@@ -302,7 +301,6 @@
     user-select: none;
     transition: background-color var(--vlist-transition-duration, 150ms)
         var(--vlist-transition-timing, ease-in-out);
-    will-change: transform;
 }
 
 /* Suppress transitions during active scroll */

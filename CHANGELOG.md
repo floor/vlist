@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri).
+
+Who is affected: every list, including tables. The sortable drag ghost and the column-reorder drop indicator are unchanged.
+
+### Fixed
+
+- Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri): rows no longer ask the browser for a compositor layer each (#519). Table rows and the table column header no longer ask for one either.
+
 ## [3.8.6] - 2026-11-18
 
 Tables with `scrollbar()` and pinned columns display the right scrollbars, focus rings, and fades in Chromium and Firefox.

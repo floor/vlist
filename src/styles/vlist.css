@@ -266,7 +266,6 @@
         opacity var(--vlist-transition-duration) var(--vlist-transition-timing);
     contain: content;
     box-sizing: border-box;
-    will-change: transform;
 }
 
 /* Suppress transitions during active scroll for better performance */
