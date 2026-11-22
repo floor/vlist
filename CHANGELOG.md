@@ -11,13 +11,13 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-Grid cells loaded by `data()` show the same skeleton and fade as list rows.
+Skeleton bars and the fade-in now apply to grid and masonry cells while async data loads.
 
-Who is affected: lists using `grid()` together with `data()`. Nothing changes for other lists.
+Who is affected: lists using `grid()` or `masonry()` together with `data()`. Nothing changes for other lists.
 
 ### Fixed
 
-- A grid cell whose item has not loaded gets `vlist-item--placeholder`, and the cell fades in when the item arrives, the same as a list row.
+- Skeleton bars and the fade-in now apply to grid and masonry cells while async data loads.
 
 ## [3.8.7] - 2026-11-22
 
