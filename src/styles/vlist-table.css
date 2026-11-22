@@ -302,7 +302,6 @@
     user-select: none;
     transition: background-color var(--vlist-transition-duration, 150ms)
         var(--vlist-transition-timing, ease-in-out);
-    will-change: transform;
 }
 
 /* Suppress transitions during active scroll */
