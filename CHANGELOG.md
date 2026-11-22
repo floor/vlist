@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.7] - 2026-11-22
+
 Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri).
 
 Who is affected: every list, including tables. The sortable drag ghost and the column-reorder drop indicator are unchanged.
@@ -2365,7 +2367,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.6...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.7...HEAD
+[3.8.7]: https://github.com/floor/vlist/compare/v3.8.6...v3.8.7
 [3.8.6]: https://github.com/floor/vlist/compare/v3.8.5...v3.8.6
 [3.8.5]: https://github.com/floor/vlist/compare/v3.8.4...v3.8.5
 [3.8.4]: https://github.com/floor/vlist/compare/v3.8.3...v3.8.4
