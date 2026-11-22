@@ -17,6 +17,6 @@ test("rows and headers do not request a compositor layer", () => {
 
   expect(rule(list, ".vlist-item,\n.vlist-group-header {")).not.toContain("will-change");
   expect(rule(table, ".vlist-table-row {")).not.toContain("will-change");
-  expect(rule(table, ".vlist-table-header {")).not.toContain("will-change");
+  expect(rule(table, "\n.vlist-table-header {\n")).toContain("will-change: scroll-position");
   expect(rule(table, ".vlist-table-drop-indicator {")).toContain("will-change: transform");
 });

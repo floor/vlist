@@ -138,6 +138,7 @@
     display: flex;
     align-items: stretch;
     box-sizing: border-box;
+    will-change: scroll-position;
     contain: layout style;
     background-color: var(--vlist-bg, #ffffff);
     border-bottom: 1px solid var(--vlist-border, #e5e7eb);

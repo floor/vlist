@@ -17,7 +17,7 @@ Who is affected: every list, including tables. The sortable drag ghost and the c
 
 ### Fixed
 
-- Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri): rows no longer ask the browser for a compositor layer each (#519). Table rows and the table column header no longer ask for one either.
+- Text and icons in list rows and group headers stay sharp on Windows in Edge and WebView2 (Tauri): rows no longer ask the browser for a compositor layer each (#519). Table rows no longer ask for one either.
 
 ## [3.8.6] - 2026-11-18
 
