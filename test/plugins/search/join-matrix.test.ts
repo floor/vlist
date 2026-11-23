@@ -7,11 +7,11 @@
  *    comparison, so the assertion is one rebuild at the new filtered length.
  * b. a throw from the group callback or an earlier hook leaves the previous
  *    filter, count/layout/ARIA/counter agree, the error reaches the caller,
- *    and a retry applies the edit (FLO-1508)
+ *    and a retry applies the edit
  * c. the first match created by an edit in navigate mode is revealed and
  *    emits search:match
  *
- * A throw from header.height is excluded (FLO-1509). search() rejects data().
+ * A throw from header.height is excluded. search() rejects data().
  */
 
 import { describe, expect, it, beforeAll, afterAll } from "bun:test";
