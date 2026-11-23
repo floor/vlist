@@ -23,7 +23,7 @@ type ItemStateFn = (index: number, state: ItemState) => void;
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
-import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
+import { SCROLL_DURATION } from "../../constants";
 import { rowContentWritten } from "../../core/dom";
 import { createScrollPaddingReader } from "../../utils/scroll-padding";
 
@@ -60,11 +60,10 @@ export function groups<T extends VListItem = VListItem>(
     throw new Error("[vlist] groups: header height/width must be a positive number or function");
   }
 
-  const rawHeaderTemplate = config.header?.template ?? config.headerTemplate;
-  if (!rawHeaderTemplate) {
+  const headerTemplate = config.header?.template ?? config.headerTemplate;
+  if (!headerTemplate) {
     throw new Error("[vlist] groups: header.template is required");
   }
-  const headerTemplate = rawHeaderTemplate;
 
   let layout: GroupLayout<T>;
   let stickyHeader: StickyHeaderInstance | null = null;
@@ -127,10 +126,6 @@ export function groups<T extends VListItem = VListItem>(
   let lastRebuildLoadedCount = 0;
   let getLoadedCount: (() => number) | null = null;
   let origSizeCacheRebuild: SizeCache["rebuild"];
-
-  function getLayoutItemCount(): number {
-    return layout.totalEntries;
-  }
 
   // Only rebuilds layout when the data total changes (initial load, reload).
   // Item content updates (placeholder → real) are handled by the render loop
@@ -324,13 +319,6 @@ export function groups<T extends VListItem = VListItem>(
     placeholderIndices.clear();
   }
 
-  function drainDetached(): void {
-    if (detached.size > 0) {
-      detached.forEach((element) => pool.release(element));
-      detached.clear();
-    }
-  }
-
   function writeContent(element: HTMLElement, content: string | Node): void {
     if (typeof content === "string") element.innerHTML = content;
     else {
@@ -371,7 +359,7 @@ export function groups<T extends VListItem = VListItem>(
         element.style.display = "none";
       } else {
         element.style.display = "";
-        writeContent(element, headerTemplate(groupKey, entry.group.groupIndex));
+        writeContent(element, headerTemplate!(groupKey, entry.group.groupIndex));
       }
       renderedHeaderKey.set(element, groupKey);
       return true;
@@ -460,7 +448,7 @@ export function groups<T extends VListItem = VListItem>(
     const isForced = forceNextRender;
     forceNextRender = false;
 
-    const totalItems = getLayoutItemCount();
+    const totalItems = layout.totalEntries;
     if (cs <= 0 || totalItems === 0) {
       if (rendered.size > 0) {
         rendered.forEach((element) => {
@@ -611,7 +599,10 @@ export function groups<T extends VListItem = VListItem>(
       contentElement.appendChild(fragment);
     }
 
-    drainDetached();
+    if (detached.size > 0) {
+      detached.forEach((element) => pool.release(element));
+      detached.clear();
+    }
 
     const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
     updateContentSize?.(totalSize);
@@ -772,15 +763,6 @@ export function groups<T extends VListItem = VListItem>(
       layout = createGroupLayout(dataCount, config, getLoadedItem ?? ctxGetItem);
       lastDataCount = dataCount;
 
-      const getHeaderHeight =
-        typeof headerHeightRaw === "number"
-          ? (_groupIndex: number): number => headerHeightRaw
-          : (groupIndex: number): number => {
-              const group = layout.groups[groupIndex];
-              if (!group) return 0;
-              return (headerHeightRaw as Function)(group.key, groupIndex);
-            };
-
       // From here on the cache is variable because the grouped spec wraps
       // headers and data together, so the fact cannot be read back later.
       // Capture what the installed data spec was, for remeasureItem().
@@ -793,7 +775,7 @@ export function groups<T extends VListItem = VListItem>(
         const entry = layout.getEntry(layoutIndex);
         if (entry.type === "header") {
           if (config.sticky !== false && entry.group.groupIndex === 0) return 0;
-          return getHeaderHeight(entry.group.groupIndex);
+          return layout.getHeaderHeight(entry.group.groupIndex);
         }
         return origGetSize(entry.dataIndex);
       };
@@ -846,12 +828,7 @@ export function groups<T extends VListItem = VListItem>(
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
           const group = layout.groups[groupIndex];
           if (!group) return;
-          const result = headerTemplate(group.key, groupIndex);
-          if (typeof result === "string") {
-            slot.innerHTML = result;
-          } else {
-            slot.replaceChildren(result);
-          }
+          writeContent(slot, headerTemplate(group.key, groupIndex));
         };
 
         const headerH = layout.getHeaderHeight(0);
@@ -1145,7 +1122,8 @@ export function groups<T extends VListItem = VListItem>(
           return pos;
         };
 
-        applyScrollBehavior(ctx.scroll, getTarget, behavior, duration, easing);
+        if (behavior === "smooth") ctx.scroll.smoothTo(getTarget, duration ?? SCROLL_DURATION, easing);
+        else ctx.scroll.to(getTarget());
       });
 
       // Same signal as a filter that keeps the count: syncLayoutIfNeeded

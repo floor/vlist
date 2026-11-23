@@ -39,6 +39,22 @@ const EMPTY_GROUP: GroupBoundary = {
 const readHeaderIndex = (group: GroupBoundary): number => group.headerLayoutIndex;
 const readDataIndex = (group: GroupBoundary): number => group.firstDataIndex;
 
+/** Same search as findLastAtMost, keyed by a field so the groups bundle can drop the wrappers. */
+const findBy = (
+  items: readonly GroupBoundary[],
+  key: "headerLayoutIndex" | "firstDataIndex",
+  limit: number,
+): number => {
+  let lo = 0;
+  let hi = items.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >>> 1;
+    if (items[mid]![key] <= limit) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+};
+
 /**
  * Last index whose read(item) is <= limit. Empty input returns 0.
  * Both group lookups use this one search. `read` is a stable function,
@@ -108,10 +124,9 @@ const buildGroups = <T extends VListItem>(
     const key = getGroupForIndex(i, item);
 
     if (currentKey === null) {
-      // First loaded item — start first group
+      // First loaded item — start first group. groupStart is already 0,
+      // and every unloaded item before this one belongs to it.
       currentKey = key;
-      groupStart = 0;
-      // All items before this one (unloaded) belong to this group
     } else if (key !== currentKey) {
       const count = i - groupStart;
       groups.push({
@@ -278,7 +293,7 @@ export const createGroupLayout = <T extends VListItem = VListItem>(
       return reusableItem;
     }
 
-    const gi = findGroupByLayoutIndex(groups, layoutIndex);
+    const gi = findBy(groups, "headerLayoutIndex", layoutIndex);
     const group = groups[gi]!;
 
     if (layoutIndex === group.headerLayoutIndex) {
@@ -296,7 +311,7 @@ export const createGroupLayout = <T extends VListItem = VListItem>(
   const layoutToDataIndex = (layoutIndex: number): number => {
     if (groups.length === 0) return layoutIndex;
 
-    const gi = findGroupByLayoutIndex(groups, layoutIndex);
+    const gi = findBy(groups, "headerLayoutIndex", layoutIndex);
     const group = groups[gi]!;
 
     if (layoutIndex === group.headerLayoutIndex) {
@@ -310,7 +325,7 @@ export const createGroupLayout = <T extends VListItem = VListItem>(
   const dataToLayoutIndex = (dataIndex: number): number => {
     if (groups.length === 0) return dataIndex;
 
-    const gi = findGroupByDataIndex(groups, dataIndex);
+    const gi = findBy(groups, "firstDataIndex", dataIndex);
     const group = groups[gi]!;
 
     // Layout index = header layout index + 1 (skip header) + offset within group
@@ -321,14 +336,14 @@ export const createGroupLayout = <T extends VListItem = VListItem>(
   const getGroupAtLayoutIndex = (layoutIndex: number): GroupBoundary => {
     if (groups.length === 0) return EMPTY_GROUP;
 
-    const gi = findGroupByLayoutIndex(groups, layoutIndex);
+    const gi = findBy(groups, "headerLayoutIndex", layoutIndex);
     return groups[gi]!;
   };
 
   const getGroupAtDataIndex = (dataIndex: number): GroupBoundary => {
     if (groups.length === 0) return EMPTY_GROUP;
 
-    const gi = findGroupByDataIndex(groups, dataIndex);
+    const gi = findBy(groups, "firstDataIndex", dataIndex);
     return groups[gi]!;
   };
 
