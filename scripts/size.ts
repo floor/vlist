@@ -198,7 +198,8 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   data: kb(15.45),
   scrollbar: kb(13.53),
   sortable: kb(14.26),
-  groups: kb(16.1),
+  // PR 527 only: owner approved the measured 16503 B on 2026-11-23.
+  groups: kb(16.117),
   page: kb(11.53),
   snapshots: kb(11.75),
   transition: kb(12.61),
@@ -221,7 +222,8 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "table + rowAttributes": kb(17.44),
   masonry: kb(15.08),
   tree: kb(15.94),
-  search: kb(13.94),
+  // PR 527 only: owner approved the measured 14297 B on 2026-11-23.
+  search: kb(13.962),
   carousel: kb(16.15),
   vue: kb(10.77),
   svelte: kb(10.67),

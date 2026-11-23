@@ -255,17 +255,24 @@ export function data<T extends VListItem = VListItem>(
           if (engineState.initialized) {
             const newTotal = dataManager.getTotal();
             const newCached = dataManager.getCached();
-            engineState.totalItems = newTotal;
             // Rebuild when the total OR the loaded count changed. A reload
             // clears loaded items without changing the total — layout
             // interceptors (groups) must then recompute boundaries from the
             // now-placeholder data, otherwise a stale group header / sticky
             // lingers over the placeholders. Tracking both also dedupes the
-            // rebuild that previously lived in onItemsLoaded.
+            // rebuild that previously lived in onItemsLoaded. A same-count
+            // edit leaves totalItems alone: a grouped table stores the layout
+            // length there, and writing the raw count hides the trailing rows.
             if (newTotal !== lastRebuildTotal || newCached !== lastRebuildCached) {
               lastRebuildTotal = newTotal;
               lastRebuildCached = newCached;
+              engineState.totalItems = newTotal;
               sizeCache.rebuild(newTotal);
+            } else if (engineState.totalItems !== newTotal && !ctx.hooks.get("_groupsLayoutPending")) {
+              // setItems() wrote the static array length, shorter or longer.
+              // A plain table reads that as its row count; a grouped table
+              // keeps the layout length.
+              engineState.totalItems = newTotal;
             }
             ctx.render.contentSize(sizeCache.getTotalSize());
             ctx.render.ifNeeded();
@@ -385,6 +392,8 @@ export function data<T extends VListItem = VListItem>(
       });
 
       ctx.hooks.method("_getLoadedCount", (): number => dataManager.getCached());
+
+      ctx.hooks.method("_getIndexById", (id: string | number): number => dataManager.getIndexById(id));
 
       // ARIA: aria-busy for loading state
       emitter.on("load:start", () => {

@@ -42,8 +42,8 @@ export const createStickyContainer = (
   container.style.cssText =
     `z-index:5;pointer-events:none;overflow:hidden;` +
     (horizontal
-      ? `position:absolute;top:0;bottom:0;left:${stickyOffset || 0}px`
-      : `position:relative;top:${stickyOffset || 0}px`);
+      ? `position:absolute;top:0;bottom:0;left:${stickyOffset}px`
+      : `position:relative;top:${stickyOffset}px`);
   container.style[mainProp] = `${headerHeight}px`;
   root.insertBefore(container, root.firstChild);
   return container;
@@ -64,6 +64,7 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   const mainProp = horizontal ? "width" : "height";
   const crossProp = horizontal ? "height" : "width";
   const translateAxis = horizontal ? "X" : "Y";
+  const translate = `translate${translateAxis}`;
 
   const setMain = (el: HTMLElement, px: number): void => {
     el.style[mainProp] = `${px}px`;
@@ -75,9 +76,7 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   const mkSlot = (): HTMLElement => {
     const s = document.createElement("div");
     s.className = "sticky-group";
-    s.style.position = "absolute";
-    s.style.willChange = "transform";
-    s.style[crossProp] = "100%";
+    s.style.cssText = `position:absolute;will-change:transform;${crossProp}:100%`;
     return s;
   };
 
@@ -91,7 +90,7 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
 
   // Pre-cached arrays — rebuilt in cacheGroups(), read on every scroll tick.
   // Header height is one number: the layout size and the painted size match.
-  let groups = layout.groups;
+  let groups: GroupLayout<T>["groups"] = [];
   let offsets: number[] = [];
   let sizes: number[] = [];
   let groupCount = 0;
@@ -147,8 +146,8 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     if (offset === lastOffset) return;
     lastOffset = offset;
     const r = Math.round(offset);
-    active.style.transform = `translate${translateAxis}(${r}px)`;
-    standby.style.transform = `translate${translateAxis}(${r + curSize}px)`;
+    active.style.transform = `${translate}(${r}px)`;
+    standby.style.transform = `${translate}(${r + curSize}px)`;
   };
 
   const resetTransforms = (): void => {
@@ -165,10 +164,7 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     curGroup = nxtGroup;
     curSize = curGroup >= 0 ? sizes[curGroup]! : 0;
     setMain(container, curSize);
-    clear(standby);
-    nxtGroup = -1;
-    transitioning = false;
-    resetTransforms();
+    cancel();
   };
 
   const cancel = (): void => {
@@ -183,18 +179,18 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   // instead of display to preserve layout (the viewport is sized with
   // calc(100% - headerHeight) and relies on the container occupying space).
   const preserveLayout = !!existingContainer;
+  const hiddenStyle = preserveLayout ? "visibility" : "display";
+  const hiddenValue = preserveLayout ? "hidden" : "none";
   const show = (): void => {
     if (visible) return;
     visible = true;
-    if (preserveLayout) container.style.visibility = "";
-    else container.style.display = "";
+    container.style[hiddenStyle] = "";
   };
 
   const hide = (): void => {
     if (!visible) return;
     visible = false;
-    if (preserveLayout) container.style.visibility = "hidden";
-    else container.style.display = "none";
+    container.style[hiddenStyle] = hiddenValue;
     clear(active);
     curGroup = -1;
     curSize = 0;

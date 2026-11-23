@@ -140,7 +140,7 @@ export const createSearchBar = (
   parent.insertBefore(root, position === "top" ? (before ?? parent.firstChild) : null);
 
   const reflectClear = (): void => {
-    clear.classList.toggle(`${p}__clear-button--hidden`, input.value.length === 0);
+    clear.classList.toggle(`${p}__clear-button--hidden`, !input.value);
   };
 
   const onInput = (): void => {

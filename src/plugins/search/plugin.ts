@@ -134,7 +134,7 @@ export interface SearchPluginInstance<T extends VListItem = VListItem> extends V
 export function search<T extends VListItem = VListItem>(
   config: SearchPluginConfig<T> = {},
 ): SearchPluginInstance<T> {
-  const mode = config.mode ?? "filter";
+  const navigate = (config.mode ?? "filter") === "navigate";
   const position = config.position ?? "top";
   const text: Required<SearchText> = { ...DEFAULT_SEARCH_TEXT, ...config.text };
   const caseSensitive = config.caseSensitive ?? false;
@@ -236,7 +236,7 @@ export function search<T extends VListItem = VListItem>(
     const reveal = ctx.hooks.get("_scrollItemIntoView") as ((index: number) => void) | undefined;
     if (scrollToIndexFn) scrollToIndexFn(original, "center");
     else if (reveal) reveal(index);
-    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(index) - ctx.getState().containerSize / 2));
+    else ctx.scroll.to(Math.max(0, ctx.sizes.cache.getOffset(index) - engineState.containerSize / 2));
     const item = ctx.items.all()[original];
     ctx.emitter.emit("search:match", {
       index: original,
@@ -255,7 +255,7 @@ export function search<T extends VListItem = VListItem>(
    * already do (#106).
    */
   const updateNav = (): void => {
-    bar?.showNav(mode === "navigate" && matches.length > 0);
+    bar?.showNav(!!(navigate && matches.length));
   };
 
   const updateCounter = (): void => {
@@ -264,9 +264,9 @@ export function search<T extends VListItem = VListItem>(
     updateNav();
     if (!isActive()) {
       bar.setCounter("");
-    } else if (matches.length === 0) {
+    } else if (!matches.length) {
       bar.setCounter(text.noResults);
-    } else if (mode === "navigate") {
+    } else if (navigate) {
       bar.setCounter(text.position(current + 1, matches.length));
     } else {
       bar.setCounter(text.results(matches.length));
@@ -294,26 +294,27 @@ export function search<T extends VListItem = VListItem>(
     computeMatches();
     current = keepCurrent ? Math.max(0, Math.min(current, matches.length - 1)) : 0;
 
-    if (mode === "filter") syncFilter(isActive());
+    if (!navigate) syncFilter(isActive());
 
     setSearchingClass();
     updateCounter();
     ctx.render.force(); // fresh innerHTML so highlight re-applies for the new query
 
-    if (mode === "navigate" && matches.length > 0) scrollToMatch();
+    if (navigate && matches.length) scrollToMatch();
 
     emitSearchChange();
     armCancelTimer();
   };
 
-  const onItemUpdate = (id: string | number, updates: Partial<T>): void => {
-    if (!open || !isActive()) return;
+  // 0: membership unchanged. 1: the match list changed. 2: navigate should reveal.
+  const onItemUpdate = (id: string | number, updates: Partial<T>): number => {
+    if (!open || !isActive()) return 0;
     const items = ctx.items.all();
     const targetId = updates.id ?? id;
     const idx = items.findIndex((item) => item.id === targetId);
-    if (idx < 0) return;
+    if (idx < 0) return 0;
     const matched = matchesItem(items[idx], caseSensitive ? query : query.toLowerCase());
-    if (matched === matchSet.has(idx)) return;
+    if (matched === matchSet.has(idx)) return 0;
 
     const prevRow = matches[current];
     let pos = 0;
@@ -332,12 +333,7 @@ export function search<T extends VListItem = VListItem>(
           ? pos
           : 0;
 
-    if (mode === "filter") syncFilter(true);
-    updateCounter();
-    if (mode === "navigate" && matches.length > 0 && matches[current] !== prevRow) {
-      scrollToMatch();
-    }
-    emitSearchChange();
+    return navigate && matches.length && matches[current] !== prevRow ? 2 : 1;
   };
 
   // ── Open / close ────────────────────────────────────────────────────────────
@@ -360,9 +356,9 @@ export function search<T extends VListItem = VListItem>(
 
   const closeSearch = (): void => {
     clearCancelTimer();
-    const wasOpen = open || query.length > 0;
+    const wasOpen = open || !!query;
     open = false;
-    if (query.length > 0) applyQuery("");
+    if (query) applyQuery("");
     ctx.dom.root.classList.remove(`${classPrefix}--search-open`);
     setSearchingClass();
     if (wasOpen) ctx.emitter.emit("search:close", undefined);
@@ -371,10 +367,10 @@ export function search<T extends VListItem = VListItem>(
   // ── Match navigation ────────────────────────────────────────────────────────
 
   const step = (delta: number): void => {
-    if (matches.length === 0) return;
+    if (!matches.length) return;
     current = (current + delta + matches.length) % matches.length;
     updateCounter();
-    if (mode === "navigate") {
+    if (navigate) {
       scrollToMatch();
       ctx.render.force(); // re-evaluate the --current mark
     }
@@ -436,7 +432,7 @@ export function search<T extends VListItem = VListItem>(
     resolveOnce();
     const start = state.startIndex;
     const end = start + Math.max(0, state.visibleCount - 1);
-    const currentOriginal = mode === "navigate" ? matches[current] : -1;
+    const currentOriginal = navigate ? matches[current] : -1;
     // startIndex/visibleCount are data-space (groups fills them that way so
     // loaders request items, not headers). renderedElement is layout-space —
     // headers occupy indices — so look up through the mapping groups publishes.
@@ -462,7 +458,7 @@ export function search<T extends VListItem = VListItem>(
         }
       }
 
-      if (active && mode === "navigate") {
+      if (active && navigate) {
         // Cheap by construction: only the row entering or leaving the current
         // match touches the DOM — the rest compare one property and move on.
         const isCurrentRow = dataIndex === currentOriginal;
@@ -517,7 +513,7 @@ export function search<T extends VListItem = VListItem>(
           if (e.key === "Backspace") {
             e.preventDefault();
             applyQuery(query.slice(0, -1));
-            if (query.length === 0) closeSearch();
+            if (!query) closeSearch();
           } else if (isPrintable(e)) {
             e.preventDefault();
             if (!open) openSearch();
@@ -605,7 +601,7 @@ export function search<T extends VListItem = VListItem>(
           delete is.search;
           return;
         }
-        if (mode === "filter") {
+        if (!navigate) {
           // index is the filtered (virtual) position — all visible rows match.
           is.search = { matched: true, query, matchIndex: index, isCurrent: false };
         } else {
@@ -625,12 +621,26 @@ export function search<T extends VListItem = VListItem>(
       // filtered row.
       ctx.hooks.method("_getItem", getItem);
       ctx.hooks.method("_getLoadedItem", getItem);
+      // Groups asks for the index in the space its layout uses. A filter's
+      // slot is not the source index. The match list is refreshed first, so a
+      // row that just left the filter is not a slot.
+      ctx.hooks.method("_getIndexById", (id: string | number): number => {
+        const source = ctx.items.all().findIndex((row) => row.id === id);
+        return filtered ? matches.indexOf(source) : source;
+      });
       if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
       let prevOnUpdate = ctx.hooks.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined;
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
+        // Membership first, so groups regroups against the rows that still
+        // match, then navigation and the public events see that layout.
+        const changed = onItemUpdate(id, u);
         prevOnUpdate?.(id, u);
-        onItemUpdate(id, u);
+        if (!changed) return;
+        if (!navigate) syncFilter(true);
+        updateCounter();
+        if (changed > 1) scrollToMatch();
+        emitSearchChange();
       });
 
       // Public methods.

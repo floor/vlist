@@ -23,7 +23,7 @@ type ItemStateFn = (index: number, state: ItemState) => void;
 import type { EngineState } from "../../core/state";
 import type { SizeCache } from "../../core/sizes";
 import type { ElementPool } from "../../core/types";
-import { applyScrollBehavior } from "../../utils/apply-scroll-behavior";
+import { SCROLL_DURATION } from "../../constants";
 import { rowContentWritten } from "../../core/dom";
 import { createScrollPaddingReader } from "../../utils/scroll-padding";
 
@@ -60,11 +60,10 @@ export function groups<T extends VListItem = VListItem>(
     throw new Error("[vlist] groups: header height/width must be a positive number or function");
   }
 
-  const rawHeaderTemplate = config.header?.template ?? config.headerTemplate;
-  if (!rawHeaderTemplate) {
+  const headerTemplate = config.header?.template ?? config.headerTemplate;
+  if (!headerTemplate) {
     throw new Error("[vlist] groups: header.template is required");
   }
-  const headerTemplate = rawHeaderTemplate;
 
   let layout: GroupLayout<T>;
   let stickyHeader: StickyHeaderInstance | null = null;
@@ -128,10 +127,6 @@ export function groups<T extends VListItem = VListItem>(
   let getLoadedCount: (() => number) | null = null;
   let origSizeCacheRebuild: SizeCache["rebuild"];
 
-  function getLayoutItemCount(): number {
-    return layout.totalEntries;
-  }
-
   // Only rebuilds layout when the data total changes (initial load, reload).
   // Item content updates (placeholder → real) are handled by the render loop
   // updating existing DOM elements in-place — no layout rebuild needed.
@@ -173,6 +168,12 @@ export function groups<T extends VListItem = VListItem>(
   // align:end so the "scroll to last" reaches the true content bottom.
   let masonryGroupBottoms: number[] | null = null;
 
+  const laneTop = (lanes: Float64Array): number => {
+    let top = 0;
+    for (let c = 0; c < gridColumns; c++) if (lanes[c]! > top) top = lanes[c]!;
+    return top;
+  };
+
   function rebuildGridPositions(): void {
     if (gridColumns <= 0) { gridItemPositions = null; gridSorted = null; return; }
     const rawCross = engineState.crossSize || contentElement.clientWidth;
@@ -203,10 +204,7 @@ export function groups<T extends VListItem = VListItem>(
       for (let i = 0; i < total; i++) {
         const entry = layout.getEntry(i);
         if (entry.type === "header") {
-          let tallest = 0;
-          for (let c = 0; c < gridColumns; c++) {
-            if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
-          }
+          const tallest = laneTop(laneSizes);
           if (curGroupIdx >= 0) groupBottoms[curGroupIdx] = groupY + tallest;
           groupY += tallest;
           const h = sizeCache.getSize(i);
@@ -229,13 +227,7 @@ export function groups<T extends VListItem = VListItem>(
         }
       }
       // Finalize the last group's bottom
-      if (curGroupIdx >= 0) {
-        let tallest = 0;
-        for (let c = 0; c < gridColumns; c++) {
-          if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
-        }
-        groupBottoms[curGroupIdx] = groupY + tallest;
-      }
+      if (curGroupIdx >= 0) groupBottoms[curGroupIdx] = groupY + laneTop(laneSizes);
       masonryGroupBottoms = groupBottoms;
     } else {
       masonryGroupBottoms = null;
@@ -324,13 +316,6 @@ export function groups<T extends VListItem = VListItem>(
     placeholderIndices.clear();
   }
 
-  function drainDetached(): void {
-    if (detached.size > 0) {
-      detached.forEach((element) => pool.release(element));
-      detached.clear();
-    }
-  }
-
   function writeContent(element: HTMLElement, content: string | Node): void {
     if (typeof content === "string") element.innerHTML = content;
     else {
@@ -364,14 +349,17 @@ export function groups<T extends VListItem = VListItem>(
 
       element.className = groupHeaderClass;
       element.setAttribute("role", "presentation");
+      element.removeAttribute("id");
       element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("aria-setsize");
       element.setAttribute("data-id", headerId);
 
       if (isX && stickyHeader && entry.group.groupIndex === 0) {
         element.style.display = "none";
       } else {
         element.style.display = "";
-        writeContent(element, headerTemplate(groupKey, entry.group.groupIndex));
+        writeContent(element, headerTemplate!(groupKey, entry.group.groupIndex));
       }
       renderedHeaderKey.set(element, groupKey);
       return true;
@@ -460,7 +448,7 @@ export function groups<T extends VListItem = VListItem>(
     const isForced = forceNextRender;
     forceNextRender = false;
 
-    const totalItems = getLayoutItemCount();
+    const totalItems = layout.totalEntries;
     if (cs <= 0 || totalItems === 0) {
       if (rendered.size > 0) {
         rendered.forEach((element) => {
@@ -611,7 +599,10 @@ export function groups<T extends VListItem = VListItem>(
       contentElement.appendChild(fragment);
     }
 
-    drainDetached();
+    if (detached.size > 0) {
+      detached.forEach((element) => pool.release(element));
+      detached.clear();
+    }
 
     const totalSize = gridItemPositions ? getGridContentSize() : sizeCache.getTotalSize();
     updateContentSize?.(totalSize);
@@ -772,15 +763,6 @@ export function groups<T extends VListItem = VListItem>(
       layout = createGroupLayout(dataCount, config, getLoadedItem ?? ctxGetItem);
       lastDataCount = dataCount;
 
-      const getHeaderHeight =
-        typeof headerHeightRaw === "number"
-          ? (_groupIndex: number): number => headerHeightRaw
-          : (groupIndex: number): number => {
-              const group = layout.groups[groupIndex];
-              if (!group) return 0;
-              return (headerHeightRaw as Function)(group.key, groupIndex);
-            };
-
       // From here on the cache is variable because the grouped spec wraps
       // headers and data together, so the fact cannot be read back later.
       // Capture what the installed data spec was, for remeasureItem().
@@ -793,7 +775,7 @@ export function groups<T extends VListItem = VListItem>(
         const entry = layout.getEntry(layoutIndex);
         if (entry.type === "header") {
           if (config.sticky !== false && entry.group.groupIndex === 0) return 0;
-          return getHeaderHeight(entry.group.groupIndex);
+          return layout.getHeaderHeight(entry.group.groupIndex);
         }
         return origGetSize(entry.dataIndex);
       };
@@ -813,11 +795,14 @@ export function groups<T extends VListItem = VListItem>(
       origSizeCacheRebuild = sizeCache.rebuild;
       sizeCache.rebuild = (n: number): void => {
         lastRebuildLoadedCount = -1;
+        // Search publishes the filtered reader during its setup, after this
+        // plugin. A query in the same task rebuilds before the microtask
+        // caches that reader, so resolve it on the rebuild the query already runs.
+        if (!getLoadedItem) {
+          getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
+        }
         if (tableMode) {
           lastDataCount = n;
-          if (!getLoadedItem) {
-            getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
-          }
           layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.items.all()[i] as T | undefined));
           engineState.totalItems = layout.totalEntries;
           if (stickyHeader) {
@@ -846,12 +831,7 @@ export function groups<T extends VListItem = VListItem>(
         const renderInto = (slot: HTMLElement, groupIndex: number): void => {
           const group = layout.groups[groupIndex];
           if (!group) return;
-          const result = headerTemplate(group.key, groupIndex);
-          if (typeof result === "string") {
-            slot.innerHTML = result;
-          } else {
-            slot.replaceChildren(result);
-          }
+          writeContent(slot, headerTemplate(group.key, groupIndex));
         };
 
         const headerH = layout.getHeaderHeight(0);
@@ -1145,7 +1125,26 @@ export function groups<T extends VListItem = VListItem>(
           return pos;
         };
 
-        applyScrollBehavior(ctx.scroll, getTarget, behavior, duration, easing);
+        if (behavior === "smooth") ctx.scroll.smoothTo(getTarget, duration ?? SCROLL_DURATION, easing);
+        else ctx.scroll.to(getTarget());
+      });
+
+      // Same signal as a filter that keeps the count: syncLayoutIfNeeded
+      // rebuilds. A table paints through its own renderer, so that change
+      // uses the size-cache rebuild that already owns the table layout.
+      // A same-key update leaves the signal alone. all() is data space:
+      // table() replaces items.at with a layout-space reader.
+      ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<T>): void => {
+        const key = updates.id ?? id;
+        const at = getMethod?.("_getIndexById") as ((itemId: string | number) => number) | undefined;
+        // A hook owns the index space: data() returns the source index, search
+        // returns the filtered slot. Falling through would re-read source space.
+        const index = at ? at(key) : ctx.items.all().findIndex((row) => row.id === key);
+        const item = index < 0 ? undefined : (getLoadedItem ? getLoadedItem(index) : ctx.items.all()[index]);
+        if (item && config.getGroupForIndex(index, item) !== layout.getGroupAtDataIndex(index).key) {
+          if (tableMode) sizeCache.rebuild(layout.totalEntries - layout.groupCount);
+          else lastDataCount = -1;
+        }
       });
 
       ctx.hooks.onDestroy(() => {
