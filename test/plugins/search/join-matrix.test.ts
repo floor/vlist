@@ -1007,7 +1007,7 @@ function added(dir: Dir): Row {
 const cases: Case[] = [];
 
 function add(op: Op, dir: Dir, mode: Mode, surface: Surface, throwKind: ThrowKind, tag?: Tag): void {
-  cases.push({
+  cases.push(<Case>{
     id: `${op}/${dir}/${mode}/${surface}/${throwKind}`,
     op,
     dir,
@@ -1333,7 +1333,7 @@ describe("search join matrix against 3.8.10", () => {
         expect(threw, spec.id).toBe(spec.throwKind === "group" ? "group" : "earlier");
         expect(afterThrow, spec.id).toEqual(before);
         const cleanId = spec.id.replace(`/${spec.throwKind}`, "/none");
-        expect(after, spec.id).toEqual(EXPECTED[cleanId]);
+        expect(after, spec.id).toEqual(EXPECTED[cleanId]!);
         return;
       }
 
@@ -1351,7 +1351,7 @@ describe("search join matrix against 3.8.10", () => {
         expect(noted?.note, spec.id).toBe("meta");
       }
 
-      expect(after, spec.id).toEqual(EXPECTED[spec.id]);
+      expect(after, spec.id).toEqual(EXPECTED[spec.id]!);
     }));
   }
 
@@ -1489,7 +1489,7 @@ describe("search join matrix against 3.8.10", () => {
         expect(threw, surface).toBe("group");
         expect(side, surface).toBeNull();
         expect(afterSide, surface).toEqual(before);
-        expect(after, surface).toEqual(EXPECTED[`updateItem/join/${mode}/${surface}/none`]);
+        expect(after, surface).toEqual(EXPECTED[`updateItem/join/${mode}/${surface}/none`]!);
       }));
     }
   }
