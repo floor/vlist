@@ -1148,27 +1148,15 @@ export function groups<T extends VListItem = VListItem>(
         applyScrollBehavior(ctx.scroll, getTarget, behavior, duration, easing);
       });
 
-      // updateItem mutates the item, then force-renders. The layout stays
-      // until the group key changes; a same-key update only repaints.
-      const prevOnItemUpdate = ctx.hooks.get("_onItemUpdate") as
-        ((id: string | number, updates: Partial<T>) => void) | undefined;
+      // Same signal as a filter that keeps the count: syncLayoutIfNeeded
+      // rebuilds. A same-key update leaves the signal alone.
       ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<T>): void => {
-        prevOnItemUpdate?.(id, updates);
-        const itemId = updates.id ?? id;
-        const byId = getMethod?.("_getIndexById") as ((key: string | number) => number) | undefined;
-        let index = byId ? byId(itemId) : -1;
-        if (index < 0) {
-          const listed = ctx.items.all();
-          for (let i = 0; i < listed.length; i++) {
-            if (listed[i]!.id === itemId) { index = i; break; }
-          }
-        }
-        if (index < 0) return;
-        const item = (getLoadedItem ?? ctxGetItem)(index);
-        if (!item) return;
-        if (config.getGroupForIndex(index, item) !== layout.getGroupAtDataIndex(index).key) {
-          lastRebuildLoadedCount = -1;
-        }
+        const key = updates.id ?? id;
+        const at = getMethod?.("_getIndexById") as ((itemId: string | number) => number) | undefined;
+        let index = at?.(key) ?? -1;
+        if (index < 0) index = ctx.items.all().findIndex((row) => row.id === key);
+        const item = index < 0 ? undefined : (getLoadedItem ?? ctxGetItem)(index);
+        if (item && config.getGroupForIndex(index, item) !== layout.getGroupAtDataIndex(index).key) lastDataCount = -1;
       });
 
       ctx.hooks.onDestroy(() => {
