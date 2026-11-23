@@ -595,4 +595,37 @@ describe("groups() updateItem group key", () => {
     expect(root.getAttribute("aria-rowcount")).toBe("5");
     expect(container.querySelectorAll(".vlist-table-row").length).toBe(4);
   }));
+
+  it("restores a plain table after a longer setItems and an edit", scoped(async (scope) => {
+    const source = rows([["A", 4]]).map((row) => ({ ...row, label: row.group }));
+    const adapter: VListAdapter<Row> = {
+      read: async ({ offset, limit }) => ({
+        items: source.slice(offset, offset + limit),
+        total: source.length,
+      }),
+    };
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        data<Row>({ adapter, total: source.length }),
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+      ],
+    );
+    scope.own(list, container);
+    await waitFor(
+      () => container.querySelectorAll(".vlist-table-row").length === 4,
+      "the four rows to render",
+    );
+    const root = container.querySelector(".vlist") as HTMLElement;
+    list.setItems(rows([["A", 6]]).map((row) => ({ ...row, label: row.group })));
+    expect(root.getAttribute("aria-rowcount")).toBe("7");
+    list.updateItem(2, { label: "edited" });
+    await tick();
+    expect(root.getAttribute("aria-rowcount")).toBe("5");
+    expect(container.querySelectorAll(".vlist-table-row").length).toBe(4);
+  }));
 });

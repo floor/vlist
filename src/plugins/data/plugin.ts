@@ -268,9 +268,10 @@ export function data<T extends VListItem = VListItem>(
               lastRebuildCached = newCached;
               engineState.totalItems = newTotal;
               sizeCache.rebuild(newTotal);
-            } else if (engineState.totalItems < newTotal && !ctx.hooks.get("_groupsLayoutPending")) {
-              // setItems() wrote the static array length. A plain table reads
-              // that as its row count; a grouped table keeps the layout length.
+            } else if (engineState.totalItems !== newTotal && !ctx.hooks.get("_groupsLayoutPending")) {
+              // setItems() wrote the static array length, shorter or longer.
+              // A plain table reads that as its row count; a grouped table
+              // keeps the layout length.
               engineState.totalItems = newTotal;
             }
             ctx.render.contentSize(sizeCache.getTotalSize());
