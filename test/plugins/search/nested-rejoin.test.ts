@@ -68,13 +68,14 @@ describe("search nested rejoin", () => {
     );
     listRef.list = list;
     const events: number[] = [];
+    const api = list as VList<Row> & { setQuery(query: string): void; getMatches(): number[] };
     list.on("search:change", (event) => events.push(event.matches));
-    list.setQuery("show");
+    api.setQuery("show");
     events.length = 0;
 
     list.updateItem(2, { label: "show" });
 
-    const matches = list.getMatches();
+    const matches = api.getMatches();
     const counter = container.querySelector(".vlist-search__counter")?.textContent ?? "";
     const reported = events[events.length - 1];
     expect(matches).toEqual([0, 1, 2]);
