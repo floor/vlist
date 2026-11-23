@@ -111,8 +111,9 @@ export function groups<T extends VListItem = VListItem>(
   // Reused in the next render pass to avoid pool round-trip (which clears innerHTML).
   const detached = new Map<string, HTMLElement>();
   // Header ids are positional. This is the group key last painted into the
-  // element, written only when that paint happens. Pool release drops it so a
-  // recycled node cannot skip on a key from its earlier life.
+  // element, written only when that paint happens. pool.release clears
+  // data-id, so a recycled node fails the id check and is rewritten; the
+  // WeakMap entry is left in place.
   const renderedHeaderKey = new WeakMap<HTMLElement, string>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
@@ -309,11 +310,6 @@ export function groups<T extends VListItem = VListItem>(
   }
 
 
-  function releaseElement(element: HTMLElement): void {
-    renderedHeaderKey.delete(element);
-    pool.release(element);
-  }
-
   function detachAll(): void {
     rendered.forEach((element) => {
       element.remove();
@@ -321,7 +317,7 @@ export function groups<T extends VListItem = VListItem>(
       if (id) {
         detached.set(id, element);
       } else {
-        releaseElement(element);
+        pool.release(element);
       }
     });
     rendered.clear();
@@ -330,7 +326,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function drainDetached(): void {
     if (detached.size > 0) {
-      detached.forEach((element) => releaseElement(element));
+      detached.forEach((element) => pool.release(element));
       detached.clear();
     }
   }
@@ -469,7 +465,7 @@ export function groups<T extends VListItem = VListItem>(
       if (rendered.size > 0) {
         rendered.forEach((element) => {
           element.remove();
-          releaseElement(element);
+          pool.release(element);
         });
         rendered.clear();
         placeholderIndices.clear();
@@ -529,7 +525,7 @@ export function groups<T extends VListItem = VListItem>(
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
         element.remove();
-        releaseElement(element);
+        pool.release(element);
         rendered.delete(idx);
         placeholderIndices.delete(idx);
       }

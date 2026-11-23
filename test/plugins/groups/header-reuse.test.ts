@@ -214,6 +214,51 @@ describe("groups() header text after an in-place shift", () => {
     }
   });
 
+  it("rewrites a pooled header when it is reused for a different group", async () => {
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: rows([[STOPPED, 23]]),
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+      ],
+    );
+    try {
+      await tick();
+      const content = container.querySelector(".vlist-content") as HTMLElement;
+      const header = content.querySelector(".vlist-group-header") as HTMLElement;
+      expect(header.getAttribute("data-id")).toBe("__group_header_0");
+      header.setAttribute("data-probe", "header");
+
+      const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+      viewport.scrollTop = 160;
+      viewport.dispatchEvent(new Event("scroll"));
+      await tick();
+      expect(header.isConnected).toBe(false);
+
+      list.setItems(rows([[DONE, 23]]));
+      await tick();
+      viewport.scrollTop = 0;
+      viewport.dispatchEvent(new Event("scroll"));
+      await tick();
+
+      expect(header.isConnected).toBe(true);
+      expect(header.getAttribute("data-id")).toBe("__group_header_0");
+      expect(textOf(header)).toBe(DONE);
+      expectAligned(container);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
   it("does not rewrite an unchanged header on scroll", async () => {
     let writes = 0;
     const container = createContainer({ width: 300, height: 800 });
