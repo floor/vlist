@@ -166,6 +166,8 @@ export function search<T extends VListItem = VListItem>(
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
+  // A join is recorded here and spliced in after the previous hook, so that
+  // hook still sees the old slots. -1 when this update did not insert.
   let hold = -1;
   let holdAt = 0;
   let cut = false;
@@ -334,6 +336,7 @@ export function search<T extends VListItem = VListItem>(
       cut = true;
       matches.splice(pos, 1);
       matchSet.delete(idx);
+      // indexOf is -1 when the focused row was the one removed, or there was none.
       current = matches.indexOf(prevRow as number);
       if (current < 0) current = pos < matches.length ? pos : 0;
     }
@@ -654,8 +657,11 @@ export function search<T extends VListItem = VListItem>(
           if (!removed && matchSet.has(idx)) {
             at = 0;
             while (at < matches.length && matches[at]! < idx) at++;
-            matches.splice(at, 0, idx);
-            if (current >= at && matches.length > 1) current++;
+            // A nested rejoin may have spliced this row already.
+            if (matches[at] !== idx) {
+              matches.splice(at, 0, idx);
+              if (current >= at && matches.length > 1) current++;
+            }
           }
           if (!changed) return;
           if (!navigate) {
