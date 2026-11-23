@@ -992,14 +992,10 @@ function patchOf(dir: Dir): { id: number; updates: Partial<Row> } {
   return { id: 4, updates: { note: "kept" } };
 }
 
-// A throw is the recovery contract. Reversal and join-leave earlier-hook
-// throws, and the plain filter join-leave group throw, are included: their
-// old snapshots pinned a leftover match and a short event list.
-function nestedTag(dir: Dir, throwKind: ThrowKind, mode?: Mode, surface?: Surface): Tag | undefined {
+// A throw is the recovery contract: the error propagates, the catch still
+// shows the previous filter, and the retry matches the clean run.
+function nestedTag(dir: Dir, throwKind: ThrowKind): Tag | undefined {
   if (throwKind === "none" || dir === "match-meta") return undefined;
-  if (dir === "join-leave" && throwKind === "group") {
-    return mode === "filter" && surface === "plain" ? "b" : undefined;
-  }
   if (dir === "same" || dir === "other" || dir === "reversal" || dir === "join-leave") return "b";
   return undefined;
 }
@@ -1040,8 +1036,8 @@ for (const mode of ["filter", "navigate"] as const) {
       const once = dir === "match-meta" && mode === "filter" ? "a" : nestedTag(dir, "none");
       add("nested", dir, mode, surface, "none", once);
       if (dir === "match-meta") continue;
-      add("nested", dir, mode, surface, "group", nestedTag(dir, "group", mode, surface));
-      add("nested", dir, mode, surface, "earlier", nestedTag(dir, "earlier", mode, surface));
+      add("nested", dir, mode, surface, "group", nestedTag(dir, "group"));
+      add("nested", dir, mode, surface, "earlier", nestedTag(dir, "earlier"));
     }
     add("setItems", "longer", mode, surface, "none");
     add("setItems", "shorter", mode, surface, "none");
