@@ -541,6 +541,75 @@ describe("groups() updateItem group key", () => {
     }
   });
 
+  it("finds the joined row by id after the group callback throws", async () => {
+    let throwOnce = true;
+    const groupOf = (_index: number, item: Row | undefined): string => {
+      if (throwOnce && item?.id === 1 && item.label === "show") {
+        throwOnce = false;
+        throw new Error("group");
+      }
+      return item?.group ?? "";
+    };
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: [
+          { id: 1, group: "A", label: "hide" },
+          { id: 2, group: "B", label: "show" },
+          { id: 3, group: "C", label: "show" },
+          { id: 4, group: "D", label: "show" },
+        ],
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: groupOf,
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        {
+          // Groups skips a row hidden for the join, so the same callback has to
+          // throw from the update hook the search wrapper calls.
+          name: "join-throw",
+          priority: 30,
+          setup(ctx) {
+            const prev = ctx.hooks.get("_onItemUpdate") as
+              ((id: string | number, updates: Partial<Row>) => void) | undefined;
+            ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
+              if (throwOnce && id === 1) {
+                groupOf(0, ctx.items.all().find((row) => row.id === id));
+              }
+              prev?.(id, updates);
+            });
+          },
+        },
+        search<Row>({ mode: "filter", field: "label", position: "none" }),
+      ],
+    );
+    const announced = list as VList<Row> & { setQuery(query: string): void };
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
+      list.updateItem(1, { group: "Z" });
+      await tick();
+      expect(tableSequence(container)).toEqual([
+        "H:Z#__group_header_0",
+        "I:Z#1",
+        "H:B#__group_header_1",
+        "I:B#2",
+        "H:C#__group_header_2",
+        "I:C#3",
+      ]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
   it("regroups a filtered edit issued in the same task as the query", async () => {
     const container = createContainer({ width: 300, height: 800 });
     const list = createVList<Row>(

@@ -636,8 +636,12 @@ export function search<T extends VListItem = VListItem>(
         // Membership first, so groups regroups against the rows that still
         // match, then navigation and the public events see that layout.
         const changed = onItemUpdate(id, u);
-        prevOnUpdate?.(id, u);
-        joined = -1;
+        try {
+          prevOnUpdate?.(id, u);
+        } finally {
+          // A throw from the previous hook must not leave this row hidden.
+          joined = -1;
+        }
         if (!changed) return;
         if (!navigate) syncFilter(true);
         updateCounter();

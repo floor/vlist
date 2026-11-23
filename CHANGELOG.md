@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- An edit that brings a row into an active search filter regroups once. If the group callback throws during that edit, a later update finds the row by id.
+
 ## [3.8.10] - 2026-11-23
 
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
