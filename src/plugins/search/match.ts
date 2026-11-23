@@ -86,7 +86,6 @@ export const highlightElement = (
   clearHighlights(root, matchClass);
 
   const needle = caseSensitive ? query : query.toLowerCase();
-  const qlen = query.length;
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 
@@ -97,7 +96,7 @@ export const highlightElement = (
   for (const textNode of targets) {
     const text = textNode.nodeValue ?? "";
     const hay = caseSensitive ? text : text.toLowerCase();
-    let idx = hay.indexOf(needle, 0);
+    let idx = hay.indexOf(needle);
     if (idx === -1) continue;
     const frag = document.createDocumentFragment();
     let last = 0;
@@ -105,9 +104,9 @@ export const highlightElement = (
       if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
       const mark = document.createElement("mark");
       mark.className = matchClass;
-      mark.textContent = text.slice(idx, idx + qlen);
+      mark.textContent = text.slice(idx, idx + needle.length);
       frag.appendChild(mark);
-      last = idx + qlen;
+      last = idx + needle.length;
       idx = hay.indexOf(needle, last);
     }
     if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));

@@ -166,7 +166,7 @@ export const createSearchBar = (
     setCounter(value: string): void {
       counter.textContent = value;
     },
-    showNav(show: boolean): void {
+    showNav(show: boolean | number): void {
       prev.classList.toggle(`${p}__nav-prev--hidden`, !show);
       next.classList.toggle(`${p}__nav-next--hidden`, !show);
     },

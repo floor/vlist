@@ -257,14 +257,10 @@ export function search<T extends VListItem = VListItem>(
    * leave nothing to navigate: hide, as the counter and the clear button
    * already do (#106).
    */
-  const updateNav = (): void => {
-    bar?.showNav(!!(navigate && matches.length));
-  };
-
   const updateCounter = (): void => {
     if (!bar) return;
     // Same query/matches state as the counter — refreshed together.
-    updateNav();
+    bar.showNav(navigate && matches.length);
     if (!isActive()) {
       bar.setCounter("");
     } else if (!matches.length) {
@@ -320,22 +316,19 @@ export function search<T extends VListItem = VListItem>(
     if (matched === matchSet.has(idx)) return 0;
 
     const prevRow = matches[current];
-    let pos = 0;
-    while (pos < matches.length && matches[pos]! < idx) pos++;
+    let pos = matches.findIndex((row) => row >= idx);
+    if (pos < 0) pos = matches.length;
     if (matched) {
       matches.splice(pos, 0, idx);
       matchSet.add(idx);
-      if (filtered) joined = idx;
+      joined = idx;
     } else {
       matches.splice(pos, 1);
       matchSet.delete(idx);
     }
-    current =
-      prevRow !== undefined && prevRow !== idx
-        ? matches.indexOf(prevRow)
-        : pos < matches.length
-          ? pos
-          : 0;
+    // indexOf is -1 when the focused row was the one removed, or there was none.
+    current = matches.indexOf(prevRow);
+    if (current < 0) current = pos < matches.length ? pos : 0;
 
     return navigate && matches.length && matches[current] !== prevRow ? 2 : 1;
   };
@@ -360,7 +353,7 @@ export function search<T extends VListItem = VListItem>(
 
   const closeSearch = (): void => {
     clearCancelTimer();
-    const wasOpen = open || !!query;
+    const wasOpen = open || query;
     open = false;
     if (query) applyQuery("");
     ctx.dom.root.classList.remove(`${classPrefix}--search-open`);
@@ -424,8 +417,6 @@ export function search<T extends VListItem = VListItem>(
       fn(el);
     }
   };
-  const highlightTarget = (t: HTMLElement): void => highlightElement(t, query, caseSensitive, matchClass);
-  const clearTarget = (t: HTMLElement): void => clearHighlights(t, matchClass);
 
   const highlightVisible = (state: EngineState): void => {
     if (!doHighlight) return;
@@ -450,14 +441,14 @@ export function search<T extends VListItem = VListItem>(
       if (row._stamp !== queryVersion) {
         // Newly rendered, rewritten, or built for an older query.
         if (active) {
-          eachScope(el, highlightTarget);
+          eachScope(el, (t) => highlightElement(t, query, caseSensitive, matchClass));
           marksPresent = true;
           row._stamp = queryVersion;
           row._searchMarkCurrent = false;
         } else if (row._stamp) {
           // Marks built for a query that is no longer active. A row the
           // renderer has written since carries 0 and costs nothing.
-          eachScope(el, clearTarget);
+          eachScope(el, (t) => clearHighlights(t, matchClass));
           row._stamp = 0;
         }
       }
@@ -588,7 +579,7 @@ export function search<T extends VListItem = VListItem>(
             onKeydown,
           },
         );
-        updateNav();
+        bar?.showNav(navigate && matches.length);
         if (variant !== "default") {
           bar.root.classList.add(`${classPrefix}-search--${variant}`);
         }
