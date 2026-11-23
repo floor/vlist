@@ -21,6 +21,7 @@ interface Row extends VListItem {
   id: number;
   group: string;
   label?: string;
+  note?: string;
 }
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
@@ -541,37 +542,104 @@ describe("groups() updateItem group key", () => {
     }
   });
 
-  it("finds the joined row by id after the group callback throws", async () => {
+  const shownRows = [
+    { id: 1, group: "A", label: "hide" },
+    { id: 2, group: "B", label: "show" },
+    { id: 3, group: "C", label: "show" },
+    { id: 4, group: "D", label: "show" },
+  ];
+  const filteredThree = [
+    "H:B#__group_header_0",
+    "I:B#2",
+    "H:C#__group_header_1",
+    "I:C#3",
+    "H:D#__group_header_2",
+    "I:D#4",
+  ];
+  const filteredFour = [
+    "H:A#__group_header_0",
+    "I:A#1",
+    "H:B#__group_header_1",
+    "I:B#2",
+    "H:C#__group_header_2",
+    "I:C#3",
+    "H:D#__group_header_3",
+    "I:D#4",
+  ];
+
+  it("keeps the table in agreement when grouping throws during a join", async () => {
     let throwOnce = true;
-    const groupOf = (_index: number, item: Row | undefined): string => {
-      if (throwOnce && item?.id === 1 && item.label === "show") {
-        throwOnce = false;
-        throw new Error("group");
-      }
-      return item?.group ?? "";
-    };
     const container = createContainer({ width: 300, height: 800 });
     const list = createVList<Row>(
       {
         container,
-        items: [
-          { id: 1, group: "A", label: "hide" },
-          { id: 2, group: "B", label: "show" },
-          { id: 3, group: "C", label: "show" },
-          { id: 4, group: "D", label: "show" },
-        ],
+        items: shownRows.map((row) => ({ ...row })),
         item: { height: 40, template: (item) => item.label ?? item.group },
       },
       [
         table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
         groups<Row>({
-          getGroupForIndex: groupOf,
+          getGroupForIndex: (_index, item) => {
+            if (throwOnce && item?.id === 1 && item.label === "show") {
+              throwOnce = false;
+              throw new Error("group");
+            }
+            return item?.group ?? "";
+          },
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "filter", field: "label" }),
+      ],
+    );
+    const announced = list as VList<Row> & {
+      setQuery(query: string): void;
+      getMatches(): number[];
+    };
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      const root = container.querySelector(".vlist") as HTMLElement;
+      expect(root.getAttribute("aria-rowcount")).toBe("7");
+      expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
+      expect(announced.getMatches()).toHaveLength(3);
+      expect(list.total).toBe(3);
+      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("3 results");
+      list.updateItem(4, { note: "later" });
+      await tick();
+      expect(tableSequence(container)).toEqual(filteredThree);
+      expect(root.getAttribute("aria-rowcount")).toBe("7");
+      expect(list.total).toBe(3);
+      list.updateItem(1, { label: "show" });
+      await tick();
+      expect(tableSequence(container)).toEqual(filteredFour);
+      expect(root.getAttribute("aria-rowcount")).toBe("9");
+      expect(list.total).toBe(4);
+      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("4 results");
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("retries a join after an earlier hook throws and shows every match", async () => {
+    let throwOnce = true;
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: shownRows.map((row) => ({ ...row })),
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
           header: { height: 32, template: (key) => key },
           sticky: false,
         }),
         {
-          // Groups skips a row hidden for the join, so the same callback has to
-          // throw from the update hook the search wrapper calls.
           name: "join-throw",
           priority: 30,
           setup(ctx) {
@@ -579,7 +647,73 @@ describe("groups() updateItem group key", () => {
               ((id: string | number, updates: Partial<Row>) => void) | undefined;
             ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
               if (throwOnce && id === 1) {
-                groupOf(0, ctx.items.all().find((row) => row.id === id));
+                throwOnce = false;
+                throw new Error("group");
+              }
+              prev?.(id, updates);
+            });
+          },
+        },
+        search<Row>({ mode: "filter", field: "label" }),
+      ],
+    );
+    const announced = list as VList<Row> & {
+      setQuery(query: string): void;
+      getMatches(): number[];
+    };
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
+      expect(announced.getMatches()).toHaveLength(3);
+      expect(list.total).toBe(3);
+      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("3 results");
+      expect(tableSequence(container)).toEqual(filteredThree);
+      list.updateItem(1, { label: "show" });
+      await tick();
+      expect(tableSequence(container)).toEqual(filteredFour);
+      expect(list.total).toBe(4);
+      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("4 results");
+      const root = container.querySelector(".vlist") as HTMLElement;
+      expect(root.getAttribute("aria-rowcount")).toBe("9");
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("keeps the outer join hidden when an earlier hook updates another row", async () => {
+    let groupingCalls = 0;
+    let nest = true;
+    let list: VList<Row> | null = null;
+    const container = createContainer({ width: 300, height: 800 });
+    list = createVList<Row>(
+      {
+        container,
+        items: shownRows.map((row) => ({ ...row })),
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => {
+            groupingCalls += 1;
+            return item?.group ?? "";
+          },
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        {
+          name: "nested-update",
+          priority: 30,
+          setup(ctx) {
+            const prev = ctx.hooks.get("_onItemUpdate") as
+              ((id: string | number, updates: Partial<Row>) => void) | undefined;
+            ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
+              if (nest && id === 1) {
+                nest = false;
+                list?.updateItem(2, { note: "nested" });
               }
               prev?.(id, updates);
             });
@@ -593,17 +727,13 @@ describe("groups() updateItem group key", () => {
       await tick();
       announced.setQuery("show");
       await tick();
-      expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
-      list.updateItem(1, { group: "Z" });
+      groupingCalls = 0;
+      list.updateItem(1, { label: "show" });
+      // The nested edit checks its own row once. The join itself rebuilds the
+      // four matches once; it does not also rebuild the previous three.
+      expect(groupingCalls).toBe(5);
       await tick();
-      expect(tableSequence(container)).toEqual([
-        "H:Z#__group_header_0",
-        "I:Z#1",
-        "H:B#__group_header_1",
-        "I:B#2",
-        "H:C#__group_header_2",
-        "I:C#3",
-      ]);
+      expect(tableSequence(container)).toEqual(filteredFour);
     } finally {
       list.destroy();
       container.remove();

@@ -166,9 +166,11 @@ export function search<T extends VListItem = VListItem>(
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
-  // A row that just joined the filter is hidden from the index hook until the
-  // previous update hook returns, so that hook does not rebuild the old length.
-  let joined = -1;
+  // A join is recorded here and spliced in after the previous hook, so that
+  // hook still sees the old slots. -1 when this update did not insert.
+  let hold = -1;
+  let holdAt = 0;
+  let cut = false;
   /** Position within `matches` of the focused match (navigate mode). */
   let current = 0;
   /** Whether a virtual filter is currently applied (filter mode). */
@@ -307,6 +309,8 @@ export function search<T extends VListItem = VListItem>(
 
   // 0: membership unchanged. 1: the match list changed. 2: navigate should reveal.
   const onItemUpdate = (id: string | number, updates: Partial<T>): number => {
+    hold = -1;
+    cut = false;
     if (!open || !isActive()) return 0;
     const items = ctx.items.all();
     const targetId = updates.id ?? id;
@@ -319,16 +323,19 @@ export function search<T extends VListItem = VListItem>(
     let pos = matches.findIndex((row) => row >= idx);
     if (pos < 0) pos = matches.length;
     if (matched) {
-      matches.splice(pos, 0, idx);
-      matchSet.add(idx);
-      joined = idx;
+      // Spliced after the previous hook so a nested update keeps its old slot.
+      hold = idx;
+      holdAt = pos;
     } else {
+      cut = true;
+      hold = idx;
+      holdAt = pos;
       matches.splice(pos, 1);
       matchSet.delete(idx);
+      // indexOf is -1 when the focused row was the one removed, or there was none.
+      current = matches.indexOf(prevRow as number);
+      if (current < 0) current = pos < matches.length ? pos : 0;
     }
-    // indexOf is -1 when the focused row was the one removed, or there was none.
-    current = matches.indexOf(prevRow as number);
-    if (current < 0) current = pos < matches.length ? pos : 0;
 
     return navigate && matches.length && matches[current] !== prevRow ? 2 : 1;
   };
@@ -627,7 +634,7 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_getIndexById", (id: string | number): number => {
         const source = ctx.items.all().findIndex((row) => row.id === id);
         if (!filtered) return source;
-        return source === joined ? -1 : matches.indexOf(source);
+        return matches.indexOf(source);
       });
       if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
@@ -635,18 +642,40 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
         // Membership first, so groups regroups against the rows that still
         // match, then navigation and the public events see that layout.
+        const prevTotal = engineState.totalItems;
+        const prevCur = current;
         const changed = onItemUpdate(id, u);
+        const at = holdAt;
+        const idx = hold;
+        const removed = cut;
+        let synced = false;
         try {
           prevOnUpdate?.(id, u);
-        } finally {
-          // A throw from the previous hook must not leave this row hidden.
-          joined = -1;
+          if (!changed) return;
+          if (!removed) {
+            matches.splice(at, 0, idx);
+            matchSet.add(idx);
+            if (prevCur >= at && matches.length > 1) current = prevCur + 1;
+          }
+          if (!navigate) syncFilter(true);
+          synced = true;
+          updateCounter();
+          if (changed > 1) scrollToMatch();
+          emitSearchChange();
+        } catch (err) {
+          if (!synced) {
+            if (removed) {
+              matches.splice(at, 0, idx);
+              matchSet.add(idx);
+            } else if (matchSet.has(idx)) {
+              matches.splice(at, 1);
+              matchSet.delete(idx);
+            }
+            current = prevCur;
+            engineState.totalItems = prevTotal;
+          }
+          throw err;
         }
-        if (!changed) return;
-        if (!navigate) syncFilter(true);
-        updateCounter();
-        if (changed > 1) scrollToMatch();
-        emitSearchChange();
       });
 
       // Public methods.
