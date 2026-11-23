@@ -634,13 +634,38 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
         // Membership first, so groups regroups against the rows that still
         // match, then navigation and the public events see that layout.
+        const prevTotal = engineState.totalItems;
+        const prevCur = current;
+        const snap = matches.slice();
+        const snapSet = new Set(matchSet);
         const changed = onItemUpdate(id, u);
-        prevOnUpdate?.(id, u);
-        if (!changed) return;
-        if (!navigate) syncFilter(true);
-        updateCounter();
-        if (changed > 1) scrollToMatch();
-        emitSearchChange();
+        try {
+          prevOnUpdate?.(id, u);
+          if (!changed) return;
+          if (!navigate) {
+            syncFilter(true);
+            // A plain list rebuilds on the paint. That callback has to throw
+            // inside this try, or the match list is committed and the layout is not.
+            ctx.render.force();
+          }
+          updateCounter();
+          if (changed > 1) scrollToMatch();
+          emitSearchChange();
+        } catch (err) {
+          // The splice already happened. A throw from the group callback or
+          // an earlier hook must put the filter back, including a nested edit
+          // that landed in this same call.
+          matches = snap;
+          matchSet = snapSet;
+          current = prevCur;
+          engineState.totalItems = prevTotal;
+          if (!navigate && changed) {
+            syncFilter(true);
+            ctx.render.force();
+          }
+          updateCounter();
+          throw err;
+        }
       });
 
       // Public methods.

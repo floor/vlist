@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- An edit that throws from the group callback or an earlier update hook leaves the previous search filter. The match list, the total, the layout, the row count and the counter stay together, and retrying the edit applies it.
+
 ## [3.8.10] - 2026-11-23
 
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
