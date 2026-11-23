@@ -260,12 +260,29 @@ const RECORDED: Record<string, unknown> = {
     "during": [
       {
         "kind": "match",
+        "itemId": 3,
         "keys": "A:1,B:1,C:1,D:1",
         "lookup": [
-          1,
-          2,
-          3,
-          4
+          {
+            "id": 1,
+            "label": "hide",
+            "group": "A"
+          },
+          {
+            "id": 2,
+            "label": "hide",
+            "group": "Z"
+          },
+          {
+            "id": 3,
+            "label": "show",
+            "group": "C"
+          },
+          {
+            "id": 4,
+            "label": "hide",
+            "group": "D"
+          }
         ],
         "headers": "A|B|C|D",
         "trace": [
@@ -275,12 +292,29 @@ const RECORDED: Record<string, unknown> = {
       },
       {
         "kind": "change",
+        "itemId": null,
         "keys": "A:1,B:1,C:1,D:1",
         "lookup": [
-          1,
-          2,
-          3,
-          4
+          {
+            "id": 1,
+            "label": "hide",
+            "group": "A"
+          },
+          {
+            "id": 2,
+            "label": "hide",
+            "group": "Z"
+          },
+          {
+            "id": 3,
+            "label": "show",
+            "group": "C"
+          },
+          {
+            "id": 4,
+            "label": "hide",
+            "group": "D"
+          }
         ],
         "headers": "A|B|C|D",
         "trace": [
@@ -326,7 +360,7 @@ const RECORDED: Record<string, unknown> = {
     "rendered": "__group_header_0,1,__group_header_1,2,__group_header_2,3,__group_header_3,4",
     "focused": "2",
     "events": [
-      "match:1",
+      "match:1:2",
       "change:1"
     ],
     "scroll": 0
@@ -382,14 +416,31 @@ const RECORDED: Record<string, unknown> = {
     "during": [
       {
         "kind": "match",
+        "itemId": 3,
         "keys": "A:1,Z:1,C:1,D:1",
         "lookup": [
-          1,
-          2,
-          3,
-          4
+          {
+            "id": 1,
+            "label": "hide",
+            "group": "A"
+          },
+          {
+            "id": 2,
+            "label": "hide",
+            "group": "Z"
+          },
+          {
+            "id": 3,
+            "label": "show",
+            "group": "C"
+          },
+          {
+            "id": 4,
+            "label": "hide",
+            "group": "D"
+          }
         ],
-        "headers": "",
+        "headers": "A|B|C|D",
         "trace": [
           "earlier",
           "group:1",
@@ -401,14 +452,31 @@ const RECORDED: Record<string, unknown> = {
       },
       {
         "kind": "change",
+        "itemId": null,
         "keys": "A:1,Z:1,C:1,D:1",
         "lookup": [
-          1,
-          2,
-          3,
-          4
+          {
+            "id": 1,
+            "label": "hide",
+            "group": "A"
+          },
+          {
+            "id": 2,
+            "label": "hide",
+            "group": "Z"
+          },
+          {
+            "id": 3,
+            "label": "show",
+            "group": "C"
+          },
+          {
+            "id": 4,
+            "label": "hide",
+            "group": "D"
+          }
         ],
-        "headers": "",
+        "headers": "A|B|C|D",
         "trace": [
           "earlier",
           "group:1",
@@ -424,7 +492,7 @@ const RECORDED: Record<string, unknown> = {
       2
     ],
     "counter": "1 of 1",
-    "headers": ""
+    "headers": "A|Z|C|D"
   },
   "navigate/focus-preserved/table": {
     "matches": [
@@ -456,7 +524,7 @@ const RECORDED: Record<string, unknown> = {
     "rendered": "__group_header_0,1,__group_header_1,2,__group_header_2,3,__group_header_3,4",
     "focused": "2",
     "events": [
-      "match:1",
+      "match:1:2",
       "change:1"
     ],
     "scroll": 0
@@ -838,16 +906,60 @@ const RECORDED: Record<string, unknown> = {
     "aria": null,
     "focused": "2"
   },
-  "data/sparse": {
-    "loaded": 1000,
-    "renamedFrom": -1,
-    "renamedTo": 0,
-    "placeholderId": "__placeholder_20",
-    "placeholderAfter": "__placeholder_20",
-    "placeholderIndex": -1,
-    "total": 80
+  "same-task/rekey/plain": {
+    "keys": "C:1",
+    "headers": "C",
+    "rendered": "__group_header_0,2",
+    "matches": [
+      1
+    ],
+    "lookup": [
+      {
+        "id": 2,
+        "label": "show",
+        "group": "C"
+      }
+    ]
+  },
+  "same-task/join/plain": {
+    "keys": "A:1,B:1,C:1",
+    "headers": "A|B|C",
+    "rendered": "__group_header_0,1,__group_header_1,2,__group_header_2,3",
+    "matches": [
+      0,
+      1,
+      2
+    ],
+    "total": 3
+  },
+  "same-task/rekey/table": {
+    "keys": "C:1",
+    "headers": "C",
+    "rendered": "__group_header_0,2",
+    "matches": [
+      1
+    ],
+    "lookup": [
+      {
+        "id": 2,
+        "label": "show",
+        "group": "C"
+      }
+    ]
+  },
+  "same-task/join/table": {
+    "keys": "A:1,B:1,C:1",
+    "headers": "A|B|C",
+    "rendered": "__group_header_0,1,__group_header_1,2,__group_header_2,3",
+    "matches": [
+      0,
+      1,
+      2
+    ],
+    "total": 3
   }
 };
+
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
 
 function baseRows(): Row[] {
@@ -880,12 +992,15 @@ function patchOf(dir: Dir): { id: number; updates: Partial<Row> } {
   return { id: 4, updates: { note: "kept" } };
 }
 
-// The ten truncated filter retries and the ten stale navigate counters are
-// the throw contract, not a snapshot of the bug.
-function nestedTag(dir: Dir, throwKind: ThrowKind): Tag | undefined {
-  if (throwKind === "none" || dir === "join-leave" || dir === "match-meta") return undefined;
-  if (dir === "reversal" && throwKind === "earlier") return undefined;
-  if (dir === "same" || dir === "other" || dir === "reversal") return "b";
+// A throw is the recovery contract. Reversal and join-leave earlier-hook
+// throws, and the plain filter join-leave group throw, are included: their
+// old snapshots pinned a leftover match and a short event list.
+function nestedTag(dir: Dir, throwKind: ThrowKind, mode?: Mode, surface?: Surface): Tag | undefined {
+  if (throwKind === "none" || dir === "match-meta") return undefined;
+  if (dir === "join-leave" && throwKind === "group") {
+    return mode === "filter" && surface === "plain" ? "b" : undefined;
+  }
+  if (dir === "same" || dir === "other" || dir === "reversal" || dir === "join-leave") return "b";
   return undefined;
 }
 
@@ -925,8 +1040,8 @@ for (const mode of ["filter", "navigate"] as const) {
       const once = dir === "match-meta" && mode === "filter" ? "a" : nestedTag(dir, "none");
       add("nested", dir, mode, surface, "none", once);
       if (dir === "match-meta") continue;
-      add("nested", dir, mode, surface, "group", nestedTag(dir, "group"));
-      add("nested", dir, mode, surface, "earlier", nestedTag(dir, "earlier"));
+      add("nested", dir, mode, surface, "group", nestedTag(dir, "group", mode, surface));
+      add("nested", dir, mode, surface, "earlier", nestedTag(dir, "earlier", mode, surface));
     }
     add("setItems", "longer", mode, surface, "none");
     add("setItems", "shorter", mode, surface, "none");
@@ -1154,13 +1269,24 @@ async function mountCustom(
 }
 
 function headersOf(container: HTMLElement): string {
-  return [...container.querySelectorAll(".vlist-group-header")].map((el) => el.textContent ?? "").join("|");
+  return [...container.querySelectorAll(".vlist-group-header, .vlist-table-group-header")]
+    .map((el) => el.textContent ?? "")
+    .join("|");
 }
 
 function lookupOf(list: Api, count: number): Array<number | string | null> {
   const ids: Array<number | string | null> = [];
   for (let i = 0; i < count; i++) ids.push(list.getItemAt(i)?.id ?? null);
   return ids;
+}
+
+function fieldsOf(list: Api, count: number): Array<{ id: number | string; label: string; group: string } | null> {
+  const rows: Array<{ id: number | string; label: string; group: string } | null> = [];
+  for (let i = 0; i < count; i++) {
+    const item = list.getItemAt(i);
+    rows.push(item ? { id: item.id, label: item.label, group: item.group } : null);
+  }
+  return rows;
 }
 
 describe("search join matrix against 3.8.10", () => {
@@ -1378,17 +1504,18 @@ describe("search join matrix against 3.8.10", () => {
       const { list, container } = await mountCustom(baseRows(), "navigate", surface, { trace });
       scope.own(list, container);
       const during: unknown[] = [];
-      const take = (kind: string): void => {
+      const take = (kind: string, itemId: number | string | null): void => {
         during.push({
           kind,
+          itemId,
           keys: list.getGroupLayout().groups.map((group) => `${group.key}:${group.count}`).join(","),
-          lookup: lookupOf(list, 4),
+          lookup: fieldsOf(list, 4),
           headers: headersOf(container),
           trace: [...trace],
         });
       };
-      list.on("search:change", () => take("change"));
-      list.on("search:match", () => take("match"));
+      list.on("search:change", () => take("change", null));
+      list.on("search:match", (event) => take("match", event.item?.id ?? null));
       trace.length = 0;
       list.updateItem(2, { label: "hide", group: "Z" });
       await tick();
@@ -1421,7 +1548,7 @@ describe("search join matrix against 3.8.10", () => {
       await tick();
       const events: string[] = [];
       list.on("search:change", (event) => events.push(`change:${event.matches}`));
-      list.on("search:match", (event) => events.push(`match:${String(event.index)}`));
+      list.on("search:match", (event) => events.push(`match:${String(event.index)}:${String(event.item?.id)}`));
       list.updateItem(3, { label: "hide" });
       await tick();
       keep(`navigate/focus-wrap/${surface}`, snapOf(list, container, events));
@@ -1530,52 +1657,146 @@ describe("search join matrix against 3.8.10", () => {
     }));
   }
 
-  it("data/sparse renames a loaded id and ignores an unloaded placeholder", scoped(async (scope) => {
+  it("data/sparse renames offset 9 across a hole and leaves an unloaded row alone", scoped(async (scope) => {
     const container = createContainer({ width: 300, height: 800 });
+    let groupingCalls = 0;
     const list = createVList<Row>(
-      { container, items: [], item: { height: 40, template: (item) => item.label } },
-      [data<Row>({
-        total: 80,
-        adapter: {
-          read: async ({ offset }) => ({
-            items: offset === 0
-              ? Array.from({ length: 10 }, (_, i) => ({ id: i, group: "A", label: "row" }))
-              : [],
-            total: 80,
-          }),
-        },
-      })],
-    );
+      { container, items: [], item: { height: 40, template: (item) => `${item.group}:${item.label}` } },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => {
+            groupingCalls += 1;
+            return item?.group ?? "";
+          },
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        data<Row>({
+          total: 40,
+          adapter: {
+            read: ({ offset }) => {
+              if (offset !== 0) return new Promise(() => {});
+              const items: Row[] = [];
+              items[9] = { id: 90, group: "A", label: "nine" };
+              items[11] = { id: 110, group: "B", label: "eleven" };
+              items[15] = { id: 150, group: "C", label: "fifteen" };
+              return Promise.resolve({ items, total: 40, hasMore: false });
+            },
+          },
+        }),
+      ],
+    ) as Api;
     scope.own(list, container);
-    for (let i = 0; i < 20 && list.getItemAt(0)?.id !== 0; i++) await tick();
-    const placeholder = list.getItemAt(20);
-    const placeholderId = placeholder?.id;
-    list.updateItem(placeholderId ?? "__placeholder_20", { label: "nope" });
+    for (let i = 0; i < 20 && list.getItemAt(9)?.id !== 90; i++) await tick();
+    const hole = list.getItemAt(0);
+    const between = list.getItemAt(10);
+    expect(String(hole?.id), "sparse").toBe(`${PLACEHOLDER_ID_PREFIX}0`);
+    expect(String(between?.id), "sparse").toBe(`${PLACEHOLDER_ID_PREFIX}10`);
+    expect(list.getItemAt(11)?.id, "sparse").toBe(110);
+    const beforeKeys = list.getGroupLayout().groups.map((group) => `${group.key}:${group.count}`).join(",");
+    groupingCalls = 0;
+    list.updateItem(hole?.id ?? "", { label: "nope", group: "Q" });
     await tick();
-    list.updateItem(0, { id: 1000 });
+    expect(groupingCalls, "sparse").toBe(0);
+    expect(list.getItemAt(0)?.id, "sparse").toBe(hole?.id);
+    expect(list.getItemAt(0)?.label, "sparse").toBe(hole?.label);
+    expect(list.getItemAt(0)?.group, "sparse").toBe(hole?.group);
+    expect(list.getGroupLayout().groups.map((group) => `${group.key}:${group.count}`).join(","), "sparse").toBe(beforeKeys);
+    groupingCalls = 0;
+    list.updateItem(90, { id: 91, group: "Z" });
     await tick();
-    const detail = {
-      loaded: list.getItemAt(0)?.id ?? null,
-      renamedFrom: list.getIndexById(0),
-      renamedTo: list.getIndexById(1000),
-      placeholderId,
-      placeholderAfter: list.getItemAt(20)?.id ?? null,
-      placeholderIndex: list.getIndexById(placeholderId ?? ""),
-      total: list.total,
-    };
-    if (RECORD) {
-      console.log(JSON.stringify({ id: "data/sparse", detail }));
-      return;
-    }
-    expect(detail.loaded, "sparse").toBe(1000);
-    expect(detail.renamedFrom, "sparse").toBe(-1);
-    expect(detail.renamedTo, "sparse").toBe(0);
-    expect(String(detail.placeholderId), "sparse").toBe(`${PLACEHOLDER_ID_PREFIX}20`);
-    expect(detail.placeholderAfter, "sparse").toBe(detail.placeholderId);
-    expect(detail.placeholderIndex, "sparse").toBe(-1);
-    expect(detail.total, "sparse").toBe(80);
+    expect(groupingCalls, "sparse").toBeGreaterThan(0);
+    expect(list.getIndexById(90), "sparse").toBe(-1);
+    expect(list.getIndexById(91), "sparse").toBe(9);
+    expect(list.getItemAt(9)?.group, "sparse").toBe("Z");
+    expect(list.getItemAt(9)?.label, "sparse").toBe("nine");
+    expect(list.getItemAt(11)?.group, "sparse").toBe("B");
+    expect(String(list.getItemAt(10)?.id), "sparse").toBe(`${PLACEHOLDER_ID_PREFIX}10`);
+    const keys = list.getGroupLayout().groups.map((group) => group.key);
+    expect(keys, "sparse").toContain("Z");
+    expect(keys, "sparse").toContain("B");
+    expect(keys, "sparse").toContain("C");
+    expect(headersOf(container), "sparse").toContain("Z");
   }));
+
+  for (const surface of ["plain", "table"] as const) {
+    it(`same-task/rekey/${surface}`, scoped(async (scope) => {
+      const container = createContainer({ width: 300, height: 800 });
+      const plugins: Array<VListPlugin<Row>> = [];
+      if (surface === "table") {
+        plugins.push(table<Row>({ columns: [{ key: "label", label: "Label", width: 120 }], rowHeight: 40, headerHeight: 32 }));
+      }
+      plugins.push(groups<Row>({
+        getGroupForIndex: (_index, item) => item?.group ?? "",
+        header: { height: 32, template: (key) => key },
+        sticky: false,
+      }));
+      plugins.push(search<Row>({ mode: "filter", field: "label" }));
+      const list = createVList<Row>(
+        {
+          container,
+          items: [
+            { id: 1, group: "A", label: "hide" },
+            { id: 2, group: "A", label: "show" },
+          ],
+          item: { height: 40, template: (item) => item.group },
+        },
+        plugins,
+      ) as Api;
+      scope.own(list, container);
+      list.setQuery("show");
+      list.updateItem(2, { group: "C" });
+      await tick();
+      keep(`same-task/rekey/${surface}`, {
+        keys: list.getGroupLayout().groups.map((group) => `${group.key}:${group.count}`).join(","),
+        headers: headersOf(container),
+        rendered: renderedIds(container),
+        matches: list.getMatches(),
+        lookup: fieldsOf(list, 1),
+      });
+    }));
+
+    it(`same-task/join/${surface}`, scoped(async (scope) => {
+      const container = createContainer({ width: 300, height: 800 });
+      const plugins: Array<VListPlugin<Row>> = [];
+      if (surface === "table") {
+        plugins.push(table<Row>({ columns: [{ key: "label", label: "Label", width: 120 }], rowHeight: 40, headerHeight: 32 }));
+      }
+      plugins.push(groups<Row>({
+        getGroupForIndex: (_index, item) => item?.group ?? "",
+        header: { height: 32, template: (key) => key },
+        sticky: false,
+      }));
+      plugins.push(search<Row>({ mode: "filter", field: "label" }));
+      const list = createVList<Row>(
+        { container, items: baseRows(), item: { height: 40, template: (item) => item.label } },
+        plugins,
+      ) as Api;
+      scope.own(list, container);
+      list.setQuery("show");
+      list.updateItem(1, { label: "show" });
+      await tick();
+      keep(`same-task/join/${surface}`, {
+        keys: list.getGroupLayout().groups.map((group) => `${group.key}:${group.count}`).join(","),
+        headers: headersOf(container),
+        rendered: renderedIds(container),
+        matches: list.getMatches(),
+        total: list.total,
+      });
+    }));
+  }
 });
+
+function renderedIds(container: HTMLElement): string {
+  const tableRows = [...container.querySelectorAll(".vlist-table-row")];
+  const nodes = tableRows.length
+    ? tableRows
+    : [...container.querySelectorAll(".vlist-group-header, .vlist-item")];
+  return nodes
+    .sort((a, b) => Number(a.getAttribute("data-index")) - Number(b.getAttribute("data-index")))
+    .map((el) => el.getAttribute("data-id") ?? "")
+    .join(",");
+}
 
 const EXPECTED: Record<string, Snap> = {
   "updateItem/join/filter/plain/none": {
