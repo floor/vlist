@@ -1007,14 +1007,14 @@ function added(dir: Dir): Row {
 const cases: Case[] = [];
 
 function add(op: Op, dir: Dir, mode: Mode, surface: Surface, throwKind: ThrowKind, tag?: Tag): void {
-  cases.push(<Case>{
+  cases.push({
     id: `${op}/${dir}/${mode}/${surface}/${throwKind}`,
     op,
     dir,
     mode,
     surface,
     throwKind,
-    tag,
+    tag: tag!,
   });
 }
 
