@@ -626,7 +626,8 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_getItem", getItem);
       ctx.hooks.method("_getLoadedItem", getItem);
       // Groups asks for the index in the space its layout uses. A filter's
-      // slot is not the source index; the match list is still the previous one.
+      // slot is not the source index. The match list is refreshed first, so a
+      // row that just left the filter is not a slot.
       ctx.hooks.method("_getIndexById", (id: string | number): number => {
         const source = ctx.items.all().findIndex((row) => row.id === id);
         return filtered ? matches.indexOf(source) : source;
@@ -635,8 +636,10 @@ export function search<T extends VListItem = VListItem>(
 
       let prevOnUpdate = ctx.hooks.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined;
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
-        prevOnUpdate?.(id, u);
+        // Refresh the match list before groups reads it, so one regroup sees
+        // the rows that still match instead of rebuilding the old list first.
         onItemUpdate(id, u);
+        prevOnUpdate?.(id, u);
       });
 
       // Public methods.

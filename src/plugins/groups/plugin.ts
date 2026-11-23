@@ -795,11 +795,14 @@ export function groups<T extends VListItem = VListItem>(
       origSizeCacheRebuild = sizeCache.rebuild;
       sizeCache.rebuild = (n: number): void => {
         lastRebuildLoadedCount = -1;
+        // Search publishes the filtered reader during its setup, after this
+        // plugin. A query in the same task rebuilds before the microtask
+        // caches that reader, so resolve it on the rebuild the query already runs.
+        if (!getLoadedItem) {
+          getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
+        }
         if (tableMode) {
           lastDataCount = n;
-          if (!getLoadedItem) {
-            getLoadedItem = (getMethod?.("_getLoadedItem") as ((index: number) => T | undefined) | undefined) ?? null;
-          }
           layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.items.all()[i] as T | undefined));
           engineState.totalItems = layout.totalEntries;
           if (stickyHeader) {

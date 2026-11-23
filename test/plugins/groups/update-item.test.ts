@@ -390,4 +390,128 @@ describe("groups() updateItem group key", () => {
       container.remove();
     }
   });
+
+  it("keeps the trailing rows when a grouped table edit keeps the group", scoped(async (scope) => {
+    const source = rows([["A", 2], ["B", 2]]).map((row) => ({ ...row, label: row.group }));
+    const adapter: VListAdapter<Row> = {
+      read: async ({ offset, limit }) => ({
+        items: source.slice(offset, offset + limit),
+        total: source.length,
+      }),
+    };
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        data<Row>({ adapter, total: source.length }),
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+      ],
+    );
+    scope.own(list, container);
+    await waitFor(
+      () => tableSequence(container).some((row) => row === "I:A#1"),
+      "the table rows to render",
+    );
+    const root = container.querySelector(".vlist") as HTMLElement;
+    expect(root.getAttribute("aria-rowcount")).toBe("7");
+    list.updateItem(2, { label: "edited" });
+    await tick();
+    expect(root.getAttribute("aria-rowcount")).toBe("7");
+    expect(tableSequence(container)).toEqual([
+      "H:A#__group_header_0",
+      "I:A#1",
+      "I:A#2",
+      "H:B#__group_header_1",
+      "I:B#3",
+      "I:B#4",
+    ]);
+  }));
+
+  it("regroups once when an edit leaves the active table filter", async () => {
+    let groupingCalls = 0;
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: [
+          { id: 1, group: "A", label: "show" },
+          { id: 2, group: "B", label: "show" },
+          { id: 3, group: "B", label: "show" },
+        ],
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => {
+            groupingCalls += 1;
+            return item?.group ?? "";
+          },
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "filter", field: "label", position: "none" }),
+      ],
+    );
+    try {
+      await tick();
+      (list as VList<Row> & { setQuery(query: string): void }).setQuery("show");
+      await tick();
+      groupingCalls = 0;
+      list.updateItem(3, { group: "C", label: "hide" });
+      expect(groupingCalls).toBe(2);
+      await tick();
+      expect(tableSequence(container)).toEqual([
+        "H:A#__group_header_0",
+        "I:A#1",
+        "H:B#__group_header_1",
+        "I:B#2",
+      ]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("regroups a filtered edit issued in the same task as the query", async () => {
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: [
+          { id: 1, group: "A", label: "hide" },
+          { id: 2, group: "A", label: "show" },
+        ],
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "filter", field: "label", position: "none" }),
+      ],
+    );
+    try {
+      (list as VList<Row> & { setQuery(query: string): void }).setQuery("show");
+      list.updateItem(2, { group: "C" });
+      await tick();
+      expect(sequence(container)).toEqual([
+        "H:C#__group_header_0",
+        "I:C#2",
+      ]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
 });
