@@ -110,6 +110,10 @@ export function groups<T extends VListItem = VListItem>(
   // Elements detached during boundary changes, keyed by data-id.
   // Reused in the next render pass to avoid pool round-trip (which clears innerHTML).
   const detached = new Map<string, HTMLElement>();
+  // Header ids are positional. This is the group key last painted into the
+  // element, written only when that paint happens. Pool release drops it so a
+  // recycled node cannot skip on a key from its earlier life.
+  const renderedHeaderKey = new WeakMap<HTMLElement, string>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   // RFC-012: item transforms are `offset - baseOffset`. baseOffset shifts with
@@ -305,6 +309,11 @@ export function groups<T extends VListItem = VListItem>(
   }
 
 
+  function releaseElement(element: HTMLElement): void {
+    renderedHeaderKey.delete(element);
+    pool.release(element);
+  }
+
   function detachAll(): void {
     rendered.forEach((element) => {
       element.remove();
@@ -312,7 +321,7 @@ export function groups<T extends VListItem = VListItem>(
       if (id) {
         detached.set(id, element);
       } else {
-        pool.release(element);
+        releaseElement(element);
       }
     });
     rendered.clear();
@@ -321,7 +330,7 @@ export function groups<T extends VListItem = VListItem>(
 
   function drainDetached(): void {
     if (detached.size > 0) {
-      detached.forEach((element) => pool.release(element));
+      detached.forEach((element) => releaseElement(element));
       detached.clear();
     }
   }
@@ -352,7 +361,8 @@ export function groups<T extends VListItem = VListItem>(
     }
     if (entry.type === "header") {
       const headerId = `__group_header_${entry.group.groupIndex}`;
-      if (element.getAttribute("data-id") === headerId) {
+      const groupKey = entry.group.key;
+      if (element.getAttribute("data-id") === headerId && renderedHeaderKey.get(element) === groupKey) {
         return true;
       }
 
@@ -365,8 +375,9 @@ export function groups<T extends VListItem = VListItem>(
         element.style.display = "none";
       } else {
         element.style.display = "";
-        writeContent(element, headerTemplate(entry.group.key, entry.group.groupIndex));
+        writeContent(element, headerTemplate(groupKey, entry.group.groupIndex));
       }
+      renderedHeaderKey.set(element, groupKey);
       return true;
     }
 
@@ -458,7 +469,7 @@ export function groups<T extends VListItem = VListItem>(
       if (rendered.size > 0) {
         rendered.forEach((element) => {
           element.remove();
-          pool.release(element);
+          releaseElement(element);
         });
         rendered.clear();
         placeholderIndices.clear();
@@ -518,7 +529,7 @@ export function groups<T extends VListItem = VListItem>(
     rendered.forEach((element, idx) => {
       if (idx < renderStart || idx > renderEnd) {
         element.remove();
-        pool.release(element);
+        releaseElement(element);
         rendered.delete(idx);
         placeholderIndices.delete(idx);
       }
