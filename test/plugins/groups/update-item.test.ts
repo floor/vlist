@@ -21,6 +21,7 @@ interface Row extends VListItem {
   id: number;
   group: string;
   label?: string;
+  note?: string;
 }
 
 let geometry: ReturnType<typeof capturePrototypeGeometry>;
@@ -541,37 +542,106 @@ describe("groups() updateItem group key", () => {
     }
   });
 
-  it("finds the joined row by id after the group callback throws", async () => {
+  // Released behaviour from 3.8.10 (f140c9d), and a known bug: after the throw
+  // the match list says 4 while the layout still has 6 entries. Not the
+  // desired end state. The next edit must not shrink aria-rowcount to 5.
+  const assertReleasedThrow = (
+    list: VList<Row> & { getMatches(): number[]; getGroupLayout(): { totalEntries: number; groupCount: number } },
+    container: HTMLElement,
+    rendered: string[],
+  ): void => {
+    const root = container.querySelector(".vlist") as HTMLElement;
+    const layout = list.getGroupLayout();
+    expect(list.getMatches()).toEqual([0, 1, 2, 3]);
+    expect(list.total).toBe(4);
+    expect(layout.totalEntries).toBe(6);
+    expect(layout.groupCount).toBe(3);
+    expect(root.getAttribute("aria-rowcount")).toBe("7");
+    expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("3 results");
+    expect([...container.querySelectorAll(".vlist-table-row")]
+      .sort((a, b) => Number(a.getAttribute("data-index")) - Number(b.getAttribute("data-index")))
+      .map((el) => `${el.classList.contains("vlist-table-group-header") ? "H" : "I"}:${el.getAttribute("data-id")}`),
+    ).toEqual(rendered);
+  };
+
+  const throwRows = (): Row[] => [
+    { id: 1, group: "A", label: "hide" },
+    { id: 2, group: "B", label: "show" },
+    { id: 3, group: "C", label: "show" },
+    { id: 4, group: "D", label: "show" },
+  ];
+
+  it("matches the released list when grouping throws during a join", async () => {
     let throwOnce = true;
-    const groupOf = (_index: number, item: Row | undefined): string => {
-      if (throwOnce && item?.id === 1 && item.label === "show") {
-        throwOnce = false;
-        throw new Error("group");
-      }
-      return item?.group ?? "";
-    };
     const container = createContainer({ width: 300, height: 800 });
     const list = createVList<Row>(
       {
         container,
-        items: [
-          { id: 1, group: "A", label: "hide" },
-          { id: 2, group: "B", label: "show" },
-          { id: 3, group: "C", label: "show" },
-          { id: 4, group: "D", label: "show" },
-        ],
+        items: throwRows(),
         item: { height: 40, template: (item) => item.label ?? item.group },
       },
       [
         table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
         groups<Row>({
-          getGroupForIndex: groupOf,
+          getGroupForIndex: (_index, item) => {
+            if (throwOnce && item?.id === 1 && item.label === "show") {
+              throwOnce = false;
+              throw new Error("group");
+            }
+            return item?.group ?? "";
+          },
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "filter", field: "label" }),
+      ],
+    );
+    const announced = list as VList<Row> & {
+      setQuery(query: string): void;
+      getMatches(): number[];
+      getGroupLayout(): { totalEntries: number; groupCount: number };
+    };
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
+      assertReleasedThrow(announced, container, [
+        "H:__group_header_0", "I:2", "H:__group_header_1", "I:3", "H:__group_header_2", "I:4",
+      ]);
+      list.updateItem(4, { note: "later" });
+      await tick();
+      assertReleasedThrow(announced, container, [
+        "H:__group_header_0", "I:1", "H:__group_header_1", "I:2", "H:__group_header_2", "I:3",
+      ]);
+      list.updateItem(1, { label: "show" });
+      await tick();
+      assertReleasedThrow(announced, container, [
+        "H:__group_header_0", "I:1", "H:__group_header_1", "I:2", "H:__group_header_2", "I:3",
+      ]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("matches the released list when an earlier hook throws during a join", async () => {
+    let throwOnce = true;
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: throwRows(),
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
           header: { height: 32, template: (key) => key },
           sticky: false,
         }),
         {
-          // Groups skips a row hidden for the join, so the same callback has to
-          // throw from the update hook the search wrapper calls.
           name: "join-throw",
           priority: 30,
           setup(ctx) {
@@ -579,30 +649,38 @@ describe("groups() updateItem group key", () => {
               ((id: string | number, updates: Partial<Row>) => void) | undefined;
             ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
               if (throwOnce && id === 1) {
-                groupOf(0, ctx.items.all().find((row) => row.id === id));
+                throwOnce = false;
+                throw new Error("group");
               }
               prev?.(id, updates);
             });
           },
         },
-        search<Row>({ mode: "filter", field: "label", position: "none" }),
+        search<Row>({ mode: "filter", field: "label" }),
       ],
     );
-    const announced = list as VList<Row> & { setQuery(query: string): void };
+    const announced = list as VList<Row> & {
+      setQuery(query: string): void;
+      getMatches(): number[];
+      getGroupLayout(): { totalEntries: number; groupCount: number };
+    };
     try {
       await tick();
       announced.setQuery("show");
       await tick();
       expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
-      list.updateItem(1, { group: "Z" });
+      assertReleasedThrow(announced, container, [
+        "H:__group_header_0", "I:2", "H:__group_header_1", "I:3", "H:__group_header_2", "I:4",
+      ]);
+      list.updateItem(4, { note: "later" });
       await tick();
-      expect(tableSequence(container)).toEqual([
-        "H:Z#__group_header_0",
-        "I:Z#1",
-        "H:B#__group_header_1",
-        "I:B#2",
-        "H:C#__group_header_2",
-        "I:C#3",
+      assertReleasedThrow(announced, container, [
+        "H:__group_header_0", "I:1", "H:__group_header_1", "I:2", "H:__group_header_2", "I:3",
+      ]);
+      list.updateItem(1, { label: "show" });
+      await tick();
+      assertReleasedThrow(announced, container, [
+        "H:__group_header_0", "I:1", "H:__group_header_1", "I:2", "H:__group_header_2", "I:3",
       ]);
     } finally {
       list.destroy();

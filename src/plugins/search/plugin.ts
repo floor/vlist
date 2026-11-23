@@ -220,13 +220,19 @@ export function search<T extends VListItem = VListItem>(
   const syncFilter = (active: boolean): void => {
     if (active) resolveOnce();
     else if (!filtered) return;
+    const prevTotal = engineState.totalItems;
     filtered = active;
     const totalFn = active ? (): number => matches.length : (): number => ctx.items.all().length;
     ctx.items.setTotalFn(totalFn);
     engineState.totalItems = totalFn();
-    (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
-    ctx.sizes.rebuild();
-    ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
+    try {
+      (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
+      ctx.sizes.rebuild();
+      ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
+    } catch (err) {
+      engineState.totalItems = prevTotal;
+      throw err;
+    }
   };
 
   // ── Navigate mode ─────────────────────────────────────────────────────────
