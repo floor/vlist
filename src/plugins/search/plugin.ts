@@ -327,7 +327,7 @@ export function search<T extends VListItem = VListItem>(
       matchSet.delete(idx);
     }
     // indexOf is -1 when the focused row was the one removed, or there was none.
-    current = matches.indexOf(prevRow);
+    current = matches.indexOf(prevRow as number);
     if (current < 0) current = pos < matches.length ? pos : 0;
 
     return navigate && matches.length && matches[current] !== prevRow ? 2 : 1;

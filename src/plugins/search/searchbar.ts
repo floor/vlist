@@ -61,7 +61,7 @@ export interface SearchBar {
   readonly input: HTMLInputElement;
   setCounter(text: string): void;
   /** Show/hide the prev/next buttons (navigate mode, with matches to step). */
-  showNav(show: boolean): void;
+  showNav(show: boolean | number): void;
   focus(): void;
   setValue(value: string): void;
   destroy(): void;
