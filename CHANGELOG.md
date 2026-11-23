@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.10] - 2026-11-23
+
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
 
 Who is affected: lists using `groups()`, including with `data()`, `table()`, or a search filter, and a focused row in a listbox.
@@ -2399,7 +2401,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.9...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.10...HEAD
+[3.8.10]: https://github.com/floor/vlist/compare/v3.8.9...v3.8.10
 [3.8.9]: https://github.com/floor/vlist/compare/v3.8.8...v3.8.9
 [3.8.8]: https://github.com/floor/vlist/compare/v3.8.7...v3.8.8
 [3.8.7]: https://github.com/floor/vlist/compare/v3.8.6...v3.8.7
