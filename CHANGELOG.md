@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws before a nested edit has committed, the list stays on the previous filter, and retrying the edit applies it. A nested edit that already committed stays, and the match list stays ordered and unique. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. A nested join reports the same match count as the match list, the total and the counter.
+- An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws before a nested edit has committed, the list stays on the previous filter, and retrying the edit applies it. A nested edit that already committed stays. A pending join that never took a slot is dropped, and the match list stays ordered and unique. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. A nested join reports the same match count as the match list, the total and the counter.
 
 ## [3.8.10] - 2026-11-23
 

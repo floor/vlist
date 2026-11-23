@@ -246,6 +246,43 @@ describe("search nested rejoin", () => {
     });
   }
 
+  for (const variant of ["join", "leave"] as const) {
+    it(`stays consistent when a nested join of another row completes and the outer ${variant} throws`, async () => {
+      let once = true;
+      const mounted = mount("table", rows(variant === "join" ? "hide" : "show"), (list, id) => {
+        if (!once || id !== 2) return;
+        once = false;
+        list.updateItem(4, { label: "show" });
+        throw new Error("outer after other");
+      });
+      mounted.list.setQuery("show");
+      await flush();
+      let error = "";
+      try {
+        mounted.list.updateItem(2, { label: variant === "join" ? "show" : "hide" });
+      } catch (err) {
+        error = (err as Error).message;
+      }
+      await flush();
+      expect(error).toBe("outer after other");
+      expect(mounted.list.getMatches()).toEqual([0, 2, 3]);
+      expectAgreed(mounted.list, mounted.container, mounted.engine(), [1, 3, 4]);
+
+      mounted.list.updateItem(1, { note: "side" });
+      await flush();
+      expect(mounted.list.getMatches()).toEqual([0, 2, 3]);
+      expectAgreed(mounted.list, mounted.container, mounted.engine(), [1, 3, 4]);
+
+      mounted.list.updateItem(2, { label: variant === "join" ? "show" : "hide" });
+      await flush();
+      const retried = variant === "join" ? [0, 1, 2, 3] : [0, 2, 3];
+      const retriedIds = variant === "join" ? [1, 2, 3, 4] : [1, 3, 4];
+      expect(mounted.list.getMatches()).toEqual(retried);
+      expectAgreed(mounted.list, mounted.container, mounted.engine(), retriedIds);
+      mounted.close();
+    });
+  }
+
   it("reports one match count for a nested join", () => {
     let once = true;
     const seen: number[][] = [];
