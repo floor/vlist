@@ -32,7 +32,7 @@ const PATH_PREV = "M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z";
 const PATH_NEXT = "M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z";
 
 const svgIcon = (d: string): string =>
-  `<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" aria-hidden="true"><path d="${d}"></path></svg>`;
+  `<svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"></path></svg>`;
 
 export interface SearchBarCallbacks {
   onInput(value: string): void;
@@ -95,7 +95,6 @@ export const createSearchBar = (
   const root = document.createElement("div");
   root.className = `${p} ${p}--bar ${p}--${position}`;
   root.setAttribute("role", "search");
-  root.setAttribute("aria-disabled", "false");
   // The landmark is unnamed by default; name it only if the consumer asked.
   if (text.region) root.setAttribute("aria-label", text.region);
 

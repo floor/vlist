@@ -306,14 +306,15 @@ export function search<T extends VListItem = VListItem>(
     armCancelTimer();
   };
 
-  const onItemUpdate = (id: string | number, updates: Partial<T>): void => {
-    if (!open || !isActive()) return;
+  // 0: membership unchanged. 1: the match list changed. 2: navigate should reveal.
+  const onItemUpdate = (id: string | number, updates: Partial<T>): number => {
+    if (!open || !isActive()) return 0;
     const items = ctx.items.all();
     const targetId = updates.id ?? id;
     const idx = items.findIndex((item) => item.id === targetId);
-    if (idx < 0) return;
+    if (idx < 0) return 0;
     const matched = matchesItem(items[idx], caseSensitive ? query : query.toLowerCase());
-    if (matched === matchSet.has(idx)) return;
+    if (matched === matchSet.has(idx)) return 0;
 
     const prevRow = matches[current];
     let pos = 0;
@@ -332,12 +333,7 @@ export function search<T extends VListItem = VListItem>(
           ? pos
           : 0;
 
-    if (mode === "filter") syncFilter(true);
-    updateCounter();
-    if (mode === "navigate" && matches.length > 0 && matches[current] !== prevRow) {
-      scrollToMatch();
-    }
-    emitSearchChange();
+    return mode === "navigate" && matches.length > 0 && matches[current] !== prevRow ? 2 : 1;
   };
 
   // ── Open / close ────────────────────────────────────────────────────────────
@@ -569,7 +565,7 @@ export function search<T extends VListItem = VListItem>(
       const prevMatch = (): void => step(-1);
 
       if (position !== "none") {
-        const listId = ctx.dom.root.id || undefined;
+        const listId = ctx.dom.root.id;
         bar = createSearchBar(
           ctx.dom.root,
           ctx.dom.viewport,
@@ -636,10 +632,15 @@ export function search<T extends VListItem = VListItem>(
 
       let prevOnUpdate = ctx.hooks.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined;
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
-        // Refresh the match list before groups reads it, so one regroup sees
-        // the rows that still match instead of rebuilding the old list first.
-        onItemUpdate(id, u);
+        // Membership first, so groups regroups against the rows that still
+        // match, then navigation and the public events see that layout.
+        const changed = onItemUpdate(id, u);
         prevOnUpdate?.(id, u);
+        if (!changed) return;
+        if (mode === "filter") syncFilter(true);
+        updateCounter();
+        if (changed > 1) scrollToMatch();
+        emitSearchChange();
       });
 
       // Public methods.

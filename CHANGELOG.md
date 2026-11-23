@@ -20,6 +20,7 @@ Who is affected: lists using `groups()`, including with `data()`, `table()`, or 
 - `updateItem` that changes an item's group key rebuilds the group layout, so the item sits under the new header. A group emptied this way loses its header, and the sticky title follows. An update that keeps the key does not rebuild.
 - A grouped table rebuilds on that same key change, with static items and with `data()`, so the new header appears and the later rows stay. Under an active search filter the item moves under the new header. A focused row stays the listbox active descendant, and a node painted as a header drops the item id and positional ARIA.
 - A same-key edit on a grouped table loaded through `data()` keeps the later rows. An edit that also leaves an active filter regroups once, and a query issued in the same task as the edit uses the filtered row.
+- Navigate mode scrolls to the next match after that regroup, and the search events follow it. A plain table gets its row count back when an edit follows a shorter `setItems()`.
 
 ## [3.8.9] - 2026-11-23
 

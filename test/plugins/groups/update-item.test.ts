@@ -514,4 +514,85 @@ describe("groups() updateItem group key", () => {
       container.remove();
     }
   });
+
+  it("regroups before navigate mode announces the next match", async () => {
+    const items: Row[] = [];
+    for (let id = 1; id <= 24; id++) {
+      items.push({ id, group: "A", label: id === 2 || id === 21 ? "show" : "hide" });
+    }
+    const container = createContainer({ width: 300, height: 100 });
+    const list = createVList<Row>(
+      {
+        container,
+        items,
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "navigate", field: "label", position: "none" }),
+      ],
+    );
+    const announced = list as VList<Row> & {
+      setQuery(query: string): void;
+      getGroupLayout(): { groups: Array<{ key: string }> };
+    };
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      let keys = "";
+      list.on("search:change", () => {
+        keys = announced.getGroupLayout().groups.map((group) => group.key).join(",");
+      });
+      list.updateItem(2, { group: "C", label: "hide" });
+      expect(keys).toBe("A,C,A");
+      const row = container.querySelector('[data-id="21"]') as HTMLElement;
+      const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+      const top = Number.parseFloat(row.style.transform.slice(11)) || 0;
+      const bottom = top + 40 - viewport.scrollTop;
+      expect(bottom).toBeGreaterThan(0);
+      expect(bottom).toBeLessThanOrEqual(viewport.clientHeight);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("restores a plain table after a shorter setItems and an edit", scoped(async (scope) => {
+    const source = rows([["A", 4]]).map((row) => ({ ...row, label: row.group }));
+    const adapter: VListAdapter<Row> = {
+      read: async ({ offset, limit }) => ({
+        items: source.slice(offset, offset + limit),
+        total: source.length,
+      }),
+    };
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        data<Row>({ adapter, total: source.length }),
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+      ],
+    );
+    scope.own(list, container);
+    await waitFor(
+      () => container.querySelectorAll(".vlist-table-row").length === 4,
+      "the four rows to render",
+    );
+    const root = container.querySelector(".vlist") as HTMLElement;
+    list.setItems([{ id: 1, group: "A", label: "A" }]);
+    expect(root.getAttribute("aria-rowcount")).toBe("2");
+    list.updateItem(2, { label: "edited" });
+    await tick();
+    expect(root.getAttribute("aria-rowcount")).toBe("5");
+    expect(container.querySelectorAll(".vlist-table-row").length).toBe(4);
+  }));
 });

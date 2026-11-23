@@ -1580,10 +1580,8 @@ describe("search — updateItem", () => {
     q(list, "setQuery")("ap");
     list.on("search:change", () => order.push("search"));
 
-    // Search refreshes the match list before the previous update hook, so a
-    // layout plugin reads the rows that still match.
     list.updateItem(2, { name: "Pineapple" });
-    expect(order).toEqual(["search", "first:2"]);
+    expect(order).toEqual(["first:2", "search"]);
     expect(q(list, "getMatches")()).toEqual([0, 1, 3, 4]);
   });
 
