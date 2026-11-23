@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+A group header shows the label of the group now under it after rows are inserted, removed, or replaced in front of it.
+
+Who is affected: lists using `groups()`.
+
+### Fixed
+
+- A reused group header shows the new group's label when rows are inserted, prepended, or replaced in front of it. The header's id stays positional.
+
 ## [3.8.8] - 2026-11-22
 
 Skeleton bars and the fade-in now apply to grid and masonry cells while async data loads.

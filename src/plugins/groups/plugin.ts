@@ -110,6 +110,11 @@ export function groups<T extends VListItem = VListItem>(
   // Elements detached during boundary changes, keyed by data-id.
   // Reused in the next render pass to avoid pool round-trip (which clears innerHTML).
   const detached = new Map<string, HTMLElement>();
+  // Header ids are positional. This is the group key last painted into the
+  // element, written only when that paint happens. pool.release clears
+  // data-id, so a recycled node fails the id check and is rewritten; the
+  // WeakMap entry is left in place.
+  const renderedHeaderKey = new WeakMap<HTMLElement, string>();
   let lastScrollPosition = -1;
   let lastContainerSize = -1;
   // RFC-012: item transforms are `offset - baseOffset`. baseOffset shifts with
@@ -352,7 +357,8 @@ export function groups<T extends VListItem = VListItem>(
     }
     if (entry.type === "header") {
       const headerId = `__group_header_${entry.group.groupIndex}`;
-      if (element.getAttribute("data-id") === headerId) {
+      const groupKey = entry.group.key;
+      if (element.getAttribute("data-id") === headerId && renderedHeaderKey.get(element) === groupKey) {
         return true;
       }
 
@@ -365,8 +371,9 @@ export function groups<T extends VListItem = VListItem>(
         element.style.display = "none";
       } else {
         element.style.display = "";
-        writeContent(element, headerTemplate(entry.group.key, entry.group.groupIndex));
+        writeContent(element, headerTemplate(groupKey, entry.group.groupIndex));
       }
+      renderedHeaderKey.set(element, groupKey);
       return true;
     }
 
