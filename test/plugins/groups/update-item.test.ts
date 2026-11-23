@@ -481,6 +481,66 @@ describe("groups() updateItem group key", () => {
     }
   });
 
+  it("regroups once when an edit joins the active table filter", async () => {
+    let groupingCalls = 0;
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: [
+          { id: 1, group: "A", label: "hide" },
+          { id: 2, group: "B", label: "show" },
+          { id: 3, group: "C", label: "show" },
+          { id: 4, group: "D", label: "show" },
+        ],
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => {
+            groupingCalls += 1;
+            return item?.group ?? "";
+          },
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "filter", field: "label", position: "none" }),
+      ],
+    );
+    const announced = list as VList<Row> & {
+      setQuery(query: string): void;
+      getGroupLayout(): { groups: Array<{ key: string }> };
+    };
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      groupingCalls = 0;
+      let keys = "";
+      list.on("search:change", () => {
+        keys = announced.getGroupLayout().groups.map((group) => group.key).join(",");
+      });
+      list.updateItem(1, { label: "show" });
+      expect(groupingCalls).toBe(4);
+      expect(keys).toBe("A,B,C,D");
+      await tick();
+      expect(tableSequence(container)).toEqual([
+        "H:A#__group_header_0",
+        "I:A#1",
+        "H:B#__group_header_1",
+        "I:B#2",
+        "H:C#__group_header_2",
+        "I:C#3",
+        "H:D#__group_header_3",
+        "I:D#4",
+      ]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
   it("regroups a filtered edit issued in the same task as the query", async () => {
     const container = createContainer({ width: 300, height: 800 });
     const list = createVList<Row>(

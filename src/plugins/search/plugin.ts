@@ -166,6 +166,9 @@ export function search<T extends VListItem = VListItem>(
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
+  // A row that just joined the filter is hidden from the index hook until the
+  // previous update hook returns, so that hook does not rebuild the old length.
+  let joined = -1;
   /** Position within `matches` of the focused match (navigate mode). */
   let current = 0;
   /** Whether a virtual filter is currently applied (filter mode). */
@@ -322,6 +325,7 @@ export function search<T extends VListItem = VListItem>(
     if (matched) {
       matches.splice(pos, 0, idx);
       matchSet.add(idx);
+      if (filtered) joined = idx;
     } else {
       matches.splice(pos, 1);
       matchSet.delete(idx);
@@ -626,7 +630,8 @@ export function search<T extends VListItem = VListItem>(
       // row that just left the filter is not a slot.
       ctx.hooks.method("_getIndexById", (id: string | number): number => {
         const source = ctx.items.all().findIndex((row) => row.id === id);
-        return filtered ? matches.indexOf(source) : source;
+        if (!filtered) return source;
+        return source === joined ? -1 : matches.indexOf(source);
       });
       if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
@@ -636,6 +641,7 @@ export function search<T extends VListItem = VListItem>(
         // match, then navigation and the public events see that layout.
         const changed = onItemUpdate(id, u);
         prevOnUpdate?.(id, u);
+        joined = -1;
         if (!changed) return;
         if (!navigate) syncFilter(true);
         updateCounter();
