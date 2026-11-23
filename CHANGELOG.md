@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.9] - 2026-11-23
+
 A group header shows the label of the group now under it after rows are inserted, removed, or replaced in front of it. The incoming sticky title does too, when the groups change while one header is pushing the previous one aside.
 
 Who is affected: lists using `groups()`.
@@ -2386,7 +2388,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.8...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.9...HEAD
+[3.8.9]: https://github.com/floor/vlist/compare/v3.8.8...v3.8.9
 [3.8.8]: https://github.com/floor/vlist/compare/v3.8.7...v3.8.8
 [3.8.7]: https://github.com/floor/vlist/compare/v3.8.6...v3.8.7
 [3.8.6]: https://github.com/floor/vlist/compare/v3.8.5...v3.8.6
