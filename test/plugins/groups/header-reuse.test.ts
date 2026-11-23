@@ -382,6 +382,39 @@ describe("groups() header text after an in-place shift", () => {
     }
   });
 
+  function standbyShift(container: HTMLElement): number | null {
+    const shifted = stickySlots(container).filter((slot) => slot.shift !== null);
+    if (shifted.length === 0) return null;
+    shifted.sort((a, b) => a.shift! - b.shift!);
+    return shifted[shifted.length - 1]!.shift;
+  }
+
+  async function rebuildAtPushStart(horizontal: boolean): Promise<void> {
+    const f = await mountPush(horizontal);
+    try {
+      if (horizontal) f.viewport.scrollLeft = 80;
+      else f.viewport.scrollTop = 80;
+      f.viewport.dispatchEvent(new Event("scroll"));
+      await tick();
+      expect(standbyShift(f.container)).toBe(32);
+      f.list.setItems(rows(horizontal ? [["X", 2], ["C", 12]] : [["X", 2], ["C", 30]]));
+      await tick();
+      if (horizontal) expect(f.viewport.scrollLeft).toBe(80);
+      else expect(f.viewport.scrollTop).toBe(80);
+      expect(standbyShift(f.container)).toBe(32);
+    } finally {
+      f.dispose();
+    }
+  }
+
+  it("places the standby one header away when a rebuild lands on the start of a push, vertical", async () => {
+    await rebuildAtPushStart(false);
+  });
+
+  it("places the standby one header away when a rebuild lands on the start of a push, horizontal", async () => {
+    await rebuildAtPushStart(true);
+  });
+
   it("ends the sticky push when a rebuild makes the incoming header no longer fit", async () => {
     const container = createContainer({ width: 300, height: 800 });
     const list = createVList<Row>(

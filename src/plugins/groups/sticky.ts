@@ -113,7 +113,9 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   let curSize = 0;
   let nxtGroup = -1;
   let visible = false;
-  let lastOffset = 0;
+  // applyPush is only called with dist <= 0. 1 is not a placement, so the
+  // first write of 0 — including the one right after a reset — still runs.
+  let lastOffset = 1;
   let transitioning = false;
 
   // Slot content — delegate to caller-provided renderInto
@@ -150,7 +152,7 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
   };
 
   const resetTransforms = (): void => {
-    lastOffset = 0;
+    lastOffset = 1;
     active.style.transform = "";
     standby.style.transform = "";
   };

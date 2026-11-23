@@ -18,7 +18,7 @@ Who is affected: lists using `groups()`.
 ### Fixed
 
 - A reused group header shows the new group's label when rows are inserted, prepended, or replaced in front of it. The header's id stays positional.
-- The incoming sticky title updates when the groups change while one header is pushing the previous one aside. If that push no longer fits, it ends.
+- The incoming sticky title updates when the groups change while one header is pushing the previous one aside, including when that push is exactly at its start. If that push no longer fits, it ends.
 
 ## [3.8.8] - 2026-11-22
 
