@@ -251,6 +251,10 @@ export const createStickyHeader = <T extends VListItem = VListItem>(
     const prev = curGroup;
     curGroup = -1;
     curSize = 0;
+    // The following update() skips a standby fill when the incoming index is
+    // unchanged, and applyPush skips when the offset is unchanged. Drop the
+    // transition so that update repaints it, or ends it if it no longer fits.
+    if (transitioning) cancel();
     if (prev >= 0) setCurrent(prev);
   };
 
