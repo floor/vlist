@@ -90,7 +90,8 @@ export const highlightElement = (
   // so the mark is sliced from the original text by the query's length.
   const qlen = query.length;
 
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  // 4 is NodeFilter.SHOW_TEXT.
+  const walker = document.createTreeWalker(root, 4);
 
   const targets: Text[] = [];
   let current: Node | null;

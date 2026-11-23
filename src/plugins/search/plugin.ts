@@ -415,7 +415,7 @@ export function search<T extends VListItem = VListItem>(
    */
   interface StampedRow extends StampableRow {
     /** Whether this row currently carries the `--current` class (navigate). */
-    _searchMarkCurrent?: boolean;
+    _mk?: boolean;
   }
 
   const eachScope = (el: HTMLElement, fn: (target: HTMLElement) => void): void => {
@@ -459,7 +459,7 @@ export function search<T extends VListItem = VListItem>(
           eachScope(el, highlightTarget);
           marksPresent = true;
           row._stamp = queryVersion;
-          row._searchMarkCurrent = false;
+          row._mk = false;
         } else if (row._stamp) {
           // Marks built for a query that is no longer active. A row the
           // renderer has written since carries 0 and costs nothing.
@@ -472,12 +472,12 @@ export function search<T extends VListItem = VListItem>(
         // Cheap by construction: only the row entering or leaving the current
         // match touches the DOM — the rest compare one property and move on.
         const isCurrentRow = dataIndex === currentOriginal;
-        if (row._searchMarkCurrent !== isCurrentRow) {
+        if (row._mk !== isCurrentRow) {
           const marks = el.querySelectorAll(`.${matchClass}`);
           for (let m = 0; m < marks.length; m++) {
             marks[m]!.classList.toggle(currentClass, isCurrentRow);
           }
-          row._searchMarkCurrent = isCurrentRow;
+          row._mk = isCurrentRow;
         }
       }
     }
