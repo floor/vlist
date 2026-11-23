@@ -298,4 +298,157 @@ describe("groups() header text after an in-place shift", () => {
       container.remove();
     }
   });
+
+  function stickySlots(container: HTMLElement): Array<{ text: string; shift: number | null }> {
+    return [...container.querySelectorAll(".sticky-group")].map((el) => {
+      const match = /translate[XY]\((-?\d+)px\)/.exec((el as HTMLElement).style.transform);
+      return { text: textOf(el), shift: match ? Number(match[1]) : null };
+    });
+  }
+
+  function standbyText(container: HTMLElement): string {
+    const slots = stickySlots(container);
+    const shifted = slots.filter((slot) => slot.shift !== null);
+    if (shifted.length === 0) return "";
+    if (shifted.length === 1) return shifted[0]!.text;
+    shifted.sort((a, b) => a.shift! - b.shift!);
+    return shifted[shifted.length - 1]!.text;
+  }
+
+  async function mountPush(horizontal: boolean): Promise<{
+    list: VList<Row>;
+    container: HTMLElement;
+    viewport: HTMLElement;
+    dispose: () => void;
+  }> {
+    const container = createContainer({ width: horizontal ? 300 : 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        orientation: horizontal ? "horizontal" : "vertical",
+        items: rows(horizontal ? [["A", 2], ["B", 12]] : [["A", 2], ["B", 30]]),
+        item: horizontal
+          ? { width: 40, template: (item) => item.group }
+          : { height: 40, template: (item) => item.group },
+      },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: true,
+        }),
+      ],
+    );
+    await tick();
+    const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+    if (horizontal) viewport.scrollLeft = 88;
+    else viewport.scrollTop = 88;
+    viewport.dispatchEvent(new Event("scroll"));
+    await tick();
+    return {
+      list,
+      container,
+      viewport,
+      dispose(): void {
+        list.destroy();
+        container.remove();
+      },
+    };
+  }
+
+  it("refills the standby sticky title inside a push, vertical", async () => {
+    const f = await mountPush(false);
+    try {
+      expect(standbyText(f.container)).toBe("B");
+      f.list.setItems(rows([["X", 2], ["C", 30]]));
+      await tick();
+      expect(f.viewport.scrollTop).toBe(88);
+      expect(standbyText(f.container)).toBe("C");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it("refills the standby sticky title inside a push, horizontal", async () => {
+    const f = await mountPush(true);
+    try {
+      expect(standbyText(f.container)).toBe("B");
+      f.list.setItems(rows([["X", 2], ["C", 12]]));
+      await tick();
+      expect(f.viewport.scrollLeft).toBe(88);
+      expect(standbyText(f.container)).toBe("C");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  function standbyShift(container: HTMLElement): number | null {
+    const shifted = stickySlots(container).filter((slot) => slot.shift !== null);
+    if (shifted.length === 0) return null;
+    shifted.sort((a, b) => a.shift! - b.shift!);
+    return shifted[shifted.length - 1]!.shift;
+  }
+
+  async function rebuildAtPushStart(horizontal: boolean): Promise<void> {
+    const f = await mountPush(horizontal);
+    try {
+      if (horizontal) f.viewport.scrollLeft = 80;
+      else f.viewport.scrollTop = 80;
+      f.viewport.dispatchEvent(new Event("scroll"));
+      await tick();
+      expect(standbyShift(f.container)).toBe(32);
+      f.list.setItems(rows(horizontal ? [["X", 2], ["C", 12]] : [["X", 2], ["C", 30]]));
+      await tick();
+      if (horizontal) expect(f.viewport.scrollLeft).toBe(80);
+      else expect(f.viewport.scrollTop).toBe(80);
+      expect(standbyShift(f.container)).toBe(32);
+    } finally {
+      f.dispose();
+    }
+  }
+
+  it("places the standby one header away when a rebuild lands on the start of a push, vertical", async () => {
+    await rebuildAtPushStart(false);
+  });
+
+  it("places the standby one header away when a rebuild lands on the start of a push, horizontal", async () => {
+    await rebuildAtPushStart(true);
+  });
+
+  it("ends the sticky push when a rebuild makes the incoming header no longer fit", async () => {
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: rows([["A", 2], ["B", 30]]),
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: {
+            height: (key) => key === "A" ? 32 : key === "X" ? 4 : 48,
+            template: (key) => key,
+          },
+          sticky: true,
+        }),
+      ],
+    );
+    try {
+      await tick();
+      const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+      viewport.scrollTop = 88;
+      viewport.dispatchEvent(new Event("scroll"));
+      await tick();
+      expect(standbyText(container)).toBe("B");
+      list.setItems(rows([["X", 2], ["C", 30]]));
+      await tick();
+      expect(standbyText(container)).toBe("");
+      const titles = stickySlots(container).map((slot) => slot.text).filter((text) => text.length > 0);
+      expect(titles).toEqual(["X"]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
 });

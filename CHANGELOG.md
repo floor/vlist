@@ -11,13 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-A group header shows the label of the group now under it after rows are inserted, removed, or replaced in front of it.
+A group header shows the label of the group now under it after rows are inserted, removed, or replaced in front of it. The incoming sticky title does too, when the groups change while one header is pushing the previous one aside.
 
 Who is affected: lists using `groups()`.
 
 ### Fixed
 
 - A reused group header shows the new group's label when rows are inserted, prepended, or replaced in front of it. The header's id stays positional.
+- The incoming sticky title updates when the groups change while one header is pushing the previous one aside, including when that push is exactly at its start. If that push no longer fits, it ends.
 
 ## [3.8.8] - 2026-11-22
 
