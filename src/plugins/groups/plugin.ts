@@ -814,6 +814,10 @@ export function groups<T extends VListItem = VListItem>(
           lastDataCount = n;
           lastRebuildLoadedCount = getLoadedCount?.() ?? 0;
           rebuildGridPositions();
+          if (stickyHeader) {
+            stickyHeader.refresh();
+            stickyHeader.update(scroll.getPixelEquivalent());
+          }
         }
         origSizeCacheRebuild(layout.totalEntries);
       };
