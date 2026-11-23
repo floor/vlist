@@ -95,6 +95,36 @@ describe("search bar", () => {
     expect(container.querySelector(".vlist-search__input")).not.toBeNull();
   });
 
+  it("draws a 24px icon and marks the landmark enabled", () => {
+    const { container } = makeList();
+    const bar = container.querySelector(".vlist-search")!;
+    expect(bar.getAttribute("aria-disabled")).toBe("false");
+    const icons = container.querySelectorAll(".vlist-search svg");
+    expect(icons.length).toBeGreaterThan(0);
+    for (const svg of icons) {
+      expect(svg.getAttribute("width")).toBe("24");
+      expect(svg.getAttribute("height")).toBe("24");
+    }
+  });
+
+  it("does not set aria-controls when the list root has no id", () => {
+    const { container } = makeList();
+    const root = container.querySelector(".vlist")!;
+    expect(root.id).toBe("");
+    expect(container.querySelector(".vlist-search__input")!.hasAttribute("aria-controls")).toBe(false);
+  });
+
+  it("points aria-controls at a list root that has an id", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<Fruit>(
+      { container, items: FRUITS.slice(), item: { height: 30, template: (item) => item.name } },
+      [{ name: "stamp", priority: 1, setup(ctx) { ctx.dom.root.id = "fruits"; } }, search<Fruit>()],
+    );
+    lists.push(list);
+    expect(container.querySelector(".vlist-search__input")!.getAttribute("aria-controls")).toBe("fruits");
+  });
+
   it("uses the modular BEM structure (container / leading-icon / input / clear)", () => {
     const { container } = makeList();
     const bar = container.querySelector(".vlist-search")!;
