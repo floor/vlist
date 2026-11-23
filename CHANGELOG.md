@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- An edit that brings a row into an active search filter regroups once. If that edit throws, the list stays on the previous filter, and retrying the edit applies it.
+- An edit that brings a row into an active search filter regroups once. If that edit throws, the list stays on the previous filter, and retrying the edit applies it. The first match created by an edit in navigate mode is revealed. Nested edits that change which rows match keep the match list ordered and unique.
 
 ## [3.8.10] - 2026-11-23
 

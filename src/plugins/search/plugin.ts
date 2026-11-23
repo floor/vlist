@@ -223,7 +223,7 @@ export function search<T extends VListItem = VListItem>(
     if (active) resolveOnce();
     else if (!filtered) return;
     filtered = active;
-    const totalFn = active ? (): number => matches.length : (): number => ctx.items.all().length;
+    const totalFn = (): number => (active ? matches.length : ctx.items.all().length);
     ctx.items.setTotalFn(totalFn);
     engineState.totalItems = totalFn();
     (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
@@ -320,10 +320,11 @@ export function search<T extends VListItem = VListItem>(
     if (matched === matchSet.has(idx)) return 0;
 
     const prevRow = matches[current];
-    let pos = matches.findIndex((row) => row >= idx);
-    if (pos < 0) pos = matches.length;
+    let pos = 0;
+    while (pos < matches.length && matches[pos]! < idx) pos++;
     if (matched) {
       // Spliced after the previous hook so a nested update keeps its old slot.
+      // An empty list has nothing to compare, so the reveal is decided here.
       hold = idx;
       holdAt = pos;
     } else {
@@ -336,8 +337,7 @@ export function search<T extends VListItem = VListItem>(
       current = matches.indexOf(prevRow as number);
       if (current < 0) current = pos < matches.length ? pos : 0;
     }
-
-    return navigate && matches.length && matches[current] !== prevRow ? 2 : 1;
+    return navigate && (matches.length ? matches[current] !== prevRow : matched) ? 2 : 1;
   };
 
   // ── Open / close ────────────────────────────────────────────────────────────
@@ -444,8 +444,8 @@ export function search<T extends VListItem = VListItem>(
     // loaders request items, not headers). renderedElement is layout-space —
     // headers occupy indices — so look up through the mapping groups publishes.
     for (let dataIndex = start; dataIndex <= end; dataIndex++) {
-      const layoutIndex = d2lFn !== null ? d2lFn(dataIndex) : dataIndex;
-      if (l2dFn !== null && l2dFn(layoutIndex) < 0) continue;
+      const layoutIndex = d2lFn ? d2lFn(dataIndex) : dataIndex;
+      if (l2dFn && l2dFn(layoutIndex) < 0) continue;
       const el = ctx.dom.renderedElement(layoutIndex);
       if (!el) continue;
 
@@ -645,17 +645,19 @@ export function search<T extends VListItem = VListItem>(
         const prevTotal = engineState.totalItems;
         const prevCur = current;
         const changed = onItemUpdate(id, u);
-        const at = holdAt;
+        let at = holdAt;
         const idx = hold;
         const removed = cut;
         let synced = false;
         try {
           prevOnUpdate?.(id, u);
           if (!changed) return;
-          if (!removed) {
+          if (!removed && !matchSet.has(idx)) {
+            at = 0;
+            while (at < matches.length && matches[at]! < idx) at++;
             matches.splice(at, 0, idx);
             matchSet.add(idx);
-            if (prevCur >= at && matches.length > 1) current = prevCur + 1;
+            if (current >= at && matches.length > 1) current++;
           }
           if (!navigate) syncFilter(true);
           synced = true;

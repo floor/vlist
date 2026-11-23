@@ -828,6 +828,164 @@ describe("groups() updateItem group key", () => {
     }
   });
 
+  it("reveals the first navigate match when an edit creates it", async () => {
+    const items: Row[] = [];
+    for (let id = 1; id <= 24; id++) items.push({ id, group: "A", label: "hide" });
+    const container = createContainer({ width: 300, height: 100 });
+    const list = createVList<Row>(
+      {
+        container,
+        items,
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "navigate", field: "label", position: "none" }),
+      ],
+    );
+    const announced = list as VList<Row> & { setQuery(query: string): void };
+    const events: string[] = [];
+    list.on("search:match", () => { events.push("match"); });
+    list.on("search:change", () => { events.push("change"); });
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      events.length = 0;
+      list.updateItem(21, { label: "show" });
+      await tick();
+      expect(events).toEqual(["match", "change"]);
+      const row = container.querySelector('[data-id="21"]') as HTMLElement;
+      const viewport = container.querySelector(".vlist-viewport") as HTMLElement;
+      const top = Number.parseFloat(row.style.transform.slice(11)) || 0;
+      const bottom = top + 40 - viewport.scrollTop;
+      expect(bottom).toBeGreaterThan(0);
+      expect(bottom).toBeLessThanOrEqual(viewport.clientHeight);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("keeps nested joins in order and removes the row that leaves", async () => {
+    let nest = true;
+    let list: VList<Row> | null = null;
+    const container = createContainer({ width: 300, height: 800 });
+    const slots = [
+      { id: 1, group: "A", label: "hide" },
+      { id: 2, group: "B", label: "hide" },
+      { id: 3, group: "C", label: "show" },
+      { id: 4, group: "D", label: "show" },
+    ];
+    list = createVList<Row>(
+      {
+        container,
+        items: slots,
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        {
+          name: "nest-earlier",
+          priority: 30,
+          setup(ctx) {
+            const prev = ctx.hooks.get("_onItemUpdate") as
+              ((id: string | number, updates: Partial<Row>) => void) | undefined;
+            ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
+              if (nest && id === 2) {
+                nest = false;
+                list?.updateItem(1, { label: "show" });
+              }
+              prev?.(id, updates);
+            });
+          },
+        },
+        search<Row>({ mode: "filter", field: "label" }),
+      ],
+    );
+    const announced = list as Announced;
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      list.updateItem(2, { label: "show" });
+      await tick();
+      agreed(announced, container, [0, 1, 2, 3], filteredFour, "9", "4 results");
+      list.updateItem(1, { label: "hide" });
+      await tick();
+      agreed(announced, container, [1, 2, 3], filteredThree, "7", "3 results");
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("does not list a row twice when the join updates it again", async () => {
+    let nest = true;
+    let list: VList<Row> | null = null;
+    const container = createContainer({ width: 300, height: 800 });
+    const slots = [
+      { id: 1, group: "A", label: "hide" },
+      { id: 2, group: "B", label: "hide" },
+      { id: 3, group: "C", label: "show" },
+      { id: 4, group: "D", label: "show" },
+    ];
+    list = createVList<Row>(
+      {
+        container,
+        items: slots,
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        {
+          name: "nest-same",
+          priority: 30,
+          setup(ctx) {
+            const prev = ctx.hooks.get("_onItemUpdate") as
+              ((id: string | number, updates: Partial<Row>) => void) | undefined;
+            ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
+              if (nest && id === 2) {
+                nest = false;
+                list?.updateItem(2, { note: "again" });
+              }
+              prev?.(id, updates);
+            });
+          },
+        },
+        search<Row>({ mode: "filter", field: "label" }),
+      ],
+    );
+    const announced = list as Announced;
+    try {
+      await tick();
+      announced.setQuery("show");
+      await tick();
+      list.updateItem(2, { label: "show" });
+      await tick();
+      agreed(announced, container, [1, 2, 3], filteredThree, "7", "3 results");
+      expect(container.querySelectorAll('[data-id="2"]').length).toBe(1);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
   it("restores a plain table after a shorter setItems and an edit", scoped(async (scope) => {
     const source = rows([["A", 4]]).map((row) => ({ ...row, label: row.group }));
     const adapter: VListAdapter<Row> = {
