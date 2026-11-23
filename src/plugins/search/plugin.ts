@@ -166,8 +166,6 @@ export function search<T extends VListItem = VListItem>(
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
-  // A join is recorded here and spliced in after the previous hook, so that
-  // hook still sees the old slots. -1 when this update did not insert.
   let hold = -1;
   let holdAt = 0;
   let cut = false;
@@ -277,7 +275,7 @@ export function search<T extends VListItem = VListItem>(
   const emitSearchChange = (): void => {
     ctx.emitter.emit("search:change", {
       query,
-      matches: matches.length,
+      matches: matchSet.size,
       total: ctx.items.all().length,
     });
   };
@@ -320,20 +318,22 @@ export function search<T extends VListItem = VListItem>(
     if (matched === matchSet.has(idx)) return 0;
 
     const prevRow = matches[current];
-    let pos = 0;
-    while (pos < matches.length && matches[pos]! < idx) pos++;
     if (matched) {
-      // Spliced after the previous hook so a nested update keeps its old slot.
-      // An empty list has nothing to compare, so the reveal is decided here.
+      // Counted now, spliced after the previous hook so that hook keeps the old slots.
+      matchSet.add(idx);
       hold = idx;
-      holdAt = pos;
+      holdAt = -1;
     } else {
-      cut = true;
+      const pos = matches.indexOf(idx);
+      if (pos < 0) {
+        matchSet.delete(idx);
+        return 1;
+      }
       hold = idx;
       holdAt = pos;
+      cut = true;
       matches.splice(pos, 1);
       matchSet.delete(idx);
-      // indexOf is -1 when the focused row was the one removed, or there was none.
       current = matches.indexOf(prevRow as number);
       if (current < 0) current = pos < matches.length ? pos : 0;
     }
@@ -651,15 +651,17 @@ export function search<T extends VListItem = VListItem>(
         let synced = false;
         try {
           prevOnUpdate?.(id, u);
-          if (!changed) return;
-          if (!removed && !matchSet.has(idx)) {
+          if (!removed && matchSet.has(idx)) {
             at = 0;
             while (at < matches.length && matches[at]! < idx) at++;
             matches.splice(at, 0, idx);
-            matchSet.add(idx);
             if (current >= at && matches.length > 1) current++;
           }
-          if (!navigate) syncFilter(true);
+          if (!changed) return;
+          if (!navigate) {
+            syncFilter(true);
+            ctx.render.force();
+          }
           synced = true;
           updateCounter();
           if (changed > 1) scrollToMatch();
@@ -670,7 +672,7 @@ export function search<T extends VListItem = VListItem>(
               matches.splice(at, 0, idx);
               matchSet.add(idx);
             } else if (matchSet.has(idx)) {
-              matches.splice(at, 1);
+              if (at >= 0) matches.splice(at, 1);
               matchSet.delete(idx);
             }
             current = prevCur;
