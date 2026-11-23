@@ -86,6 +86,9 @@ export const highlightElement = (
   clearHighlights(root, matchClass);
 
   const needle = caseSensitive ? query : query.toLowerCase();
+  // The lowercased needle can be longer than the query ("İ" → "i" + dot),
+  // so the mark is sliced from the original text by the query's length.
+  const qlen = query.length;
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 
@@ -104,9 +107,9 @@ export const highlightElement = (
       if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
       const mark = document.createElement("mark");
       mark.className = matchClass;
-      mark.textContent = text.slice(idx, idx + needle.length);
+      mark.textContent = text.slice(idx, idx + qlen);
       frag.appendChild(mark);
-      last = idx + needle.length;
+      last = idx + qlen;
       idx = hay.indexOf(needle, last);
     }
     if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
