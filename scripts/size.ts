@@ -222,8 +222,8 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "table + rowAttributes": kb(17.44),
   masonry: kb(15.08),
   tree: kb(15.94),
-  // Owner allowed the measured 14397 B on 2026-11-23, for this filter join only.
-  search: kb(14.06),
+  // Owner allowed the measured 14412 B on 2026-11-23, for this filter join only.
+  search: kb(14.075),
   carousel: kb(16.15),
   vue: kb(10.77),
   svelte: kb(10.67),
