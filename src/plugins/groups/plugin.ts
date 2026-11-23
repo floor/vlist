@@ -168,6 +168,12 @@ export function groups<T extends VListItem = VListItem>(
   // align:end so the "scroll to last" reaches the true content bottom.
   let masonryGroupBottoms: number[] | null = null;
 
+  const laneTop = (lanes: Float64Array): number => {
+    let top = 0;
+    for (let c = 0; c < gridColumns; c++) if (lanes[c]! > top) top = lanes[c]!;
+    return top;
+  };
+
   function rebuildGridPositions(): void {
     if (gridColumns <= 0) { gridItemPositions = null; gridSorted = null; return; }
     const rawCross = engineState.crossSize || contentElement.clientWidth;
@@ -198,10 +204,7 @@ export function groups<T extends VListItem = VListItem>(
       for (let i = 0; i < total; i++) {
         const entry = layout.getEntry(i);
         if (entry.type === "header") {
-          let tallest = 0;
-          for (let c = 0; c < gridColumns; c++) {
-            if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
-          }
+          const tallest = laneTop(laneSizes);
           if (curGroupIdx >= 0) groupBottoms[curGroupIdx] = groupY + tallest;
           groupY += tallest;
           const h = sizeCache.getSize(i);
@@ -224,13 +227,7 @@ export function groups<T extends VListItem = VListItem>(
         }
       }
       // Finalize the last group's bottom
-      if (curGroupIdx >= 0) {
-        let tallest = 0;
-        for (let c = 0; c < gridColumns; c++) {
-          if (laneSizes[c]! > tallest) tallest = laneSizes[c]!;
-        }
-        groupBottoms[curGroupIdx] = groupY + tallest;
-      }
+      if (curGroupIdx >= 0) groupBottoms[curGroupIdx] = groupY + laneTop(laneSizes);
       masonryGroupBottoms = groupBottoms;
     } else {
       masonryGroupBottoms = null;
@@ -352,7 +349,10 @@ export function groups<T extends VListItem = VListItem>(
 
       element.className = groupHeaderClass;
       element.setAttribute("role", "presentation");
+      element.removeAttribute("id");
       element.removeAttribute("aria-selected");
+      element.removeAttribute("aria-posinset");
+      element.removeAttribute("aria-setsize");
       element.setAttribute("data-id", headerId);
 
       if (isX && stickyHeader && entry.group.groupIndex === 0) {
@@ -1127,14 +1127,21 @@ export function groups<T extends VListItem = VListItem>(
       });
 
       // Same signal as a filter that keeps the count: syncLayoutIfNeeded
-      // rebuilds. A same-key update leaves the signal alone.
+      // rebuilds. A table paints through its own renderer, so that change
+      // uses the size-cache rebuild that already owns the table layout.
+      // A same-key update leaves the signal alone. all() is data space:
+      // table() replaces items.at with a layout-space reader.
       ctx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<T>): void => {
         const key = updates.id ?? id;
         const at = getMethod?.("_getIndexById") as ((itemId: string | number) => number) | undefined;
-        let index = at?.(key) ?? -1;
-        if (index < 0) index = ctx.items.all().findIndex((row) => row.id === key);
-        const item = index < 0 ? undefined : (getLoadedItem ?? ctxGetItem)(index);
-        if (item && config.getGroupForIndex(index, item) !== layout.getGroupAtDataIndex(index).key) lastDataCount = -1;
+        // A hook owns the index space: data() returns the source index, search
+        // returns the filtered slot. Falling through would re-read source space.
+        const index = at ? at(key) : ctx.items.all().findIndex((row) => row.id === key);
+        const item = index < 0 ? undefined : (getLoadedItem ? getLoadedItem(index) : ctx.items.all()[index]);
+        if (item && config.getGroupForIndex(index, item) !== layout.getGroupAtDataIndex(index).key) {
+          if (tableMode) sizeCache.rebuild(layout.totalEntries - layout.groupCount);
+          else lastDataCount = -1;
+        }
       });
 
       ctx.hooks.onDestroy(() => {

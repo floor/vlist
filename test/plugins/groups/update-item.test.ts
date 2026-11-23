@@ -13,6 +13,9 @@ import type { VList } from "../../../src/core/types";
 import type { VListAdapter, VListItem } from "../../../src/types";
 import { groups } from "../../../src/plugins/groups/plugin";
 import { data } from "../../../src/plugins/data";
+import { table } from "../../../src/plugins/table";
+import { search } from "../../../src/plugins/search/plugin";
+import { selection } from "../../../src/plugins/selection";
 
 interface Row extends VListItem {
   id: number;
@@ -57,6 +60,20 @@ function sequence(container: HTMLElement): string[] {
     return `${kind}:${textOf(el)}#${el.getAttribute("data-id")}`;
   });
 }
+
+function tableSequence(container: HTMLElement): string[] {
+  // Rows are absolutely positioned, so visual order is data-index, not DOM order.
+  return [...container.querySelectorAll(".vlist-table-row")]
+    .sort((a, b) => Number(a.getAttribute("data-index")) - Number(b.getAttribute("data-index")))
+    .map((el) => {
+      const header = el.classList.contains("vlist-table-group-header");
+      const node = header ? el.querySelector(".vlist-table-group-header-content") ?? el : el;
+      const kind = header ? "H" : "I";
+      return `${kind}:${textOf(node)}#${el.getAttribute("data-id")}`;
+    });
+}
+
+const tableColumns = [{ key: "group", label: "Group", width: 120 }];
 
 function stickyTexts(container: HTMLElement): string[] {
   return [...container.querySelectorAll(".sticky-group")]
@@ -220,4 +237,157 @@ describe("groups() updateItem group key", () => {
       "I:B#4",
     ]);
   }));
+
+  const regrouped = [
+    "H:A#__group_header_0",
+    "I:A#1",
+    "H:C#__group_header_1",
+    "I:C#2",
+    "H:B#__group_header_2",
+    "I:B#3",
+    "I:B#4",
+  ];
+
+  it("rebuilds a grouped table when updateItem changes the group", async () => {
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: rows([["A", 2], ["B", 2]]),
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+      ],
+    );
+    try {
+      await tick();
+      list.updateItem(2, { group: "C" });
+      await tick();
+      expect(tableSequence(container)).toEqual(regrouped);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("rebuilds a grouped table loaded through data()", scoped(async (scope) => {
+    const source = rows([["A", 2], ["B", 2]]);
+    const adapter: VListAdapter<Row> = {
+      read: async ({ offset, limit }) => ({
+        items: source.slice(offset, offset + limit),
+        total: source.length,
+      }),
+    };
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        data<Row>({ adapter, total: source.length }),
+        table<Row>({ columns: tableColumns, rowHeight: 40, headerHeight: 32 }),
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+      ],
+    );
+    scope.own(list, container);
+    await waitFor(
+      () => tableSequence(container).some((row) => row === "I:A#1"),
+      "the table rows to render",
+    );
+    list.updateItem(2, { group: "C" });
+    await tick();
+    expect(tableSequence(container)).toEqual(regrouped);
+  }));
+
+  it("regroups an item under an active search filter", async () => {
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: [
+          { id: 1, group: "A", label: "hide" },
+          { id: 2, group: "A", label: "show" },
+          { id: 3, group: "B", label: "show" },
+        ],
+        item: { height: 40, template: (item) => item.label ?? item.group },
+      },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        search<Row>({ mode: "filter", field: "label", position: "none" }),
+      ],
+    );
+    try {
+      await tick();
+      (list as VList<Row> & { setQuery(query: string): void }).setQuery("show");
+      await tick();
+      list.updateItem(3, { group: "C" });
+      await tick();
+      expect(sequence(container)).toEqual([
+        "H:A#__group_header_0",
+        "I:show#2",
+        "H:C#__group_header_1",
+        "I:show#3",
+      ]);
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
+
+  it("keeps the focused row as the active descendant after it changes group", async () => {
+    const container = createContainer({ width: 300, height: 800 });
+    const list = createVList<Row>(
+      {
+        container,
+        items: rows([["A", 2], ["B", 2]]),
+        item: { height: 40, template: (item) => item.group },
+      },
+      [
+        groups<Row>({
+          getGroupForIndex: (_index, item) => item?.group ?? "",
+          header: { height: 32, template: (key) => key },
+          sticky: false,
+        }),
+        selection<Row>({ mode: "single", followFocus: true }),
+      ],
+    );
+    try {
+      await tick();
+      const root = container.querySelector(".vlist") as HTMLElement;
+      const content = container.querySelector(".vlist-content") as HTMLElement;
+      root.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
+      root.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+      expect(content.getAttribute("aria-activedescendant")).toBe("vlist-item-2");
+      list.updateItem(2, { group: "C" });
+      await tick();
+      const active = content.getAttribute("aria-activedescendant");
+      expect(active).toBe("vlist-item-3");
+      const named = container.querySelector(`[id="${active}"]`);
+      expect(named?.getAttribute("data-id")).toBe("2");
+      expect(named?.classList.contains("vlist-group-header")).toBe(false);
+      for (const header of container.querySelectorAll(".vlist-group-header")) {
+        expect(header.hasAttribute("id")).toBe(false);
+        expect(header.hasAttribute("aria-posinset")).toBe(false);
+        expect(header.hasAttribute("aria-setsize")).toBe(false);
+      }
+    } finally {
+      list.destroy();
+      container.remove();
+    }
+  });
 });

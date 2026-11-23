@@ -452,7 +452,9 @@ export function selection<T extends VListItem = VListItem>(
           if (candidate.style.display !== "none") { el = candidate; break; }
         }
         if (!el && all.length > 0) el = all[0] as HTMLElement;
-        dom.content.setAttribute("aria-activedescendant", el?.id ?? `${classPrefix}-item-${index}`);
+        // A regroup paints the focused row after this lookup. An empty id is
+        // the header still sitting at the new index, not the committed item.
+        dom.content.setAttribute("aria-activedescendant", el?.id || `${classPrefix}-item-${index}`);
       };
 
       const restoringFocus = retainFocus(ctx, (): void => {

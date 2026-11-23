@@ -625,6 +625,12 @@ export function search<T extends VListItem = VListItem>(
       // filtered row.
       ctx.hooks.method("_getItem", getItem);
       ctx.hooks.method("_getLoadedItem", getItem);
+      // Groups asks for the index in the space its layout uses. A filter's
+      // slot is not the source index; the match list is still the previous one.
+      ctx.hooks.method("_getIndexById", (id: string | number): number => {
+        const source = ctx.items.all().findIndex((row) => row.id === id);
+        return filtered ? matches.indexOf(source) : source;
+      });
       if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
       let prevOnUpdate = ctx.hooks.get("_onItemUpdate") as ((id: string | number, u: Partial<T>) => void) | undefined;

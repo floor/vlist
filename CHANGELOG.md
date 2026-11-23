@@ -13,11 +13,12 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
 
-Who is affected: lists using `groups()`, including with `data()`.
+Who is affected: lists using `groups()`, including with `data()`, `table()`, or a search filter, and a focused row in a listbox.
 
 ### Fixed
 
 - `updateItem` that changes an item's group key rebuilds the group layout, so the item sits under the new header. A group emptied this way loses its header, and the sticky title follows. An update that keeps the key does not rebuild.
+- A grouped table rebuilds on that same key change, with static items and with `data()`, so the new header appears and the later rows stay. Under an active search filter the item moves under the new header. A focused row stays the listbox active descendant, and a node painted as a header drops the item id and positional ARIA.
 
 ## [3.8.9] - 2026-11-23
 
