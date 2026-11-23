@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
+
+Who is affected: lists using `groups()`, including with `data()`.
+
+### Fixed
+
+- `updateItem` that changes an item's group key rebuilds the group layout, so the item sits under the new header. A group emptied this way loses its header, and the sticky title follows. An update that keeps the key does not rebuild.
+
 ## [3.8.9] - 2026-11-23
 
 A group header shows the label of the group now under it after rows are inserted, removed, or replaced in front of it. The incoming sticky title does too, when the groups change while one header is pushing the previous one aside.

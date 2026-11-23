@@ -386,6 +386,8 @@ export function data<T extends VListItem = VListItem>(
 
       ctx.hooks.method("_getLoadedCount", (): number => dataManager.getCached());
 
+      ctx.hooks.method("_getIndexById", (id: string | number): number => dataManager.getIndexById(id));
+
       // ARIA: aria-busy for loading state
       emitter.on("load:start", () => {
         dom.root.setAttribute("aria-busy", "true");
