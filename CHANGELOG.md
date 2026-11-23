@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- An edit that brings a row into an active search filter regroups once. If that edit throws, the filter, the row count and the counter stay as they were, and retrying the edit shows the row.
+- An edit that brings a row into an active search filter regroups once. If that edit throws, the list stays on the previous filter, and retrying the edit applies it.
 
 ## [3.8.10] - 2026-11-23
 

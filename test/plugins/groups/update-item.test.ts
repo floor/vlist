@@ -567,6 +567,34 @@ describe("groups() updateItem group key", () => {
     "I:D#4",
   ];
 
+  type Announced = VList<Row> & {
+    setQuery(query: string): void;
+    getMatches(): number[];
+    getGroupLayout(): { totalEntries: number; groupCount: number };
+  };
+
+  // Count, layout, ARIA and the counter describe the same filter.
+  const agreed = (
+    list: Announced,
+    container: HTMLElement,
+    matches: number[],
+    rows: string[],
+    aria: string,
+    counter: string | null,
+  ): void => {
+    const layout = list.getGroupLayout();
+    const root = container.querySelector(".vlist") as HTMLElement;
+    expect(list.getMatches()).toEqual(matches);
+    expect(list.total).toBe(matches.length);
+    expect(layout.groupCount).toBe(rows.filter((row) => row.startsWith("H:")).length);
+    expect(layout.totalEntries).toBe(rows.length);
+    expect(root.getAttribute("aria-rowcount")).toBe(aria);
+    if (counter !== null) {
+      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe(counter);
+    }
+    expect(tableSequence(container)).toEqual(rows);
+  };
+
   it("keeps the table in agreement when grouping throws during a join", async () => {
     let throwOnce = true;
     const container = createContainer({ width: 300, height: 800 });
@@ -592,31 +620,19 @@ describe("groups() updateItem group key", () => {
         search<Row>({ mode: "filter", field: "label" }),
       ],
     );
-    const announced = list as VList<Row> & {
-      setQuery(query: string): void;
-      getMatches(): number[];
-    };
+    const announced = list as Announced;
     try {
       await tick();
       announced.setQuery("show");
       await tick();
-      const root = container.querySelector(".vlist") as HTMLElement;
-      expect(root.getAttribute("aria-rowcount")).toBe("7");
       expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
-      expect(announced.getMatches()).toHaveLength(3);
-      expect(list.total).toBe(3);
-      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("3 results");
+      agreed(announced, container, [1, 2, 3], filteredThree, "7", "3 results");
       list.updateItem(4, { note: "later" });
       await tick();
-      expect(tableSequence(container)).toEqual(filteredThree);
-      expect(root.getAttribute("aria-rowcount")).toBe("7");
-      expect(list.total).toBe(3);
+      agreed(announced, container, [1, 2, 3], filteredThree, "7", "3 results");
       list.updateItem(1, { label: "show" });
       await tick();
-      expect(tableSequence(container)).toEqual(filteredFour);
-      expect(root.getAttribute("aria-rowcount")).toBe("9");
-      expect(list.total).toBe(4);
-      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("4 results");
+      agreed(announced, container, [0, 1, 2, 3], filteredFour, "9", "4 results");
     } finally {
       list.destroy();
       container.remove();
@@ -657,26 +673,16 @@ describe("groups() updateItem group key", () => {
         search<Row>({ mode: "filter", field: "label" }),
       ],
     );
-    const announced = list as VList<Row> & {
-      setQuery(query: string): void;
-      getMatches(): number[];
-    };
+    const announced = list as Announced;
     try {
       await tick();
       announced.setQuery("show");
       await tick();
       expect(() => list.updateItem(1, { label: "show" })).toThrow("group");
-      expect(announced.getMatches()).toHaveLength(3);
-      expect(list.total).toBe(3);
-      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("3 results");
-      expect(tableSequence(container)).toEqual(filteredThree);
+      agreed(announced, container, [1, 2, 3], filteredThree, "7", "3 results");
       list.updateItem(1, { label: "show" });
       await tick();
-      expect(tableSequence(container)).toEqual(filteredFour);
-      expect(list.total).toBe(4);
-      expect(container.querySelector(".vlist-search__counter")?.textContent).toBe("4 results");
-      const root = container.querySelector(".vlist") as HTMLElement;
-      expect(root.getAttribute("aria-rowcount")).toBe("9");
+      agreed(announced, container, [0, 1, 2, 3], filteredFour, "9", "4 results");
     } finally {
       list.destroy();
       container.remove();
@@ -722,7 +728,7 @@ describe("groups() updateItem group key", () => {
         search<Row>({ mode: "filter", field: "label", position: "none" }),
       ],
     );
-    const announced = list as VList<Row> & { setQuery(query: string): void };
+    const announced = list as Announced;
     try {
       await tick();
       announced.setQuery("show");
@@ -733,7 +739,7 @@ describe("groups() updateItem group key", () => {
       // four matches once; it does not also rebuild the previous three.
       expect(groupingCalls).toBe(5);
       await tick();
-      expect(tableSequence(container)).toEqual(filteredFour);
+      agreed(announced, container, [0, 1, 2, 3], filteredFour, "9", null);
     } finally {
       list.destroy();
       container.remove();
