@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- On Chromium with classic scrollbars, a table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. The native horizontal bar stays.
+- On Chromium with classic scrollbars, a table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. The native horizontal bar stays, and it is the bar the stylesheet paints on Chromium: a thicker thumb and no arrow buttons. The custom vertical track ends above that bar.
 
 ## [3.8.10] - 2026-11-23
 

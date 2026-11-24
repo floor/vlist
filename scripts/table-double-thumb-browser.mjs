@@ -28,15 +28,18 @@ const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
 <style>
   body { margin: 8px; }
-  #host, #fresh { width: 420px; height: 240px; }
+  #host, #fresh, #grouped { width: 420px; height: 240px; }
+  #color-control { width: 180px; height: 80px; }
   .ref { width: 420px; height: 80px; overflow: scroll; }
   .ref i { display: block; width: 790px; height: 200px; }
 </style>
 <div id="host"></div>
 <div id="fresh"></div>
+<div id="grouped"></div>
+<div id="color-control"></div>
 <div class="ref"><i></i></div>
 <script type="module">
-import { createVList, table, scrollbar } from "/index.js";
+import { createVList, table, scrollbar, groups } from "/index.js";
 const columns = [
   { key: "name", label: "Name", width: 220 },
   { key: "size", label: "Size", width: 200 },
@@ -58,16 +61,36 @@ const mountIn = (container, n) => createVList({
 const mount = (n) => mountIn("#host", n);
 window.list = mount(6);
 window.fresh = mountIn("#fresh", 40);
+window.grouped = createVList({
+  container: "#grouped",
+  items: items(40),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [
+  table({ rowHeight: 28, headerHeight: 28, columns }),
+  groups({
+    getGroupForIndex: (index) => "G" + Math.floor(index / 10),
+    header: { height: 28, template: (key) => key },
+  }),
+  scrollbar(),
+]);
+window.colorControl = createVList({
+  container: "#color-control",
+  items: items(4),
+  item: { height: 18, template: (row) => row.name },
+  scroll: { mode: "auto" },
+}, [scrollbar()]);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
   window.list = mount(40);
 };
 window.mountNested = () => {
+  const cell = document.querySelector("#host .vlist-table-cell");
   const holder = document.createElement("div");
   holder.id = "nested";
   holder.style.cssText = "width:160px;height:70px";
-  document.querySelector("#host .vlist").appendChild(holder);
+  cell.appendChild(holder);
   createVList({
     container: holder,
     items: Array.from({ length: 20 }, (_, i) => ({ id: i })),
@@ -126,7 +149,7 @@ try {
   for (const stream of [child?.stdin, child?.stdout, child?.stderr]) stream?.unref?.();
   console.log(await browser.version());
   const page = await browser.newPage();
-  const cdp = await pinPage(page, { width: 760, height: 640 });
+  const cdp = await pinPage(page, { width: 760, height: 1280 });
   await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true });
   await page.goto(server.url.href);
   await page.waitForFunction(() => window.ready);
@@ -291,14 +314,82 @@ try {
   const nested = await page.evaluate(() => {
     window.mountNested();
     const vp = document.querySelector("#nested .vlist-viewport");
+    const control = document.querySelector("#color-control .vlist-viewport");
     return {
       overflowY: getComputedStyle(vp).overflowY,
       root: vp.parentElement.className,
+      scrollbarColor: getComputedStyle(vp).scrollbarColor,
+      controlColor: getComputedStyle(control).scrollbarColor,
     };
   });
   assert.equal(nested.root, "vlist", "the nested list is a plain list: " + nested.root);
   assert.equal(nested.overflowY, "auto", "a plain list nested in a cell keeps overflow-y auto");
+  assert.equal(nested.scrollbarColor, nested.controlColor, "a nested list keeps the plain scrollbar color");
+  assert.notEqual(nested.scrollbarColor, "auto", "a nested list does not take the table scrollbar-color");
   console.log("PASS nested list", JSON.stringify(nested));
+
+  const horizontalHit = async (selector) => {
+    const box = await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      vp.scrollIntoView({ block: "center", inline: "nearest" });
+      vp.scrollTop = 0;
+      const rect = vp.getBoundingClientRect();
+      const bar = vp.offsetHeight - vp.clientHeight;
+      return { right: rect.right, top: rect.top, bottom: rect.bottom, bar, max: vp.scrollWidth - vp.clientWidth };
+    }, selector);
+    assert.ok(box.bar > 0, selector + " has a native horizontal bar");
+    const x = box.right - 5;
+    const y = box.bottom - box.bar / 2;
+    await page.mouse.move(box.right - 8, box.top + 36);
+    await settle(page);
+    const hit = await page.evaluate((x, y) => {
+      const el = document.elementFromPoint(x, y);
+      return el ? String(el.className) : "";
+    }, x, y);
+    assert.equal(hit.includes("vlist-scrollbar"), false, selector + " horizontal bar is under " + hit);
+
+    await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      vp.scrollTop = 0;
+      vp.scrollLeft = 0;
+    }, selector);
+    const clickFrom = await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      return { left: vp.scrollLeft, top: vp.scrollTop };
+    }, selector);
+    await page.mouse.click(x, y);
+    await settle(page);
+    const clickTo = await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      return { left: vp.scrollLeft, top: vp.scrollTop };
+    }, selector);
+    assert.equal(clickTo.top, clickFrom.top, selector + " click keeps scrollTop " + JSON.stringify(clickTo));
+    assert.ok(clickTo.left > clickFrom.left, selector + " click moves scrollLeft " + JSON.stringify(clickTo));
+
+    await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      vp.scrollTop = 0;
+      vp.scrollLeft = vp.scrollWidth;
+    }, selector);
+    const dragFrom = await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      return { left: vp.scrollLeft, top: vp.scrollTop };
+    }, selector);
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x - 60, y, { steps: 6 });
+    await page.mouse.up();
+    await settle(page);
+    const dragTo = await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      return { left: vp.scrollLeft, top: vp.scrollTop };
+    }, selector);
+    assert.equal(dragTo.top, dragFrom.top, selector + " drag keeps scrollTop " + JSON.stringify(dragTo));
+    assert.ok(dragTo.left < dragFrom.left - 15, selector + " drag moves scrollLeft " + JSON.stringify(dragFrom) + " -> " + JSON.stringify(dragTo));
+    console.log("PASS horizontal hit", selector, JSON.stringify({ hit, clickTo, dragTo }));
+  };
+  await horizontalHit("#host");
+  await horizontalHit("#grouped");
 } finally {
   await browser?.close();
   server.stop(true);

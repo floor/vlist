@@ -271,6 +271,26 @@ export const createScrollbar = (
     hoverZone.style[isX ? "left" : "top"] = `${offset}px`;
   };
 
+  // The track is positioned on the root, whose bottom includes a native
+  // horizontal bar. Stop the track and its hover zone above that bar, or a
+  // press at the bar's right end hits the vertical track.
+  let lastBarInset = -1;
+  const syncBarInset = (): void => {
+    if (isX || attachTo === viewport) return;
+    const bar = Math.round(viewport.offsetHeight - viewport.clientHeight);
+    if (bar === lastBarInset) return;
+    lastBarInset = bar;
+    if (bar > 0) {
+      track.style.bottom = `calc(var(--vlist-custom-scrollbar-padding-bottom) + ${bar}px)`;
+      hoverZone.style.bottom = `${bar}px`;
+      hoverZone.style.height = "auto";
+    } else {
+      track.style.bottom = "";
+      hoverZone.style.bottom = "";
+      hoverZone.style.height = "";
+    }
+  };
+
   // =============================================================================
   // DOM Setup
   // =============================================================================
@@ -382,6 +402,7 @@ export const createScrollbar = (
     totalSize = newTotalSize;
     containerSize = newContainerSize;
     syncTrackOffset();
+    syncBarInset();
 
     updatePosition(currentScrollPosition);
 
