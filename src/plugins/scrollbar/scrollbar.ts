@@ -271,13 +271,21 @@ export const createScrollbar = (
     hoverZone.style[isX ? "left" : "top"] = `${offset}px`;
   };
 
-  // The track is positioned on the root, whose bottom includes a native
-  // horizontal bar. Stop the track and its hover zone above that bar, or a
-  // press at the bar's right end hits the vertical track.
+  // The track sits on the root, so a native horizontal bar overlaps its end.
+  // A border is not a bar, and neither is a wider content box that does not
+  // scroll. Page mode does not observe the viewport, so a bar that appears
+  // without a main-axis change is caught from the border box instead.
   let lastBarInset = -1;
+  let barObserver: ResizeObserver | null = null;
   const syncBarInset = (): void => {
     if (isX || attachTo === viewport) return;
-    const bar = Math.round(viewport.offsetHeight - viewport.clientHeight);
+    const gap = viewport.offsetHeight - viewport.clientHeight;
+    let bar = 0;
+    if (gap > 0 && viewport.scrollWidth > viewport.clientWidth) {
+      const css = getComputedStyle(viewport);
+      const border = (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0);
+      bar = Math.max(0, Math.round(gap - border));
+    }
     if (bar === lastBarInset) return;
     lastBarInset = bar;
     if (bar > 0) {
@@ -290,6 +298,10 @@ export const createScrollbar = (
       hoverZone.style.height = "";
     }
   };
+  if (!isX && attachTo !== viewport && typeof ResizeObserver !== "undefined") {
+    barObserver = new ResizeObserver(() => { syncBarInset(); });
+    barObserver.observe(viewport, { box: "border-box" });
+  }
 
   // =============================================================================
   // DOM Setup
@@ -703,6 +715,8 @@ export const createScrollbar = (
 
     handlePointerEnd();
     clearHideTimeout();
+    barObserver?.disconnect();
+    barObserver = null;
     for (const remove of removeListeners) remove();
     for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, originalStyles[i]!);
     viewport.classList.remove(`${classPrefix}-viewport--gutter`);

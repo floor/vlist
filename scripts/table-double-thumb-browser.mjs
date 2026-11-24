@@ -28,8 +28,11 @@ const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
 <style>
   body { margin: 8px; }
-  #host, #fresh, #grouped { width: 420px; height: 240px; }
+  body { padding-bottom: 320px; }
+  #host, #fresh, #grouped, #bordered { width: 420px; height: 240px; }
   #color-control { width: 180px; height: 80px; }
+  #page-resize, #page-pin { width: 420px; height: auto; }
+  #bordered .vlist-viewport { box-sizing: border-box; border-top: 12px solid #111; }
   .ref { width: 420px; height: 80px; overflow: scroll; }
   .ref i { display: block; width: 790px; height: 200px; }
 </style>
@@ -37,9 +40,13 @@ const html = `<!doctype html><meta charset="utf-8">
 <div id="fresh"></div>
 <div id="grouped"></div>
 <div id="color-control"></div>
+<div id="bordered"></div>
+<div id="page-resize"></div>
+<div id="page-pin"></div>
+<div id="footer" style="height:280px">footer</div>
 <div class="ref"><i></i></div>
 <script type="module">
-import { createVList, table, scrollbar, groups } from "/index.js";
+import { createVList, table, scrollbar, groups, page, columnPin } from "/index.js";
 const columns = [
   { key: "name", label: "Name", width: 220 },
   { key: "size", label: "Size", width: 200 },
@@ -80,6 +87,37 @@ window.colorControl = createVList({
   item: { height: 18, template: (row) => row.name },
   scroll: { mode: "auto" },
 }, [scrollbar()]);
+window.bordered = createVList({
+  container: "#bordered",
+  items: items(40),
+  item: { height: 28, template: (row) => row.name },
+  scroll: { mode: "auto" },
+}, [scrollbar()]);
+const narrow = [
+  { key: "name", label: "Name", width: 90 },
+  { key: "size", label: "Size", width: 90 },
+  { key: "modified", label: "Modified", width: 90 },
+  { key: "kind", label: "Kind", width: 90 },
+];
+const pageItems = items(80);
+const pageTable = (container, cols, pins) => createVList({
+  container,
+  items: pageItems,
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [
+  page({ scrollPadding: { bottom: 400 } }),
+  table({
+    rowHeight: 28,
+    headerHeight: 28,
+    columns: cols,
+    fillWidth: false,
+    features: [columnPin(pins ? { pins } : undefined)],
+  }),
+  scrollbar(),
+]);
+window.pageResize = pageTable("#page-resize", narrow, { name: "left" });
+window.pagePin = pageTable("#page-pin", columns);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
@@ -390,6 +428,106 @@ try {
   };
   await horizontalHit("#host");
   await horizontalHit("#grouped");
+
+  const readEnds = (selector) => page.evaluate((selector) => {
+    const vp = document.querySelector(selector + " .vlist-viewport");
+    const track = document.querySelector(selector + " .vlist-scrollbar");
+    const hover = document.querySelector(selector + " .vlist-scrollbar__hover");
+    const css = getComputedStyle(vp);
+    const border = (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0);
+    const gap = vp.offsetHeight - vp.clientHeight;
+    const rect = vp.getBoundingClientRect();
+    return {
+      bar: vp.scrollWidth > vp.clientWidth ? Math.max(0, Math.round(gap - border)) : 0,
+      bottom: track.style.bottom,
+      hoverBottom: hover.style.bottom,
+      right: rect.right,
+      edge: rect.bottom,
+      left: vp.scrollLeft,
+      top: vp.scrollTop,
+      y: window.scrollY,
+    };
+  }, selector);
+  const place = async (selector) => {
+    await page.evaluate((selector) => {
+      const vp = document.querySelector(selector + " .vlist-viewport");
+      vp.scrollLeft = 0;
+      document.querySelector(selector + " .vlist").scrollIntoView({ block: "end", inline: "nearest" });
+    }, selector);
+    await settle(page);
+  };
+  const hitAt = (x, y) => page.evaluate((x, y) => {
+    const el = document.elementFromPoint(x, y);
+    return el ? String(el.className) : "";
+  }, x, y);
+  const clickRail = async (selector, y) => {
+    await place(selector);
+    const box = await readEnds(selector);
+    const x = box.right - 9;
+    const hit = await hitAt(x, y(box));
+    const before = await readEnds(selector);
+    await page.mouse.click(x, y(box));
+    await settle(page);
+    const after = await readEnds(selector);
+    return { hit, before, after };
+  };
+
+  await place("#bordered");
+  const bordered = await readEnds("#bordered");
+  assert.equal(bordered.bar, 0, "a top border is not a horizontal bar: " + JSON.stringify(bordered));
+  assert.equal(bordered.bottom, "", "a bordered list keeps the track inset clear");
+  assert.equal(bordered.hoverBottom, "", "a bordered list keeps the hover inset clear");
+  const borderClick = await clickRail("#bordered", (box) => box.edge - 8);
+  assert.ok(borderClick.hit.includes("vlist-scrollbar"), "bordered lower rail is " + borderClick.hit);
+  assert.ok(borderClick.after.top > borderClick.before.top + 15, "bordered lower rail pages " + JSON.stringify(borderClick));
+  console.log("PASS bordered rail", JSON.stringify({ hit: borderClick.hit, top: [borderClick.before.top, borderClick.after.top] }));
+
+  const checkEnds = async (selector, expectBar) => {
+    await place(selector);
+    const box = await readEnds(selector);
+    if (expectBar) {
+      assert.ok(box.bar > 0, selector + " gains a horizontal bar " + JSON.stringify(box));
+      assert.ok(box.bottom.includes(String(box.bar) + "px"), selector + " inset follows the bar " + box.bottom);
+    } else {
+      assert.equal(box.bar, 0, selector + " loses the horizontal bar " + JSON.stringify(box));
+      assert.equal(box.bottom, "", selector + " clears the inset " + box.bottom);
+      assert.equal(box.hoverBottom, "", selector + " clears the hover inset");
+    }
+    const barY = (next) => next.edge - (expectBar ? next.bar / 2 : 5);
+    const railY = (next) => next.edge - next.bar - (expectBar ? 6 : 12);
+    const barClick = await clickRail(selector, barY);
+    const railClick = await clickRail(selector, railY);
+    if (expectBar) {
+      assert.equal(barClick.hit.includes("vlist-scrollbar"), false, selector + " right end is under " + barClick.hit);
+      assert.ok(barClick.after.left > barClick.before.left, selector + " right end moves scrollLeft " + JSON.stringify(barClick));
+      assert.equal(barClick.after.y, barClick.before.y, selector + " right end keeps the page " + JSON.stringify(barClick));
+      assert.ok(railClick.hit.includes("vlist-scrollbar"), selector + " bottom rail is " + railClick.hit);
+    } else {
+      assert.ok(barClick.hit.includes("vlist-scrollbar"), selector + " right end misses the track " + barClick.hit);
+      assert.ok(railClick.hit.includes("vlist-scrollbar"), selector + " bottom rail misses the track " + railClick.hit);
+    }
+    console.log("PASS ends", selector, expectBar ? "bar" : "clear", JSON.stringify({
+      bar: box.bar,
+      barHit: barClick.hit,
+      railHit: railClick.hit,
+    }));
+  };
+
+  await checkEnds("#page-resize", false);
+  await page.evaluate(() => window.pageResize.resizeColumn("kind", 400));
+  await settle(page);
+  await checkEnds("#page-resize", true);
+  await page.evaluate(() => window.pageResize.resizeColumn("kind", 90));
+  await settle(page);
+  await checkEnds("#page-resize", false);
+
+  await checkEnds("#page-pin", false);
+  await page.evaluate(() => window.pagePin.setColumnPin("name", "left"));
+  await settle(page);
+  await checkEnds("#page-pin", true);
+  await page.evaluate(() => window.pagePin.setColumnPin("name", null));
+  await settle(page);
+  await checkEnds("#page-pin", false);
 } finally {
   await browser?.close();
   server.stop(true);
