@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- A table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. Measured on Chromium with classic scrollbars. The native horizontal bar stays.
+- On Chromium with classic scrollbars, a table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. The native horizontal bar stays.
 
 ## [3.8.10] - 2026-11-23
 

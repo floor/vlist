@@ -63,6 +63,17 @@ window.openFolder = () => {
   document.getElementById("host").innerHTML = "";
   window.list = mount(40);
 };
+window.mountNested = () => {
+  const holder = document.createElement("div");
+  holder.id = "nested";
+  holder.style.cssText = "width:160px;height:70px";
+  document.querySelector("#host .vlist").appendChild(holder);
+  createVList({
+    container: holder,
+    items: Array.from({ length: 20 }, (_, i) => ({ id: i })),
+    item: { height: 18, template: (row) => "Nested " + row.id },
+  }, [scrollbar()]);
+};
 window.measure = () => {
   const vp = document.querySelector("#host .vlist-viewport");
   const webkit = getComputedStyle(vp, "::-webkit-scrollbar");
@@ -115,7 +126,8 @@ try {
   for (const stream of [child?.stdin, child?.stdout, child?.stderr]) stream?.unref?.();
   console.log(await browser.version());
   const page = await browser.newPage();
-  await pinPage(page, { width: 760, height: 640 });
+  const cdp = await pinPage(page, { width: 760, height: 640 });
+  await cdp.send("Emulation.setFocusEmulationEnabled", { enabled: true });
   await page.goto(server.url.href);
   await page.waitForFunction(() => window.ready);
   await settle(page);
@@ -181,6 +193,112 @@ try {
   assert.ok(fresh.horizontalGutter > 0, "a fresh table keeps the native horizontal gutter");
   assert.equal(fresh.verticalGutter, 0, "a fresh overflowing table has no native vertical gutter: " + JSON.stringify(fresh));
   console.log("PASS one vertical thumb on a fresh overflowing table");
+
+  const readTop = () => page.evaluate(() => document.querySelector("#host .vlist-viewport").scrollTop);
+  const arm = (top) => page.evaluate(async (top) => {
+    const vp = document.querySelector("#host .vlist-viewport");
+    vp.focus({ preventScroll: true });
+    for (let i = 0; i < 20; i++) {
+      vp.scrollTop = top;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (vp.scrollTop === top) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        if (vp.scrollTop === top) return;
+      }
+    }
+  }, top);
+  const untilMoved = async (from) => page.evaluate(async (from) => {
+    const vp = document.querySelector("#host .vlist-viewport");
+    for (let i = 0; i < 45; i++) {
+      if (vp.scrollTop !== from) return vp.scrollTop;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return vp.scrollTop;
+  }, from);
+  const stableTop = () => page.evaluate(async () => {
+    const vp = document.querySelector("#host .vlist-viewport");
+    let last = -1;
+    let same = 0;
+    for (let i = 0; i < 90; i++) {
+      const now = vp.scrollTop;
+      same = now === last ? same + 1 : 0;
+      last = now;
+      if (same >= 5) return now;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return vp.scrollTop;
+  });
+
+  await arm(40);
+  const swipeFrom = await readTop();
+  const box = await page.evaluate(() => {
+    const r = document.querySelector("#host .vlist-viewport").getBoundingClientRect();
+    return { x: r.x + 40, y: r.y + 80 };
+  });
+  await page.touchscreen.touchStart(box.x, box.y);
+  await page.touchscreen.touchMove(box.x, box.y - 50);
+  await page.touchscreen.touchEnd();
+  const swipeTo = await untilMoved(swipeFrom);
+  assert.notEqual(swipeTo, swipeFrom, "a touch swipe moves scrollTop: " + swipeFrom);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: false });
+  await stableTop();
+  console.log("PASS touch swipe", swipeFrom, "->", swipeTo);
+
+  for (const key of ["ArrowDown", "PageDown", "End", "Space"]) {
+    await arm(80);
+    const from = await stableTop();
+    await page.keyboard.press(key);
+    const to = await stableTop();
+    assert.ok(Math.abs(to - from) > 15, key + " moves scrollTop: " + from + " -> " + to);
+    console.log("PASS", key, from, "->", to);
+  }
+
+  await arm(0);
+  await settle(page);
+  const token = await page.evaluate(() => {
+    const vp = document.querySelector("#host .vlist-viewport");
+    const vr = vp.getBoundingClientRect();
+    const cell = [...vp.querySelectorAll(".vlist-table-cell")].filter((el) => {
+      const text = el.textContent.trim();
+      return text.startsWith("Item ") && el.getBoundingClientRect().top > vr.bottom + 40;
+    }).at(-1);
+    return cell ? cell.textContent.trim() : "";
+  });
+  assert.ok(token, "a mounted row sits below the viewport");
+  const findFrom = await readTop();
+  const mod = process.platform === "darwin" ? "Meta" : "Control";
+  await page.keyboard.down(mod);
+  await page.keyboard.press("KeyF");
+  await page.keyboard.up(mod);
+  await page.keyboard.type(token);
+  await page.keyboard.press("Enter");
+  const findTo = await stableTop();
+  assert.ok(findTo - findFrom > 15, "Find scrolls the mounted row into view: " + token + " " + findFrom + " -> " + findTo);
+  await page.keyboard.press("Escape");
+  console.log("PASS find", token, findFrom, "->", findTo);
+
+  const consumer = await page.evaluate(() => {
+    const vp = document.querySelector("#host .vlist-viewport");
+    const previous = vp.style.overflowY;
+    vp.style.overflowY = "scroll";
+    const computed = getComputedStyle(vp).overflowY;
+    vp.style.overflowY = previous;
+    return computed;
+  });
+  assert.equal(consumer, "scroll", "a consumer overflowY stays scroll");
+  console.log("PASS consumer overflowY");
+
+  const nested = await page.evaluate(() => {
+    window.mountNested();
+    const vp = document.querySelector("#nested .vlist-viewport");
+    return {
+      overflowY: getComputedStyle(vp).overflowY,
+      root: vp.parentElement.className,
+    };
+  });
+  assert.equal(nested.root, "vlist", "the nested list is a plain list: " + nested.root);
+  assert.equal(nested.overflowY, "auto", "a plain list nested in a cell keeps overflow-y auto");
+  console.log("PASS nested list", JSON.stringify(nested));
 } finally {
   await browser?.close();
   server.stop(true);

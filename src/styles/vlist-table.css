@@ -107,13 +107,18 @@
         scrollbar-width: auto;
     }
 
-    /* Classic Chromium reserves the platform vertical gutter from
-       scrollbar-width: auto even when the webkit width is 0. The viewport's
-       inline overflow: auto would keep that gutter. Hiding this axis drops
-       it. scrollTop still moves, and overflow-x stays auto so the native
-       horizontal bar remains. A page table keeps the document as its scrollport. */
-    .vlist--table:not(.vlist--page) .vlist-viewport--custom-scrollbar {
-        overflow-y: hidden !important;
+    /* Classic Chromium (157, --disable-features=OverlayScrollbar): a bare
+       overflow:auto box with ::-webkit-scrollbar { width: 0; height: 16px }
+       has a 0px vertical gutter and a 16px horizontal one, with or without
+       scrollbar-width: auto, and with or without an inline overflow: auto.
+       The same declarations on this viewport stay at the 15px platform
+       gutter until scrollbar-color stops being the thumb/track pair from
+       .vlist-viewport. Resetting it lets the webkit width take the layout
+       gutter. overflow-y stays auto, so the viewport remains a native
+       scroller. The direct child is the table's own viewport: a plain list
+       nested in a cell keeps the base scrollbar-color. */
+    .vlist--table > .vlist-viewport.vlist-viewport--custom-scrollbar {
+        scrollbar-color: auto;
     }
 }
 
