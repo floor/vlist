@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- On Chromium with classic scrollbars, a table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. The native horizontal bar stays, and it is the bar the stylesheet paints on Chromium: a thicker thumb and no arrow buttons. While that bar is showing, the custom vertical track ends above it, including after a page table gains the bar by widening or pinning a column. The track returns to the bottom when the bar goes away. A border on the viewport is not treated as a bar.
+- On Chromium with classic scrollbars, a table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. The native horizontal bar stays, and it is the bar the stylesheet paints on Chromium: a thicker thumb and no arrow buttons. While that bar is showing, the custom vertical track ends above it. That includes a page table after a column is widened or pinned, a bar with a bottom border under it, and a strip forced by overflow-x: scroll when the columns fit. The track returns to the bottom when the bar goes away. A top border alone is not a bar, and a sub-pixel remainder of fractional borders is not one either.
 
 ## [3.8.10] - 2026-11-23
 

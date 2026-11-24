@@ -271,20 +271,23 @@ export const createScrollbar = (
     hoverZone.style[isX ? "left" : "top"] = `${offset}px`;
   };
 
-  // The track sits on the root, so a native horizontal bar overlaps its end.
-  // A border is not a bar, and neither is a wider content box that does not
-  // scroll. Page mode does not observe the viewport, so a bar that appears
-  // without a main-axis change is caught from the border box instead.
+  // The track sits on the root. Count a horizontal bar from the gap left
+  // after both borders, including a bar forced by overflow-x: scroll, and
+  // keep the bottom border below that bar. A sub-pixel remainder is not a
+  // bar. Page mode does not observe the viewport, so the border box catches
+  // a bar that appears without a main-axis change.
   let lastBarInset = -1;
   let barObserver: ResizeObserver | null = null;
   const syncBarInset = (): void => {
     if (isX || attachTo === viewport) return;
     const gap = viewport.offsetHeight - viewport.clientHeight;
     let bar = 0;
-    if (gap > 0 && viewport.scrollWidth > viewport.clientWidth) {
+    if (gap > 0) {
       const css = getComputedStyle(viewport);
-      const border = (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0);
-      bar = Math.max(0, Math.round(gap - border));
+      const top = parseFloat(css.borderTopWidth) || 0;
+      const bottom = parseFloat(css.borderBottomWidth) || 0;
+      const thick = Math.floor(gap - top - bottom);
+      if (thick > 0) bar = thick + bottom;
     }
     if (bar === lastBarInset) return;
     lastBarInset = bar;
