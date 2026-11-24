@@ -32,7 +32,9 @@ const html = `<!doctype html><meta charset="utf-8">
   #host, #fresh, #grouped, #bordered { width: 420px; height: 240px; }
   #color-control { width: 180px; height: 80px; }
   #page-resize, #page-pin { width: 420px; height: auto; }
+  #bottom-border, #forced, #fraction { width: 420px; height: 240px; }
   #bordered .vlist-viewport { box-sizing: border-box; border-top: 12px solid #111; }
+  #bottom-border .vlist-viewport { box-sizing: border-box; border-bottom: 12px solid #111; }
   .ref { width: 420px; height: 80px; overflow: scroll; }
   .ref i { display: block; width: 790px; height: 200px; }
 </style>
@@ -43,6 +45,9 @@ const html = `<!doctype html><meta charset="utf-8">
 <div id="bordered"></div>
 <div id="page-resize"></div>
 <div id="page-pin"></div>
+<div id="bottom-border"></div>
+<div id="forced"></div>
+<div id="fraction"></div>
 <div id="footer" style="height:280px">footer</div>
 <div class="ref"><i></i></div>
 <script type="module">
@@ -118,6 +123,17 @@ const pageTable = (container, cols, pins) => createVList({
 ]);
 window.pageResize = pageTable("#page-resize", narrow, { name: "left" });
 window.pagePin = pageTable("#page-pin", columns);
+window.bottomBorder = mountIn("#bottom-border", 40);
+window.forced = createVList({
+  container: "#forced",
+  items: items(40),
+  item: { height: 28, template: (row) => row.name },
+  scroll: { mode: "auto" },
+}, [
+  table({ rowHeight: 28, headerHeight: 28, columns: narrow, fillWidth: false }),
+  scrollbar(),
+]);
+window.fraction = mountIn("#fraction", 40);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
@@ -528,6 +544,119 @@ try {
   await page.evaluate(() => window.pagePin.setColumnPin("name", null));
   await settle(page);
   await checkEnds("#page-pin", false);
+
+  const show = async (selector) => {
+    await page.evaluate((selector) => {
+      document.querySelector(selector).scrollIntoView({ block: "center", inline: "nearest" });
+    }, selector);
+    await settle(page);
+  };
+
+  await show("#bottom-border");
+  const bottomBorder = await page.evaluate(() => {
+    const vp = document.querySelector("#bottom-border .vlist-viewport");
+    vp.scrollLeft = 180;
+    vp.scrollTop = 0;
+    const css = getComputedStyle(vp);
+    const top = parseFloat(css.borderTopWidth) || 0;
+    const bottom = parseFloat(css.borderBottomWidth) || 0;
+    const gap = vp.offsetHeight - vp.clientHeight;
+    const thick = gap - top - bottom;
+    const rect = vp.getBoundingClientRect();
+    const track = document.querySelector("#bottom-border .vlist-scrollbar").getBoundingClientRect();
+    const hover = document.querySelector("#bottom-border .vlist-scrollbar__hover").getBoundingClientRect();
+    return {
+      thick, bottom, gap,
+      barTop: rect.bottom - bottom - thick,
+      trackBottom: track.bottom,
+      hoverBottom: hover.bottom,
+      x: rect.right - 8,
+      y: rect.bottom - bottom - thick / 2,
+      left: vp.scrollLeft,
+      topScroll: vp.scrollTop,
+    };
+  });
+  assert.ok(bottomBorder.thick > 8, "bottom border leaves a horizontal bar " + JSON.stringify(bottomBorder));
+  await page.mouse.click(bottomBorder.x, bottomBorder.y);
+  await settle(page);
+  const bottomMoved = await page.evaluate(() => {
+    const vp = document.querySelector("#bottom-border .vlist-viewport");
+    return { left: vp.scrollLeft, top: vp.scrollTop };
+  });
+  assert.ok(bottomMoved.left > bottomBorder.left, "bottom border right end moves scrollLeft " + JSON.stringify(bottomMoved));
+  assert.equal(bottomMoved.top, bottomBorder.topScroll, "bottom border right end keeps scrollTop " + JSON.stringify(bottomMoved));
+  assert.ok(bottomBorder.trackBottom <= bottomBorder.barTop + 0.5, "track ends above the bar " + JSON.stringify(bottomBorder));
+  assert.ok(bottomBorder.hoverBottom <= bottomBorder.barTop + 0.5, "hover ends above the bar " + JSON.stringify(bottomBorder));
+  console.log("PASS bottom border", JSON.stringify({ ...bottomBorder, moved: bottomMoved }));
+
+  await page.evaluate(() => {
+    document.querySelector("#forced .vlist-viewport").style.overflowX = "scroll";
+  });
+  await settle(page);
+  await show("#forced");
+  const forced = await page.evaluate(() => {
+    const vp = document.querySelector("#forced .vlist-viewport");
+    vp.scrollTop = 0;
+    const rect = vp.getBoundingClientRect();
+    const gap = vp.offsetHeight - vp.clientHeight;
+    return {
+      gap,
+      scrollWidth: vp.scrollWidth,
+      clientWidth: vp.clientWidth,
+      bottom: document.querySelector("#forced .vlist-scrollbar").style.bottom,
+      hoverBottom: document.querySelector("#forced .vlist-scrollbar__hover").style.bottom,
+      x: rect.right - 8,
+      y: rect.bottom - gap / 2,
+      top: vp.scrollTop,
+    };
+  });
+  assert.equal(forced.scrollWidth, forced.clientWidth, "forced bar has no horizontal overflow " + JSON.stringify(forced));
+  assert.ok(forced.gap > 8, "overflow-x scroll reserves a horizontal strip " + JSON.stringify(forced));
+  assert.notEqual(forced.bottom, "", "forced strip gets a track inset");
+  assert.notEqual(forced.hoverBottom, "", "forced strip gets a hover inset");
+  await page.mouse.click(forced.x, forced.y);
+  await settle(page);
+  const forcedTop = await page.evaluate(() => document.querySelector("#forced .vlist-viewport").scrollTop);
+  assert.equal(forcedTop, forced.top, "forced strip click keeps scrollTop " + forcedTop);
+  console.log("PASS forced bar", JSON.stringify({ ...forced, top: forcedTop }));
+
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 760,
+    height: 1280,
+    deviceScaleFactor: 1.25,
+    mobile: false,
+  });
+  const fraction = await page.evaluate(() => {
+    const vp = document.querySelector("#fraction .vlist-viewport");
+    vp.style.overflowX = "hidden";
+    vp.style.zoom = "1.3";
+    const samples = [];
+    for (const width of [1.4, 1.6]) {
+      vp.style.borderTop = width + "px solid #111";
+      vp.style.borderBottom = width + "px solid #111";
+      window.fraction.refreshScrollbar();
+      const css = getComputedStyle(vp);
+      const top = parseFloat(css.borderTopWidth) || 0;
+      const bottom = parseFloat(css.borderBottomWidth) || 0;
+      const gap = vp.offsetHeight - vp.clientHeight;
+      samples.push({
+        width, top, bottom, gap,
+        remainder: gap - top - bottom,
+        overflowX: css.overflowX,
+        bottomStyle: document.querySelector("#fraction .vlist-scrollbar").style.bottom,
+        hoverBottom: document.querySelector("#fraction .vlist-scrollbar__hover").style.bottom,
+      });
+    }
+    return samples;
+  });
+  const subpixel = fraction.filter((sample) => sample.remainder > 0 && sample.remainder < 1);
+  assert.ok(subpixel.length > 0, "zoom 1.3 leaves a sub-pixel border gap " + JSON.stringify(fraction));
+  for (const sample of subpixel) {
+    assert.equal(sample.overflowX, "hidden", "fraction case hides the horizontal axis");
+    assert.equal(sample.bottomStyle, "", "a sub-pixel remainder is not an inset " + JSON.stringify(sample));
+    assert.equal(sample.hoverBottom, "", "a sub-pixel remainder does not lift the hover zone " + JSON.stringify(sample));
+  }
+  console.log("PASS fractional gap", JSON.stringify(fraction));
 } finally {
   await browser?.close();
   server.stop(true);
