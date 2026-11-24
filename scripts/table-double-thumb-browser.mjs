@@ -28,11 +28,12 @@ const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
 <style>
   body { margin: 8px; }
-  #host { width: 420px; height: 240px; }
+  #host, #fresh { width: 420px; height: 240px; }
   .ref { width: 420px; height: 80px; overflow: scroll; }
   .ref i { display: block; width: 790px; height: 200px; }
 </style>
 <div id="host"></div>
+<div id="fresh"></div>
 <div class="ref"><i></i></div>
 <script type="module">
 import { createVList, table, scrollbar } from "/index.js";
@@ -45,8 +46,8 @@ const columns = [
 const items = (n) => Array.from({ length: n }, (_, i) => ({
   id: i, name: "Item " + i, size: (i * 37) + " B", modified: "Nov " + (i + 1), kind: "File",
 }));
-const mount = (n) => createVList({
-  container: "#host",
+const mountIn = (container, n) => createVList({
+  container,
   items: items(n),
   item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
   scroll: { mode: "auto" },
@@ -54,7 +55,9 @@ const mount = (n) => createVList({
   table({ rowHeight: 28, headerHeight: 28, columns }),
   scrollbar(),
 ]);
+const mount = (n) => mountIn("#host", n);
 window.list = mount(6);
+window.fresh = mountIn("#fresh", 40);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
@@ -149,6 +152,35 @@ try {
     "native vertical gutter beside the custom thumb: " + JSON.stringify(after),
   );
   console.log("PASS one vertical thumb after the folder rebuild");
+
+  const fresh = await page.evaluate(() => {
+    const vp = document.querySelector("#fresh .vlist-viewport");
+    const webkit = getComputedStyle(vp, "::-webkit-scrollbar");
+    const thumb = document.querySelector("#fresh .vlist-scrollbar__thumb");
+    const tr = thumb ? thumb.getBoundingClientRect() : null;
+    return {
+      verticalGutter: vp.offsetWidth - vp.clientWidth,
+      horizontalGutter: vp.offsetHeight - vp.clientHeight,
+      webkitWidth: webkit.width,
+      webkitHeight: webkit.height,
+      scrollHeight: vp.scrollHeight,
+      clientHeight: vp.clientHeight,
+      scrollWidth: vp.scrollWidth,
+      clientWidth: vp.clientWidth,
+      thumb: tr ? { w: Math.round(tr.width), h: Math.round(tr.height) } : null,
+      bars: document.querySelectorAll("#fresh .vlist-scrollbar").length,
+    };
+  });
+  console.log("fresh", JSON.stringify(fresh));
+  assert.equal(fresh.bars, 1, "a fresh overflowing table has one custom scrollbar");
+  assert.ok(fresh.scrollHeight > fresh.clientHeight, "a fresh table overflows vertically");
+  assert.ok(fresh.scrollWidth > fresh.clientWidth, "a fresh table overflows horizontally");
+  assert.equal(fresh.webkitWidth, "0px", "a fresh table keeps the vertical webkit thickness at 0");
+  assert.equal(fresh.webkitHeight, "16px", "a fresh table keeps the native horizontal bar");
+  assert.ok(fresh.thumb && fresh.thumb.h > 0, "a fresh table shows the custom thumb");
+  assert.ok(fresh.horizontalGutter > 0, "a fresh table keeps the native horizontal gutter");
+  assert.equal(fresh.verticalGutter, 0, "a fresh overflowing table has no native vertical gutter: " + JSON.stringify(fresh));
+  console.log("PASS one vertical thumb on a fresh overflowing table");
 } finally {
   await browser?.close();
   server.stop(true);

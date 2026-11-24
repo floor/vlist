@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- A table that uses the custom scrollbar no longer shows the native vertical bar beside that thumb when the rows overflow. Measured on Chromium with classic scrollbars. The native horizontal bar stays.
+
 ## [3.8.10] - 2026-11-23
 
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
