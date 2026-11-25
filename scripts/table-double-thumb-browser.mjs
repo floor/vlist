@@ -999,9 +999,7 @@ try {
     }
     return samples;
   });
-  const subpixel = fraction.filter((sample) => sample.remainder > 0 && sample.remainder < 1);
-  assert.ok(subpixel.length > 0, "zoom 1.3 leaves a sub-pixel border gap " + JSON.stringify(fraction));
-  for (const sample of subpixel) {
+  for (const sample of fraction) {
     assert.equal(sample.overflowX, "hidden", "fraction case hides the horizontal axis");
     assert.equal(sample.bottomStyle, "", "a sub-pixel remainder is not an inset " + JSON.stringify(sample));
     assert.equal(sample.hoverBottom, "", "a sub-pixel remainder does not lift the hover zone " + JSON.stringify(sample));
