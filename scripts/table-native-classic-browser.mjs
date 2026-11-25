@@ -20,15 +20,19 @@ const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
 <style>
   body { margin: 8px; }
-  #host, #fresh, #grouped, #synthetic, #grid { width: 420px; height: 240px; }
+  #host, #fresh, #grouped, #synthetic, #grid, #bordered, #nest, #page { width: 420px; height: 240px; }
+  #bordered .vlist-viewport { border: 2px solid #94a3b8; }
 </style>
 <div id="host"></div>
 <div id="fresh"></div>
 <div id="grouped"></div>
+<div id="bordered"></div>
 <div id="synthetic"></div>
 <div id="grid"></div>
+<div id="nest"></div>
+<div id="page"></div>
 <script type="module">
-import { createVList, table, scrollbar, groups } from "/index.js";
+import { createVList, table, scrollbar, groups, page, columnPin } from "/index.js";
 const columns = [
   { key: "name", label: "Name", width: 220 },
   { key: "size", label: "Size", width: 200 },
@@ -54,6 +58,7 @@ const mountIn = (container, n, grouped) => createVList({
 window.list = mountIn("#host", 6, false);
 window.fresh = mountIn("#fresh", 40, false);
 window.grouped = mountIn("#grouped", 40, true);
+window.bordered = mountIn("#bordered", 40, false);
 window.synthetic = createVList({
   container: "#synthetic",
   items: items(40),
@@ -72,15 +77,42 @@ window.grid = createVList({
   { name: "grid-role", priority: 10, setup(ctx) { ctx.dom.root.setAttribute("role", "grid"); } },
   scrollbar(),
 ]);
+window.nest = mountIn("#nest", 40, false);
+const slot = document.createElement("div");
+slot.id = "inner";
+slot.style.cssText = "width:200px;height:90px";
+document.querySelector("#nest .vlist-content").append(slot);
+window.innerList = createVList({
+  container: "#inner",
+  items: items(30),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [scrollbar()]);
+window.paged = createVList({
+  container: "#page",
+  items: items(40),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [
+  page(),
+  table({
+    rowHeight: 28,
+    headerHeight: 28,
+    columns,
+    features: [columnPin({ pins: { name: "left" } })],
+  }),
+  scrollbar(),
+]);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
   window.list = mountIn("#host", 40, false);
 };
 window.bars = (selector) => {
-  const root = document.querySelector(selector);
-  const vp = root.querySelector(".vlist-viewport");
-  const track = root.querySelector(".vlist-scrollbar:not(.vlist-scrollbar--horizontal)");
+  const host = document.querySelector(selector);
+  const root = host.classList.contains("vlist") ? host : host.querySelector(":scope > .vlist");
+  const vp = root.querySelector(":scope > .vlist-viewport");
+  const track = root.querySelector(":scope > .vlist-scrollbar:not(.vlist-scrollbar--horizontal)");
   const thumb = track ? track.querySelector(".vlist-scrollbar__thumb") : null;
   const shown = (el) => {
     if (!el) return false;
@@ -89,11 +121,21 @@ window.bars = (selector) => {
     const box = el.getBoundingClientRect();
     return box.width > 0 && box.height > 0;
   };
+  const css = getComputedStyle(vp);
+  const borders = (parseFloat(css.borderLeftWidth) || 0) + (parseFloat(css.borderRightWidth) || 0);
+  const probe = document.createElement("div");
+  probe.style.scrollbarColor = "var(--vlist-scrollbar-thumb-color) var(--vlist-scrollbar-track-color)";
+  root.append(probe);
+  const theme = getComputedStyle(probe).scrollbarColor;
+  probe.remove();
   const gutter = vp.offsetWidth - vp.clientWidth;
   return {
     native: gutter > 0,
     custom: shown(track),
     gutter,
+    column: gutter - borders,
+    scrollbarColor: css.scrollbarColor,
+    theme,
     thumb: thumb ? Math.round(thumb.getBoundingClientRect().height) : 0,
     scrollHeight: vp.scrollHeight,
     clientHeight: vp.clientHeight,
@@ -156,7 +198,7 @@ async function exercise(classic) {
   console.log(label, await browser.version());
   try {
     const page = await browser.newPage();
-    await pinPage(page, { width: 760, height: 900 });
+    await pinPage(page, { width: 760, height: 1500 });
     await page.goto(server.url.href);
     await page.waitForFunction(() => window.ready);
     await settle(page);
@@ -180,6 +222,16 @@ async function exercise(classic) {
       console.log(label, "grouped", JSON.stringify(grouped));
       await check(label + " one vertical bar on a grouped table", async () => oneBar(grouped, "grouped"));
 
+      for (const selector of ["#host", "#fresh", "#grouped", "#bordered"]) {
+        await check(label + " " + selector + " keeps a 15px native column and the theme scrollbar color", async () => {
+          const sample = await page.evaluate((selector) => window.bars(selector), selector);
+          console.log(label, "theme", selector, JSON.stringify(sample));
+          assert.equal(sample.column, 15, selector + " native gutter is 15 " + JSON.stringify(sample));
+          assert.equal(sample.scrollbarColor, sample.theme, selector + " scrollbar-color is the theme pair " + JSON.stringify(sample));
+          assert.equal(sample.custom, false, selector + " hides the custom thumb " + JSON.stringify(sample));
+        });
+      }
+
       const synthetic = await page.evaluate(() => window.bars("#synthetic"));
       console.log(label, "synthetic", JSON.stringify(synthetic));
       await check(label + " synthetic table keeps the custom thumb", async () => {
@@ -191,6 +243,30 @@ async function exercise(classic) {
         console.log(label, "synthetic settled", JSON.stringify(settled));
         assert.equal(settled.native, false, "synthetic has no native gutter " + JSON.stringify(settled));
         assert.equal(settled.custom, true, "synthetic keeps the custom thumb " + JSON.stringify(settled));
+        assert.notEqual(settled.scrollbarColor, "auto", "synthetic keeps its scrollbar color " + JSON.stringify(settled));
+        assert.equal(settled.scrollbarColor, settled.theme, "synthetic scrollbar-color is the theme pair " + JSON.stringify(settled));
+      });
+
+      const inner = await page.evaluate(() => window.bars("#inner"));
+      console.log(label, "inner", JSON.stringify(inner));
+      await check(label + " a nested plain list keeps its own gutter and the theme scrollbar color", async () => {
+        assert.equal(inner.column, 15, "nested gutter is 15 " + JSON.stringify(inner));
+        assert.notEqual(inner.scrollbarColor, "auto", "nested color is not auto " + JSON.stringify(inner));
+        assert.equal(inner.scrollbarColor, inner.theme, "nested scrollbar-color is the theme pair " + JSON.stringify(inner));
+      });
+      const nest = await page.evaluate(() => window.bars("#nest"));
+      console.log(label, "nest", JSON.stringify(nest));
+      await check(label + " the table around that nested list keeps its native column and the theme color", async () => {
+        assert.equal(nest.column, 15, "outer gutter is 15 " + JSON.stringify(nest));
+        assert.equal(nest.custom, false, "outer hides the custom thumb " + JSON.stringify(nest));
+        assert.equal(nest.scrollbarColor, nest.theme, "outer scrollbar-color is the theme pair " + JSON.stringify(nest));
+      });
+
+      const paged = await page.evaluate(() => window.bars("#page"));
+      console.log(label, "page", JSON.stringify(paged));
+      await check(label + " a pinned page table keeps the theme scrollbar color", async () => {
+        assert.notEqual(paged.scrollbarColor, "auto", "page color is not auto " + JSON.stringify(paged));
+        assert.equal(paged.scrollbarColor, paged.theme, "page scrollbar-color is the theme pair " + JSON.stringify(paged));
       });
 
       const grid = await page.evaluate(() => window.bars("#grid"));

@@ -18,15 +18,18 @@ const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
 <style>
   body { margin: 8px; background: #0f172a; }
-  #host, #fresh, #grouped, #bordered { width: 420px; height: 240px; }
+  #host, #fresh, #grouped, #bordered, #synthetic, #page, #nest { width: 420px; height: 240px; }
   #bordered .vlist-viewport { border: 2px solid #94a3b8; }
 </style>
 <div id="host"></div>
 <div id="fresh"></div>
 <div id="grouped"></div>
 <div id="bordered"></div>
+<div id="synthetic"></div>
+<div id="page"></div>
+<div id="nest"></div>
 <script type="module">
-import { createVList, table, scrollbar, groups } from "/index.js";
+import { createVList, table, scrollbar, groups, page, columnPin } from "/index.js";
 const columns = [
   { key: "name", label: "Name", width: 220 },
   { key: "size", label: "Size", width: 200 },
@@ -53,15 +56,51 @@ window.list = mountIn("#host", 6, false);
 window.fresh = mountIn("#fresh", 40, false);
 window.grouped = mountIn("#grouped", 40, true);
 window.bordered = mountIn("#bordered", 40, false);
+window.synthetic = createVList({
+  container: "#synthetic",
+  items: items(40),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "synthetic" },
+}, [
+  table({ rowHeight: 28, headerHeight: 28, columns }),
+  scrollbar(),
+]);
+window.paged = createVList({
+  container: "#page",
+  items: items(40),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [
+  page(),
+  table({
+    rowHeight: 28,
+    headerHeight: 28,
+    columns,
+    features: [columnPin({ pins: { name: "left" } })],
+  }),
+  scrollbar(),
+]);
+window.nest = mountIn("#nest", 40, false);
+const slot = document.createElement("div");
+slot.id = "inner";
+slot.style.cssText = "width:200px;height:90px";
+document.querySelector("#nest .vlist-content").append(slot);
+window.innerList = createVList({
+  container: "#inner",
+  items: items(30),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [scrollbar()]);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
   window.list = mountIn("#host", 40, false);
 };
 window.bars = (selector) => {
-  const root = document.querySelector(selector);
-  const vp = root.querySelector(".vlist-viewport");
-  const track = root.querySelector(".vlist-scrollbar:not(.vlist-scrollbar--horizontal)");
+  const host = document.querySelector(selector);
+  const root = host.classList.contains("vlist") ? host : host.querySelector(":scope > .vlist");
+  const vp = root.querySelector(":scope > .vlist-viewport");
+  const track = root.querySelector(":scope > .vlist-scrollbar:not(.vlist-scrollbar--horizontal)");
   const thumb = track ? track.querySelector(".vlist-scrollbar__thumb") : null;
   const shown = (el) => {
     if (!el) return false;
@@ -73,12 +112,20 @@ window.bars = (selector) => {
   const css = getComputedStyle(vp);
   const pseudo = getComputedStyle(vp, "::-webkit-scrollbar");
   const borders = (parseFloat(css.borderLeftWidth) || 0) + (parseFloat(css.borderRightWidth) || 0);
+  const hBorders = (parseFloat(css.borderTopWidth) || 0) + (parseFloat(css.borderBottomWidth) || 0);
+  const probe = document.createElement("div");
+  probe.style.scrollbarColor = "var(--vlist-scrollbar-thumb-color) var(--vlist-scrollbar-track-color)";
+  vp.append(probe);
+  const theme = getComputedStyle(probe).scrollbarColor;
+  probe.remove();
   const thumbBox = thumb ? thumb.getBoundingClientRect() : null;
   const vpBox = vp.getBoundingClientRect();
   return {
     custom: shown(track),
     gutter: vp.offsetWidth - vp.clientWidth - borders,
+    hGutter: vp.offsetHeight - vp.clientHeight - hBorders,
     scrollbarColor: css.scrollbarColor,
+    theme,
     pseudoWidth: pseudo.width,
     pseudoHeight: pseudo.height,
     scrollHeight: vp.scrollHeight,
@@ -234,6 +281,16 @@ try {
       const png = await page.screenshot({ clip: sample.clip, captureBeyondViewport: false });
       const extra = extraThumbRuns(png, sample.thumbSpan);
       assert.equal(extra, 0, selector + " paints no second thumb at the right edge " + JSON.stringify(sample));
+    });
+  }
+
+  for (const selector of ["#synthetic", "#page", "#inner"]) {
+    await check("overlay " + selector + " keeps the theme color and reserves no horizontal strip", async () => {
+      const sample = await page.evaluate((selector) => window.bars(selector), selector);
+      console.log(selector, JSON.stringify(sample));
+      assert.notEqual(sample.scrollbarColor, "auto", selector + " does not reset scrollbar-color " + JSON.stringify(sample));
+      assert.equal(sample.scrollbarColor, sample.theme, selector + " keeps the theme pair " + JSON.stringify(sample));
+      assert.ok(sample.hGutter < 2, selector + " reserves no horizontal strip " + JSON.stringify(sample));
     });
   }
 } finally {
