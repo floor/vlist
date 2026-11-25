@@ -101,17 +101,20 @@ describe("scrollbar() on a natively scrolling table", () => {
     done(mounted);
   });
 
-  it("keeps the custom thumb when the author hides the native bar", () => {
+  it("keeps the custom thumb when the author hides the native bar, without the class that re-enables it", () => {
     const mounted = mount(true, { scrollbarWidth: "none" });
     overflow(mounted);
     expect(mounted.track.style.display).not.toBe("none");
-    expect(mounted.ctx.dom.viewport.classList.contains(CUSTOM)).toBe(true);
+    // The table stylesheet's rule under this class turns the native bar back
+    // on (scrollbar-width: auto), which would make two bars again.
+    expect(mounted.ctx.dom.viewport.classList.contains(CUSTOM)).toBe(false);
     done(mounted);
   });
 
   it("keeps the custom thumb when an author stylesheet rule hides the native bar", () => {
     const style = document.createElement("style");
-    style.textContent = "#author-hidden .vlist-viewport { scrollbar-width: none; }";
+    // Lowest specificity: the library's own table rule would win if the class were added.
+    style.textContent = ":where(#author-hidden) .vlist-viewport { scrollbar-width: none; }";
     document.head.appendChild(style);
     try {
       const plugin = scrollbar<{ id: number }>();
@@ -126,7 +129,7 @@ describe("scrollbar() on a natively scrolling table", () => {
       ctx.engineState.containerSize = 240;
       plugin.hooks!.onResize!(420, 240);
       expect(track.style.display).not.toBe("none");
-      expect(ctx.dom.viewport.classList.contains(CUSTOM)).toBe(true);
+      expect(ctx.dom.viewport.classList.contains(CUSTOM)).toBe(false);
       plugin.destroy!();
       ctx.cleanup();
     } finally {
