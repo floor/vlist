@@ -175,7 +175,7 @@ async function exercise(classic) {
           const borderTop = parseFloat(css.borderTopWidth) || 0;
           const borderBottom = parseFloat(css.borderBottomWidth) || 0;
           const bar = Math.max(0, (vp.offsetHeight - vp.clientHeight) - borderTop - borderBottom);
-          const x = rect.left + vp.clientLeft + vp.clientWidth - 4;
+          const x = rect.left + vp.clientLeft + vp.clientWidth - 24;
           const y = rect.bottom - borderBottom - Math.max(bar, 8) / 2;
           const hit = document.elementFromPoint(x, y);
           return { x, y, bar, hit: hit ? String(hit.className) : "", left: vp.scrollLeft, top: vp.scrollTop };
@@ -205,7 +205,7 @@ async function exercise(classic) {
           const start = await page.evaluate((selector, y) => {
             const vp = document.querySelector(selector + " .vlist-viewport");
             const rect = vp.getBoundingClientRect();
-            return { x: rect.left + vp.clientLeft + vp.clientWidth - 4, y, left: vp.scrollLeft, top: vp.scrollTop };
+            return { x: rect.left + vp.clientLeft + vp.clientWidth - 24, y, left: vp.scrollLeft, top: vp.scrollTop };
           }, selector, point.y);
           await page.mouse.move(start.x, start.y);
           await page.mouse.down();
@@ -265,6 +265,7 @@ async function exercise(classic) {
         await page.touchscreen.touchEnd();
         const swipeTo = await untilMoved(swipeFrom);
         assert.notEqual(swipeTo, swipeFrom, "a touch swipe moves scrollTop: " + swipeFrom + " -> " + swipeTo);
+        await stableTop();
         for (const key of ["ArrowDown", "PageDown", "End", "Space"]) {
           await arm(80);
           const from = await stableTop();
