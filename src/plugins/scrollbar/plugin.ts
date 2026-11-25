@@ -81,14 +81,20 @@ export function scrollbar<T extends VListItem = VListItem>(
       // While a table scrolls natively, use the browser's own vertical bar and
       // draw none: the viewport is then styled as if scrollbar() were absent.
       // A synthetic table (overflow hidden) has no native bar and keeps the
-      // custom thumb. So does a viewport whose author hid the native bar.
+      // custom thumb. So does a viewport whose author hid the native bar: that
+      // is read from the computed style with our class removed, so an author
+      // rule of any specificity counts and our own rules do not mask it.
       // Runs at setup, on resize and on a mode switch, never per scroll.
       syncNativeBar = (): void => {
         const vp = dom.viewport;
-        const native = !!table
+        let native = !!table
           && ctx.config.scrollMode !== "synthetic"
-          && vp.style.overflowY !== "hidden"
-          && vp.style.scrollbarWidth !== "none";
+          && vp.style.overflowY !== "hidden";
+        if (native) {
+          vp.classList.remove(customClass);
+          native = vp.style.scrollbarWidth !== "none"
+            && getComputedStyle(vp).getPropertyValue("scrollbar-width") !== "none";
+        }
         vp.classList.toggle(customClass, !native);
         sb?.useNativeBar(native);
       };
