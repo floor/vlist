@@ -55,7 +55,7 @@ describe("classic table scrollbar", () => {
       const classic = mount(true);
       classic.ctx.engineState.totalSize = 4000;
       classic.plugin.hooks!.onResize!(420, 240);
-      expect(classic.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(false);
+      expect(classic.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
       expect(classic.track.style.display).toBe("none");
       classic.plugin.destroy!();
       classic.ctx.cleanup();
