@@ -109,6 +109,31 @@ describe("scrollbar() on a natively scrolling table", () => {
     done(mounted);
   });
 
+  it("keeps the custom thumb when an author stylesheet rule hides the native bar", () => {
+    const style = document.createElement("style");
+    style.textContent = "#author-hidden .vlist-viewport { scrollbar-width: none; }";
+    document.head.appendChild(style);
+    try {
+      const plugin = scrollbar<{ id: number }>();
+      const ctx = createPluginMockContext([{ id: 1 }]);
+      ctx.ctx.emitter.on = ((_event: string, _fn: () => void) => () => {}) as typeof ctx.ctx.emitter.on;
+      ctx.ctx.hooks.method("_getTableLayout", () => null);
+      ctx.dom.root.id = "author-hidden";
+      ctx.dom.viewport.classList.add("vlist-viewport");
+      plugin.setup!(ctx.ctx);
+      const track = ctx.dom.root.querySelector(".vlist-scrollbar") as HTMLElement;
+      ctx.engineState.totalSize = 4000;
+      ctx.engineState.containerSize = 240;
+      plugin.hooks!.onResize!(420, 240);
+      expect(track.style.display).not.toBe("none");
+      expect(ctx.dom.viewport.classList.contains(CUSTOM)).toBe(true);
+      plugin.destroy!();
+      ctx.cleanup();
+    } finally {
+      style.remove();
+    }
+  });
+
   it("keeps the custom thumb on lists that are not tables", () => {
     for (const grid of [false, true]) {
       const mounted = mount(false, { grid, gutterPx: 15 });
