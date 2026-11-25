@@ -418,6 +418,39 @@
     height: auto;
 }
 
+/* Vertical track in a column beside the scrollport. The column keeps its
+   width while the track is hidden, and it stays off the horizontal bar. */
+.vlist:has(> .vlist-scrollbar-rail) > .vlist-viewport {
+    max-width: calc(100% - var(--vlist-track-column-width, 0px));
+}
+
+.vlist-scrollbar-rail {
+    position: absolute;
+    z-index: 9;
+    inset-inline-end: 0;
+    top: calc(var(--vlist-table-header-height, 0px) + var(--vlist-sticky-header-height, 0px));
+    bottom: 0;
+    width: var(--vlist-track-column-width, 0px);
+}
+
+.vlist-scrollbar-rail > .vlist-scrollbar {
+    right: auto;
+    inset-inline-end: var(--vlist-custom-scrollbar-padding-right);
+}
+
+.vlist-scrollbar-rail > .vlist-scrollbar__hover {
+    inset-inline-end: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.vlist:has(> .vlist-scrollbar-rail) > .vlist-sticky-header {
+    width: calc(100% - var(--vlist-track-column-width, 0px));
+    max-width: calc(100% - var(--vlist-track-column-width, 0px));
+    box-sizing: border-box;
+}
+
 /* Visible state */
 .vlist-scrollbar--visible {
     opacity: 1;
@@ -582,6 +615,10 @@
             var(--vlist-custom-scrollbar-width) +
             var(--vlist-custom-scrollbar-padding-left)
     );
+}
+
+.vlist:has(> .vlist-scrollbar-rail) > .vlist-viewport--gutter {
+    padding-right: 0;
 }
 
 .vlist--horizontal .vlist-viewport--gutter {

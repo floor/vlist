@@ -516,3 +516,34 @@ describe("scrollbar — engineState.totalSize", () => {
     cleanup();
   });
 });
+
+describe("scrollbar — track column", () => {
+  it("puts the vertical track beside the viewport and removes it on destroy", () => {
+    const plugin = scrollbar<TestItem>();
+    const items = createTestItems(20);
+    const { ctx, dom, cleanup } = createPluginMockContext<TestItem>(items);
+
+    plugin.setup!(ctx);
+
+    const rail = dom.root.querySelector(".vlist-scrollbar-rail") as HTMLElement;
+    const track = rail.querySelector(".vlist-scrollbar") as HTMLElement;
+    const hover = rail.querySelector(".vlist-scrollbar__hover") as HTMLElement;
+    expect(rail.parentElement).toBe(dom.root);
+    expect(track).not.toBeNull();
+    expect(hover.parentElement).toBe(rail);
+    expect(dom.viewport.parentElement).toBe(dom.root);
+    expect(dom.root.className).toBe("vlist");
+    const column = dom.root.style.getPropertyValue("--vlist-track-column-width");
+    expect(column).not.toBe("");
+    expect(dom.viewport.style.width).toBe(`calc(100% - ${column})`);
+    expect(track.style.top).toBe("");
+
+    plugin.destroy!();
+
+    expect(dom.root.querySelector(".vlist-scrollbar-rail")).toBeNull();
+    expect(dom.root.className).toBe("vlist");
+    expect(dom.root.style.getPropertyValue("--vlist-track-column-width")).toBe("");
+    expect(dom.viewport.style.width).toBe("");
+    cleanup();
+  });
+});

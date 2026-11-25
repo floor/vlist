@@ -202,6 +202,9 @@ export const createScrollbar = (
 
   const clickBehavior = rawClickBehavior === 'page' ? 'scroll' : rawClickBehavior;
   const attachTo = parent ?? viewport;
+  // A vertical track on the list root sits in a column beside the scrollport.
+  // An overlay on the viewport's inline-end edge covers a native horizontal bar.
+  const useRail = !isX && attachTo !== viewport;
 
   const pad = resolvePadding(config.padding);
 
@@ -255,20 +258,32 @@ export const createScrollbar = (
   const thumb = document.createElement("div");
   // Always created: extends click target into the padding margin + handles hover when showOnHover
   const hoverZone = document.createElement("div");
+  const rail = useRail ? document.createElement("div") : null;
+  const previousViewportWidth = useRail ? viewport.style.width : "";
 
-  // When the scrollbar lives on root, offset its top to align with the viewport.
-  // Uses the CSS variable for padding so runtime updates via CSS take effect
-  // without rebuilding the scrollbar.
-  const startPadVar = isX
-    ? "--vlist-custom-scrollbar-padding-left"
-    : "--vlist-custom-scrollbar-padding-top";
+  // A horizontal track on the root still lines up with the viewport. The
+  // vertical rail is placed by CSS, so it never reads offsetTop.
+  const startPadVar = "--vlist-custom-scrollbar-padding-left";
   const syncTrackOffset = (): void => {
-    if (attachTo === viewport) return;
+    if (!isX || attachTo === viewport) return;
     const offset = viewport.offsetTop;
-    track.style[isX ? "left" : "top"] = offset
+    track.style.left = offset
       ? `calc(var(${startPadVar}) + ${offset}px)`
       : `var(${startPadVar})`;
-    hoverZone.style[isX ? "left" : "top"] = `${offset}px`;
+    hoverZone.style.left = `${offset}px`;
+  };
+  const fitRail = (trackWidth: string): void => {
+    if (!rail) return;
+    const trackPx = parseFloat(trackWidth) || 0;
+    const railPx = Math.max(hoverZoneWidth, trackPx + pad.left + pad.right);
+    const next = `${railPx}px`;
+    if (attachTo.style.getPropertyValue("--vlist-track-column-width") !== next) {
+      attachTo.style.setProperty("--vlist-track-column-width", next);
+    }
+    // Inline, so it wins over the viewport's own width:100%. A px length
+    // stays in step with the column; the header reads the same variable.
+    const width = `calc(100% - ${next})`;
+    if (viewport.style.width !== width) viewport.style.width = width;
   };
 
   // =============================================================================
@@ -301,7 +316,6 @@ export const createScrollbar = (
     }
 
     track.appendChild(thumb);
-    attachTo.appendChild(track);
 
     // Edge zone — covers the padding margin + track area along the scrollbar edge.
     // Always present so clicks in the padding margin are captured regardless of showOnHover.
@@ -311,14 +325,18 @@ export const createScrollbar = (
       hoverZone.classList.add(`${classPrefix}-scrollbar__hover--horizontal`);
       hoverZone.style.height = `${hoverZoneWidth}px`;
     } else {
-      hoverZone.style.width = `${hoverZoneWidth}px`;
+      hoverZone.style.width = rail ? "100%" : `${hoverZoneWidth}px`;
     }
-    attachTo.appendChild(hoverZone);
 
-    // When attached to root instead of viewport, offset track/hover to match
-    // the viewport's position (e.g. below a sticky header).
-    if (attachTo !== viewport) {
-      syncTrackOffset();
+    if (rail) {
+      rail.className = `${classPrefix}-scrollbar-rail`;
+      rail.append(track, hoverZone);
+      attachTo.appendChild(rail);
+      fitRail("0");
+    } else {
+      attachTo.append(track, hoverZone);
+      // A horizontal track on the root lines up with the viewport.
+      if (attachTo !== viewport) syncTrackOffset();
     }
   };
 
@@ -381,18 +399,21 @@ export const createScrollbar = (
   ): void => {
     totalSize = newTotalSize;
     containerSize = newContainerSize;
-    syncTrackOffset();
+    if (!rail) syncTrackOffset();
 
     updatePosition(currentScrollPosition);
 
-    // Check if scrollbar is needed
+    // Check if scrollbar is needed. A rail keeps the track in layout while the
+    // content fits, so the column still has a box; a disabled bar leaves it.
     if (!enabled || totalSize <= containerSize) {
-      track.style.display = "none";
+      track.style.visibility = rail && enabled ? "hidden" : "";
+      track.style.display = rail && enabled ? "" : "none";
       track.classList.remove(`${classPrefix}-scrollbar--visible`);
       visible = false;
       return;
     }
     track.style.display = "";
+    track.style.visibility = "";
 
     // Effective track length shrinks by the margin on both ends (start + end along scroll axis)
     const trackLength = Math.max(0, containerSize - scrollAxisStartPad - scrollAxisEndPad);
@@ -665,6 +686,7 @@ export const createScrollbar = (
       config.trackColor ?? (colors?.length === 2 ? colors[1]! : originalStyles[3]!)];
     for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, values[i]!);
     appliedSizing = values.slice(0, 2);
+    fitRail(values[0]!);
     hoverZone.style.display = enabled ? '' : 'none';
     viewport.classList.toggle(`${classPrefix}-viewport--gutter`, enabled && !!config.gutter);
     if (!enabled) handlePointerEnd();
@@ -686,6 +708,11 @@ export const createScrollbar = (
     for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, originalStyles[i]!);
     viewport.classList.remove(`${classPrefix}-viewport--gutter`);
     hoverZone.remove();
+    if (rail) {
+      rail.remove();
+      attachTo.style.removeProperty("--vlist-track-column-width");
+      viewport.style.width = previousViewportWidth;
+    }
 
     // Remove inline CSS variable overrides
     attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-top");

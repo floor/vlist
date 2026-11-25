@@ -864,6 +864,7 @@ export function groups<T extends VListItem = VListItem>(
 
         stickyHeader.update(scroll.getPixelEquivalent());
 
+        if (!isX) rootElement.style.setProperty("--vlist-sticky-header-height", `${headerH}px`);
         const onPage = rootElement.classList.contains(`${classPrefix}--page`);
         if (onPage) {
           // The window is the scroller. Pin under the caller's band and the
@@ -1158,6 +1159,7 @@ export function groups<T extends VListItem = VListItem>(
           stickyHeader = null;
         }
         rootElement.classList.remove(`${classPrefix}--grouped`);
+        rootElement.style.removeProperty("--vlist-sticky-header-height");
       });
     },
 

@@ -73,9 +73,10 @@ async function treeWithScrollbar(scope: TestScope) {
 }
 
 describe("scrollbar + tree — the thumb follows expand and collapse", () => {
-  it("has no track while the closed tree fits in the viewport", scoped(async (scope) => {
+  it("keeps the column track hidden while the closed tree fits", scoped(async (scope) => {
     const { track } = await treeWithScrollbar(scope);
-    expect(track.style.display).toBe("none");
+    expect(track.style.visibility).toBe("hidden");
+    expect(track.classList.contains("vlist-scrollbar--visible")).toBe(false);
   }));
 
   it("shows a thumb sized for the longer list as soon as a folder opens", scoped(async (scope) => {
@@ -102,6 +103,7 @@ describe("scrollbar + tree — the thumb follows expand and collapse", () => {
 
     list.collapse("src");
 
-    expect(track.style.display).toBe("none");
+    expect(track.style.visibility).toBe("hidden");
+    expect(track.classList.contains("vlist-scrollbar--visible")).toBe(false);
   }));
 });

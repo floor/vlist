@@ -86,6 +86,20 @@
     height: calc(100% - var(--vlist-table-header-height, 0px));
 }
 
+/* The rail already starts below the header, so the hover fills the rail. */
+.vlist--table .vlist-scrollbar-rail > .vlist-scrollbar__hover {
+    top: 0;
+    height: 100%;
+}
+
+/* Same width as the scrollport, so pinned and filled columns share edges. */
+.vlist--table:has(> .vlist-scrollbar-rail) > [role="rowgroup"] {
+    width: calc(100% - var(--vlist-track-column-width, 0px));
+    max-width: calc(100% - var(--vlist-track-column-width, 0px));
+    align-self: start;
+    box-sizing: border-box;
+}
+
 /* In table mode the viewport scrolls both ways. scrollbar() replaces only the
    vertical bar; the horizontal bar stays native so overflowing columns can
    still be reached.
@@ -106,12 +120,28 @@
     .vlist--table .vlist-viewport--custom-scrollbar {
         scrollbar-width: auto;
     }
+
+    /* Classic Chromium keeps a vertical gutter while scrollbar-color is the
+       thumb/track pair from .vlist-viewport. Resetting it lets the webkit
+       width take the layout gutter. overflow-y stays auto. The direct child
+       is the table's own viewport: a nested list keeps the base color. */
+    .vlist--table > .vlist-viewport.vlist-viewport--custom-scrollbar {
+        scrollbar-color: auto;
+    }
 }
 
 .vlist--table .vlist-viewport--custom-scrollbar::-webkit-scrollbar {
     display: block;
     width: 0; /* vertical: hidden, custom scrollbar() replaces it */
     height: 16px; /* horizontal: native bar when columns overflow */
+}
+
+/* Arrow buttons would own the last pixels of the bar, so a drag at the
+   right end could not move the thumb. The thumb runs the full track. */
+.vlist--table .vlist-viewport--custom-scrollbar::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 @supports (-moz-appearance: none) and (not (selector(::-webkit-scrollbar))) {

@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- A table with `scrollbar()` shows one custom vertical thumb. The table's own viewport drops the classic vertical gutter, and the custom track sits in a column beside the scrollport, so a native horizontal bar ends clear of the track. The column keeps its width while the track is hidden. Lists without `scrollbar()` keep the previous layout.
+
 ## [3.8.10] - 2026-11-23
 
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.
