@@ -133,11 +133,6 @@ export type ScrollCallback = (position: number) => void;
 
 let nextViewportId = 0;
 
-/** A classic scrollbar reserves a column. Borders are not that column. */
-export const scrollbarGutter = (el: HTMLElement): boolean => {
-  const css = getComputedStyle(el);
-  return el.offsetWidth - el.clientWidth >= (parseFloat(css.borderLeftWidth) || 0) + (parseFloat(css.borderRightWidth) || 0) + 2;
-};
 const AUTO_HIDE_DELAY = 1000;
 const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;

@@ -14,7 +14,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
-import { createScrollbar, scrollbarGutter, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
+import { createScrollbar, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
 
 // =============================================================================
 // Config
@@ -75,16 +75,23 @@ export function scrollbar<T extends VListItem = VListItem>(
       // any grid would lose its thumb, and the class marker must stay out of
       // this bundle.
       const table = !isX && ctx.hooks.get("_getTableLayout");
+      // A table keeps the browser's horizontal bar for its columns, so its
+      // stylesheet cannot hide the native vertical bar the way a plain list
+      // does, and Chrome paints that bar beside or over a custom thumb (#514).
+      // While a table scrolls natively, use the browser's own vertical bar and
+      // draw none: the viewport is then styled as if scrollbar() were absent.
+      // A synthetic table (overflow hidden) has no native bar and keeps the
+      // custom thumb. So does a viewport whose author hid the native bar.
+      // Runs at setup, on resize and on a mode switch, never per scroll.
       syncNativeBar = (): void => {
         const vp = dom.viewport;
-        sb?.useNativeBar(
-          !!table
+        const native = !!table
           && ctx.config.scrollMode !== "synthetic"
           && vp.style.overflowY !== "hidden"
-          && scrollbarGutter(vp),
-        );
+          && vp.style.scrollbarWidth !== "none";
+        vp.classList.toggle(customClass, !native);
+        sb?.useNativeBar(native);
       };
-      dom.viewport.classList.add(customClass);
       syncNativeBar();
       const offMode = ctx.emitter.on("scroll:mode", syncNativeBar);
 
