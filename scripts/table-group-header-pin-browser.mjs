@@ -76,7 +76,8 @@ window.gutterInfo=()=>{
   const cr=content&&content.getBoundingClientRect();
   const nb=count&&count.getBoundingClientRect();
   const padding=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight);
-  const rail=document.querySelector('#gutter-host .vlist-scrollbar-rail');
+  // The rail generates no box, so the reserved column is the hover zone.
+  const rail=document.querySelector('#gutter-host .vlist-scrollbar__hover');
   const rb=rail&&rail.getBoundingClientRect();
   return{
     clientWidth:vp.clientWidth,padding,containerType:style.containerType,
@@ -191,10 +192,10 @@ try {
  pass('pinned columns do not cover the group header content',pin);
 
  // ── The content width is the content box, the rail column excluded ──
- // The rail beside the viewport is the reservation. Padding inside the
- // narrowed viewport would inset the label a second time, so this no longer
- // asks for padding > 0. The column must be wider than nothing, start where
- // the viewport ends, and the label must fill that content box.
+ // The hover zone fills the reserved column. Padding inside the narrowed
+ // viewport would inset the label a second time, so this no longer asks for
+ // padding > 0. The column must be wider than nothing, start where the
+ // viewport ends, and the label must fill that content box.
  const gut=await page.evaluate(()=>gutterInfo());
  assert.equal(gut.containerType,'inline-size',`the gutter host's viewport is the size container: container-type ${gut.containerType}`);
  assert(gut.railWidth>0,`the gutter host reserves a column for the custom scrollbar: ${gut.railWidth}`);
@@ -209,7 +210,7 @@ try {
  assert(st.exists,'the sticky host renders a sticky group header');
  assert(st.countVisible,`sticky group header: the count stays inside the container: ${JSON.stringify(st)}`);
  const band=await page.evaluate(()=>{
-  const rail=document.querySelector('#sticky-host .vlist-scrollbar-rail').getBoundingClientRect();
+  const rail=document.querySelector('#sticky-host .vlist-scrollbar__hover').getBoundingClientRect();
   const vp=document.querySelector('#sticky-host .vlist-viewport').getBoundingClientRect();
   return {railTop:rail.top,viewportTop:vp.top};
  });
