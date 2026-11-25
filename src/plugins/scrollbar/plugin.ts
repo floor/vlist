@@ -14,7 +14,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
-import { createScrollbar, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
+import { createScrollbar, measureClassicScrollbar, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
 
 // =============================================================================
 // Config
@@ -42,6 +42,7 @@ export function scrollbar<T extends VListItem = VListItem>(
   let mainAxisPadding = 0;
   let lastBoundsTotal = 0;
   let lastBoundsContainer = 0;
+  let syncNativeBar = (): void => {};
 
   return {
     name: "scrollbar",
@@ -69,7 +70,14 @@ export function scrollbar<T extends VListItem = VListItem>(
         dom.root.parentElement!,
       );
 
-      dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+      const customClass = `${classPrefix}-viewport--custom-scrollbar`;
+      const verticalTable = !isX && dom.root.classList.contains(`${classPrefix}--table`);
+      syncNativeBar = (): void => {
+        const native = verticalTable && measureClassicScrollbar();
+        sb?.useNativeBar(native);
+        dom.viewport.classList.toggle(customClass, !native);
+      };
+      syncNativeBar();
 
       ctx.hooks.method("refreshScrollbar", () => sb?.refresh());
 
@@ -86,7 +94,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       ctx.hooks.onDestroy(() => {
         sb?.destroy();
         sb = null;
-        dom.viewport.classList.remove(`${classPrefix}-viewport--custom-scrollbar`);
+        dom.viewport.classList.remove(customClass);
         if (config?.gutter) {
           dom.viewport.classList.remove(`${classPrefix}-viewport--gutter`);
         }
@@ -107,6 +115,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       },
 
       onResize(): void {
+        syncNativeBar();
         const total = engineState.totalSize + mainAxisPadding;
         const container = engineState.containerSize;
         lastBoundsTotal = total;

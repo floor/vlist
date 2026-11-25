@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- A table whose platform scrollbars take a column keeps that native vertical bar and does not render the custom vertical track, so the native horizontal bar is the only bar along the bottom. Overlay scrollbars keep the custom thumb. Measured on Chromium with classic scrollbars and with overlay scrollbars.
+
 ## [3.8.10] - 2026-11-23
 
 An item whose group key changes through `updateItem` moves under that group. An update that keeps the key leaves the headers as they are.

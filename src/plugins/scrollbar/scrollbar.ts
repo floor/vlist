@@ -117,6 +117,9 @@ export interface Scrollbar {
   /** Check if scrollbar is visible */
   isVisible: () => boolean;
 
+  /** Leave the vertical track to the native bar. No layout read. */
+  useNativeBar: (on: boolean) => void;
+
   /** Destroy and cleanup */
   destroy: () => void;
 }
@@ -129,6 +132,20 @@ export type ScrollCallback = (position: number) => void;
 // =============================================================================
 
 let nextViewportId = 0;
+
+/** A classic scrollbar reserves a column. An overlay bar does not. */
+export const scrollbarGutter = (el: { offsetWidth: number; clientWidth: number }): boolean =>
+  el.offsetWidth > el.clientWidth;
+
+/** Probe once per call. Callers use it at setup and on resize, not while scrolling. */
+export const measureClassicScrollbar = (): boolean => {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:absolute;width:40px;height:40px;overflow:scroll";
+  document.body.append(probe);
+  const classic = scrollbarGutter(probe);
+  probe.remove();
+  return classic;
+};
 const AUTO_HIDE_DELAY = 1000;
 const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
@@ -215,6 +232,7 @@ export const createScrollbar = (
 
   // State
   let enabled = true;
+  let nativeBar = false;
   let totalSize = 0;
   let containerSize = 0;
   let thumbSize = 0;
@@ -349,7 +367,7 @@ export const createScrollbar = (
    * When called from hover events, no auto-hide is scheduled.
    */
   const show = (): void => {
-    if (!enabled || totalSize <= containerSize) return;
+    if (nativeBar || !enabled || totalSize <= containerSize) return;
 
     clearHideTimeout();
 
@@ -381,6 +399,12 @@ export const createScrollbar = (
   ): void => {
     totalSize = newTotalSize;
     containerSize = newContainerSize;
+    if (nativeBar) {
+      track.style.display = "none";
+      hoverZone.style.display = "none";
+      viewport.classList.remove(`${classPrefix}-viewport--gutter`);
+      return;
+    }
     syncTrackOffset();
 
     updatePosition(currentScrollPosition);
@@ -734,6 +758,16 @@ export const createScrollbar = (
   // Public API
   // =============================================================================
 
+  const useNativeBar = (on: boolean): void => {
+    nativeBar = on;
+    if (!on) return;
+    track.style.display = "none";
+    hoverZone.style.display = "none";
+    track.classList.remove(`${classPrefix}-scrollbar--visible`);
+    viewport.classList.remove(`${classPrefix}-viewport--gutter`);
+    visible = false;
+  };
+
   return {
     refresh,
     show,
@@ -741,6 +775,7 @@ export const createScrollbar = (
     updateBounds,
     updatePosition,
     isVisible: () => visible,
+    useNativeBar,
     destroy,
   };
 };
