@@ -429,7 +429,7 @@
 .vlist:has(> .vlist-scrollbar-rail) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--vlist-track-column-width, var(--vlist-track-column, 0px));
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto [scrollport] minmax(0, 1fr) [search] auto;
     align-items: stretch;
     container-type: inline-size;
     container-name: vlist;
@@ -444,7 +444,7 @@
 }
 
 .vlist--page:has(> .vlist-scrollbar-rail) {
-    grid-template-rows: auto auto auto auto auto;
+    grid-template-rows: auto auto auto [scrollport] auto [search] auto;
 }
 
 .vlist:has(> .vlist-scrollbar-rail) > * {
@@ -454,7 +454,7 @@
 
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-viewport {
     grid-column: 1;
-    grid-row: -2;
+    grid-row: scrollport;
     width: auto;
     max-width: none;
     min-width: 0;
@@ -465,7 +465,7 @@
     position: relative;
     z-index: 9;
     grid-column: 2;
-    grid-row: -2;
+    grid-row: scrollport;
     min-width: 0;
     min-height: 0;
 }
@@ -475,7 +475,7 @@
 }
 
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-search--bottom {
-    grid-row: -1;
+    grid-row: search;
 }
 
 .vlist-scrollbar-rail > .vlist-scrollbar {
