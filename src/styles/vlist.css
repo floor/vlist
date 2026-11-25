@@ -428,7 +428,7 @@
     position: absolute;
     z-index: 9;
     inset-inline-end: 0;
-    top: calc(var(--vlist-table-header-height, 0px) + var(--vlist-sticky-header-height, 0px));
+    top: var(--vlist-table-header-height, 0px);
     bottom: 0;
     width: var(--vlist-track-column-width, 0px);
 }
