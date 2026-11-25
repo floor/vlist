@@ -9,9 +9,17 @@ afterAll(() => { unregisterDOM(); });
 
 describe("scrollbarGutter", () => {
   it("is classic when the bar takes width and overlay when it does not", () => {
-    expect(scrollbarGutter({ offsetWidth: 100, clientWidth: 85 })).toBe(true);
-    expect(scrollbarGutter({ offsetWidth: 100, clientWidth: 100 })).toBe(false);
-    expect(scrollbarGutter({ offsetWidth: 0, clientWidth: 0 })).toBe(false);
+    const el = document.createElement("div");
+    const set = (offset: number, client: number): void => {
+      Object.defineProperty(el, "offsetWidth", { configurable: true, get: () => offset });
+      Object.defineProperty(el, "clientWidth", { configurable: true, get: () => client });
+    };
+    set(100, 85);
+    expect(scrollbarGutter(el)).toBe(true);
+    set(100, 100);
+    expect(scrollbarGutter(el)).toBe(false);
+    set(0, 0);
+    expect(scrollbarGutter(el)).toBe(false);
   });
 });
 
@@ -105,6 +113,34 @@ describe("classic table scrollbar", () => {
     expect(swapped.ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
     swapped.plugin.destroy!();
     swapped.ctx.cleanup();
+  });
+
+  it("keeps the custom thumb when 2px inline borders are the whole width difference", () => {
+    const bordered = (scrollbarWidth: string, gutterPx: number) => {
+      const mounted = mount(true, { gutterPx });
+      const vp = mounted.ctx.dom.viewport;
+      vp.style.borderInline = "2px solid";
+      vp.style.borderLeft = "2px solid";
+      vp.style.borderRight = "2px solid";
+      vp.style.scrollbarWidth = scrollbarWidth;
+      overflow(mounted);
+      return mounted;
+    };
+
+    const overlay = bordered("auto", 4);
+    expect(overlay.track.style.display).not.toBe("none");
+    overlay.plugin.destroy!();
+    overlay.ctx.cleanup();
+
+    const hiddenBar = bordered("none", 4);
+    expect(hiddenBar.track.style.display).not.toBe("none");
+    hiddenBar.plugin.destroy!();
+    hiddenBar.ctx.cleanup();
+
+    const classic = bordered("auto", 19);
+    expect(classic.track.style.display).toBe("none");
+    classic.plugin.destroy!();
+    classic.ctx.cleanup();
   });
 
   it("shows the thumb again when the table switches to synthetic, and does not while scrolling", () => {
