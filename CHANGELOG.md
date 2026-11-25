@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- On overlay scrollbars, a table shows one vertical thumb. The viewport's scrollbar color no longer leaves the platform thumb painted on top of the custom one. A classic bar that takes a column is unchanged.
+
 ## [3.8.11] - 2026-11-25
 
 ### Fixed

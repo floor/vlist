@@ -96,8 +96,12 @@
    vertical bar no thickness and the horizontal bar a real height. The
    per-axis pseudo ::-webkit-scrollbar:vertical computes empty in that Chrome,
    so the thickness is set on ::-webkit-scrollbar itself. Chrome 157 reports
-   width 0 and height 16px. On macOS the bars are overlay, so both gutters
-   stay 0 and the vertical thumb does not take a column.
+   width 0 and height 16px. scrollbar-color on the viewport makes Chrome
+   ignore that width, so an overlay thumb still paints on top of the custom
+   one. Where the custom track is kept, scrollbar-color is auto and the
+   platform vertical thumb is not painted. Where the custom track is hidden
+   (a classic bar took the column), the theme color is put back so that
+   native bar stays. On macOS the bars are overlay, so both gutters stay 0.
    Firefox (no ::-webkit-scrollbar, so the block above stays off) cannot hide
    one axis. scrollbar-width: thin shows both bars: the horizontal bar is
    visible, and the thin native vertical bar sits under the custom thumb.
@@ -105,6 +109,11 @@
 @supports selector(::-webkit-scrollbar) {
     .vlist--table .vlist-viewport--custom-scrollbar {
         scrollbar-width: auto;
+        scrollbar-color: auto;
+    }
+
+    .vlist--table:has(.vlist-scrollbar[style*="display: none"]) .vlist-viewport--custom-scrollbar {
+        scrollbar-color: var(--vlist-scrollbar-thumb-color) var(--vlist-scrollbar-track-color);
     }
 }
 
