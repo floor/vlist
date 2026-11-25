@@ -80,6 +80,33 @@ describe("classic table scrollbar", () => {
     });
   });
 
+  it("drags and clicks the native horizontal bar when the platform will not", () => {
+    withProbe(15, () => {
+      const classic = mount(true);
+      const vp = classic.ctx.dom.viewport;
+      Object.defineProperty(vp, "offsetHeight", { configurable: true, value: 240 });
+      Object.defineProperty(vp, "clientHeight", { configurable: true, value: 225 });
+      Object.defineProperty(vp, "clientWidth", { configurable: true, value: 400 });
+      Object.defineProperty(vp, "scrollWidth", { configurable: true, writable: true, value: 800 });
+      vp.getBoundingClientRect = () => ({
+        x: 0, y: 0, left: 0, top: 0, right: 420, bottom: 240, width: 420, height: 240, toJSON() { return {}; },
+      });
+      vp.scrollLeft = 180;
+      const down = new PointerEvent("pointerdown", { clientX: 400, clientY: 232, button: 0, bubbles: true });
+      vp.dispatchEvent(down);
+      vp.dispatchEvent(new PointerEvent("pointermove", { clientX: 340, clientY: 232, bubbles: true }));
+      vp.dispatchEvent(new PointerEvent("pointerup", { clientX: 340, clientY: 232, bubbles: true }));
+      expect(vp.scrollLeft).toBeLessThan(180);
+
+      vp.scrollLeft = 180;
+      vp.dispatchEvent(new PointerEvent("pointerdown", { clientX: 400, clientY: 232, button: 0, bubbles: true }));
+      vp.dispatchEvent(new PointerEvent("pointerup", { clientX: 400, clientY: 232, bubbles: true }));
+      expect(vp.scrollLeft).toBeGreaterThan(180);
+      classic.plugin.destroy!();
+      classic.ctx.cleanup();
+    });
+  });
+
   it("rechecks on resize and does not recheck while scrolling", () => {
     let probes = 0;
     const append = document.body.append.bind(document.body);

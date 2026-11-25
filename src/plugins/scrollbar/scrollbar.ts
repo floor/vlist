@@ -758,9 +758,64 @@ export const createScrollbar = (
   // Public API
   // =============================================================================
 
+  // A classic platform bar takes a column, and this Chrome will not drag that
+  // thumb or stop a touch flick before the end. The native click still owns
+  // the gesture when it moves scrollLeft; otherwise the pointer does.
+  let hDrag: { x: number; left: number; moved: boolean; own: 0 | 1 | 2 } | null = null;
+  let nativeInput = false;
+  const hMax = (): number => Math.max(0, viewport.scrollWidth - viewport.clientWidth);
+  const inHBar = (event: PointerEvent): boolean => {
+    if (!nativeBar || isX) return false;
+    const rect = viewport.getBoundingClientRect();
+    const bar = viewport.offsetHeight - viewport.clientHeight;
+    return bar > 0 && event.clientY >= rect.bottom - bar && event.clientY <= rect.bottom + 1;
+  };
+  const onHDown = (event: PointerEvent): void => {
+    if (event.button !== 0 || !inHBar(event)) return;
+    hDrag = { x: event.clientX, left: viewport.scrollLeft, moved: false, own: 0 };
+    viewport.setPointerCapture(event.pointerId);
+  };
+  const onHMove = (event: PointerEvent): void => {
+    if (!hDrag) return;
+    const dx = event.clientX - hDrag.x;
+    if (dx === 0) return;
+    hDrag.moved = true;
+    if (hDrag.own === 0) hDrag.own = viewport.scrollLeft === hDrag.left ? 1 : 2;
+    if (hDrag.own !== 1) return;
+    viewport.scrollLeft = Math.max(0, Math.min(hMax(), hDrag.left + dx));
+  };
+  const onHUp = (event: PointerEvent): void => {
+    const drag = hDrag;
+    hDrag = null;
+    if (!drag || drag.moved || viewport.scrollLeft !== drag.left) return;
+    const mid = viewport.getBoundingClientRect().left + viewport.clientWidth / 2;
+    viewport.scrollLeft = Math.max(0, Math.min(hMax(), drag.left + (event.clientX > mid ? viewport.clientWidth : -viewport.clientWidth)));
+  };
+  const stopFling = (): void => {
+    if (!nativeBar) return;
+    const top = viewport.scrollTop;
+    const left = viewport.scrollLeft;
+    viewport.style.overflowY = "hidden";
+    viewport.scrollTop = top;
+    viewport.scrollLeft = left;
+    void viewport.offsetHeight;
+    viewport.style.overflowY = "";
+  };
+  const armNativeInput = (): void => {
+    if (nativeInput) return;
+    nativeInput = true;
+    listen(viewport, "pointerdown", onHDown as EventListener);
+    listen(viewport, "pointermove", onHMove as EventListener);
+    listen(viewport, "pointerup", onHUp as EventListener);
+    listen(viewport, "pointercancel", onHUp as EventListener);
+    listen(viewport, "touchend", stopFling);
+    listen(viewport, "touchcancel", stopFling);
+  };
+
   const useNativeBar = (on: boolean): void => {
     nativeBar = on;
     if (!on) return;
+    armNativeInput();
     track.style.display = "none";
     hoverZone.style.display = "none";
     track.classList.remove(`${classPrefix}-scrollbar--visible`);
