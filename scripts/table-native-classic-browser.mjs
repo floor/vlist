@@ -111,7 +111,7 @@ const server = Bun.serve({
   fetch(req) {
     const path = new URL(req.url).pathname;
     if (path === "/") return new Response(html, { headers: { "Content-Type": "text/html" } });
-    if (["/index.js", "/vlist.css", "/vlist-table.css"].includes(path)) {
+    if (["/index.js", "/synthetic-driver.js", "/vlist.css", "/vlist-table.css"].includes(path)) {
       return new Response(Bun.file(root + path));
     }
     return new Response("", { status: 404 });
@@ -183,8 +183,14 @@ async function exercise(classic) {
       const synthetic = await page.evaluate(() => window.bars("#synthetic"));
       console.log(label, "synthetic", JSON.stringify(synthetic));
       await check(label + " synthetic table keeps the custom thumb", async () => {
-        assert.equal(synthetic.native, false, "synthetic has no native gutter " + JSON.stringify(synthetic));
-        assert.equal(synthetic.custom, true, "synthetic keeps the custom thumb " + JSON.stringify(synthetic));
+        await page.waitForFunction(() => {
+          const vp = document.querySelector("#synthetic .vlist-viewport");
+          return vp !== null && vp.style.overflowY === "hidden";
+        });
+        const settled = await page.evaluate(() => window.bars("#synthetic"));
+        console.log(label, "synthetic settled", JSON.stringify(settled));
+        assert.equal(settled.native, false, "synthetic has no native gutter " + JSON.stringify(settled));
+        assert.equal(settled.custom, true, "synthetic keeps the custom thumb " + JSON.stringify(settled));
       });
 
       const grid = await page.evaluate(() => window.bars("#grid"));
