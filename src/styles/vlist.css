@@ -457,9 +457,7 @@
     grid-row: scrollport;
     width: auto;
     max-width: none;
-    /* Fill the row's content box. A stretched border box counts a zoomed
-       border as less than its used width, and a sub-pixel border then looks
-       like a horizontal bar. */
+    /* The row is already the space below the header. Fill that row. */
     height: 100%;
     min-width: 0;
     min-height: 0;
