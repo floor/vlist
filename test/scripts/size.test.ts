@@ -45,7 +45,7 @@ describe("size gate", () => {
       a11y: kb(12.51),
       selection: kb(13.91),
       data: kb(15.45),
-      scrollbar: kb(13.53),
+      scrollbar: kb(13.539),
       sortable: kb(14.26),
       groups: kb(16.117),
       page: kb(11.53),

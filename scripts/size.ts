@@ -196,7 +196,10 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   a11y: kb(12.51),
   selection: kb(13.91),
   data: kb(15.45),
-  scrollbar: kb(13.53),
+  // Measured 13863 gzipped. +9 B over 13854: the grouped-rail fallback without
+  // anchor() and percentage track widths, for #514. The owner approved a pin
+  // up to 13921 on 2026-11-25. kb(13.539) floors to the measurement.
+  scrollbar: kb(13.539),
   sortable: kb(14.26),
   // PR 527 only: owner approved the measured 16503 B on 2026-11-23.
   groups: kb(16.117),
