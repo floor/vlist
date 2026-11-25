@@ -29,7 +29,7 @@ describe("classic table scrollbar", () => {
     Object.defineProperty(viewport, "clientWidth", { configurable: true, get: () => 400 });
   };
 
-  const mount = (table: boolean, options?: { gutter?: boolean; synthetic?: boolean; grid?: boolean; gutterPx?: number }) => {
+  const mount = (table: boolean, options?: { gutter?: boolean; synthetic?: boolean; grid?: boolean; gutterPx?: number; borderPx?: number; borderEach?: number; scrollbarWidth?: string }) => {
     const plugin = scrollbar<{ id: number }>(options?.gutter ? { gutter: true } : undefined);
     const ctx = createPluginMockContext([{ id: 1 }]);
     const modeHandlers: Array<() => void> = [];
@@ -40,6 +40,11 @@ describe("classic table scrollbar", () => {
     if (table) ctx.ctx.hooks.method("_getTableLayout", () => null);
     if (options?.grid) ctx.dom.root.setAttribute("role", "grid");
     if (options?.synthetic) (ctx.ctx.config as { scrollMode: string }).scrollMode = "synthetic";
+    if (options?.borderPx !== undefined) {
+      ctx.dom.viewport.style.borderInline = `${options.borderPx}px solid`;
+      ctx.dom.viewport.dataset.borderEach = String(options.borderEach ?? options.borderPx);
+    }
+    if (options?.scrollbarWidth) ctx.dom.viewport.style.scrollbarWidth = options.scrollbarWidth;
     setGutter(ctx.dom.viewport, options?.gutterPx ?? 0);
     plugin.setup!(ctx.ctx);
     const track = ctx.dom.root.querySelector(".vlist-scrollbar") as HTMLElement;
@@ -113,6 +118,59 @@ describe("classic table scrollbar", () => {
     expect(swapped.ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
     swapped.plugin.destroy!();
     swapped.ctx.cleanup();
+  });
+
+  it("keeps the custom thumb at DPR 1, 1.25 and 1.5, and still counts an 8px or 15px bar", () => {
+    const real = window.getComputedStyle.bind(window);
+    window.getComputedStyle = ((elt: Element, pseudo?: string | null) => {
+      const css = real(elt, pseudo);
+      const each = elt instanceof HTMLElement ? elt.dataset.borderEach : undefined;
+      if (each === undefined) return css;
+      return new Proxy(css, {
+        get(target, prop, receiver) {
+          if (prop === "borderLeftWidth" || prop === "borderRightWidth") return `${each}px`;
+          const value: unknown = Reflect.get(target, prop, receiver);
+          return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(target) : value;
+        },
+      });
+    }) as typeof window.getComputedStyle;
+
+    const roundHalfToEven = (value: number): number => {
+      const floor = Math.floor(value);
+      const frac = value - floor;
+      if (Math.abs(frac - 0.5) > 1e-9) return Math.round(value);
+      return floor % 2 === 0 ? floor : floor + 1;
+    };
+
+    try {
+      for (const dpr of [1, 1.25, 1.5]) {
+        for (const borderPx of [1, 2, 3]) {
+          const computedEach = roundHalfToEven(borderPx * dpr) / dpr;
+          for (const scrollbarWidth of ["auto", "none"]) {
+            const mounted = mount(true, { gutterPx: borderPx * 2, borderPx, borderEach: computedEach, scrollbarWidth });
+            overflow(mounted);
+            expect(mounted.track.style.display, `dpr ${dpr} border ${borderPx} ${scrollbarWidth}`).not.toBe("none");
+            mounted.plugin.destroy!();
+            mounted.ctx.cleanup();
+          }
+        }
+      }
+      for (const bar of [8, 15]) {
+        const plain = mount(true, { gutterPx: bar });
+        overflow(plain);
+        expect(plain.track.style.display, `${bar}px bar`).toBe("none");
+        plain.plugin.destroy!();
+        plain.ctx.cleanup();
+
+        const bordered = mount(true, { gutterPx: 4 + bar, borderPx: 2, borderEach: 1.6, scrollbarWidth: "auto" });
+        overflow(bordered);
+        expect(bordered.track.style.display, `${bar}px bar beside 2px borders at dpr 1.25`).toBe("none");
+        bordered.plugin.destroy!();
+        bordered.ctx.cleanup();
+      }
+    } finally {
+      window.getComputedStyle = real as typeof window.getComputedStyle;
+    }
   });
 
   it("keeps the custom thumb when 2px inline borders are the whole width difference", () => {
