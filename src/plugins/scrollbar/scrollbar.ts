@@ -207,6 +207,7 @@ export const createScrollbar = (
   const useRail = !isX && attachTo !== viewport;
 
   const pad = resolvePadding(config.padding);
+  const edges = ["top", "right", "bottom", "left"] as const;
 
   // Axis-aware padding: start/end along the scroll axis, wall-side for hover zone default
   const scrollAxisStartPad = isX ? pad.left : pad.top;
@@ -262,7 +263,7 @@ export const createScrollbar = (
   const previousViewportWidth = useRail ? viewport.style.width : "";
 
   // A horizontal track on the root still lines up with the viewport. The
-  // vertical rail is placed by CSS, so it never reads offsetTop.
+  // vertical rail reads offsetTop only when the container size changes.
   const startPadVar = "--vlist-custom-scrollbar-padding-left";
   const syncTrackOffset = (): void => {
     if (!isX || attachTo === viewport) return;
@@ -280,12 +281,17 @@ export const createScrollbar = (
       viewport.style.width = previousViewportWidth;
       return;
     }
-    // parseFloat("0.75rem") is 0.75. The used width is what the column must hold.
+    // parseFloat("0.75rem") is 0.75. Measure on the rail: its containing block
+    // is the list, which is what a root-attached track resolved percentages against.
+    // A percentage left on the track would resolve against the rail and shrink.
     let raw = trackWidth;
+    track.style.width = "";
     if (!raw.endsWith("px") && raw !== "0") {
-      track.style.width = raw;
-      raw = getComputedStyle(track).width;
-      track.style.width = "";
+      const pct = raw.includes("%");
+      rail.style.width = raw;
+      raw = getComputedStyle(rail).width;
+      rail.style.width = "";
+      if (pct && raw.endsWith("px")) track.style.width = raw;
     }
     const next = `${Math.max(hoverZoneWidth, (parseFloat(raw) || 0) + pad.left + pad.right)}px`;
     // Inline, so it wins over the viewport's own width:100%.
@@ -312,10 +318,8 @@ export const createScrollbar = (
     }
 
     if (config.padding !== undefined) {
-      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-top",    `${pad.top}px`);
-      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-right",  `${pad.right}px`);
-      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-bottom", `${pad.bottom}px`);
-      attachTo.style.setProperty("--vlist-custom-scrollbar-padding-left",   `${pad.left}px`);
+      for (const edge of edges)
+        attachTo.style.setProperty(`--vlist-custom-scrollbar-padding-${edge}`, pad[edge] + "px");
     }
 
     if (config.minThumbSize !== undefined) {
@@ -404,6 +408,12 @@ export const createScrollbar = (
     newTotalSize: number,
     newContainerSize: number,
   ): void => {
+    // Setup and resize only. A scroll that does not change the viewport size
+    // must not read offsetTop. Inline top covers engines without anchor().
+    if (rail && newContainerSize !== containerSize) {
+      const top = viewport.offsetTop;
+      rail.style.top = top ? top + "px" : "";
+    }
     totalSize = newTotalSize;
     containerSize = newContainerSize;
     if (!rail) syncTrackOffset();
@@ -722,10 +732,8 @@ export const createScrollbar = (
     }
 
     // Remove inline CSS variable overrides
-    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-top");
-    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-right");
-    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-bottom");
-    attachTo.style.removeProperty("--vlist-custom-scrollbar-padding-left");
+    for (const edge of edges)
+      attachTo.style.removeProperty(`--vlist-custom-scrollbar-padding-${edge}`);
 
     // Remove DOM elements
     track.remove();
