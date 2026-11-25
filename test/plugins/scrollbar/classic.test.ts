@@ -16,91 +16,108 @@ describe("scrollbarGutter", () => {
 });
 
 describe("classic table scrollbar", () => {
-  const gutterOf = (el: HTMLElement, fallback: PropertyDescriptor | undefined): number => {
-    if (el.style.overflow === "scroll") return 0;
-    const get = fallback?.get;
-    return get ? get.call(el) : 0;
+  const setGutter = (viewport: HTMLElement, gutter: number): void => {
+    Object.defineProperty(viewport, "offsetWidth", { configurable: true, get: () => 400 + gutter });
+    Object.defineProperty(viewport, "clientWidth", { configurable: true, get: () => 400 });
   };
 
-  const withProbe = (gutter: number, run: () => void): void => {
-    const proto = HTMLElement.prototype;
-    const offset = Object.getOwnPropertyDescriptor(proto, "offsetWidth");
-    const client = Object.getOwnPropertyDescriptor(proto, "clientWidth");
-    Object.defineProperty(proto, "offsetWidth", {
-      configurable: true,
-      get() { return this.style.overflow === "scroll" ? 40 + gutter : gutterOf(this, offset); },
-    });
-    Object.defineProperty(proto, "clientWidth", {
-      configurable: true,
-      get() { return this.style.overflow === "scroll" ? 40 : gutterOf(this, client); },
-    });
-    try { run(); }
-    finally {
-      if (offset) Object.defineProperty(proto, "offsetWidth", offset);
-      if (client) Object.defineProperty(proto, "clientWidth", client);
-    }
-  };
-
-  const mount = (table: boolean) => {
-    const plugin = scrollbar<{ id: number }>();
+  const mount = (table: boolean, options?: { gutter?: boolean; synthetic?: boolean; grid?: boolean; gutterPx?: number }) => {
+    const plugin = scrollbar<{ id: number }>(options?.gutter ? { gutter: true } : undefined);
     const ctx = createPluginMockContext([{ id: 1 }]);
-    if (table) ctx.dom.root.setAttribute("role", "grid");
+    const modeHandlers: Array<() => void> = [];
+    ctx.ctx.emitter.on = (( _event: string, fn: () => void) => {
+      modeHandlers.push(fn);
+      return () => {};
+    }) as typeof ctx.ctx.emitter.on;
+    if (table) ctx.ctx.hooks.method("_getTableLayout", () => null);
+    if (options?.grid) ctx.dom.root.setAttribute("role", "grid");
+    if (options?.synthetic) (ctx.ctx.config as { scrollMode: string }).scrollMode = "synthetic";
+    setGutter(ctx.dom.viewport, options?.gutterPx ?? 0);
     plugin.setup!(ctx.ctx);
     const track = ctx.dom.root.querySelector(".vlist-scrollbar") as HTMLElement;
-    return { plugin, ctx, track };
+    const hover = ctx.dom.root.querySelector(".vlist-scrollbar__hover") as HTMLElement;
+    return { plugin, ctx, track, hover, modeHandlers };
   };
 
-  it("hides the custom vertical track on a classic table and keeps it on overlay", () => {
-    withProbe(15, () => {
-      const classic = mount(true);
-      classic.ctx.engineState.totalSize = 4000;
-      classic.plugin.hooks!.onResize!(420, 240);
-      expect(classic.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
-      expect(classic.track.style.display).toBe("none");
-      classic.plugin.destroy!();
-      classic.ctx.cleanup();
-    });
-    withProbe(0, () => {
-      const overlay = mount(true);
-      overlay.ctx.engineState.totalSize = 4000;
-      overlay.plugin.hooks!.onResize!(420, 240);
-      expect(overlay.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
-      expect(overlay.track.style.display).not.toBe("none");
-      overlay.plugin.destroy!();
-      overlay.ctx.cleanup();
-    });
+  const overflow = (mounted: ReturnType<typeof mount>): void => {
+    mounted.ctx.engineState.totalSize = 4000;
+    mounted.ctx.engineState.containerSize = 240;
+    mounted.plugin.hooks!.onResize!(420, 240);
+  };
+
+  it("hides the custom vertical track when this table's viewport has a real gutter", () => {
+    const classic = mount(true, { gutterPx: 15 });
+    overflow(classic);
+    expect(classic.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
+    expect(classic.track.style.display).toBe("none");
+    classic.plugin.destroy!();
+    classic.ctx.cleanup();
+
+    const overlay = mount(true, { gutterPx: 0 });
+    overflow(overlay);
+    expect(overlay.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
+    expect(overlay.track.style.display).not.toBe("none");
+    overlay.plugin.destroy!();
+    overlay.ctx.cleanup();
+  });
+
+  it("keeps the custom thumb on a synthetic table and on a grid that is not a table", () => {
+    const synthetic = mount(true, { synthetic: true, gutterPx: 15 });
+    synthetic.ctx.dom.viewport.style.overflowY = "hidden";
+    overflow(synthetic);
+    expect(synthetic.track.style.display).not.toBe("none");
+    synthetic.plugin.destroy!();
+    synthetic.ctx.cleanup();
+
+    const grid = mount(false, { grid: true, gutterPx: 15 });
+    overflow(grid);
+    expect(grid.track.style.display).not.toBe("none");
+    grid.plugin.destroy!();
+    grid.ctx.cleanup();
   });
 
   it("keeps the custom track on a classic list that is not a table", () => {
-    withProbe(15, () => {
-      const plain = mount(false);
-      expect(plain.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
-      plain.plugin.destroy!();
-      plain.ctx.cleanup();
-    });
+    const plain = mount(false, { gutterPx: 15 });
+    overflow(plain);
+    expect(plain.ctx.dom.viewport.classList.contains("vlist-viewport--custom-scrollbar")).toBe(true);
+    expect(plain.track.style.display).not.toBe("none");
+    plain.plugin.destroy!();
+    plain.ctx.cleanup();
   });
 
-  it("rechecks on resize and does not recheck while scrolling", () => {
-    let probes = 0;
-    const append = document.body.append.bind(document.body);
-    document.body.append = ((node: Node) => {
-      if (node instanceof HTMLElement && node.style.overflow === "scroll") probes += 1;
-      return append(node);
-    }) as typeof document.body.append;
-    try {
-      withProbe(15, () => {
-        const { plugin, ctx } = mount(true);
-        expect(probes).toBe(1);
-        plugin.hooks!.onAfterScroll!(20, 1);
-        plugin.hooks!.onAfterScroll!(40, 1);
-        expect(probes).toBe(1);
-        plugin.hooks!.onResize!(420, 240);
-        expect(probes).toBe(2);
-        plugin.destroy!();
-        ctx.cleanup();
-      });
-    } finally {
-      document.body.append = append;
-    }
+  it("restores the track, hover zone, and gutter when the platform bar changes", () => {
+    const swapped = mount(true, { gutter: true, gutterPx: 15 });
+    overflow(swapped);
+    expect(swapped.track.style.display).toBe("none");
+    expect(swapped.hover.style.display).toBe("none");
+    expect(swapped.ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+
+    setGutter(swapped.ctx.dom.viewport, 0);
+    swapped.plugin.hooks!.onResize!(420, 240);
+    expect(swapped.track.style.display).not.toBe("none");
+    expect(swapped.hover.style.display).not.toBe("none");
+    expect(swapped.ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(true);
+
+    setGutter(swapped.ctx.dom.viewport, 15);
+    swapped.plugin.hooks!.onResize!(420, 240);
+    expect(swapped.track.style.display).toBe("none");
+    expect(swapped.hover.style.display).toBe("none");
+    expect(swapped.ctx.dom.viewport.classList.contains("vlist-viewport--gutter")).toBe(false);
+    swapped.plugin.destroy!();
+    swapped.ctx.cleanup();
+  });
+
+  it("shows the thumb again when the table switches to synthetic, and does not while scrolling", () => {
+    const live = mount(true, { gutterPx: 15 });
+    overflow(live);
+    expect(live.track.style.display).toBe("none");
+    live.plugin.hooks!.onAfterScroll!(20, 1);
+    live.plugin.hooks!.onAfterScroll!(40, 1);
+    expect(live.track.style.display).toBe("none");
+    live.ctx.dom.viewport.style.overflowY = "hidden";
+    for (const notify of live.modeHandlers) notify();
+    expect(live.track.style.display).not.toBe("none");
+    live.plugin.destroy!();
+    live.ctx.cleanup();
   });
 });

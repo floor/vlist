@@ -136,16 +136,6 @@ let nextViewportId = 0;
 /** A classic scrollbar reserves a column. An overlay bar does not. */
 export const scrollbarGutter = (el: { offsetWidth: number; clientWidth: number }): boolean =>
   el.offsetWidth > el.clientWidth;
-
-/** Probe once per call. Callers use it at setup and on resize, not while scrolling. */
-export const measureClassicScrollbar = (): boolean => {
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:absolute;width:40px;height:40px;overflow:scroll";
-  document.body.append(probe);
-  const classic = scrollbarGutter(probe);
-  probe.remove();
-  return classic;
-};
 const AUTO_HIDE_DELAY = 1000;
 const MIN_THUMB_SIZE = 15;
 const SHOW_ON_HOVER = true;
@@ -759,13 +749,20 @@ export const createScrollbar = (
   // =============================================================================
 
   const useNativeBar = (on: boolean): void => {
+    if (nativeBar === on) return;
     nativeBar = on;
-    if (!on) return;
-    track.style.display = "none";
-    hoverZone.style.display = "none";
-    track.classList.remove(`${classPrefix}-scrollbar--visible`);
-    viewport.classList.remove(`${classPrefix}-viewport--gutter`);
-    visible = false;
+    if (on) {
+      track.style.display = "none";
+      hoverZone.style.display = "none";
+      track.classList.remove(`${classPrefix}-scrollbar--visible`);
+      viewport.classList.remove(`${classPrefix}-viewport--gutter`);
+      visible = false;
+      return;
+    }
+    hoverZone.style.display = enabled ? "" : "none";
+    viewport.classList.toggle(`${classPrefix}-viewport--gutter`, enabled && !!config.gutter);
+    updateBounds(totalSize, containerSize);
+    show();
   };
 
   return {

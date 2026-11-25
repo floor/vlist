@@ -20,11 +20,13 @@ const html = `<!doctype html><meta charset="utf-8">
 <link rel="stylesheet" href="/vlist.css"><link rel="stylesheet" href="/vlist-table.css">
 <style>
   body { margin: 8px; }
-  #host, #fresh, #grouped { width: 420px; height: 240px; }
+  #host, #fresh, #grouped, #synthetic, #grid { width: 420px; height: 240px; }
 </style>
 <div id="host"></div>
 <div id="fresh"></div>
 <div id="grouped"></div>
+<div id="synthetic"></div>
+<div id="grid"></div>
 <script type="module">
 import { createVList, table, scrollbar, groups } from "/index.js";
 const columns = [
@@ -52,6 +54,24 @@ const mountIn = (container, n, grouped) => createVList({
 window.list = mountIn("#host", 6, false);
 window.fresh = mountIn("#fresh", 40, false);
 window.grouped = mountIn("#grouped", 40, true);
+window.synthetic = createVList({
+  container: "#synthetic",
+  items: items(40),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "synthetic" },
+}, [
+  table({ rowHeight: 28, headerHeight: 28, columns }),
+  scrollbar(),
+]);
+window.grid = createVList({
+  container: "#grid",
+  items: items(40),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: "auto" },
+}, [
+  { name: "grid-role", priority: 10, setup(ctx) { ctx.dom.root.setAttribute("role", "grid"); } },
+  scrollbar(),
+]);
 window.openFolder = () => {
   window.list.destroy();
   document.getElementById("host").innerHTML = "";
@@ -159,6 +179,19 @@ async function exercise(classic) {
       const grouped = await page.evaluate(() => window.bars("#grouped"));
       console.log(label, "grouped", JSON.stringify(grouped));
       await check(label + " one vertical bar on a grouped table", async () => oneBar(grouped, "grouped"));
+
+      const synthetic = await page.evaluate(() => window.bars("#synthetic"));
+      console.log(label, "synthetic", JSON.stringify(synthetic));
+      await check(label + " synthetic table keeps the custom thumb", async () => {
+        assert.equal(synthetic.native, false, "synthetic has no native gutter " + JSON.stringify(synthetic));
+        assert.equal(synthetic.custom, true, "synthetic keeps the custom thumb " + JSON.stringify(synthetic));
+      });
+
+      const grid = await page.evaluate(() => window.bars("#grid"));
+      console.log(label, "grid", JSON.stringify(grid));
+      await check(label + " a grid that is not a table keeps the custom thumb", async () => {
+        assert.equal(grid.custom, true, "grid keeps the custom thumb " + JSON.stringify(grid));
+      });
 
       const endOfBar = async (selector) => {
         await page.evaluate((selector) => {

@@ -14,7 +14,7 @@
 import type { VListItem } from "../../types";
 import type { VListPlugin, PluginContext } from "../../core/types";
 import type { EngineState } from "../../core/state";
-import { createScrollbar, measureClassicScrollbar, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
+import { createScrollbar, scrollbarGutter, type Scrollbar, type ScrollbarConfig } from "./scrollbar";
 
 // =============================================================================
 // Config
@@ -71,12 +71,22 @@ export function scrollbar<T extends VListItem = VListItem>(
       );
 
       const customClass = `${classPrefix}-viewport--custom-scrollbar`;
-      const verticalTable = !isX && dom.root.getAttribute("role") === "grid";
+      // table() publishes this during its setup. role="grid" is not enough:
+      // any grid would lose its thumb, and the class marker must stay out of
+      // this bundle.
+      const table = !isX && ctx.hooks.get("_getTableLayout");
       syncNativeBar = (): void => {
-        sb?.useNativeBar(verticalTable && measureClassicScrollbar());
+        const vp = dom.viewport;
+        sb?.useNativeBar(
+          !!table
+          && ctx.config.scrollMode !== "synthetic"
+          && vp.style.overflowY !== "hidden"
+          && scrollbarGutter(vp),
+        );
       };
       dom.viewport.classList.add(customClass);
       syncNativeBar();
+      const offMode = ctx.emitter.on("scroll:mode", syncNativeBar);
 
       ctx.hooks.method("refreshScrollbar", () => sb?.refresh());
 
@@ -91,6 +101,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       ctx.hooks.method("_scrollbar:getInstance", () => sb);
 
       ctx.hooks.onDestroy(() => {
+        offMode();
         sb?.destroy();
         sb = null;
         dom.viewport.classList.remove(customClass);
