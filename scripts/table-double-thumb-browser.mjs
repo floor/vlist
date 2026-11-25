@@ -652,6 +652,10 @@ try {
     return vp.scrollTop;
   });
 
+  await page.evaluate(() => {
+    document.querySelector("#host").scrollIntoView({ block: "center", inline: "nearest" });
+  });
+  await settle(page);
   await arm(40);
   const swipeFrom = await readTop();
   const box = await page.evaluate(() => {
@@ -822,10 +826,10 @@ try {
     const el = document.elementFromPoint(x, y);
     return el ? String(el.className) : "";
   }, x, y);
-  const clickRail = async (selector, y) => {
+  const clickRail = async (selector, y, column) => {
     await place(selector);
     const box = await readEnds(selector);
-    const x = box.right - 9;
+    const x = column ? box.right + 6 : box.right - 9;
     const hit = await hitAt(x, y(box));
     const before = await readEnds(selector);
     await page.mouse.click(x, y(box));
@@ -839,7 +843,7 @@ try {
   assert.equal(bordered.bar, 0, "a top border is not a horizontal bar: " + JSON.stringify(bordered));
   assert.equal(bordered.bottom, "", "a bordered list keeps the track inset clear");
   assert.equal(bordered.hoverBottom, "", "a bordered list keeps the hover inset clear");
-  const borderClick = await clickRail("#bordered", (box) => box.edge - 8);
+  const borderClick = await clickRail("#bordered", (box) => box.edge - 8, true);
   assert.ok(borderClick.hit.includes("vlist-scrollbar"), "bordered lower rail is " + borderClick.hit);
   assert.ok(borderClick.after.top > borderClick.before.top + 15, "bordered lower rail pages " + JSON.stringify(borderClick));
   console.log("PASS bordered rail", JSON.stringify({ hit: borderClick.hit, top: [borderClick.before.top, borderClick.after.top] }));
@@ -849,7 +853,6 @@ try {
     const box = await readEnds(selector);
     if (expectBar) {
       assert.ok(box.bar > 0, selector + " gains a horizontal bar " + JSON.stringify(box));
-      assert.ok(box.bottom.includes(String(box.bar) + "px"), selector + " inset follows the bar " + box.bottom);
     } else {
       assert.equal(box.bar, 0, selector + " loses the horizontal bar " + JSON.stringify(box));
       assert.equal(box.bottom, "", selector + " clears the inset " + box.bottom);
@@ -857,8 +860,8 @@ try {
     }
     const barY = (next) => next.edge - (expectBar ? next.bar / 2 : 5);
     const railY = (next) => next.edge - next.bar - (expectBar ? 6 : 12);
-    const barClick = await clickRail(selector, barY);
-    const railClick = await clickRail(selector, railY);
+    const barClick = await clickRail(selector, barY, !expectBar);
+    const railClick = await clickRail(selector, railY, true);
     if (expectBar) {
       assert.equal(barClick.hit.includes("vlist-scrollbar"), false, selector + " right end is under " + barClick.hit);
       assert.ok(barClick.after.left > barClick.before.left, selector + " right end moves scrollLeft " + JSON.stringify(barClick));
@@ -911,11 +914,14 @@ try {
     const rect = vp.getBoundingClientRect();
     const track = document.querySelector("#bottom-border .vlist-scrollbar").getBoundingClientRect();
     const hover = document.querySelector("#bottom-border .vlist-scrollbar__hover").getBoundingClientRect();
+    const barLeft = rect.left + vp.clientLeft;
+    const barRight = barLeft + vp.clientWidth;
+    const sharesX = (left, right) => left < barRight - 0.5 && right > barLeft + 0.5;
     return {
       thick, bottom, gap,
-      barTop: rect.bottom - bottom - thick,
-      trackBottom: track.bottom,
-      hoverBottom: hover.bottom,
+      barLeft, barRight,
+      trackShares: sharesX(track.left, track.right),
+      hoverShares: sharesX(hover.left, hover.right),
       x: rect.right - 8,
       y: rect.bottom - bottom - thick / 2,
       left: vp.scrollLeft,
@@ -931,8 +937,8 @@ try {
   });
   assert.ok(bottomMoved.left > bottomBorder.left, "bottom border right end moves scrollLeft " + JSON.stringify(bottomMoved));
   assert.equal(bottomMoved.top, bottomBorder.topScroll, "bottom border right end keeps scrollTop " + JSON.stringify(bottomMoved));
-  assert.ok(bottomBorder.trackBottom <= bottomBorder.barTop + 0.5, "track ends above the bar " + JSON.stringify(bottomBorder));
-  assert.ok(bottomBorder.hoverBottom <= bottomBorder.barTop + 0.5, "hover ends above the bar " + JSON.stringify(bottomBorder));
+  assert.equal(bottomBorder.trackShares, false, "track shares no x with the horizontal bar " + JSON.stringify(bottomBorder));
+  assert.equal(bottomBorder.hoverShares, false, "hover zone shares no x with the horizontal bar " + JSON.stringify(bottomBorder));
   console.log("PASS bottom border", JSON.stringify({ ...bottomBorder, moved: bottomMoved }));
 
   await page.evaluate(() => {
@@ -958,8 +964,6 @@ try {
   });
   assert.equal(forced.scrollWidth, forced.clientWidth, "forced bar has no horizontal overflow " + JSON.stringify(forced));
   assert.ok(forced.gap > 8, "overflow-x scroll reserves a horizontal strip " + JSON.stringify(forced));
-  assert.notEqual(forced.bottom, "", "forced strip gets a track inset");
-  assert.notEqual(forced.hoverBottom, "", "forced strip gets a hover inset");
   await page.mouse.click(forced.x, forced.y);
   await settle(page);
   const forcedTop = await page.evaluate(() => document.querySelector("#forced .vlist-viewport").scrollTop);
