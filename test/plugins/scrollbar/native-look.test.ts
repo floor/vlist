@@ -1,5 +1,9 @@
 import {readFileSync} from 'node:fs';
 import {createVList} from '../../../src/core/create';
+import {groups} from '../../../src/plugins/groups/plugin';
+import {grid} from '../../../src/plugins/grid/plugin';
+import {page} from '../../../src/plugins/page/plugin';
+import {table} from '../../../src/plugins/table/plugin';
 import {scrollbar} from '../../../src/plugins/scrollbar/plugin';
 import {test, expect, beforeAll, afterAll, afterEach} from 'bun:test';
 import {setupDOM, teardownDOM} from '../../helpers/dom';
@@ -124,23 +128,23 @@ test('a non-pixel track width stays on the stylesheet, not a measured px',()=>{
  expect(em.track.style.width).toBe('');
 });
 
-test('a percentage track width stays a percentage of the list when it widens or is revealed',()=>{
+test('a percentage track width is left as written when the list widens or is revealed',()=>{
  const hidden=make({platform:'macos'});
  hidden.host.style.display='none';
  hidden.host.style.setProperty('--vlist-custom-scrollbar-width','5%');sb!.refresh();
  expect(hidden.track.style.width).toBe('');
- expect(hidden.variable('width')).toBe('5cqw');
+ expect(hidden.variable('width')).toBe('5%');
  hidden.host.style.display='';hidden.host.style.width='620px';sb!.refresh();
  expect(hidden.track.style.width).toBe('');
- expect(hidden.variable('width')).toBe('5cqw');
+ expect(hidden.variable('width')).toBe('5%');
  expect(hidden.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
  sb!.destroy();
  const calc=make({platform:'macos'});
  calc.host.style.setProperty('--vlist-custom-scrollbar-width','calc(5% + 4px)');sb!.refresh();
  expect(calc.track.style.width).toBe('');
- expect(calc.variable('width')).toBe('calc(5cqw + 4px)');
+ expect(calc.variable('width')).toBe('calc(5% + 4px)');
  calc.host.style.width='420px';sb!.refresh();
- expect(calc.variable('width')).toBe('calc(5cqw + 4px)');
+ expect(calc.variable('width')).toBe('calc(5% + 4px)');
 });
 
 test('a title or header that moves without a viewport resize does not leave a rail offset',()=>{
@@ -158,12 +162,52 @@ test('a title or header that moves without a viewport resize does not leave a ra
  expect(rail.parentElement).toBe(host);
 });
 
+test('a sticky title is subtracted once when the rail has its own row',()=>{
+ const style=document.createElement('style');
+ style.textContent=readFileSync(new URL('../../../src/styles/vlist.css',import.meta.url),'utf8')
+  +readFileSync(new URL('../../../src/styles/vlist-table.css',import.meta.url),'utf8')
+  +readFileSync(new URL('../../../src/styles/vlist-grid.css',import.meta.url),'utf8');
+ document.body.append(style);
+ const items=Array.from({length:8},(_,i)=>({id:i,name:'Item '+i}));
+ const header={height:24,template:()=>'A'};
+ const grouped=()=>groups({getGroupForIndex:()=>'A',header});
+ const mount=(plugins: Parameters<typeof createVList>[1])=>{
+  const host=document.createElement('div');
+  host.style.cssText='width:420px;height:240px';
+  document.body.append(host);
+  createVList({container:host,items,item:{height:28,template:(row: {name: string})=>row.name}},plugins);
+  const vp=host.querySelector<HTMLElement>('.vlist-viewport')!;
+  const css=getComputedStyle(vp);
+  return {inline:vp.style.height,used:css.height,priority:css.getPropertyPriority('height')};
+ };
+ const once=(sample: {inline: string, used: string, priority: string})=>{
+  // Groups still writes the block-flow formula. The rail's row already starts
+  // below the title, so the used height is that row and the formula loses.
+  expect(sample.inline).toBe('calc(100% - 24px)');
+  expect(sample.used).toBe('100%');
+  expect(sample.priority).toBe('important');
+ };
+ once(mount([grouped(),scrollbar()]));
+ once(mount([grouped(),scrollbar({enabled:false})]));
+ once(mount([table({rowHeight:28,columns:[{key:'name',label:'Name',width:200}]}),grouped(),scrollbar()]));
+ once(mount([grid({columns:2}),grouped(),scrollbar()]));
+ const bare=mount([grouped()]);
+ expect(bare.used).toBe('calc(100% - 24px)');
+ expect(bare.priority).toBe('');
+ const paged=mount([page(),grouped(),scrollbar()]);
+ expect(paged.used).toBe('auto');
+ expect(paged.priority).toBe('important');
+});
+
 test('the rail shares the scrollport row',()=>{
  const css=readFileSync(new URL('../../../src/styles/vlist.css',import.meta.url),'utf8');
  expect(css).toContain('grid-template-columns:');
  expect(css).toContain('grid-row: scrollport');
- expect(css).toContain('container-type: inline-size');
+ expect(css).toContain('height: 100% !important');
  expect(css).toContain('--vlist-track-column:');
+ expect(css).not.toContain('container-type');
+ expect(css).not.toContain('container-name');
+ expect(css).not.toContain('cqw');
  expect(css).not.toContain('top: anchor(top)');
 });
 

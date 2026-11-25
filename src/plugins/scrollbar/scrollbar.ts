@@ -680,7 +680,7 @@ export const createScrollbar = (
     enabled = config.enabled !== false && width !== 'none';
     const values = [
       typeof config.width === 'number' ? `${config.width}px` :
-        css.getPropertyValue(barVar + 'width').trim().replace(/%/g, "cqw") || (width === 'thin' || !classic ? '6px' : '14px'),
+        css.getPropertyValue(barVar + 'width').trim() || (width === 'thin' || !classic ? '6px' : '14px'),
       typeof config.radius === 'number' ? `${config.radius}px` :
         css.getPropertyValue(barVar + 'radius').trim() || (classic ? '0px' : '4px'),
       config.thumbColor ?? (colors?.length === 2 ? colors[0]! : originalStyles[2]!),

@@ -423,16 +423,13 @@
    Headers occupy the auto rows. The scrollport and the rail share the one
    flexible row, so the rail starts where the scrollport starts without a
    measured offset. A zero-basis flex item used to fit in the leftover beside
-   a header and collapse the scrollport to no width. A percentage in the track
-   length is cqw of this list, the same box an absolute track on the root used.
-   page() sizes to its content, so that row is not a flexible track. */
+   a header and collapse the scrollport to no width. page() sizes to its
+   content, so that row is not a flexible track. */
 .vlist:has(> .vlist-scrollbar-rail) {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--vlist-track-column-width, var(--vlist-track-column, 0px));
     grid-template-rows: auto auto auto [scrollport] minmax(0, 1fr) [search] auto;
     align-items: stretch;
-    container-type: inline-size;
-    container-name: vlist;
     --vlist-track-column: max(
         var(--vlist-scrollbar-slot, 18px),
         calc(
@@ -457,14 +454,15 @@
     grid-row: scrollport;
     width: auto;
     max-width: none;
-    /* The row is already the space below the header. Fill that row. */
-    height: 100%;
+    /* The row already starts below a sticky title. Groups still writes
+       calc(100% - title) for block flow; that would subtract the title again. */
+    height: 100% !important;
     min-width: 0;
     min-height: 0;
 }
 
 .vlist--page:has(> .vlist-scrollbar-rail) > .vlist-viewport {
-    height: auto;
+    height: auto !important;
 }
 
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-scrollbar-rail {
