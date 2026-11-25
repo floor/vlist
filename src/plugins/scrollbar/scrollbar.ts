@@ -264,7 +264,8 @@ export const createScrollbar = (
 
   // A horizontal track on the root still lines up with the viewport. The
   // vertical rail reads offsetTop only when the container size changes.
-  const startPadVar = "--vlist-custom-scrollbar-padding-left";
+  const barVar = "--vlist-custom-scrollbar-";
+  const startPadVar = barVar + "padding-left";
   const syncTrackOffset = (): void => {
     if (!isX || attachTo === viewport) return;
     const offset = viewport.offsetTop;
@@ -319,11 +320,11 @@ export const createScrollbar = (
 
     if (config.padding !== undefined) {
       for (const edge of edges)
-        attachTo.style.setProperty(`--vlist-custom-scrollbar-padding-${edge}`, pad[edge] + "px");
+        attachTo.style.setProperty(barVar + "padding-" + edge, pad[edge] + "px");
     }
 
     if (config.minThumbSize !== undefined) {
-      track.style.setProperty("--vlist-custom-scrollbar-min-thumb-size", `${minThumbSize}px`);
+      track.style.setProperty(barVar + "min-thumb-size", minThumbSize + "px");
     }
 
     track.appendChild(thumb);
@@ -677,8 +678,8 @@ export const createScrollbar = (
   };
 
   const styleNames = ['width', 'radius', 'thumb-color', 'track-color'];
-  const setStyle = (name: string, value: string): void => attachTo.style.setProperty(`--vlist-custom-scrollbar-${name}`, value);
-  const originalStyles = styleNames.map(name => attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`));
+  const setStyle = (name: string, value: string): void => attachTo.style.setProperty(barVar + name, value);
+  const originalStyles = styleNames.map(name => attachTo.style.getPropertyValue(barVar + name));
   const authoredSizing = originalStyles.slice(0, 2);
   let appliedSizing: string[] = [];
   const refresh = (): void => {
@@ -686,7 +687,7 @@ export const createScrollbar = (
     // standalone component's style source is the element we write to.
     for (let i = 0; i < 2; i++) {
       const name = styleNames[i]!;
-      const inline = attachTo.style.getPropertyValue(`--vlist-custom-scrollbar-${name}`);
+      const inline = attachTo.style.getPropertyValue(barVar + name);
       if (inline !== appliedSizing[i]) authoredSizing[i] = inline;
       setStyle(name, authoredSizing[i]!);
     }
@@ -696,9 +697,9 @@ export const createScrollbar = (
     enabled = config.enabled !== false && width !== 'none';
     const values = [
       typeof config.width === 'number' ? `${config.width}px` :
-        css.getPropertyValue('--vlist-custom-scrollbar-width').trim() || (width === 'thin' || !classic ? '6px' : '14px'),
+        css.getPropertyValue(barVar + 'width').trim() || (width === 'thin' || !classic ? '6px' : '14px'),
       typeof config.radius === 'number' ? `${config.radius}px` :
-        css.getPropertyValue('--vlist-custom-scrollbar-radius').trim() || (classic ? '0px' : '4px'),
+        css.getPropertyValue(barVar + 'radius').trim() || (classic ? '0px' : '4px'),
       config.thumbColor ?? (colors?.length === 2 ? colors[0]! : originalStyles[2]!),
       config.trackColor ?? (colors?.length === 2 ? colors[1]! : originalStyles[3]!)];
     for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, values[i]!);
@@ -733,7 +734,7 @@ export const createScrollbar = (
 
     // Remove inline CSS variable overrides
     for (const edge of edges)
-      attachTo.style.removeProperty(`--vlist-custom-scrollbar-padding-${edge}`);
+      attachTo.style.removeProperty(barVar + "padding-" + edge);
 
     // Remove DOM elements
     track.remove();
