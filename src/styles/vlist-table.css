@@ -66,6 +66,7 @@
    rows scroll past it on the document. Size the group to the table's full
    width; min-width keeps a narrow table's header full width. */
 .vlist--page.vlist--table:not(.vlist--table-pinned) > [role="rowgroup"] {
+    flex-basis: auto;
     width: max-content;
     min-width: 100%;
 }
@@ -98,8 +99,9 @@
    clips the header while the body keeps scrolling. */
 .vlist--table:not(.vlist--page):has(> .vlist-scrollbar-rail) > [role="rowgroup"],
 .vlist--page.vlist--table-pinned:has(> .vlist-scrollbar-rail) > [role="rowgroup"] {
-    width: calc(100% - var(--vlist-track-column-width, 0px));
-    max-width: calc(100% - var(--vlist-track-column-width, 0px));
+    flex-basis: auto;
+    width: calc(100% - var(--vlist-track-column-width, var(--vlist-track-column, 0px)));
+    max-width: calc(100% - var(--vlist-track-column-width, var(--vlist-track-column, 0px)));
     align-self: start;
     box-sizing: border-box;
 }

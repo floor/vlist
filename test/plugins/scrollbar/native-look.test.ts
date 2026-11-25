@@ -94,81 +94,76 @@ test('a disabled scrollbar reserves no column, and an enabled hidden track keeps
  expect(disabled.viewport.style.width).toBe('');
  sb!.destroy();
  const hidden=make({platform:'macos'});
- expect(hidden.viewport.style.width).toBe('calc(100% - 18px)');
+ expect(hidden.viewport.style.width).toBe('');
+ expect(hidden.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
  sb!.updateBounds(100,500);
  expect(hidden.track.style.visibility).toBe('hidden');
- expect(hidden.viewport.style.width).toBe('calc(100% - 18px)');
+ expect(hidden.viewport.style.width).toBe('');
+ expect(hidden.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
  hidden.host.style.setProperty('scrollbar-width','none');sb!.refresh();
  expect(hidden.host.style.getPropertyValue('--vlist-track-column-width')).toBe('0px');
  expect(hidden.viewport.style.width).toBe('');
  hidden.host.style.setProperty('scrollbar-width','auto');sb!.refresh();
- expect(hidden.viewport.style.width).toBe('calc(100% - 18px)');
+ expect(hidden.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
+ expect(hidden.viewport.style.width).toBe('');
 });
 
-test('a non-pixel track width reserves the used pixels, not parseFloat',()=>{
+test('a non-pixel track width stays on the stylesheet, not a measured px',()=>{
  const rem=make({platform:'macos',hoverZoneWidth:4});
  rem.host.style.setProperty('--vlist-custom-scrollbar-width','0.75rem');sb!.refresh();
- expect(rem.host.style.getPropertyValue('--vlist-track-column-width')).toBe('16px');
+ expect(rem.variable('width')).toBe('0.75rem');
+ expect(rem.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
+ expect(rem.host.style.getPropertyValue('--vlist-scrollbar-slot')).toBe('4px');
+ expect(rem.track.style.width).toBe('');
  sb!.destroy();
- // calc() takes the same computed-width read. Browsers return used px; this
- // engine leaves calc(8px + 4px) unresolved, so the pixel result is locked
- // here with rem and em.
  const em=make({platform:'macos',hoverZoneWidth:4});
  em.host.style.fontSize='20px';
  em.host.style.setProperty('--vlist-custom-scrollbar-width','0.8em');sb!.refresh();
- expect(em.host.style.getPropertyValue('--vlist-track-column-width')).toBe('20px');
+ expect(em.variable('width')).toBe('0.8em');
+ expect(em.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
+ expect(em.track.style.width).toBe('');
 });
 
-test('a percentage track width resolves against the list, not the rail',()=>{
- const original=globalThis.getComputedStyle;
- globalThis.getComputedStyle=((element:Element,pseudo?:string|null)=>{
-  const style=original(element,pseudo);
-  const width=(element as HTMLElement).style?.width??'';
-  if(!width.includes('%'))return style;
-  const used=element.classList.contains('vlist-scrollbar-rail')
-   ?(width.includes('calc')?'24.89px':'20.89px')
-   :(width.includes('calc')?'4.89px':'0.89px');
-  return new Proxy(style,{get(target,key){
-   if(key==='width')return used;
-   const value=Reflect.get(target,key);
-   return typeof value==='function'?value.bind(target):value;
-  }});
- }) as typeof getComputedStyle;
- try {
-  const {host,track}=make({platform:'macos'});
-  host.style.setProperty('--vlist-custom-scrollbar-width','5%');sb!.refresh();
-  expect(track.style.width).toBe('20.89px');
-  expect(host.style.getPropertyValue('--vlist-track-column-width')).toBe('24.89px');
-  host.style.setProperty('--vlist-custom-scrollbar-width','calc(5% + 4px)');sb!.refresh();
-  expect(track.style.width).toBe('24.89px');
-  expect(host.style.getPropertyValue('--vlist-track-column-width')).toBe('28.89px');
-  host.style.setProperty('--vlist-custom-scrollbar-width','6px');sb!.refresh();
-  expect(track.style.width).toBe('');
-  expect(host.style.getPropertyValue('--vlist-track-column-width')).toBe('18px');
- } finally {globalThis.getComputedStyle=original;}
+test('a percentage track width stays a percentage of the list when it widens or is revealed',()=>{
+ const hidden=make({platform:'macos'});
+ hidden.host.style.display='none';
+ hidden.host.style.setProperty('--vlist-custom-scrollbar-width','5%');sb!.refresh();
+ expect(hidden.track.style.width).toBe('');
+ expect(hidden.variable('width')).toBe('5cqw');
+ hidden.host.style.display='';hidden.host.style.width='620px';sb!.refresh();
+ expect(hidden.track.style.width).toBe('');
+ expect(hidden.variable('width')).toBe('5cqw');
+ expect(hidden.host.style.getPropertyValue('--vlist-track-column-width')).toBe('');
+ sb!.destroy();
+ const calc=make({platform:'macos'});
+ calc.host.style.setProperty('--vlist-custom-scrollbar-width','calc(5% + 4px)');sb!.refresh();
+ expect(calc.track.style.width).toBe('');
+ expect(calc.variable('width')).toBe('calc(5cqw + 4px)');
+ calc.host.style.width='420px';sb!.refresh();
+ expect(calc.variable('width')).toBe('calc(5cqw + 4px)');
 });
 
-test('the rail top follows the scrollport when the container size changes',()=>{
- const host=document.createElement('div'),viewport=document.createElement('div');
- host.append(viewport);document.body.append(host);
+test('a title or header that moves without a viewport resize does not leave a rail offset',()=>{
+ const host=document.createElement('div'),header=document.createElement('div'),viewport=document.createElement('div');
+ header.style.height='24px';host.append(header,viewport);document.body.append(host);
  let top=61;
  Object.defineProperty(viewport,'offsetTop',{configurable:true,get:()=>top});
  sb=createScrollbar(viewport,()=>{},{platform:'macos'},'vlist',false,host,undefined,host);
- sb.updateBounds(10000,500);
+ sb.updateBounds(10000,186);
  const rail=host.querySelector<HTMLElement>('.vlist-scrollbar-rail')!;
- expect(rail.style.top).toBe('61px');
- top=80;sb.updateBounds(12000,500);expect(rail.style.top).toBe('61px');
- sb.updateBounds(12000,640);expect(rail.style.top).toBe('80px');
- top=0;sb.updateBounds(12000,700);expect(rail.style.top).toBe('');
+ expect(rail.style.top).toBe('');
+ header.style.height='48px';top=85;sb!.refresh();sb.updateBounds(10000,186);
+ expect(rail.style.top).toBe('');
+ expect(viewport.parentElement).toBe(host);
+ expect(rail.parentElement).toBe(host);
 });
 
-test('the rail is anchored to the scrollport',()=>{
+test('the rail shares the scrollport row',()=>{
  const css=readFileSync(new URL('../../../src/styles/vlist.css',import.meta.url),'utf8');
- expect(css).toContain('anchor-scope: --vlist-scrollport');
- expect(css).toContain('anchor-name: --vlist-scrollport');
- expect(css).toContain('position-anchor: --vlist-scrollport');
- expect(css).toContain('top: anchor(top)');
- expect(css).toContain('bottom: anchor(bottom)');
+ expect(css).toContain('flex-flow: row wrap');
+ expect(css).toContain('container-type: inline-size');
+ expect(css).toContain('--vlist-track-column:');
+ expect(css).not.toContain('top: anchor(top)');
 });
 
 test('an unpinned page header is not capped by the rail column',()=>{

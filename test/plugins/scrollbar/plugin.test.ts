@@ -533,9 +533,9 @@ describe("scrollbar — track column", () => {
     expect(hover.parentElement).toBe(rail);
     expect(dom.viewport.parentElement).toBe(dom.root);
     expect(dom.root.className).toBe("vlist");
-    const column = dom.root.style.getPropertyValue("--vlist-track-column-width");
-    expect(column).not.toBe("");
-    expect(dom.viewport.style.width).toBe(`calc(100% - ${column})`);
+    expect(dom.root.style.getPropertyValue("--vlist-track-column-width")).toBe("");
+    expect(dom.root.style.getPropertyValue("--vlist-scrollbar-slot")).not.toBe("");
+    expect(dom.viewport.style.width).toBe("");
     expect(track.style.top).toBe("");
 
     plugin.destroy!();

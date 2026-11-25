@@ -263,7 +263,7 @@ export const createScrollbar = (
   const previousViewportWidth = useRail ? viewport.style.width : "";
 
   // A horizontal track on the root still lines up with the viewport. The
-  // vertical rail reads offsetTop only when the container size changes.
+  // vertical rail is a flex sibling of the scrollport, so it never reads offsetTop.
   const barVar = "--vlist-custom-scrollbar-";
   const startPadVar = barVar + "padding-left";
   const syncTrackOffset = (): void => {
@@ -274,30 +274,18 @@ export const createScrollbar = (
       : `var(${startPadVar})`;
     hoverZone.style.left = `${offset}px`;
   };
-  const fitRail = (trackWidth: string): void => {
+  const fitRail = (): void => {
     if (!rail) return;
-    // A disabled bar takes no column. An enabled bar keeps it while hidden.
+    // The column width is a stylesheet max() of the slot and the track length,
+    // so a percentage or a rem tracks the list. A disabled bar takes no column.
+    track.style.width = "";
     if (!enabled) {
       attachTo.style.setProperty("--vlist-track-column-width", "0px");
       viewport.style.width = previousViewportWidth;
       return;
     }
-    // parseFloat("0.75rem") is 0.75. Measure on the rail: its containing block
-    // is the list, which is what a root-attached track resolved percentages against.
-    // A percentage left on the track would resolve against the rail and shrink.
-    let raw = trackWidth;
-    track.style.width = "";
-    if (!raw.endsWith("px") && raw !== "0") {
-      const pct = raw.includes("%");
-      rail.style.width = raw;
-      raw = getComputedStyle(rail).width;
-      rail.style.width = "";
-      if (pct && raw.endsWith("px")) track.style.width = raw;
-    }
-    const next = `${Math.max(hoverZoneWidth, (parseFloat(raw) || 0) + pad.left + pad.right)}px`;
-    // Inline, so it wins over the viewport's own width:100%.
-    attachTo.style.setProperty("--vlist-track-column-width", next);
-    viewport.style.width = `calc(100% - ${next})`;
+    attachTo.style.removeProperty("--vlist-track-column-width");
+    viewport.style.width = previousViewportWidth;
   };
 
   // =============================================================================
@@ -344,7 +332,8 @@ export const createScrollbar = (
       rail.className = `${classPrefix}-scrollbar-rail`;
       rail.append(track, hoverZone);
       attachTo.appendChild(rail);
-      fitRail("0");
+      attachTo.style.setProperty("--vlist-scrollbar-slot", hoverZoneWidth + "px");
+      fitRail();
     } else {
       attachTo.append(track, hoverZone);
       // A horizontal track on the root lines up with the viewport.
@@ -409,12 +398,6 @@ export const createScrollbar = (
     newTotalSize: number,
     newContainerSize: number,
   ): void => {
-    // Setup and resize only. A scroll that does not change the viewport size
-    // must not read offsetTop. Inline top covers engines without anchor().
-    if (rail && newContainerSize !== containerSize) {
-      const top = viewport.offsetTop;
-      rail.style.top = top ? top + "px" : "";
-    }
     totalSize = newTotalSize;
     containerSize = newContainerSize;
     if (!rail) syncTrackOffset();
@@ -697,14 +680,14 @@ export const createScrollbar = (
     enabled = config.enabled !== false && width !== 'none';
     const values = [
       typeof config.width === 'number' ? `${config.width}px` :
-        css.getPropertyValue(barVar + 'width').trim() || (width === 'thin' || !classic ? '6px' : '14px'),
+        css.getPropertyValue(barVar + 'width').trim().replace(/%/g, "cqw") || (width === 'thin' || !classic ? '6px' : '14px'),
       typeof config.radius === 'number' ? `${config.radius}px` :
         css.getPropertyValue(barVar + 'radius').trim() || (classic ? '0px' : '4px'),
       config.thumbColor ?? (colors?.length === 2 ? colors[0]! : originalStyles[2]!),
       config.trackColor ?? (colors?.length === 2 ? colors[1]! : originalStyles[3]!)];
     for (let i = 0; i < styleNames.length; i++) setStyle(styleNames[i]!, values[i]!);
     appliedSizing = values.slice(0, 2);
-    fitRail(values[0]!);
+    fitRail();
     hoverZone.style.display = enabled ? '' : 'none';
     viewport.classList.toggle(`${classPrefix}-viewport--gutter`, enabled && !!config.gutter);
     if (!enabled) handlePointerEnd();
@@ -729,6 +712,7 @@ export const createScrollbar = (
     if (rail) {
       rail.remove();
       attachTo.style.removeProperty("--vlist-track-column-width");
+      attachTo.style.removeProperty("--vlist-scrollbar-slot");
       viewport.style.width = previousViewportWidth;
     }
 
