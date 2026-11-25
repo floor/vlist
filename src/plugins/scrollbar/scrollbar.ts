@@ -811,9 +811,15 @@ export const createScrollbar = (
     if (nativeInput) return;
     nativeInput = true;
     listen(viewport, "pointerdown", onHDown as EventListener);
-    listen(viewport, "pointermove", onHMove as EventListener);
-    listen(viewport, "pointerup", onHUp as EventListener);
-    listen(viewport, "pointercancel", onHUp as EventListener);
+    // The platform scrollbar eats the drag before it reaches the viewport.
+    window.addEventListener("pointermove", onHMove as EventListener, true);
+    window.addEventListener("pointerup", onHUp as EventListener, true);
+    window.addEventListener("pointercancel", onHUp as EventListener, true);
+    removeListeners.push(() => {
+      window.removeEventListener("pointermove", onHMove as EventListener, true);
+      window.removeEventListener("pointerup", onHUp as EventListener, true);
+      window.removeEventListener("pointercancel", onHUp as EventListener, true);
+    });
     viewport.addEventListener("touchstart", onTouchStart, { passive: true });
     viewport.addEventListener("touchmove", onTouchMove, { passive: false });
     removeListeners.push(() => {
