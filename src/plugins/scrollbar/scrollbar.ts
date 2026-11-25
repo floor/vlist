@@ -762,6 +762,7 @@ export const createScrollbar = (
   // thumb or stop a touch flick before the end. The native click still owns
   // the gesture when it moves scrollLeft; otherwise the pointer does.
   let hDrag: { x: number; left: number; moved: boolean; own: 0 | 1 | 2 } | null = null;
+  let touchY = 0;
   let nativeInput = false;
   const hMax = (): number => Math.max(0, viewport.scrollWidth - viewport.clientWidth);
   const inHBar = (event: PointerEvent): boolean => {
@@ -773,7 +774,6 @@ export const createScrollbar = (
   const onHDown = (event: PointerEvent): void => {
     if (event.button !== 0 || !inHBar(event)) return;
     hDrag = { x: event.clientX, left: viewport.scrollLeft, moved: false, own: 0 };
-    viewport.setPointerCapture(event.pointerId);
   };
   const onHMove = (event: PointerEvent): void => {
     if (!hDrag) return;
@@ -791,15 +791,21 @@ export const createScrollbar = (
     const mid = viewport.getBoundingClientRect().left + viewport.clientWidth / 2;
     viewport.scrollLeft = Math.max(0, Math.min(hMax(), drag.left + (event.clientX > mid ? viewport.clientWidth : -viewport.clientWidth)));
   };
-  const stopFling = (): void => {
+  // A classic thumb does not take this drag, and a touch flick runs to the end.
+  // Follow the finger and cancel the flick so a later key still has room to move.
+  const onTouchStart = (event: TouchEvent): void => {
     if (!nativeBar) return;
-    const top = viewport.scrollTop;
-    const left = viewport.scrollLeft;
-    viewport.style.overflowY = "hidden";
-    viewport.scrollTop = top;
-    viewport.scrollLeft = left;
-    void viewport.offsetHeight;
-    viewport.style.overflowY = "";
+    touchY = event.touches[0]?.clientY ?? 0;
+  };
+  const onTouchMove = (event: TouchEvent): void => {
+    if (!nativeBar || !event.cancelable) return;
+    const y = event.touches[0]?.clientY ?? touchY;
+    const dy = touchY - y;
+    touchY = y;
+    if (dy === 0) return;
+    event.preventDefault();
+    const max = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+    viewport.scrollTop = Math.max(0, Math.min(max, viewport.scrollTop + dy));
   };
   const armNativeInput = (): void => {
     if (nativeInput) return;
@@ -808,8 +814,12 @@ export const createScrollbar = (
     listen(viewport, "pointermove", onHMove as EventListener);
     listen(viewport, "pointerup", onHUp as EventListener);
     listen(viewport, "pointercancel", onHUp as EventListener);
-    listen(viewport, "touchend", stopFling);
-    listen(viewport, "touchcancel", stopFling);
+    viewport.addEventListener("touchstart", onTouchStart, { passive: true });
+    viewport.addEventListener("touchmove", onTouchMove, { passive: false });
+    removeListeners.push(() => {
+      viewport.removeEventListener("touchstart", onTouchStart);
+      viewport.removeEventListener("touchmove", onTouchMove);
+    });
   };
 
   const useNativeBar = (on: boolean): void => {
