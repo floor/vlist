@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.11] - 2026-11-25
+
 ### Fixed
 
 - A table whose platform scrollbars take a column keeps that native vertical bar and does not render the custom vertical track, so the native horizontal bar is the only bar along the bottom. The custom thumb stays when the viewport does not scroll natively (a synthetic table), the list is not a table, or the width difference is the viewport's own left and right borders. A resize that changes the platform bar restores the track, its hover zone, and the gutter. Overlay scrollbars keep the custom thumb. Measured on Chrome 157 with classic scrollbars and with overlay scrollbars.
@@ -2405,7 +2407,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.10...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.11...HEAD
+[3.8.11]: https://github.com/floor/vlist/compare/v3.8.10...v3.8.11
 [3.8.10]: https://github.com/floor/vlist/compare/v3.8.9...v3.8.10
 [3.8.9]: https://github.com/floor/vlist/compare/v3.8.8...v3.8.9
 [3.8.8]: https://github.com/floor/vlist/compare/v3.8.7...v3.8.8
