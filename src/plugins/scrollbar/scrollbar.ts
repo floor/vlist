@@ -774,9 +774,11 @@ export const createScrollbar = (
   const onHDown = (event: PointerEvent): void => {
     if (event.button !== 0 || !inHBar(event)) return;
     hDrag = { x: event.clientX, left: viewport.scrollLeft, moved: false, own: 0 };
+    viewport.dataset.hb = "down";
   };
   const onHMove = (event: PointerEvent): void => {
     if (!hDrag) return;
+    viewport.dataset.hb = "move";
     const dx = event.clientX - hDrag.x;
     if (dx === 0) return;
     hDrag.moved = true;
@@ -785,6 +787,7 @@ export const createScrollbar = (
     viewport.scrollLeft = Math.max(0, Math.min(hMax(), hDrag.left + dx));
   };
   const onHUp = (event: PointerEvent): void => {
+    viewport.dataset.hb = hDrag ? (hDrag.moved ? "up-moved" : "up-click") : "up-none";
     const drag = hDrag;
     hDrag = null;
     if (!drag || drag.moved || viewport.scrollLeft !== drag.left) return;
