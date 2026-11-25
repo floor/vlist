@@ -274,16 +274,23 @@ export const createScrollbar = (
   };
   const fitRail = (trackWidth: string): void => {
     if (!rail) return;
-    const trackPx = parseFloat(trackWidth) || 0;
-    const railPx = Math.max(hoverZoneWidth, trackPx + pad.left + pad.right);
-    const next = `${railPx}px`;
-    if (attachTo.style.getPropertyValue("--vlist-track-column-width") !== next) {
-      attachTo.style.setProperty("--vlist-track-column-width", next);
+    // A disabled bar takes no column. An enabled bar keeps it while hidden.
+    if (!enabled) {
+      attachTo.style.setProperty("--vlist-track-column-width", "0px");
+      viewport.style.width = previousViewportWidth;
+      return;
     }
-    // Inline, so it wins over the viewport's own width:100%. A px length
-    // stays in step with the column; the header reads the same variable.
-    const width = `calc(100% - ${next})`;
-    if (viewport.style.width !== width) viewport.style.width = width;
+    // parseFloat("0.75rem") is 0.75. The used width is what the column must hold.
+    let raw = trackWidth;
+    if (!raw.endsWith("px") && raw !== "0") {
+      track.style.width = raw;
+      raw = getComputedStyle(track).width;
+      track.style.width = "";
+    }
+    const next = `${Math.max(hoverZoneWidth, (parseFloat(raw) || 0) + pad.left + pad.right)}px`;
+    // Inline, so it wins over the viewport's own width:100%.
+    attachTo.style.setProperty("--vlist-track-column-width", next);
+    viewport.style.width = `calc(100% - ${next})`;
   };
 
   // =============================================================================
@@ -403,8 +410,8 @@ export const createScrollbar = (
 
     updatePosition(currentScrollPosition);
 
-    // Check if scrollbar is needed. A rail keeps the track in layout while the
-    // content fits, so the column still has a box; a disabled bar leaves it.
+    // Check if scrollbar is needed. A rail keeps the track in layout while an
+    // enabled bar has nothing to scroll, so the column still has a box.
     if (!enabled || totalSize <= containerSize) {
       track.style.visibility = rail && enabled ? "hidden" : "";
       track.style.display = rail && enabled ? "" : "none";

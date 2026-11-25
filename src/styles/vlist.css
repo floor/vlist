@@ -420,17 +420,29 @@
 
 /* Vertical track in a column beside the scrollport. The column keeps its
    width while the track is hidden, and it stays off the horizontal bar. */
+/* One name per list. Without the scope, every rail would anchor to the first scrollport. */
+.vlist:has(> .vlist-scrollbar-rail) {
+    anchor-scope: --vlist-scrollport;
+}
+
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-viewport {
     max-width: calc(100% - var(--vlist-track-column-width, 0px));
+    anchor-name: --vlist-scrollport;
 }
 
 .vlist-scrollbar-rail {
     position: absolute;
     z-index: 9;
     inset-inline-end: 0;
+    /* Fallback where anchor() is unsupported: below the table header only. */
     top: var(--vlist-table-header-height, 0px);
     bottom: 0;
     width: var(--vlist-track-column-width, 0px);
+    /* The scrollport already starts below the table header and a sticky group
+       band. Matching it keeps the rail off that band and off the horizontal bar. */
+    position-anchor: --vlist-scrollport;
+    top: anchor(top);
+    bottom: anchor(bottom);
 }
 
 .vlist-scrollbar-rail > .vlist-scrollbar {

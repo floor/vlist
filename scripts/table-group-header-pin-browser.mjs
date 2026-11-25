@@ -76,12 +76,15 @@ window.gutterInfo=()=>{
   const cr=content&&content.getBoundingClientRect();
   const nb=count&&count.getBoundingClientRect();
   const padding=parseFloat(style.paddingLeft)+parseFloat(style.paddingRight);
+  const rail=document.querySelector('#gutter-host .vlist-scrollbar-rail');
+  const rb=rail&&rail.getBoundingClientRect();
   return{
     clientWidth:vp.clientWidth,padding,containerType:style.containerType,
     contentWidth:cr&&Math.round(cr.width),contentLeft:cr&&Math.round(cr.x),
     contentBoxRight:Math.round(vr.right-padding),contentRight:cr&&Math.round(cr.right),
     countRight:nb&&Math.round(nb.right),
     countVisible:!!(nb&&nb.x>=vr.x-1&&nb.right<=vr.right-padding+1),
+    railWidth:rb?rb.width:0,railLeft:rb&&Math.round(rb.left),viewportRight:Math.round(vr.right),
   };
 };
 window.pinInfo=()=>{
@@ -187,19 +190,30 @@ try {
  assert(pin.countHit,`pinned table: the count receives the hit at its centre, not a pinned cell: ${JSON.stringify(pin)}`);
  pass('pinned columns do not cover the group header content',pin);
 
- // ── The content width is the content box, gutter padding excluded ──
+ // ── The content width is the content box, the rail column excluded ──
+ // The rail beside the viewport is the reservation. Padding inside the
+ // narrowed viewport would inset the label a second time, so this no longer
+ // asks for padding > 0. The column must be wider than nothing, start where
+ // the viewport ends, and the label must fill that content box.
  const gut=await page.evaluate(()=>gutterInfo());
  assert.equal(gut.containerType,'inline-size',`the gutter host's viewport is the size container: container-type ${gut.containerType}`);
- assert(gut.padding>0,`the gutter host reserves right padding for the custom scrollbar: ${gut.padding}`);
+ assert(gut.railWidth>0,`the gutter host reserves a column for the custom scrollbar: ${gut.railWidth}`);
+ assert(within(gut.railLeft,gut.viewportRight),`the column starts at the viewport's right edge: rail ${gut.railLeft}, viewport ${gut.viewportRight}`);
  assert(within(gut.contentWidth,gut.clientWidth-gut.padding),`content ${gut.contentWidth} spans the viewport content box ${gut.clientWidth-gut.padding} (clientWidth ${gut.clientWidth}, padding ${gut.padding})`);
- assert(within(gut.contentRight,gut.contentBoxRight),`content right ${gut.contentRight} ends at the content box edge ${gut.contentBoxRight}: it must not run under the custom scrollbar gutter`);
+ assert(within(gut.contentRight,gut.contentBoxRight),`content right ${gut.contentRight} ends at the content box edge ${gut.contentBoxRight}: it must not run under the custom scrollbar`);
  assert(gut.countVisible,`the count stays visible inside the gutter host: ${JSON.stringify(gut)}`);
- pass('content width is the viewport content box, custom-scrollbar gutter excluded',gut);
+ pass('content width is the viewport content box, custom-scrollbar rail excluded',gut);
 
  // ── The sticky group header's own count stays inside its container ──
  const st=await page.evaluate(()=>stickyInfo());
  assert(st.exists,'the sticky host renders a sticky group header');
  assert(st.countVisible,`sticky group header: the count stays inside the container: ${JSON.stringify(st)}`);
+ const band=await page.evaluate(()=>{
+  const rail=document.querySelector('#sticky-host .vlist-scrollbar-rail').getBoundingClientRect();
+  const vp=document.querySelector('#sticky-host .vlist-viewport').getBoundingClientRect();
+  return {railTop:rail.top,viewportTop:vp.top};
+ });
+ assert(within(band.railTop,band.viewportTop),`the rail starts at the scrollport, below the group title: rail ${band.railTop}, viewport ${band.viewportTop}`);
  pass('sticky group header keeps its count inside the container',st);
 
  // ── The native horizontal scrollbar is left enabled ────────────────

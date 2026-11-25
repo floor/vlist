@@ -92,8 +92,12 @@
     height: 100%;
 }
 
-/* Same width as the scrollport, so pinned and filled columns share edges. */
-.vlist--table:has(> .vlist-scrollbar-rail) > [role="rowgroup"] {
+/* Same width as the scrollport, so pinned and filled columns share edges.
+   An unpinned page table scrolls wide columns on the document, and the rule
+   above already sizes that header row group to the columns. Capping it here
+   clips the header while the body keeps scrolling. */
+.vlist--table:not(.vlist--page):has(> .vlist-scrollbar-rail) > [role="rowgroup"],
+.vlist--page.vlist--table-pinned:has(> .vlist-scrollbar-rail) > [role="rowgroup"] {
     width: calc(100% - var(--vlist-track-column-width, 0px));
     max-width: calc(100% - var(--vlist-track-column-width, 0px));
     align-self: start;
