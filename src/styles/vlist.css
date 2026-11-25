@@ -474,6 +474,44 @@
     min-height: 0;
 }
 
+/* The rail's box would make a percentage width a percentage of the rail,
+   so a 5% track paints 5% of the column. Dropping the box lets that
+   percentage resolve against the list. The track then sits at the inline
+   end of the scrollport row, inside the column. A length stays that length. */
+@supports (display: contents) {
+    .vlist:has(> .vlist-scrollbar-rail) > .vlist-scrollbar-rail {
+        display: contents;
+    }
+
+    .vlist-scrollbar-rail > .vlist-scrollbar {
+        position: relative;
+        grid-column: 1 / -1;
+        grid-row: scrollport;
+        inset: auto;
+        inset-inline-start: auto;
+        inset-inline-end: auto;
+        width: var(--vlist-custom-scrollbar-width);
+        height: auto;
+        min-width: 0;
+        min-height: 0;
+        justify-self: end;
+        align-self: stretch;
+        margin-top: var(--vlist-custom-scrollbar-padding-top);
+        margin-bottom: var(--vlist-custom-scrollbar-padding-bottom);
+        margin-inline-end: var(--vlist-custom-scrollbar-padding-right);
+    }
+
+    .vlist-scrollbar-rail > .vlist-scrollbar__hover {
+        position: relative;
+        grid-column: 2;
+        grid-row: scrollport;
+        inset: auto;
+        width: 100%;
+        height: auto;
+        align-self: stretch;
+    }
+}
+
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-search {
     grid-column: 1 / -1;
 }

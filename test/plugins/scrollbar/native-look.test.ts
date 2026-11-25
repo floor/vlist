@@ -207,6 +207,9 @@ test('the rail shares the scrollport row',()=>{
  expect(css).toContain('grid-row: scrollport');
  expect(css).toContain('height: 100% !important');
  expect(css).toContain('--vlist-track-column:');
+ expect(css).toContain('display: contents');
+ expect(css).toContain('justify-self: end');
+ expect(css).toContain('grid-column: 1 / -1');
  expect(css).not.toContain('container-type');
  expect(css).not.toContain('container-name');
  expect(css).not.toContain('cqw');
