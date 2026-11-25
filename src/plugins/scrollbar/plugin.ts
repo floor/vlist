@@ -93,9 +93,10 @@ export function scrollbar<T extends VListItem = VListItem>(
           && ctx.config.scrollMode !== "synthetic"
           && vp.style.overflowY !== "hidden";
         vp.classList.toggle(customClass, !nativeTable);
-        sb?.useNativeBar(nativeTable
-          && vp.style.scrollbarWidth !== "none"
-          && getComputedStyle(vp).getPropertyValue("scrollbar-width") !== "none");
+        // The computed value decides; the inline value is only a fallback for
+        // an environment that computes none (a DOM without the property).
+        const width = nativeTable ? getComputedStyle(vp).getPropertyValue("scrollbar-width") : "";
+        sb?.useNativeBar(nativeTable && (width || vp.style.scrollbarWidth) !== "none");
       };
       syncNativeBar();
       const offMode = ctx.emitter.on("scroll:mode", syncNativeBar);
