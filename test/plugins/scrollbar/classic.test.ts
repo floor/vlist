@@ -44,7 +44,7 @@ describe("classic table scrollbar", () => {
   const mount = (table: boolean) => {
     const plugin = scrollbar<{ id: number }>();
     const ctx = createPluginMockContext([{ id: 1 }]);
-    if (table) ctx.dom.root.classList.add("vlist--table");
+    if (table) ctx.dom.root.setAttribute("role", "grid");
     plugin.setup!(ctx.ctx);
     const track = ctx.dom.root.querySelector(".vlist-scrollbar") as HTMLElement;
     return { plugin, ctx, track };

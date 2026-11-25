@@ -71,7 +71,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       );
 
       const customClass = `${classPrefix}-viewport--custom-scrollbar`;
-      const verticalTable = !isX && dom.root.classList.contains(`${classPrefix}--table`);
+      const verticalTable = !isX && dom.root.getAttribute("role") === "grid";
       syncNativeBar = (): void => {
         const native = verticalTable && measureClassicScrollbar();
         sb?.useNativeBar(native);
