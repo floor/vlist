@@ -175,7 +175,7 @@ test('a sticky title is subtracted once when the rail has its own row',()=>{
   const host=document.createElement('div');
   host.style.cssText='width:420px;height:240px';
   document.body.append(host);
-  createVList({container:host,items,item:{height:28,template:(row: {name: string})=>row.name}},plugins);
+  createVList({container:host,items,item:{height:28,template:(row)=>String(row.id)}},plugins);
   const vp=host.querySelector<HTMLElement>('.vlist-viewport')!;
   const css=getComputedStyle(vp);
   return {inline:vp.style.height,used:css.height,priority:css.getPropertyPriority('height')};
