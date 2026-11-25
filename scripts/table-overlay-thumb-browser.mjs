@@ -157,23 +157,27 @@ const decodePng = (bytes) => {
   return { width, height, bpp, data: out };
 };
 
-const lightRunsOutsideThumb = (png, thumb) => {
+const extraThumbRuns = (png, thumb) => {
   const img = decodePng(png);
   const x = Math.max(0, img.width - 5);
-  let run = 0;
-  let runs = 0;
-  const top = thumb ? thumb.top - 2 : -1;
-  const bottom = thumb ? thumb.bottom + 2 : -1;
+  const samples = [];
   for (let y = 4; y < img.height - 20; y++) {
     const i = (y * img.width + x) * img.bpp;
-    const r = img.data[i];
-    const g = img.data[i + 1];
-    const b = img.data[i + 2];
-    const light = r + g + b > 280 && Math.abs(r - g) < 40 && Math.abs(g - b) < 40;
+    samples.push(img.data[i] + img.data[i + 1] + img.data[i + 2]);
+  }
+  const sorted = samples.slice().sort((a, b) => a - b);
+  const median = sorted[sorted.length >> 1] ?? 0;
+  const top = thumb ? thumb.top - 4 : -1;
+  const bottom = thumb ? thumb.bottom + 4 : -1;
+  let run = 0;
+  let runs = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const y = i + 4;
+    const mark = Math.abs(samples[i] - median) > 30;
     const inThumb = y >= top && y <= bottom;
-    if (light && !inThumb) {
+    if (mark && !inThumb) {
       run += 1;
-      if (run === 14) runs += 1;
+      if (run === 10) runs += 1;
     } else run = 0;
   }
   return runs;
@@ -228,7 +232,7 @@ try {
       assert.equal(sample.scrollbarColor, "auto", selector + " lets the webkit width apply " + JSON.stringify(sample));
       assert.equal(sample.pseudoWidth, "0px", selector + " hides the platform vertical bar " + JSON.stringify(sample));
       const png = await page.screenshot({ clip: sample.clip, captureBeyondViewport: false });
-      const extra = lightRunsOutsideThumb(png, sample.thumbSpan);
+      const extra = extraThumbRuns(png, sample.thumbSpan);
       assert.equal(extra, 0, selector + " paints no second thumb at the right edge " + JSON.stringify(sample));
     });
   }
