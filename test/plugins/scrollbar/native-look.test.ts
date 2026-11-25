@@ -1,10 +1,12 @@
 import {readFileSync} from 'node:fs';
 import {createVList} from '../../../src/core/create';
+import type {VListPlugin} from '../../../src/core/types';
 import {groups} from '../../../src/plugins/groups/plugin';
 import {grid} from '../../../src/plugins/grid/plugin';
 import {page} from '../../../src/plugins/page/plugin';
 import {table} from '../../../src/plugins/table/plugin';
 import {scrollbar} from '../../../src/plugins/scrollbar/plugin';
+import type {VListItem} from '../../../src/types';
 import {test, expect, beforeAll, afterAll, afterEach} from 'bun:test';
 import {setupDOM, teardownDOM} from '../../helpers/dom';
 import {createScrollbar, type Scrollbar, type ScrollbarConfig} from '../../../src/plugins/scrollbar/scrollbar';
@@ -168,14 +170,14 @@ test('a sticky title is subtracted once when the rail has its own row',()=>{
   +readFileSync(new URL('../../../src/styles/vlist-table.css',import.meta.url),'utf8')
   +readFileSync(new URL('../../../src/styles/vlist-grid.css',import.meta.url),'utf8');
  document.body.append(style);
- const items=Array.from({length:8},(_,i)=>({id:i,name:'Item '+i}));
+ const items=Array.from({length:8},(_,i)=>({id:i}));
  const header={height:24,template:()=>'A'};
  const grouped=()=>groups({getGroupForIndex:()=>'A',header});
- const mount=(plugins: Parameters<typeof createVList>[1])=>{
+ const mount=(plugins: VListPlugin<VListItem>[])=>{
   const host=document.createElement('div');
   host.style.cssText='width:420px;height:240px';
   document.body.append(host);
-  createVList({container:host,items,item:{height:28,template:(row)=>String(row.id)}},plugins);
+  createVList<VListItem>({container:host,items,item:{height:28,template:(row)=>String(row.id)}},plugins);
   const vp=host.querySelector<HTMLElement>('.vlist-viewport')!;
   const css=getComputedStyle(vp);
   return {inline:vp.style.height,used:css.height,priority:css.getPropertyPriority('height')};
