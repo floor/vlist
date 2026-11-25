@@ -160,7 +160,8 @@ test('a title or header that moves without a viewport resize does not leave a ra
 
 test('the rail shares the scrollport row',()=>{
  const css=readFileSync(new URL('../../../src/styles/vlist.css',import.meta.url),'utf8');
- expect(css).toContain('flex-flow: row wrap');
+ expect(css).toContain('grid-template-columns:');
+ expect(css).toContain('grid-row: -2');
  expect(css).toContain('container-type: inline-size');
  expect(css).toContain('--vlist-track-column:');
  expect(css).not.toContain('top: anchor(top)');

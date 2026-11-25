@@ -420,14 +420,17 @@
 
 /* Vertical track in a column beside the scrollport. The column keeps its
    width while the track is hidden, and it stays off the horizontal bar.
-   Header and sticky title take their own rows, so the rail starts where the
-   scrollport starts without a measured offset. A percentage in the track
-   length is cqw of this list, the same box an absolute track on the root used. */
+   Headers occupy the auto rows. The scrollport and the rail share the one
+   flexible row, so the rail starts where the scrollport starts without a
+   measured offset. A zero-basis flex item used to fit in the leftover beside
+   a header and collapse the scrollport to no width. A percentage in the track
+   length is cqw of this list, the same box an absolute track on the root used.
+   page() sizes to its content, so that row is not a flexible track. */
 .vlist:has(> .vlist-scrollbar-rail) {
-    display: flex;
-    flex-flow: row wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--vlist-track-column-width, var(--vlist-track-column, 0px));
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     align-items: stretch;
-    align-content: stretch;
     container-type: inline-size;
     container-name: vlist;
     --vlist-track-column: max(
@@ -440,14 +443,20 @@
     );
 }
 
+.vlist--page:has(> .vlist-scrollbar-rail) {
+    grid-template-rows: auto auto auto auto auto;
+}
+
 .vlist:has(> .vlist-scrollbar-rail) > * {
-    flex: 0 0 100%;
+    grid-column: 1;
+    min-width: 0;
 }
 
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-viewport {
+    grid-column: 1;
+    grid-row: -2;
     width: auto;
     max-width: none;
-    flex: 1 1 0;
     min-width: 0;
     min-height: 0;
 }
@@ -455,11 +464,18 @@
 .vlist:has(> .vlist-scrollbar-rail) > .vlist-scrollbar-rail {
     position: relative;
     z-index: 9;
-    order: 2;
-    flex: 0 0 var(--vlist-track-column-width, var(--vlist-track-column, 0px));
-    width: var(--vlist-track-column-width, var(--vlist-track-column, 0px));
-    align-self: stretch;
+    grid-column: 2;
+    grid-row: -2;
+    min-width: 0;
     min-height: 0;
+}
+
+.vlist:has(> .vlist-scrollbar-rail) > .vlist-search {
+    grid-column: 1 / -1;
+}
+
+.vlist:has(> .vlist-scrollbar-rail) > .vlist-search--bottom {
+    grid-row: -1;
 }
 
 .vlist-scrollbar-rail > .vlist-scrollbar {
@@ -474,12 +490,6 @@
     height: 100%;
 }
 
-.vlist:has(> .vlist-scrollbar-rail) > .vlist-sticky-header {
-    flex-basis: auto;
-    width: calc(100% - var(--vlist-track-column-width, var(--vlist-track-column, 0px)));
-    max-width: calc(100% - var(--vlist-track-column-width, var(--vlist-track-column, 0px)));
-    box-sizing: border-box;
-}
 
 /* Visible state */
 .vlist-scrollbar--visible {
