@@ -15,7 +15,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- A table whose platform scrollbars take a column keeps that native vertical bar and does not render the custom vertical track, so the native horizontal bar is the only bar along the bottom. The custom thumb stays when the viewport does not scroll natively (a synthetic table), the list is not a table, or the width difference is the viewport's own left and right borders. A resize that changes the platform bar restores the track, its hover zone, and the gutter. Overlay scrollbars keep the custom thumb. Measured on Chrome 157 with classic scrollbars and with overlay scrollbars.
+- A table with `scrollbar()` no longer shows two vertical scrollbars. While the table scrolls natively (`scroll.mode` `"native"`, or `"auto"` below the browser's size limit), `scrollbar()` draws no custom vertical thumb and leaves the browser's own vertical bar, as a native list without `scrollbar()` shows. This holds with classic scrollbars, where the native bar took a column beside the custom thumb, and with overlay scrollbars, where it painted over it. A synthetic table, including an `"auto"` table past the size limit, a list that is not a table, and a viewport whose native bar the author hides with `scrollbar-width: none` keep the custom thumb. The `gutter` option reserves no padding while the native bar is used. Measured on Chromium with classic and with overlay scrollbars.
 
 ## [3.8.10] - 2026-11-23
 
