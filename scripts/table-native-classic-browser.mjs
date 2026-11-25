@@ -1,9 +1,11 @@
 /** One vertical bar on a table with classic scrollbars (#514).
  *
- * Classic scrollbars take a column, so the native vertical bar and the custom
- * track are two thumbs. Where the platform uses a classic bar, the table keeps
- * that native bar and does not render the custom vertical track. Overlay
- * scrollbars keep the custom thumb rendered, as on 3.8.10.
+ * Classic scrollbars take a column, and overlay scrollbars paint over the
+ * custom track: either way the native vertical bar and the custom track are
+ * two thumbs. While a table scrolls natively it keeps the native bar and does
+ * not render the custom vertical track, with classic and with overlay
+ * scrollbars. A synthetic table and a list that is not a table keep the
+ * custom thumb.
  *
  * The classic launch leaves Chromium's scrollbars visible and turns overlay
  * scrollbars off. The overlay launch is headless Chromium's default. Build
@@ -342,10 +344,9 @@ async function exercise(classic) {
       await settle(page);
       const fresh = await page.evaluate(() => window.bars("#fresh"));
       console.log(label, "fresh", JSON.stringify(fresh));
-      await check(label + " custom thumb is rendered", async () => {
-        assert.equal(fresh.custom, true, "overlay scrollbars keep the custom track " + JSON.stringify(fresh));
-        assert.ok(fresh.thumb > 0, "overlay scrollbars show the custom thumb " + JSON.stringify(fresh));
-        assert.ok(fresh.className.includes("vlist-viewport--custom-scrollbar"), fresh.className);
+      await check(label + " a natively scrolling table uses the native bar only", async () => {
+        assert.equal(fresh.custom, false, "overlay scrollbars: no custom vertical track " + JSON.stringify(fresh));
+        assert.ok(!fresh.className.includes("vlist-viewport--custom-scrollbar"), "the viewport is styled as without scrollbar(): " + fresh.className);
       });
     }
   } finally {

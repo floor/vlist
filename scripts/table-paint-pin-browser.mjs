@@ -3,12 +3,12 @@
  * module exporting launchBrowser.
  *
  * Four checks, all read from a real Chromium:
- * 1. The custom vertical thumb is the only vertical thumb. The native vertical
- *    bar has no thickness (::-webkit-scrollbar width 0). Where this engine
- *    gives a plain overflow box a vertical gutter, the table's vertical gutter
- *    is 0.
- * 2. Columns that overflow still get a native horizontal bar (webkit height
- *    16px, and a horizontal gutter when the engine uses classic scrollbars).
+ * 1. While the table scrolls natively there is one vertical bar, the
+ *    browser's: scrollbar() renders no custom vertical track and leaves the
+ *    viewport unstyled by it (#514). Where this engine gives a plain overflow
+ *    box a vertical gutter, the table has that native gutter too.
+ * 2. Columns that overflow still get a native horizontal bar (a horizontal
+ *    gutter when the engine uses classic scrollbars).
  * 3. The pin separator does not break the focus ring. The boundary pixel and
  *    the pixel on either side are the ring at the top of the edge; the middle
  *    of the boundary is still the separator. Checked for a single left pin, a
@@ -75,7 +75,13 @@ window.bars = (host) => {
     scrollbarWidth: getComputedStyle(vp).scrollbarWidth,
     webkitWidth: webkit.width,
     webkitHeight: webkit.height,
-    customVertical: !!document.querySelector(host + " .vlist-scrollbar:not(.vlist-scrollbar--horizontal)"),
+    customVertical: (() => {
+      const track = document.querySelector(host + " .vlist-scrollbar:not(.vlist-scrollbar--horizontal)");
+      if (!track || getComputedStyle(track).display === "none") return false;
+      const box = track.getBoundingClientRect();
+      return box.width > 0 && box.height > 0;
+    })(),
+    customClass: vp.classList.contains("vlist-viewport--custom-scrollbar"),
     edge: last ? getComputedStyle(last).getPropertyValue("--vlist-pin-edge").trim() : "",
   };
 };
@@ -190,16 +196,15 @@ try {
 
   for (const host of ["#left", "#both"]) {
     const bars = await page.evaluate((host) => window.bars(host), host);
-    assert.equal(bars.customVertical, true, host + ": scrollbar() mounted a vertical thumb");
+    assert.equal(bars.customVertical, false, host + ": no custom vertical track while the table scrolls natively");
+    assert.equal(bars.customClass, false, host + ": the viewport is styled as without scrollbar()");
     assert.ok(bars.scrollWidth > bars.clientWidth, host + ": columns overflow (" + bars.scrollWidth + " > " + bars.clientWidth + ")");
-    assert.equal(bars.webkitWidth, "0px", host + ": native vertical thickness is 0 (" + bars.webkitWidth + ")");
-    assert.equal(bars.webkitHeight, "16px", host + ": native horizontal bar is 16px (" + bars.webkitHeight + ")");
-    assert.equal(bars.scrollbarWidth, "auto", host + ": Chromium re-enables the scrollbar system");
+    assert.notEqual(bars.scrollbarWidth, "none", host + ": the native scrollbars are not hidden");
     if (bars.refVerticalGutter > 0) {
-      assert.equal(bars.verticalGutter, 0, host + ": no native vertical gutter beside the custom thumb");
+      assert.equal(bars.verticalGutter, bars.refVerticalGutter, host + ": the native vertical bar is the only vertical bar");
       assert.ok(bars.horizontalGutter > 0, host + ": native horizontal gutter is present");
     }
-    pass(host + ": one vertical thumb, native horizontal bar", bars);
+    pass(host + ": one vertical bar (native), native horizontal bar", bars);
   }
 
   for (const host of ["#left", "#both", "#rights"]) {
