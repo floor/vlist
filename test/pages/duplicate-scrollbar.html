@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Duplicate scrollbar (#514)</title>
+<style>
+  :root { color-scheme: light dark; font: 14px/1.4 system-ui, sans-serif; }
+  body { margin: 16px; background: Canvas; color: CanvasText; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+  header strong { font-size: 16px; }
+  .badge { padding: 2px 8px; border-radius: 4px; background: #e5e7eb; color: #111827; font-weight: 600; }
+  .badge.fix { background: #bbf7d0; }
+  .badge.old { background: #fde68a; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 20px; }
+  .case h2 { font-size: 14px; margin: 0 0 4px; }
+  .case p { margin: 0 0 6px; color: GrayText; font-size: 12px; }
+  .host { width: 420px; height: 240px; max-width: 100%; }
+  .bordered .vlist-viewport { border: 2px solid #94a3b8; }
+  #report { margin-top: 16px; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; }
+  button { font: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <strong>#514: two vertical scrollbars on a table</strong>
+  <span id="build" class="badge">loading…</span>
+  <a id="switch" href="#"></a>
+  <button id="folder" type="button">Open folder (rebuild case 1 with 40 rows)</button>
+  <button id="measure" type="button">Measure</button>
+</header>
+<p>To see the bug you need classic scrollbars. macOS: System Settings &gt; Appearance &gt; Show scroll bars: <b>Always</b>, then reload. Windows and most Linux setups use classic scrollbars already.
+Expected with the fix: each table shows <b>one</b> vertical bar. On 3.8.10 with classic scrollbars, cases 1 (after "Open folder"), 2 and 3 show the native bar beside the thin custom thumb.</p>
+
+<div class="grid">
+  <section class="case"><h2>1. File-browser case</h2><p>6 rows that fit, then "Open folder" swaps in 40 rows (destroy + create, like double-clicking "scripts").</p><div id="c1" class="host"></div></section>
+  <section class="case"><h2>2. Fresh table, both axes overflowing</h2><p>40 rows, 790 px of columns.</p><div id="c2" class="host"></div></section>
+  <section class="case"><h2>3. Grouped table</h2><p>groups() with a sticky header.</p><div id="c3" class="host"></div></section>
+  <section class="case bordered"><h2>4. Viewport with 2 px borders</h2><p>Overlay scrollbars must keep the custom thumb here.</p><div id="c4" class="host"></div></section>
+  <section class="case"><h2>5. Synthetic scroll mode</h2><p>Must keep the custom thumb (no native bar exists here).</p><div id="c5" class="host"></div></section>
+</div>
+<div id="report"></div>
+
+<script type="module">
+// Served from ~/Code/floor so the fix branch's build is reachable by path.
+const FIX = "/worktrees/vlist/fix-514-native-table/dist/";
+const OLD = "https://cdn.jsdelivr.net/npm/vlist@3.8.10/dist/";
+const params = new URLSearchParams(location.search);
+const useOld = params.get("v") === "3.8.10";
+const base = useOld ? OLD : FIX;
+
+for (const css of ["vlist.css", "vlist-table.css"]) {
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = base + css;
+  document.head.append(link);
+}
+
+const badge = document.getElementById("build");
+const sw = document.getElementById("switch");
+sw.href = useOld ? location.pathname : location.pathname + "?v=3.8.10";
+sw.textContent = useOld ? "Switch to the fix" : "Compare with 3.8.10";
+
+const { createVList, table, scrollbar, groups } = await import(base + "index.js");
+const version = await fetch(base + "version.json").then((r) => r.json()).catch(() => null);
+badge.textContent = useOld ? "vlist 3.8.10 (npm, has the bug)" : "fix branch " + (version ? version.commit : "?");
+badge.className = "badge " + (useOld ? "old" : "fix");
+
+const columns = [
+  { key: "name", label: "Name", width: 220 },
+  { key: "size", label: "Size", width: 200 },
+  { key: "modified", label: "Modified", width: 200 },
+  { key: "kind", label: "Kind", width: 170 },
+];
+const items = (n) => Array.from({ length: n }, (_, i) => ({
+  id: i, name: "Item " + i, size: i * 37 + " B", modified: "Nov " + ((i % 28) + 1), kind: "File",
+}));
+const mount = (container, n, opts = {}) => createVList({
+  container,
+  items: items(n),
+  item: { height: 28, template: (row) => "<span>" + row.name + "</span>" },
+  scroll: { mode: opts.mode || "auto" },
+}, [
+  table({ rowHeight: 28, headerHeight: 28, columns }),
+  ...(opts.grouped ? [groups({
+    getGroupForIndex: (index) => "Group " + Math.floor(index / 10),
+    header: { height: 28, template: (key) => key },
+  })] : []),
+  scrollbar(),
+]);
+
+let c1 = mount("#c1", 6);
+mount("#c2", 40);
+mount("#c3", 40, { grouped: true });
+mount("#c4", 40);
+mount("#c5", 40, { mode: "synthetic" });
+
+document.getElementById("folder").addEventListener("click", () => {
+  c1.destroy();
+  document.getElementById("c1").innerHTML = "";
+  c1 = mount("#c1", 40);
+  measure();
+});
+
+function measure() {
+  const lines = [];
+  for (const id of ["c1", "c2", "c3", "c4", "c5"]) {
+    const host = document.getElementById(id);
+    const vp = host.querySelector(".vlist-viewport");
+    const track = host.querySelector(".vlist-scrollbar");
+    if (!vp) continue;
+    const cs = getComputedStyle(vp);
+    const border = (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+    const gutter = Math.round((vp.offsetWidth - vp.clientWidth - border) * 100) / 100;
+    const trackShown = !!track && getComputedStyle(track).display !== "none" && track.getBoundingClientRect().height > 0;
+    const native = gutter > 0 && cs.overflowY !== "hidden";
+    const bars = (native ? 1 : 0) + (trackShown ? 1 : 0);
+    lines.push(id + ": native vertical gutter " + gutter + " px, custom track " + (trackShown ? "shown" : "hidden") + " -> " + bars + " vertical bar(s)" + (bars > 1 ? "  <-- double" : ""));
+  }
+  document.getElementById("report").textContent = lines.join("\n");
+}
+document.getElementById("measure").addEventListener("click", measure);
+requestAnimationFrame(() => requestAnimationFrame(measure));
+</script>
+</body>
+</html>
