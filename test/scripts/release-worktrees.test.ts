@@ -494,7 +494,7 @@ const createReleaseCheckout = (followUp: boolean): ReleaseCheckout => {
 
 const releasePreload = (
   checkout: ReleaseCheckout,
-  checks: "green" | "red-merge" | "advance",
+  checks: "green" | "red-merge" | "advance" | "advance-after-status" | "merge-checks-unavailable",
 ): string => {
   const pr = {
     number: 503,
@@ -517,6 +517,8 @@ const mergeSha = ${JSON.stringify(checkout.mergeSha)};
 const checks = ${JSON.stringify(checks)};
 const advance = ${JSON.stringify(advance)};
 let advanced = false;
+// The live run checks the worktree just before its final tag verification.
+let statusRead = false;
 const timer = globalThis.setTimeout;
 globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
 mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
@@ -525,10 +527,15 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     return command.includes("--head chore/release-3.3.5 --base main") ? JSON.stringify([pr]) : "[]";
   }
   if (command.startsWith("gh pr view 503")) return JSON.stringify(pr);
+  if (command === "git status --porcelain") statusRead = true;
   if (command.startsWith("gh api") && command.includes("check-runs")) {
-    if (checks === "advance" && !advanced) {
+    const advanceNow = checks === "advance" || (checks === "advance-after-status" && statusRead);
+    if (advanceNow && !advanced) {
       advanced = true;
       execute(advance, { encoding: "utf8" });
+    }
+    if (checks === "merge-checks-unavailable" && command.includes(mergeSha)) {
+      throw new Error("HTTP 502: check runs unavailable for " + mergeSha);
     }
     const failed = checks === "red-merge" && command.includes(mergeSha);
     const check_runs = ["Test & Build", "Browser suites"].map((name) => ({
@@ -702,3 +709,76 @@ it("tags --at when only the release merge's checks are red", () => {
     checkout.dispose();
   }
 }, 40_000);
+
+it("reads --at checks from the selected commit when the release merge's checks are unavailable", () => {
+  const checkout = createReleaseCheckout(true);
+  try {
+    const goodSha = checkout.goodSha;
+    if (goodSha === null) throw new Error("missing follow-up");
+    const preload = releasePreload(checkout, "merge-checks-unavailable");
+    const dry = runRelease(checkout, preload, ["3.3.5", "--dry-run", "--tag", "--at", goodSha]);
+    expect(dry.output).not.toContain("HTTP 502");
+    expect(dry.exitCode).toBe(0);
+    expect(dry.output).toContain(
+      `Check runs on --at commit ${goodSha}: Test & Build (success), Browser suites (success)`,
+    );
+    expect(dry.output).toContain(`git tag -a v3.3.5 ${goodSha} -m v3.3.5`);
+    const live = runRelease(checkout, preload, ["3.3.5", "--tag", "--at", goodSha]);
+    expect(live.output).not.toContain("HTTP 502");
+    expect(live.exitCode).toBe(0);
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "v3.3.5^{}")).toBe(goodSha);
+  } finally {
+    checkout.dispose();
+  }
+}, 40_000);
+
+it("does not publish --at of the release merge when main moves during the final check read", () => {
+  const checkout = createReleaseCheckout(false);
+  try {
+    const mergeSha = checkout.mergeSha;
+    checkout.git(checkout.repo, "fetch", "origin", "main");
+    const preload = releasePreload(checkout, "advance-after-status");
+    const created = runRelease(checkout, preload, ["3.3.5", "--tag", "--at", mergeSha]);
+    const landed = checkout.git(checkout.operator, "rev-parse", "HEAD");
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "main")).toBe(landed);
+    expect(landed).not.toBe(mergeSha);
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "tag", "-l", "v3.3.5")).toBe("");
+    expect(created.exitCode).toBe(1);
+    expect(created.output).toContain(`--at ${mergeSha} is the release merge, and origin/main has first-parent commits after it`);
+  } finally {
+    checkout.dispose();
+  }
+
+  const again = createReleaseCheckout(false);
+  try {
+    const mergeSha = again.mergeSha;
+    again.git(again.repo, "fetch", "origin", "main");
+    again.git(again.repo, "tag", "-a", "v3.3.5", mergeSha, "-m", "v3.3.5");
+    const preload = releasePreload(again, "advance-after-status");
+    const pushed = runRelease(again, preload, ["3.3.5", "--tag", "--at", mergeSha]);
+    const landed = again.git(again.operator, "rev-parse", "HEAD");
+    expect(again.git(again.root, "--git-dir", again.remote, "rev-parse", "main")).toBe(landed);
+    expect(again.git(again.root, "--git-dir", again.remote, "tag", "-l", "v3.3.5")).toBe("");
+    expect(pushed.exitCode).toBe(1);
+    expect(pushed.output).toContain(`--at ${mergeSha} is the release merge, and origin/main has first-parent commits after it`);
+  } finally {
+    again.dispose();
+  }
+}, 60_000);
+
+it("re-reads origin/main after the --at check read in dry-run and live", () => {
+  for (const args of [["--dry-run", "--tag"], ["--tag"]] as const) {
+    const checkout = createReleaseCheckout(false);
+    try {
+      const mergeSha = checkout.mergeSha;
+      checkout.git(checkout.repo, "fetch", "origin", "main");
+      const preload = releasePreload(checkout, "advance");
+      const result = runRelease(checkout, preload, ["3.3.5", ...args, "--at", mergeSha]);
+      expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "tag", "-l", "v3.3.5")).toBe("");
+      expect(result.exitCode).toBe(1);
+      expect(result.output).toContain(`--at ${mergeSha} is the release merge, and origin/main has first-parent commits after it`);
+    } finally {
+      checkout.dispose();
+    }
+  }
+}, 60_000);
