@@ -307,7 +307,7 @@ describe("parseArgs", () => {
       state: "create-source-pr",
       signature: "Agent: Example",
     });
-    expect(follow.some((step) => step.description.includes('bun run release 2.8.3 --from v2 --signature "Agent: Example"'))).toBe(true);
+    expect(follow.some((step) => step.description.includes("bun run release 2.8.3 --from v2 --signature 'Agent: Example'"))).toBe(true);
   });
 
   it("parses --tag flag", () => {

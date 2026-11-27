@@ -354,11 +354,33 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
   }
 }, 20_000);
 
-it("prints the signed follow-up after a v2 release PR and signs the v2-to-main PR", () => {
+// The operator pastes the printed follow-up into a shell, so each signature is
+// replayed through sh: `$5`, backticks, quotes, backslash and `!` must reach
+// the resumed release unchanged, and the resumed run signs the promotion PR.
+const SHELL_SIGNATURES = [
+  "Agent: Example",
+  "Agent: Claude Opus 5.5 · orchestrator",
+  "Agent: paid $5",
+  "Agent: `echo injected` ran",
+  'Agent: said "hi"',
+  "Agent: it's here",
+  "Agent: back\\slash",
+  "Agent: done!",
+  "Agent: $HOME `x` \"q\" 'a' \\ ! · $5",
+] as const;
+
+/** Run one printed shell line with stub functions, and read each call's argv back. */
+const replayInShell = (line: string, functions: string, cwd: string, env: Record<string, string | undefined>): { readonly exitCode: number; readonly output: string } => {
+  const result = Bun.spawnSync(["sh", "-c", `${functions}\n${line}`], { cwd, env, timeout: 20_000 });
+  return { exitCode: result.exitCode, output: new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr) };
+};
+
+const readArgv = (file: string): string[] => readFileSync(file, "utf8").split("\0").slice(0, -1);
+
+for (const signature of SHELL_SIGNATURES) it(`prints a follow-up a shell replays exactly and signs the v2-to-main PR: ${JSON.stringify(signature)}`, () => {
   const version = "2.8.3";
   const previous = "2.8.2";
   const branch = `chore/release-${version}`;
-  const signature = "Agent: Example";
   const root = mkdtempSync(join(tmpdir(), "vlist-release-v2-signature-"));
   const repo = join(root, "caller");
   const remote = join(root, "remote.git");
@@ -390,17 +412,21 @@ it("prints the signed follow-up after a v2 release PR and signs the v2-to-main P
     writeFileSync(preload, `
 import { mock } from "bun:test";
 import { execSync as realExec, execFileSync as realFile } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 const execute = realExec, executeFile = realFile;
 const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
-const branch = ${JSON.stringify(branch)};
-let sourcePr: object | null = null, mainPr: object | null = null;
+const branch = ${JSON.stringify(branch)}, sourcePrFile = ${JSON.stringify(join(root, "source-pr.json"))};
+// The merged v2 PR outlives this process, so the replayed follow-up run lists it.
+let sourcePr: object | null = existsSync(sourcePrFile) ? JSON.parse(readFileSync(sourcePrFile, "utf8")) : null, mainPr: object | null = null;
 const timer = globalThis.setTimeout;
 globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
 mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
   appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
   if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
-  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh pr list")) {
+    const listsSource = sourcePr !== null && !command.includes("--state open") && command.includes("--head " + branch + " --base v2");
+    return listsSource ? JSON.stringify([sourcePr]) : "[]";
+  }
   if (command.startsWith("gh pr create --base v2 --head " + branch)) {
     const operator = ${JSON.stringify(join(root, "held-v2"))};
     executeFile("git", ["worktree", "add", operator, "v2"], { stdio: "pipe" });
@@ -408,7 +434,8 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     executeFile("git", ["-C", operator, "merge", "--no-ff", branch, "-m", "operator v2 merge"], { stdio: "pipe" });
     executeFile("git", ["-C", operator, "push", "origin", "v2"], { stdio: "pipe" });
     const oid = executeFile("git", ["-C", operator, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-    sourcePr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    sourcePr = { number: 503, title: "chore(release): v${version}", state: "MERGED", headRefName: branch, baseRefName: "v2", headRefOid, mergedAt: "2026-11-02T12:00:00Z", mergeCommit: { oid } };
+    writeFileSync(sourcePrFile, JSON.stringify(sourcePr));
     return "https://github.com/floor/vlist/pull/503";
   }
   if (command.startsWith("gh pr create --base main --head v2")) {
@@ -429,9 +456,32 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     const stopped = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "v2", "--signature", signature], { cwd: repo, env, timeout: 15_000 });
     const stoppedOut = new TextDecoder().decode(stopped.stdout) + new TextDecoder().decode(stopped.stderr);
     expect(stopped.exitCode).toBe(0);
-    expect(stoppedOut).toContain(`Next step, after the operator's pinned merge:\n  bun run release ${version} --from v2 --signature "${signature}"`);
+    expect(git(repo, "log", "-1", "--format=%B", `origin/${branch}`)).toBe(`chore(release): v${version}\n\n${signature}`);
     const stoppedCommands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
     expect(stoppedCommands.some((command) => command.includes("gh pr create --base main"))).toBe(false);
+
+    const ghArgv = join(root, "gh-argv");
+    const recordGh = `gh() { printf '%s\\0' "$@" > ${JSON.stringify(ghArgv)}; }`;
+    const sourcePr = stoppedCommands.find((command) => command.startsWith("gh pr create --base v2"));
+    expect(sourcePr).toBeDefined();
+    expect(replayInShell(sourcePr!, recordGh, repo, env).exitCode).toBe(0);
+    expect(readArgv(ghArgv).slice(-1)[0]).toBe(`Release commit for v${version}.\n${signature}`);
+
+    const nextStep = stoppedOut.match(/Next step, after the operator's pinned merge:\n  (.+)\n/)?.[1];
+    expect(nextStep).toBeDefined();
+    expect(nextStep!.startsWith(`bun run release ${version} --from v2 --signature `)).toBe(true);
+    // The stub records the argv the shell built, then resumes the real release with it.
+    const releaseArgv = join(root, "release-argv");
+    const resumeRelease = `bun() { printf '%s\\0' "$@" > ${JSON.stringify(releaseArgv)}; shift 2; exec ${JSON.stringify(process.execPath)} --preload ${JSON.stringify(preload)} ${JSON.stringify(resolve(import.meta.dir, "../../scripts/release.ts"))} "$@"; }`;
+    const resumed = replayInShell(nextStep!, resumeRelease, repo, env);
+    expect(readArgv(releaseArgv)).toEqual(["run", "release", version, "--from", "v2", "--signature", signature]);
+    expect({ exitCode: resumed.exitCode, output: resumed.exitCode === 0 ? "" : resumed.output }).toEqual({ exitCode: 0, output: "" });
+    expect(resumed.output).toContain(`Next step, after the operator's pinned merge:\n  bun run release ${version} --tag`);
+    const resumedCommands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    const promotion = resumedCommands.find((command) => command.startsWith("gh pr create --base main --head v2"));
+    expect(promotion).toBeDefined();
+    expect(replayInShell(promotion!, recordGh, repo, env).exitCode).toBe(0);
+    expect(readArgv(ghArgv).slice(-1)[0]).toBe(`Version bump to v${version}.\n${signature}`);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
