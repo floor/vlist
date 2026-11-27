@@ -187,6 +187,9 @@ for (const source of ["main", "v2"] as const) {
       expect(git(repo, "tag", "-l")).toBe("");
       expect((JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as { version: string }).version).toBe(version);
       expect(readFileSync(join(repo, "CHANGELOG.md"), "utf8")).toContain(`## [${version}] -`);
+      const committed = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD:CHANGELOG.md"], { cwd: repo, env }).stdout);
+      expect(committed.endsWith("\n")).toBe(true);
+      expect(committed.endsWith("\n\n")).toBe(false);
       expect(git(held, "status", "--porcelain")).toBe("");
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -8,6 +8,9 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   USAGE,
   assertCurrentBranch,
@@ -384,6 +387,27 @@ Search: match arrows wait for a match to step (#106).
 [3.1.5]: https://github.com/floor/vlist/compare/v3.1.4...v3.1.5
 [3.1.4]: https://github.com/floor/vlist/compare/v3.1.3...v3.1.4
 `);
+  });
+
+  it("rolls a changelog that ends with a newline into a file that ends with exactly one", () => {
+    // The release reads CHANGELOG.md through git show. The file on disk ends
+    // with one newline; the text written back has to as well.
+    const dir = mkdtempSync(join(tmpdir(), "vlist-changelog-"));
+    try {
+      const path = join(dir, "CHANGELOG.md");
+      writeFileSync(path, UNRELEASED_FIXTURE);
+      const loaded = read(`cat ${JSON.stringify(path)}`, {
+        kind: "text",
+        name: "source_changelog",
+        trim: false,
+        parse: (raw) => raw,
+      });
+      const rolled = rollChangelog(loaded, "3.1.5", "2026-10-18");
+      expect(rolled.endsWith("\n")).toBe(true);
+      expect(rolled.endsWith("\n\n")).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("refuses an empty [Unreleased] section", () => {

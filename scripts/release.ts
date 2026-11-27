@@ -191,15 +191,18 @@ export const execErrorMessage = (err: unknown): string => {
 
 export const execCommand = (
   cmd: string,
-  opts: { silent?: boolean; timeout?: number } = {},
+  opts: { silent?: boolean; timeout?: number; trim?: boolean } = {},
 ): string => {
   const timeout = opts.timeout ?? READ_COMMAND_TIMEOUT_MS;
   try {
-    return execSync(cmd, {
+    const text = execSync(cmd, {
       encoding: "utf8",
       stdio: opts.silent ? ["pipe", "pipe", "pipe"] : ["inherit", "pipe", "inherit"],
       timeout,
-    }).trim();
+    });
+    // File reads opt out. Everything else still trims, so a branch name or a
+    // sha does not keep the newline git prints after it.
+    return opts.trim === false ? text : text.trim();
   } catch (err: unknown) {
     const msg = execErrorMessage(err);
     throw new Error(`Command failed [timeout ${timeout}ms] (${cmd}): ${msg}`);
@@ -1435,6 +1438,8 @@ export interface CustomJsonSchema<T> {
 export interface TextSchema<T = string> {
   readonly kind: "text";
   readonly name: string;
+  /** False keeps stdout as-is, including a trailing newline. Omitted trims. */
+  readonly trim?: boolean;
   readonly parse: (raw: string, cmd: string) => T;
 }
 
@@ -1556,9 +1561,11 @@ export const read = <T = any>(
   schema: Schema<any>,
   opts: { timeout?: number } = {},
 ): T => {
-  const raw = opts.timeout !== undefined
-    ? execCommand(cmd, { silent: true, timeout: opts.timeout })
-    : execCommand(cmd, { silent: true });
+  const raw = execCommand(cmd, {
+    silent: true,
+    ...(opts.timeout !== undefined ? { timeout: opts.timeout } : {}),
+    ...(schema.kind === "text" && schema.trim === false ? { trim: false } : {}),
+  });
   return validate<T>(raw, schema, cmd);
 };
 
@@ -2496,6 +2503,7 @@ const main = async (): Promise<void> => {
         const changelog = read(`git show origin/${sourceBranch}:CHANGELOG.md`, {
           kind: "text",
           name: "source_changelog",
+          trim: false,
           parse: (raw) => raw,
         });
         assertUnreleasedReady(changelog);
@@ -2624,7 +2632,12 @@ const main = async (): Promise<void> => {
 
       // Refuse before cutting the branch, so a release with no notes never
       // leaves a half-written release branch behind.
-      const changelog = read(`git show origin/${sourceBranch}:CHANGELOG.md`, { kind: "text", name: "source_changelog", parse: raw => raw });
+      const changelog = read(`git show origin/${sourceBranch}:CHANGELOG.md`, {
+        kind: "text",
+        name: "source_changelog",
+        trim: false,
+        parse: (raw) => raw,
+      });
       assertUnreleasedReady(changelog);
 
       step(2, `Creating release branch ${releaseBranch} and opening PR into ${sourceBranch}...`);
