@@ -79,6 +79,13 @@ jobs:
         continue-on-error: true
         run: bun run heap
 
+      # The same dist/ a user's SSR server imports. No DOM in this process.
+      - name: SSR import
+        id: ssr
+        if: steps.build.outcome == 'success'
+        continue-on-error: true
+        run: bun scripts/ssr-import.ts
+
       - name: Gate
         env:
           TYPECHECK: ${{ steps.typecheck.outcome }}
@@ -89,9 +96,10 @@ jobs:
           BUILD: ${{ steps.build.outcome }}
           SIZE: ${{ steps.size.outcome }}
           HEAP: ${{ steps.heap.outcome }}
+          SSR: ${{ steps.ssr.outcome }}
         run: |
           red=""
-          for gate in TYPECHECK DOCS TEST CONCURRENT COVERAGE BUILD SIZE HEAP; do
+          for gate in TYPECHECK DOCS TEST CONCURRENT COVERAGE BUILD SIZE HEAP SSR; do
             case "${!gate}" in
               success) ;;
               skipped) red="$red $gate(skipped)";;

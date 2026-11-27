@@ -32,7 +32,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 ## Frameworks
 
-Vue, Svelte, Solid and React each have an entry in the `vlist` package itself. Like the vanilla builder, they are feature-first: you pass plugins from `vlist`, so an app only bundles the features it uses. Every entry imports the core from `vlist`, and none carries a copy of its own.
+Vue, Svelte, Solid and React each have an entry in the `vlist` package itself. Like the vanilla builder, they are feature-first: you pass plugins from `vlist`, so an app only bundles the features it uses. Every entry imports the core from `vlist`, and none carries a copy of its own. Every entry imports under SSR, and lists are created on the client.
 
 | Framework | Import | Entry size |
 |-----------|--------|------------|
@@ -301,6 +301,10 @@ Bundlephobia's badge measures the package's root entry, which re-exports every p
 ## Examples
 
 More examples at **[vlist.io](https://vlist.io)**.
+
+### SSR (SvelteKit)
+
+`examples/ssr-sveltekit` is a SvelteKit page (SSR on) that imports `vlist` and calls `createVList` in `onMount`. From the repo root run `bun run build`, then in `examples/ssr-sveltekit` run `bun install && bun run build`.
 
 ### Data Table
 
