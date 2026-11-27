@@ -223,9 +223,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "table + rowAttributes": kb(17.44),
   masonry: kb(15.08),
   tree: kb(15.94),
-  // Measured 14554 B gzipped on this branch. The pin is that
-  // measurement plus 10 B. kb(14.223) floors to 14564.
-  search: kb(14.223),
+  // Measured 14614 B gzipped on this branch. The pin is that
+  // measurement plus 10 B. kb(14.282) floors to 14624.
+  search: kb(14.282),
   carousel: kb(16.15),
   vue: kb(10.77),
   svelte: kb(10.67),
