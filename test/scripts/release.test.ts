@@ -1162,7 +1162,7 @@ describe("planRelease", () => {
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     expect(commands).toEqual([
-      "git fetch origin main",
+      "git fetch origin +refs/heads/main:refs/remotes/origin/main",
       "git tag -a v2.8.3 425ecd4b9d6de757f5678a27df9da0fa7ec27b66 -m v2.8.3",
       "git push origin v2.8.3",
     ]);
@@ -2119,6 +2119,7 @@ describe("stop before the tag — ruled behavior", () => {
     });
     const pushCommands = pushSteps.map((s) => s.command).filter(Boolean);
     expect(pushCommands).toEqual([
+      "git fetch origin +refs/heads/main:refs/remotes/origin/main",
       "git push origin v2.8.3",
     ]);
   });
@@ -2617,9 +2618,12 @@ describe("main-only releases", () => {
   it("tags the verified SHA without checking out or returning to held branches", () => {
     const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "tag-release", tag: true, verifiedSha: "1234" });
     const commands = steps.flatMap(step => step.command ? [step.command] : []);
-    expect(commands).toEqual(["git fetch origin main", "git tag -a v3.3.5 1234 -m v3.3.5", "git push origin v3.3.5"]);
+    expect(commands).toEqual(["git fetch origin +refs/heads/main:refs/remotes/origin/main", "git tag -a v3.3.5 1234 -m v3.3.5", "git push origin v3.3.5"]);
     const retry = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "push-local-tag", tag: true, verifiedSha: "1234" });
-    expect(retry.flatMap(step => step.command ? [step.command] : [])).toEqual(["git push origin v3.3.5"]);
+    expect(retry.flatMap(step => step.command ? [step.command] : [])).toEqual([
+      "git fetch origin +refs/heads/main:refs/remotes/origin/main",
+      "git push origin v3.3.5",
+    ]);
   });
 });
 
@@ -2800,7 +2804,7 @@ describe("tag target when main has moved past the release merge", () => {
       tagAt: LATER_ON_MAIN,
     });
     expect(tagged.flatMap((step) => (step.command ? [step.command] : []))).toEqual([
-      "git fetch origin main",
+      "git fetch origin +refs/heads/main:refs/remotes/origin/main",
       `git tag -a v3.8.11 ${LATER_ON_MAIN} -m v3.8.11`,
       "git push origin v3.8.11",
     ]);

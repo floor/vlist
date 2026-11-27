@@ -667,8 +667,13 @@ it("verifies an existing remote tag against --at", () => {
     expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "v3.3.5^{}")).toBe(checkout.mergeSha);
 
     checkout.git(checkout.operator, "push", "origin", ":refs/tags/v3.3.5");
+    checkout.git(checkout.operator, "tag", "-d", "v3.3.5");
     checkout.git(checkout.operator, "tag", "-a", "v3.3.5", goodSha, "-m", "v3.3.5");
     checkout.git(checkout.operator, "push", "origin", "v3.3.5");
+    // The conflict run fetched main and auto-followed the tag that then pointed at the merge.
+    if (checkout.git(checkout.repo, "tag", "-l", "v3.3.5") === "v3.3.5") {
+      checkout.git(checkout.repo, "tag", "-d", "v3.3.5");
+    }
     const dry = runRelease(checkout, preload, ["3.3.5", "--dry-run", "--tag", "--at", goodSha]);
     expect(dry.exitCode).toBe(0);
     expect(dry.output).toContain("already released");

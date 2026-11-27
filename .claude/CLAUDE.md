@@ -254,7 +254,10 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
    first-parent commits exist, `--tag` refuses and lists each oid and subject.
    `--at <full oid>` tags one of those commits instead, only when it is on that
    line, descends from the release merge, still has package.json version X.Y.Z,
-   and its check runs are green. `--dry-run` shows the same refusal or the same
+   and its own check runs are green. It cannot name the release merge once main
+   has moved. An existing remote tag is verified against `--at`. The script
+   fetches `origin/main` into its remote-tracking ref again immediately before
+   creating or pushing the tag. `--dry-run` shows the same refusal or the same
    tag plan.
 5. Publish CI handles npm, removing any npm `next` dist-tag on stable releases,
    the GitHub Release and the site dispatch. Verify npm version/tags and the

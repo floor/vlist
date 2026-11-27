@@ -69,7 +69,11 @@ script never checks out an integration branch held by another worktree.
    of `origin/main`. When later first-parent commits exist, it refuses and
    lists them. `--at <full oid>` tags one listed commit that is on that line,
    descends from the release merge, still has package version X.Y.Z, and has
-   the same green checks. It pushes only that tag. It leaves the caller's
+   green checks on that commit. It cannot name the release merge once main has
+   moved. An existing remote tag is verified against `--at` when `--at` is
+   given. The script fetches `origin/main` into its remote-tracking ref and
+   reads that ref again immediately before creating or pushing the tag. It
+   pushes only that tag. It leaves the caller's
    branch or detached HEAD unchanged and does not switch branches after
    pushing. The tag triggers `publish.yml`: npm,
    removal of any npm `next` dist-tag on stable releases, the GitHub Release

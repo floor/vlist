@@ -19,8 +19,11 @@
  *   9. Verifies merge commit, package.json, and passing check runs on main
  *  10. Stops before the tag by default; with explicit --tag, creates an annotated tag and pushes.
  *      Refuses when origin/main has first-parent commits after the release merge, and lists them.
- *      --at <full oid> tags that commit when it is on that line, descends from the release merge,
- *      still has package.json version X.Y.Z, and its check runs are green
+ *      --at <full oid> tags that commit when it is on that line and descends from the release
+ *      merge. Once main has moved, that commit has to be one of the later ones, not the merge.
+ *      Its package.json is still X.Y.Z, and its own check runs are the gate. A remote tag is
+ *      verified against --at. origin/main is fetched into its remote-tracking ref again
+ *      immediately before the tag is created or pushed.
  */
 
 import { execSync } from "node:child_process";
@@ -157,6 +160,13 @@ export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
 export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
 export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]";
+
+/**
+ * Fetch main into its remote-tracking ref. A bare `git fetch origin main` only
+ * updates FETCH_HEAD when origin's fetch refspec does not include main, and the
+ * tag decision would then read a stale `origin/main`.
+ */
+export const FETCH_ORIGIN_MAIN = "git fetch origin +refs/heads/main:refs/remotes/origin/main";
 
 const FULL_OID_RE = /^[0-9a-f]{40}$/;
 
@@ -564,6 +574,11 @@ export const resolveTagTarget = (mergeSha: string, ctx: ReleaseContext): string 
       `Cannot tag v${ctx.targetVersion}: --at ${tagAt} does not descend from release merge ${mergeSha}`,
     );
   }
+  if (later.length > 0 && tagAt === mergeSha) {
+    throw new Error(
+      `Cannot tag v${ctx.targetVersion}: --at ${tagAt} is the release merge, and origin/main has first-parent commits after it`,
+    );
+  }
   if (ctx.packageVersionAtTagAt !== ctx.targetVersion) {
     const found = ctx.packageVersionAtTagAt ? `v${ctx.packageVersionAtTagAt}` : "unknown";
     throw new Error(
@@ -605,7 +620,7 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
     if (!mergeSha) {
       throw new Error(`Merge commit for PR #${mainPr.number} could not be determined`);
     }
-    if (ctx.remoteTagSha !== mergeSha) {
+    if (ctx.tagAt == null && ctx.remoteTagSha !== mergeSha) {
       throw new Error(
         `Remote tag v${ctx.targetVersion} points to ${ctx.remoteTagSha}, but verified merge commit from PR #${mainPr.number} is ${mergeSha}`,
       );
@@ -622,6 +637,14 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
       mergeCommitOid: mergeSha,
       parents: ctx.mainPrMergeParents ?? (ctx.sourceBranch === "main" ? ctx.sourcePrMergeParents : null),
     });
+    if (ctx.tagAt != null) {
+      const expected = resolveTagTarget(mergeSha, ctx);
+      if (ctx.remoteTagSha !== expected) {
+        throw new Error(
+          `Remote tag v${ctx.targetVersion} points to ${ctx.remoteTagSha}, but verified commit is ${expected}`,
+        );
+      }
+    }
     return "already-tagged";
   }
 
@@ -669,12 +692,15 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
         );
       }
 
-      if (ctx.checkRuns) {
-        verifyCheckRuns(ctx.checkRuns, mergeSha);
-      } else if (ctx.tag) {
-        throw new Error(
-          `Cannot tag v${ctx.targetVersion}: no check runs available for commit ${mergeSha}`,
-        );
+      // `--at` is the check gate. The merge is still the provenance check above.
+      if (ctx.tagAt == null) {
+        if (ctx.checkRuns) {
+          verifyCheckRuns(ctx.checkRuns, mergeSha);
+        } else if (ctx.tag) {
+          throw new Error(
+            `Cannot tag v${ctx.targetVersion}: no check runs available for commit ${mergeSha}`,
+          );
+        }
       }
 
       // The gate: only a merge commit pinned to the head verifies a release.
@@ -810,9 +836,13 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
       });
       break;
 
-    case "push-local-tag":
+    case "push-local-tag": {
+      const pushAgain = opts.tagAt
+        ? `bun run release ${opts.targetVersion} --tag --at ${opts.tagAt}`
+        : `bun run release ${opts.targetVersion} --tag`;
       if (isTag) {
         steps.push(
+          { description: "Fetch verified main history without switching branches", command: FETCH_ORIGIN_MAIN },
           {
             description: `Push existing verified local tag v${opts.targetVersion}`,
             command: `git push origin v${opts.targetVersion}`,
@@ -820,10 +850,11 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         );
       } else {
         steps.push({
-          description: `Local tag v${opts.targetVersion} verified at ${verifiedSha}. Run 'bun run release ${opts.targetVersion} --tag' to push.`,
+          description: `Local tag v${opts.targetVersion} verified at ${verifiedSha}. Run '${pushAgain}' to push.`,
         });
       }
       break;
+    }
 
     case "tag-release": {
       const tagSha = opts.tagAt ?? verifiedSha;
@@ -832,7 +863,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         : `bun run release ${opts.targetVersion} --tag`;
       if (isTag) {
         steps.push(
-          { description: "Fetch verified main history without switching branches", command: "git fetch origin main" },
+          { description: "Fetch verified main history without switching branches", command: FETCH_ORIGIN_MAIN },
           {
             description: `Tag v${opts.targetVersion} at verified commit ${tagSha}`,
             command: `git tag -a v${opts.targetVersion} ${tagSha} -m v${opts.targetVersion}`,
@@ -1991,6 +2022,46 @@ export const commitDescendsFrom = (ancestor: string, descendant: string): boolea
   }
 };
 
+/** History and `--at` facts from the current `origin/main` remote-tracking ref. */
+export const readTagTargetFacts = async (
+  mergeSha: string,
+  version: string,
+  tagAt: string | null,
+  waitForTargetChecks: boolean,
+): Promise<{
+  readonly commitsAfterMerge: readonly MainLineCommit[];
+  readonly tagAtOnFirstParent?: boolean;
+  readonly tagAtDescendsFromMerge?: boolean;
+  readonly packageVersionAtTagAt?: string | null;
+  readonly tagAtCheckRuns?: readonly CheckRunInfo[];
+}> => {
+  const commitsAfterMerge = readCommitsAfterMerge(mergeSha);
+  if (tagAt === null || !FULL_OID_RE.test(tagAt)) return { commitsAfterMerge };
+  const tagAtOnFirstParent = isOnFirstParentLine(tagAt);
+  const tagAtDescendsFromMerge = tagAtOnFirstParent && commitDescendsFrom(mergeSha, tagAt);
+  const namingTheMerge = commitsAfterMerge.length > 0 && tagAt === mergeSha;
+  if (!tagAtOnFirstParent || !tagAtDescendsFromMerge || namingTheMerge) {
+    return { commitsAfterMerge, tagAtOnFirstParent, tagAtDescendsFromMerge };
+  }
+  let packageVersionAtTagAt: string | null = null;
+  try {
+    packageVersionAtTagAt = readPackageVersionAtSha(tagAt);
+  } catch {
+    packageVersionAtTagAt = null;
+  }
+  if (packageVersionAtTagAt !== version) {
+    return { commitsAfterMerge, tagAtOnFirstParent, tagAtDescendsFromMerge, packageVersionAtTagAt };
+  }
+  const tagAtCheckRuns = waitForTargetChecks ? await waitForCheckRuns(tagAt) : fetchCheckRuns(tagAt);
+  return {
+    commitsAfterMerge,
+    tagAtOnFirstParent,
+    tagAtDescendsFromMerge,
+    packageVersionAtTagAt,
+    tagAtCheckRuns,
+  };
+};
+
 export const isCommitAncestorOfRemoteMain = (
   commitSha: string,
   owner = "floor",
@@ -2269,17 +2340,20 @@ const main = async (): Promise<void> => {
   const mergeSha = mainPr?.mergeCommitOid;
   const tagAt = args.at ?? null;
 
-  // The tag decision compares the release merge with origin/main. Fetch before
-  // reading that history so a stale remote-tracking ref cannot hide later commits.
-  if (mainPr?.state === "MERGED" && mergeSha && !remoteTagSha) {
-    run("git fetch origin main", { silent: true });
-  }
+  let commitsAfterMerge: readonly MainLineCommit[] | undefined;
+  let tagAtOnFirstParent: boolean | undefined;
+  let tagAtDescendsFromMerge: boolean | undefined;
+  let packageVersionAtTagAt: string | null | undefined;
+  let tagAtCheckRuns: readonly CheckRunInfo[] | undefined;
 
   if (mainPr?.state === "MERGED" && mergeSha) {
     mainPrMergeParents = readCommitParents(mergeSha);
     isMergeCommitAncestor = isCommitAncestorOfRemoteMain(mergeSha);
     packageVersionAtMergeSha = readPackageVersionAtSha(mergeSha);
-    const canWaitForChecks = !args.dryRun && !remoteTagSha &&
+    // `--at` supplies the check gate. The merge's checks stay the gate only
+    // when that merge is the commit we would tag.
+    const gateIsMerge = tagAt === null;
+    const canWaitForChecks = gateIsMerge && !args.dryRun && !remoteTagSha &&
       isMergeCommitAncestor && packageVersionAtMergeSha === newVersion;
     if (canWaitForChecks) {
       assertPinnedMerge({
@@ -2291,41 +2365,33 @@ const main = async (): Promise<void> => {
       });
       log(`Waiting up to 10 minutes for check runs on main merge commit ${mergeSha}...`);
     }
-    checkRuns = canWaitForChecks ? await waitForCheckRuns(mergeSha) : fetchCheckRuns(mergeSha);
-    try {
-      const verified = verifyCheckRuns(checkRuns, mergeSha);
-      checkRunsEvidence = verified.formattedEvidence;
-    } catch (err: unknown) {
-      if (args.tag) throw err;
+    if (gateIsMerge) {
+      checkRuns = canWaitForChecks ? await waitForCheckRuns(mergeSha) : fetchCheckRuns(mergeSha);
+      try {
+        const verified = verifyCheckRuns(checkRuns, mergeSha);
+        checkRunsEvidence = verified.formattedEvidence;
+      } catch (err: unknown) {
+        if (args.tag) throw err;
+        checkRunsEvidence = checkRuns.map((r) => `${r.name} (${r.conclusion ?? r.status})`).join(", ");
+      }
+    } else {
+      checkRuns = fetchCheckRuns(mergeSha);
       checkRunsEvidence = checkRuns.map((r) => `${r.name} (${r.conclusion ?? r.status})`).join(", ");
     }
+
+    // After check verification, so a main that moved during the wait is the
+    // history the decision reads. The refspec writes origin/main itself.
+    run(FETCH_ORIGIN_MAIN, { silent: true });
+    const facts = await readTagTargetFacts(mergeSha, newVersion, tagAt, !args.dryRun && args.tag === true);
+    commitsAfterMerge = facts.commitsAfterMerge;
+    tagAtOnFirstParent = facts.tagAtOnFirstParent;
+    tagAtDescendsFromMerge = facts.tagAtDescendsFromMerge;
+    packageVersionAtTagAt = facts.packageVersionAtTagAt;
+    tagAtCheckRuns = facts.tagAtCheckRuns;
   }
 
   if (sourcePr?.state === "MERGED" && sourcePr.mergeCommitOid) {
     sourcePrMergeParents = readCommitParents(sourcePr.mergeCommitOid);
-  }
-
-  let commitsAfterMerge: readonly MainLineCommit[] | undefined;
-  let tagAtOnFirstParent: boolean | undefined;
-  let tagAtDescendsFromMerge: boolean | undefined;
-  let packageVersionAtTagAt: string | null | undefined;
-  let tagAtCheckRuns: readonly CheckRunInfo[] | undefined;
-  if (mainPr?.state === "MERGED" && mergeSha && !remoteTagSha) {
-    commitsAfterMerge = readCommitsAfterMerge(mergeSha);
-    if (tagAt !== null && FULL_OID_RE.test(tagAt)) {
-      tagAtOnFirstParent = isOnFirstParentLine(tagAt);
-      tagAtDescendsFromMerge = tagAtOnFirstParent && commitDescendsFrom(mergeSha, tagAt);
-      if (tagAtOnFirstParent && tagAtDescendsFromMerge) {
-        try {
-          packageVersionAtTagAt = readPackageVersionAtSha(tagAt);
-        } catch {
-          packageVersionAtTagAt = null;
-        }
-        if (packageVersionAtTagAt === newVersion) {
-          tagAtCheckRuns = !args.dryRun && args.tag ? await waitForCheckRuns(tagAt) : fetchCheckRuns(tagAt);
-        }
-      }
-    }
   }
 
   let state: ReleaseState;
@@ -2452,8 +2518,33 @@ const main = async (): Promise<void> => {
     return;
   }
 
+  const resolveFreshTagTarget = async (): Promise<string> => {
+    if (!mergeSha) throw new Error(`Cannot tag v${newVersion}: no commit to tag`);
+    run(FETCH_ORIGIN_MAIN, { silent: true });
+    const facts = await readTagTargetFacts(mergeSha, newVersion, tagAt, false);
+    const fresh = resolveTagTarget(mergeSha, {
+      currentVersion: oldVersion,
+      targetVersion: newVersion,
+      remoteTagSha,
+      localTagSha,
+      commitsAfterMerge: facts.commitsAfterMerge,
+      tagAt,
+      tagAtOnFirstParent: facts.tagAtOnFirstParent,
+      tagAtDescendsFromMerge: facts.tagAtDescendsFromMerge,
+      packageVersionAtTagAt: facts.packageVersionAtTagAt,
+      tagAtCheckRuns: facts.tagAtCheckRuns,
+    });
+    if (fresh !== tagSha) {
+      throw new Error(
+        `Cannot tag v${newVersion}: freshly fetched origin/main resolves to ${fresh}, not ${tagSha}`,
+      );
+    }
+    return fresh;
+  };
+
   if (args.tag) {
     if (state === "push-local-tag") {
+      await resolveFreshTagTarget();
       step(2, `Pushing existing verified tag v${newVersion}...`);
       run(`git push origin v${newVersion}`);
       console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
@@ -2462,10 +2553,9 @@ const main = async (): Promise<void> => {
       return;
     }
     if (state === "tag-release") {
-      if (!tagSha) throw new Error(`Cannot tag v${newVersion}: no commit to tag`);
-      step(2, `Tagging v${newVersion} at verified commit ${tagSha} and pushing...`);
-      run(`git fetch origin main`, { silent: true });
-      run(`git tag -a v${newVersion} ${tagSha} -m v${newVersion}`);
+      const fresh = await resolveFreshTagTarget();
+      step(2, `Tagging v${newVersion} at verified commit ${fresh} and pushing...`);
+      run(`git tag -a v${newVersion} ${fresh} -m v${newVersion}`);
       run(`git push origin v${newVersion}`);
       console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
       log(`Done! v${newVersion} is publishing to npm.`);
@@ -2485,8 +2575,11 @@ const main = async (): Promise<void> => {
     return;
   }
   if (state === "push-local-tag") {
+    const again = tagAt
+      ? `bun run release ${newVersion} --tag --at ${tagAt}`
+      : `bun run release ${newVersion} --tag`;
     console.log(`  ✓ Local tag v${newVersion} is verified at ${tagSha}.`);
-    console.log(`\nNext step to push the tag:\n  bun run release ${newVersion} --tag`);
+    console.log(`\nNext step to push the tag:\n  ${again}`);
     return;
   }
 
