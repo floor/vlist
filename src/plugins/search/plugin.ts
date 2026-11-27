@@ -173,6 +173,10 @@ export function search<T extends VListItem = VListItem>(
   let cut = false;
   /** Calls that finished applying a membership change. A throw restores only when none have. */
   let settled = 0;
+  /** `_onItemUpdate` frames. A nested search event waits until the outer frame settles. */
+  let depth = 0;
+  /** Nested search events held until the outermost frame finishes. */
+  let held = 0;
   /** Pre-change copies, taken only when membership changes. Nested calls overwrite these; the caller keeps its own. */
   let undoM: number[] | null = null;
   let undoS: Set<number> | null = null;
@@ -292,6 +296,13 @@ export function search<T extends VListItem = VListItem>(
   };
 
   const emitSearchChange = (): void => {
+    // Publishing from the nested frame would count a join the outer edit still
+    // holds. A throw then leaves that count behind the list, the total and the
+    // counter. The nested event is published once the outer frame finishes.
+    if (depth > 1) {
+      held++;
+      return;
+    }
     ctx.emitter.emit("search:change", {
       query,
       matches: matchSet.size,
@@ -666,6 +677,7 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
         // Membership first, so groups regroups against the rows that still
         // match, then navigation and the public events see that layout.
+        depth++;
         const prevTotal = engineState.totalItems;
         const prevCur = current;
         const seen = settled;
@@ -711,6 +723,13 @@ export function search<T extends VListItem = VListItem>(
             updateCounter();
           }
           throw err;
+        } finally {
+          depth--;
+          if (depth === 0 && held > 0) {
+            const pending = held;
+            held = 0;
+            for (let i = 0; i < pending; i++) emitSearchChange();
+          }
         }
       });
 
