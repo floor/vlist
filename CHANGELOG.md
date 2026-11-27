@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.12] - 2026-11-27
+
 With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client; with `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured.
 
 Who is affected: lists with `search()` and a hidden bar plus `selection()`; lists using `autosize()` whose scrollbar thumb is dragged; anyone importing vlist from a server-rendered app (SvelteKit, Nuxt, Next, Astro); maintainers who run the release script.
@@ -2418,7 +2420,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.11...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.12...HEAD
+[3.8.12]: https://github.com/floor/vlist/compare/v3.8.11...v3.8.12
 [3.8.11]: https://github.com/floor/vlist/compare/v3.8.10...v3.8.11
 [3.8.10]: https://github.com/floor/vlist/compare/v3.8.9...v3.8.10
 [3.8.9]: https://github.com/floor/vlist/compare/v3.8.8...v3.8.9
