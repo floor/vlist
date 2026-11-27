@@ -48,6 +48,7 @@ const items = (): TestItem[] =>
 
 interface SearchApi {
   setQuery(query: string): void;
+  getQuery(): string;
   getMatches(): number[];
 }
 
@@ -166,6 +167,61 @@ describe("search() — a key another plugin handled", () => {
       await tick(0);
       await tick(30);
       expect(f.counter()).toBe("2 of 3");
+    } finally {
+      f.dispose();
+    }
+  });
+
+  // Bar hidden, a row already selected, then a query that matches. selection()
+  // runs first and treats Backspace as delete while the filtered total is
+  // above zero, so the character stays. A query that matches nothing drops
+  // the total to zero and Backspace reaches the query; Escape still clears.
+  it.serial("Backspace trims a hidden query that already has matches while a row is selected", async () => {
+    const f = await build([
+      search<TestItem>({ mode: "filter", position: "none", field: "name" }),
+      selection({ mode: "single" }),
+    ]);
+    try {
+      const apple = f.row("Apple");
+      expect(apple).toBeDefined();
+      apple!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await tick(0);
+      expect(f.selections[f.selections.length - 1]).toEqual([1]);
+
+      f.press("A");
+      f.press("p");
+      const api = f.list as unknown as SearchApi;
+      expect(api.getQuery()).toBe("Ap");
+      expect(f.list.total).toBeGreaterThan(0);
+
+      const deletes: unknown[] = [];
+      f.list.on("delete", (event) => deletes.push(event));
+      f.press("Backspace");
+
+      expect(api.getQuery()).toBe("A");
+      expect(deletes).toHaveLength(0);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it.serial("Backspace still deletes the selection when the hidden query is empty", async () => {
+    const f = await build([
+      search<TestItem>({ mode: "filter", position: "none", field: "name" }),
+      selection({ mode: "single" }),
+    ]);
+    try {
+      const apple = f.row("Apple");
+      expect(apple).toBeDefined();
+      apple!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      await tick(0);
+
+      const deletes: unknown[] = [];
+      f.list.on("delete", (event) => deletes.push(event));
+      f.press("Backspace");
+
+      expect((f.list as unknown as SearchApi).getQuery()).toBe("");
+      expect(deletes).toHaveLength(1);
     } finally {
       f.dispose();
     }
