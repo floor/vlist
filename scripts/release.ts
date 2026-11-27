@@ -57,8 +57,8 @@ export type BumpType = "patch" | "minor" | "major";
 export type ReleaseBranch = "main" | "v2";
 
 export type ReleaseArgs =
-  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined }
-  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined };
+  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined; readonly wait?: boolean | undefined }
+  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined; readonly wait?: boolean | undefined };
 
 export type ReleaseState =
   | "create-source-pr"
@@ -144,6 +144,8 @@ export interface PlanOptions {
   readonly tagAt?: string | null | undefined;
   /** One trailer line for the release commit and the release PR body. */
   readonly signature?: string | undefined;
+  /** Poll until the release PR merges. Absent means stop after the PR opens. */
+  readonly wait?: boolean | undefined;
 }
 
 export interface ReleaseStep {
@@ -161,7 +163,19 @@ export interface ParsedVersion {
 export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
 export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
-export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>]";
+export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>] [--wait]";
+
+/**
+ * The command the operator runs after the pinned merge. A PR into main is
+ * followed by the tag. A 2.x PR into v2 is followed by another release run,
+ * which opens the v2-to-main PR.
+ */
+export const releaseNextStep = (version: string, source: ReleaseBranch, openedIntoMain: boolean): string =>
+  openedIntoMain ? `bun run release ${version} --tag` : `bun run release ${version} --from ${source}`;
+
+const nextStepAfterMerge = (version: string, source: ReleaseBranch, openedIntoMain: boolean): ReleaseStep => ({
+  description: `Next step, after the operator's pinned merge: ${releaseNextStep(version, source, openedIntoMain)}`,
+});
 
 /** Shell-quote one argument. The release commands are one shell string. */
 const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
@@ -914,15 +928,19 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
     }
 
     case "await-main-pr":
-      steps.push(
-        {
-          description: `Wait for PR #${opts.mainPr?.number ?? opts.mainPrNumber ?? "<number>"} (${mainHead} → main, ${opts.targetVersion}) to be merged`,
-        },
-        pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
-        {
-          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
-        },
-      );
+      if (opts.wait === true) {
+        steps.push(
+          {
+            description: `Wait for PR #${opts.mainPr?.number ?? opts.mainPrNumber ?? "<number>"} (${mainHead} → main, ${opts.targetVersion}) to be merged`,
+          },
+          pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
+          {
+            description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+          },
+        );
+      } else {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, true));
+      }
       break;
 
     case "create-main-pr":
@@ -932,15 +950,25 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           description: `Create PR ${mainHead} → main`,
           command: `gh pr create --base main --head ${mainHead} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
         },
-        { description: `Wait for PR (${mainHead} → main) to be merged` },
-        pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
-        {
-          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
-        },
       );
+      if (opts.wait === true) {
+        steps.push(
+          { description: `Wait for PR (${mainHead} → main) to be merged` },
+          pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
+          {
+            description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+          },
+        );
+      } else {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, true));
+      }
       break;
 
     case "await-source-pr":
+      if (opts.wait !== true) {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, opts.sourceBranch === "main"));
+        break;
+      }
       steps.push(
         {
           description: `Wait for PR #${opts.sourcePr?.number ?? opts.sourcePrNumber ?? "<number>"} into ${opts.sourceBranch} to be merged`,
@@ -998,11 +1026,15 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
           { description: `Push branch ${branch}`, command: `git push origin ${branch}` },
         );
       }
+      steps.push({
+        description: `Create PR ${branch} → ${opts.sourceBranch}`,
+        command: releaseSourcePrCommand(opts.sourceBranch, branch, opts.targetVersion, opts.signature),
+      });
+      if (opts.wait !== true) {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, opts.sourceBranch === "main"));
+        break;
+      }
       steps.push(
-        {
-          description: `Create PR ${branch} → ${opts.sourceBranch}`,
-          command: releaseSourcePrCommand(opts.sourceBranch, branch, opts.targetVersion, opts.signature),
-        },
         { description: `Wait for PR into ${opts.sourceBranch} to be merged` },
         pinnedMergeStep(opts.sourcePr, `${branch} → ${opts.sourceBranch}`),
       );
@@ -1083,6 +1115,7 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
   let tag = false;
   let at: string | null = null;
   let signature: string | null = null;
+  let wait = false;
   let positional = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -1101,6 +1134,10 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
       const value = arg === "--at" ? argv[++i] : arg.slice("--at=".length);
       if (value === undefined || value === "" || value.startsWith("-")) throw new Error(USAGE);
       at = value;
+      continue;
+    }
+    if (arg === "--wait") {
+      wait = true;
       continue;
     }
     if (arg === "--signature" || arg.startsWith("--signature=")) {
@@ -1135,7 +1172,14 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
     throw new Error(USAGE);
   }
 
-  const flags = { from, dryRun, tag, ...(at === null ? {} : { at }), ...(signature === null ? {} : { signature }) };
+  const flags = {
+    from,
+    dryRun,
+    tag,
+    ...(at === null ? {} : { at }),
+    ...(signature === null ? {} : { signature }),
+    ...(wait ? { wait: true } : {}),
+  };
   if (exactVersion !== null) {
     return { kind: "exact", version: exactVersion, ...flags };
   }
@@ -2567,6 +2611,7 @@ const main = async (): Promise<void> => {
       mainPr,
       isReleaseBranchPushed,
       ...(args.signature === undefined ? {} : { signature: args.signature }),
+      ...(args.wait === true ? { wait: true } : {}),
     });
     console.log(formatReleasePlan(newVersion, sourceBranch, state, plan, { evidence }));
     return;
@@ -2733,12 +2778,21 @@ const main = async (): Promise<void> => {
     );
     const prNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
     console.log(`  ✓ PR #${prNumber} created: ${prUrl}`);
+    if (args.wait !== true) {
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, sourceBranch === "main")}`);
+      return;
+    }
 
     await waitForPrMerge(prNumber, `${releaseBranch} → ${sourceBranch}`, newVersion, pushedHead);
     verifySourcePrPin(prNumber, `${releaseBranch} → ${sourceBranch}`, pushedHead);
     if (sourceBranch === "main") mainPrNumber = prNumber;
   } else if (state === "await-source-pr") {
     const prNumber = sourcePr!.number;
+    if (args.wait !== true) {
+      console.log(`  ✓ PR #${prNumber} is already open.`);
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, sourceBranch === "main")}`);
+      return;
+    }
     await waitForPrMerge(
       prNumber,
       `${releaseBranch} → ${sourceBranch}`,
@@ -2760,6 +2814,10 @@ const main = async (): Promise<void> => {
     );
     mainPrNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
     console.log(`  ✓ PR #${mainPrNumber} created: ${prUrl}`);
+    if (args.wait !== true) {
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, true)}`);
+      return;
+    }
 
     const freshMainPin = readPrPin(mainPrNumber);
     await waitForPrMerge(
@@ -2770,6 +2828,11 @@ const main = async (): Promise<void> => {
     );
   } else if (state === "await-main-pr") {
     mainPrNumber = mainPr!.number;
+    if (args.wait !== true) {
+      console.log(`  ✓ PR #${mainPrNumber} is already open.`);
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, true)}`);
+      return;
+    }
     await waitForPrMerge(mainPrNumber, `${mainHead} → main`, newVersion, mainPr!.headRefOid);
   }
 

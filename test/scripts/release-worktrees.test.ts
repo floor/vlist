@@ -71,7 +71,7 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
   return execute(command, options);
 } }));
 `);
-      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "3.3.5", ...(checkout === "resume" ? [] : ["--tag"])], { cwd: repo, env, timeout: 15_000 });
+      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "3.3.5", ...(checkout === "resume" ? ["--wait"] : ["--tag"])], { cwd: repo, env, timeout: 15_000 });
       const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
       expect(output).toContain(checkout === "resume" ? "verified with all passing checks" : "Tag v3.3.5 pushed");
       expect(output).not.toContain("npm dist-tag add");
@@ -175,7 +175,7 @@ for (const source of ["main", "v2"] as const) {
     return execute(command, options);
   } }));
   `);
-      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version], { cwd: repo, env, timeout: 15_000 });
+      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--wait"], { cwd: repo, env, timeout: 15_000 });
       const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
       expect(output).toContain(`package.json: ${previous} → ${version}`);
       expect(output).toContain("verified with all passing checks");

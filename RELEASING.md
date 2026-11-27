@@ -56,15 +56,19 @@ script never checks out an integration branch held by another worktree.
    links, and updates both README version markers, measured size tables and
    matching prose. A failed size gate stops preparation; never raise a budget.
    It commits and pushes only the release branch, opens its PR into `main`,
-   and waits. `--signature "<line>"` appends that line as the last paragraph of
+   and exits. It prints `bun run release X.Y.Z --tag` as the next step after
+   the operator's pinned merge, and does not poll for that merge. `--wait`
+   keeps the poll through the merge and the check verification.
+   `--signature "<line>"` appends that line as the last paragraph of
    the release commit and as the last line of the release PR body. Without it,
    both stay as they are. A prerelease is never bumped: name its stable version explicitly.
 2. **Merge pinned to the reviewed head.** Independent review and all CI must
    pass on the release PR's exact head and on its base. The operator performs
-   a merge commit pinned to that head. The script verifies the merge's parents,
-   its presence on `main`, `package.json`, and every check run on that exact
-   merge commit. It waits up to ten minutes for missing or pending checks,
-   stops immediately for a failed check, then stops without tagging.
+   a merge commit pinned to that head. `--wait`, and the later `--tag` run,
+   verify the merge's parents, its presence on `main`, `package.json`, and
+   every check run on that exact merge commit. The poll waits up to ten minutes
+   for missing or pending checks, stops immediately for a failed check, and
+   does not tag.
 3. **Tag on the release decision.** Run `bun run release X.Y.Z --tag`. It
    re-verifies from scratch, fetches main's objects without checking out main,
    and tags the verified merge when that merge is still the first-parent tip
@@ -98,7 +102,10 @@ the script's diagnostic, then resume. An unfinished local release branch is
 refused. This is not a fallback after a size failure.
 
 **2.x maintenance.** Use `--from v2` for a 2.x version. Its release PR
-goes into `v2` and is followed by the existing v2-to-main PR. Both
+goes into `v2` and is followed by the existing v2-to-main PR. The command
+stops after each of those PRs. After the v2 PR, the printed next step is
+another `bun run release X.Y.Z --from v2`, which opens the v2-to-main PR.
+`--wait` opens that PR in the same run, after the v2 merge. Both
 merges must be pinned merge commits. Source ref updates are fetched without
 checking out `v2`; tagging follows the same `--tag` / `--at` rule and leaves
 the current worktree unchanged.

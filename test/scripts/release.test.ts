@@ -1008,7 +1008,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         "await-main-pr",
       ] as const;
       for (const state of states) {
-        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "v2", state });
+        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "v2", state, wait: true });
         const merges = steps
           .map((s) => s.command)
           .filter((c): c is string => !!c && c.startsWith("gh pr merge"));
@@ -1022,6 +1022,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         targetVersion: "2.8.3",
         sourceBranch: "v2",
         state: "await-main-pr",
+        wait: true,
         mainPr: mergedMainPr({ state: "OPEN", mergeCommitOid: undefined }),
       });
       expect(waiting.map((s) => s.command)).toContain(
@@ -1032,6 +1033,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         targetVersion: "2.8.3",
         sourceBranch: "v2",
         state: "await-source-pr",
+        wait: true,
         sourcePr: mergedSourcePr({ state: "OPEN", mergeCommitOid: undefined }),
       });
       expect(sourcing.map((s) => s.command)).toContain(
@@ -1128,6 +1130,7 @@ describe("planRelease", () => {
       targetVersion: "2.8.3",
       sourceBranch: "v2",
       state: "create-source-pr",
+      wait: true,
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     const descriptions = steps.map((s) => s.description);
@@ -2139,7 +2142,9 @@ describe("stop before the tag — ruled behavior", () => {
         expect(cmd).not.toMatch(/^git tag/);
         expect(cmd).not.toMatch(/^git push origin v/);
       }
-      expect(steps.some((s) => s.description.includes("bun run release 2.8.3 --tag"))).toBe(true);
+      const intoSource = state === "create-source-pr" || state === "await-source-pr";
+      const next = intoSource ? "bun run release 2.8.3 --from v2" : "bun run release 2.8.3 --tag";
+      expect(steps.some((s) => s.description.includes(next))).toBe(true);
     }
   });
 
