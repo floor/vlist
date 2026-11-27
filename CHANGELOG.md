@@ -11,16 +11,26 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-### Added
+An edit that brings a row into an active search filter regroups once. A throw leaves the previous filter unless a nested edit has already committed, and the search event reports the count the list keeps.
 
-- Every JavaScript package entry imports under SSR. Lists are created on the client. `examples/ssr-sveltekit` is a SvelteKit page that imports `vlist` and `vlist/styles`, and calls `createVList` in `onMount`.
+Who is affected: lists using `search()` with an active filter, including with `groups()` or `table()`.
 
 ### Fixed
 
 - An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws before a nested edit has committed, the list stays on the previous filter, and retrying the edit applies it. A nested edit that already committed stays. A pending join that never took a slot is dropped, and the match list stays ordered and unique. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. A nested join reports the same match count as the match list, the total and the counter. When the outer edit throws after that nested join, that event reports the settled count once. A throw from the search field accessor leaves later joins and leaves publishing their events.
-- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
-- Dragging the thumb to the end of an `autosize()` list stays at that end after the last rows measure taller, while the pointer is down. Once the drag settles, a native list is at `scrollTop === scrollHeight - clientHeight`. A synthetic thumb stays on the end of the track when the pointer is past it. Appending items, `scrollToIndex`, and restoring a snapshot do not jump to that end.
-- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate and the check evidence, so the release merge's checks are not read, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again after its last check-run read, immediately before creating or pushing the tag.
+
+## [3.8.12] - 2026-11-27
+
+With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client; with `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured.
+
+Who is affected: lists with `search()` and a hidden bar plus `selection()`; lists using `autosize()` whose scrollbar thumb is dragged; anyone importing vlist from a server-rendered app (SvelteKit, Nuxt, Next, Astro); maintainers who run the release script.
+
+### Fixed
+
+- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. When the hidden query is empty and a row is selected, Backspace still emits the delete event.
+- Every JavaScript entry imports in a server process with no DOM. Lists are still created on the client.
+- With `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured, with the browser's scrollbar and with `scrollbar()`. A drag that comes back up before release stays where it was released.
+- `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit on main's first-parent line that still carries the release version and whose checks are green.
 
 ## [3.8.11] - 2026-11-25
 
@@ -2418,7 +2428,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.11...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.12...HEAD
+[3.8.12]: https://github.com/floor/vlist/compare/v3.8.11...v3.8.12
 [3.8.11]: https://github.com/floor/vlist/compare/v3.8.10...v3.8.11
 [3.8.10]: https://github.com/floor/vlist/compare/v3.8.9...v3.8.10
 [3.8.9]: https://github.com/floor/vlist/compare/v3.8.8...v3.8.9
