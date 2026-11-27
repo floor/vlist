@@ -60,8 +60,11 @@ script never checks out an integration branch held by another worktree.
    the operator's pinned merge, and does not poll for that merge. `--wait`
    keeps the poll through the merge and the check verification.
    `--signature "<line>"` appends that line as the last paragraph of
-   the release commit and as the last line of the release PR body. Without it,
-   both stay as they are. A prerelease is never bumped: name its stable version explicitly.
+   the release commit and as the last line of the release PR body. On a 2.x
+   release it is also the last line of the v2-to-main PR body, and the printed
+   next step repeats it (`bun run release X.Y.Z --from v2 --signature "<line>"`).
+   A line with leading or trailing whitespace is rejected. Without it, the
+   commit and both PR bodies stay as they are. A prerelease is never bumped: name its stable version explicitly.
 2. **Merge pinned to the reviewed head.** Independent review and all CI must
    pass on the release PR's exact head and on its base. The operator performs
    a merge commit pinned to that head. `--wait`, and the later `--tag` run,
@@ -105,6 +108,7 @@ refused. This is not a fallback after a size failure.
 goes into `v2` and is followed by the existing v2-to-main PR. The command
 stops after each of those PRs. After the v2 PR, the printed next step is
 another `bun run release X.Y.Z --from v2`, which opens the v2-to-main PR.
+When `--signature` was given, that next step includes it.
 `--wait` opens that PR in the same run, after the v2 merge. Both
 merges must be pinned merge commits. Source ref updates are fetched without
 checking out `v2`; tagging follows the same `--tag` / `--at` rule and leaves
