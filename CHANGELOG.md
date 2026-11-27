@@ -11,7 +11,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client; with `autosize()`, a scrollbar thumb dragged past the bottom keeps the list at its end.
+With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client; with `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured.
 
 Who is affected: lists with `search()` and a hidden bar plus `selection()`; lists using `autosize()` whose scrollbar thumb is dragged; anyone importing vlist from a server-rendered app (SvelteKit, Nuxt, Next, Astro); maintainers who run the release script.
 
@@ -19,7 +19,7 @@ Who is affected: lists with `search()` and a hidden bar plus `selection()`; list
 
 - With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. When the hidden query is empty and a row is selected, Backspace still emits the delete event.
 - Every JavaScript entry imports in a server process with no DOM. Lists are still created on the client.
-- With `autosize()`, dragging the scrollbar thumb past the bottom keeps the list at its end while the last rows are measured, with the browser's scrollbar and with `scrollbar()`. A drag that comes back up before release stays where it was released.
+- With `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured, with the browser's scrollbar and with `scrollbar()`. A drag that comes back up before release stays where it was released.
 - `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit on main's first-parent line that still carries the release version and whose checks are green.
 
 ## [3.8.11] - 2026-11-25
