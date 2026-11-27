@@ -40,6 +40,8 @@ import {
   parseSizeOutput,
   refreshReadmeSizes,
   rollChangelog,
+  releaseCommitCommand,
+  releaseSourcePrCommand,
   updateReadmeVersion,
   updateReadmeVersions,
   utcDateStamp,
@@ -269,6 +271,12 @@ describe("parseArgs", () => {
       signature: "Agent: Example",
     });
     expect(parseArgs(["3.8.13"])).not.toHaveProperty("signature");
+    expect(releaseCommitCommand("3.8.13")).toBe('git commit -m "chore(release): v3.8.13"');
+    expect(releaseCommitCommand("3.8.13", "Agent: O'Brien")).toContain(`'Agent: O'\\''Brien'`);
+    expect(releaseSourcePrCommand("main", "chore/release-3.8.13", "3.8.13")).toBe(
+      'gh pr create --base main --head chore/release-3.8.13 --title "chore(release): v3.8.13" --body "Release commit for v3.8.13."',
+    );
+    expect(releaseSourcePrCommand("main", "chore/release-3.8.13", "3.8.13", "Agent: Example").endsWith("Agent: Example'")).toBe(true);
     expect(() => parseArgs(["3.8.13", "--signature"])).toThrow(USAGE);
     expect(() => parseArgs(["3.8.13", "--signature", ""])).toThrow(USAGE);
   });

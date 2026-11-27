@@ -35,7 +35,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
-- `bun run release [patch|minor|major|<version>] [--from main|v2]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `main`, 2.x from `v2`.
+- `bun run release [patch|minor|major|<version>] [--from main|v2] [--signature <line>]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `main`, 2.x from `v2`. `--signature` appends the line to the release commit and the release PR body.
 
 ## Project Structure
 
@@ -236,7 +236,7 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]` prepares
+`bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>]` prepares
 3.x from `main` and 2.x from `v2`. A 3.x release has one release PR into
 `main`; 2.x retains its v2-to-main promotion. `--from` confirms the line.
 
@@ -245,8 +245,10 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
    creates `chore/release-X.Y.Z` from its remote tip, without checking out an
    integration branch another worktree may hold. It bumps the package, dates
    the notes, updates compare links and refreshes both README versions/sizes.
-3. It pushes only the release branch and opens its PR into `main`. The
-   operator merges with a merge commit pinned to the verified PR head.
+3. It pushes only the release branch and opens its PR into `main`.
+   `--signature "<line>"` appends that line as the last paragraph of the release
+   commit and as the last line of that PR body. Without it, both stay as they are.
+   The operator merges with a merge commit pinned to the verified PR head.
 4. The script verifies the main merge, package version and all checks, then
    stops. A separate `bun run release X.Y.Z --tag` re-verifies and tags that
    exact merge when it is still the tip of `origin/main`'s first-parent history,

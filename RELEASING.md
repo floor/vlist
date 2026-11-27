@@ -56,7 +56,9 @@ script never checks out an integration branch held by another worktree.
    links, and updates both README version markers, measured size tables and
    matching prose. A failed size gate stops preparation; never raise a budget.
    It commits and pushes only the release branch, opens its PR into `main`,
-   and waits. A prerelease is never bumped: name its stable version explicitly.
+   and waits. `--signature "<line>"` appends that line as the last paragraph of
+   the release commit and as the last line of the release PR body. Without it,
+   both stay as they are. A prerelease is never bumped: name its stable version explicitly.
 2. **Merge pinned to the reviewed head.** Independent review and all CI must
    pass on the release PR's exact head and on its base. The operator performs
    a merge commit pinned to that head. The script verifies the merge's parents,

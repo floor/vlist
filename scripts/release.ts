@@ -57,8 +57,8 @@ export type BumpType = "patch" | "minor" | "major";
 export type ReleaseBranch = "main" | "v2";
 
 export type ReleaseArgs =
-  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined }
-  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined };
+  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined }
+  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined };
 
 export type ReleaseState =
   | "create-source-pr"
@@ -142,6 +142,8 @@ export interface PlanOptions {
   readonly mainPrNumber?: number | undefined;
   /** Commit `--at` names. The tag command uses it instead of the release merge. */
   readonly tagAt?: string | null | undefined;
+  /** One trailer line for the release commit and the release PR body. */
+  readonly signature?: string | undefined;
 }
 
 export interface ReleaseStep {
@@ -159,7 +161,37 @@ export interface ParsedVersion {
 export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
 export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
-export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]";
+export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>]";
+
+/** Shell-quote one argument. The release commands are one shell string. */
+const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * The release commit. Without a signature the command is the subject alone.
+ * With one, a second `-m` is the trailer paragraph, so the subject stays put.
+ */
+export const releaseCommitCommand = (version: string, signature?: string): string => {
+  const subject = `chore(release): v${version}`;
+  if (signature === undefined) return `git commit -m "${subject}"`;
+  return `git commit -m ${shellQuote(subject)} -m ${shellQuote(signature)}`;
+};
+
+/** The release PR body. The signature, when present, is its last line. */
+export const releaseSourcePrCommand = (
+  sourceBranch: string,
+  head: string,
+  version: string,
+  signature?: string,
+): string => {
+  const title = `chore(release): v${version}`;
+  const body = signature === undefined
+    ? `Release commit for v${version}.`
+    : `Release commit for v${version}.\n${signature}`;
+  if (signature === undefined) {
+    return `gh pr create --base ${sourceBranch} --head ${head} --title "${title}" --body "${body}"`;
+  }
+  return `gh pr create --base ${sourceBranch} --head ${head} --title ${shellQuote(title)} --body ${shellQuote(body)}`;
+};
 
 /**
  * Fetch main into its remote-tracking ref. A bare `git fetch origin main` only
@@ -962,14 +994,14 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
             description: "Stage modified files",
             command: "git add package.json README.md npm-readme.md CHANGELOG.md",
           },
-          { description: "Commit release bump", command: `git commit -m "chore(release): v${opts.targetVersion}"` },
+          { description: "Commit release bump", command: releaseCommitCommand(opts.targetVersion, opts.signature) },
           { description: `Push branch ${branch}`, command: `git push origin ${branch}` },
         );
       }
       steps.push(
         {
           description: `Create PR ${branch} → ${opts.sourceBranch}`,
-          command: `gh pr create --base ${opts.sourceBranch} --head ${branch} --title "chore(release): v${opts.targetVersion}" --body "Release commit for v${opts.targetVersion}."`,
+          command: releaseSourcePrCommand(opts.sourceBranch, branch, opts.targetVersion, opts.signature),
         },
         { description: `Wait for PR into ${opts.sourceBranch} to be merged` },
         pinnedMergeStep(opts.sourcePr, `${branch} → ${opts.sourceBranch}`),
@@ -1050,6 +1082,7 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
   let dryRun = false;
   let tag = false;
   let at: string | null = null;
+  let signature: string | null = null;
   let positional = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -1068,6 +1101,14 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
       const value = arg === "--at" ? argv[++i] : arg.slice("--at=".length);
       if (value === undefined || value === "" || value.startsWith("-")) throw new Error(USAGE);
       at = value;
+      continue;
+    }
+    if (arg === "--signature" || arg.startsWith("--signature=")) {
+      const value = arg === "--signature" ? argv[++i] : arg.slice("--signature=".length);
+      if (value === undefined || value.trim() === "" || value.startsWith("-") || /[\r\n]/.test(value)) {
+        throw new Error(USAGE);
+      }
+      signature = value;
       continue;
     }
     if (arg === "--from") {
@@ -1094,7 +1135,7 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
     throw new Error(USAGE);
   }
 
-  const flags = { from, dryRun, tag, ...(at === null ? {} : { at }) };
+  const flags = { from, dryRun, tag, ...(at === null ? {} : { at }), ...(signature === null ? {} : { signature }) };
   if (exactVersion !== null) {
     return { kind: "exact", version: exactVersion, ...flags };
   }
@@ -2525,6 +2566,7 @@ const main = async (): Promise<void> => {
       sourcePr,
       mainPr,
       isReleaseBranchPushed,
+      ...(args.signature === undefined ? {} : { signature: args.signature }),
     });
     console.log(formatReleasePlan(newVersion, sourceBranch, state, plan, { evidence }));
     return;
@@ -2677,7 +2719,7 @@ const main = async (): Promise<void> => {
       console.log(`  ✓ README.md + npm-readme.md: version v${newVersion}, size rows refreshed`);
 
       run(`git add package.json README.md npm-readme.md CHANGELOG.md`);
-      run(`git commit -m "chore(release): v${newVersion}"`);
+      run(releaseCommitCommand(newVersion, args.signature));
       run(`git push origin ${releaseBranch}`);
       console.log(`  ✓ Pushed to ${releaseBranch}`);
     }
@@ -2686,7 +2728,7 @@ const main = async (): Promise<void> => {
     // merge it waits for must be pinned to exactly that commit.
     const pushedHead = run("git rev-parse HEAD", { silent: true });
     const prUrl = run(
-      `gh pr create --base ${sourceBranch} --head ${releaseBranch} --title "chore(release): v${newVersion}" --body "Release commit for v${newVersion}."`,
+      releaseSourcePrCommand(sourceBranch, releaseBranch, newVersion, args.signature),
       { silent: true },
     );
     const prNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
