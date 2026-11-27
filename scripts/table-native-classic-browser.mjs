@@ -141,7 +141,7 @@ const launch = (classic) => launchBrowser({
   scrollbars: classic ? "classic" : (overlay ? "overlay" : "default"),
 });
 
-async function paintedThumb(page) {
+async function overlayProbe(page) {
   await page.evaluate(() => {
     const probe = document.createElement("div");
     probe.id = "bar-probe";
@@ -153,6 +153,10 @@ async function paintedThumb(page) {
     probe.scrollTop = 30;
   });
   try {
+    const gutter = await page.evaluate(() => {
+      const el = document.getElementById("bar-probe");
+      return el.offsetWidth - el.clientWidth;
+    });
     const box = await page.evaluate(() => {
       const r = document.getElementById("bar-probe").getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + 24 };
@@ -168,7 +172,7 @@ async function paintedThumb(page) {
       };
     });
     const b64 = await page.screenshot({ clip, encoding: "base64" });
-    return page.evaluate(async (b64) => {
+    const painted = await page.evaluate(async (b64) => {
       const img = new Image();
       img.src = "data:image/png;base64," + b64;
       await img.decode();
@@ -184,6 +188,7 @@ async function paintedThumb(page) {
       }
       return dark;
     }, b64);
+    return { gutter, painted };
   } finally {
     await page.evaluate(() => document.getElementById("bar-probe")?.remove());
   }
@@ -394,11 +399,13 @@ async function exercise(classic) {
         assert.equal(fresh.custom, false, "no custom vertical track " + JSON.stringify(fresh));
         assert.ok(!fresh.className.includes("vlist-viewport--custom-scrollbar"), "the viewport is styled as without scrollbar(): " + fresh.className);
         if (!overlay) return;
+        const probe = await overlayProbe(page);
+        console.log(label, "probe", JSON.stringify(probe));
+        assert.equal(probe.gutter, 0, "overlay probe takes no column " + JSON.stringify(probe));
+        assert.ok(probe.painted > 20, "overlay probe paints a vertical thumb (" + probe.painted + " px) " + JSON.stringify(probe));
         assert.ok(fresh.scrollHeight > fresh.clientHeight, "overlay table overflows " + JSON.stringify(fresh));
-        assert.equal(fresh.gutter, 0, "overlay scrollbars take no column " + JSON.stringify(fresh));
-        assert.equal(fresh.native, false, "overlay scrollbars are not a classic gutter " + JSON.stringify(fresh));
-        const painted = await paintedThumb(page);
-        assert.ok(painted > 20, "overlay scrollbars paint a thumb (" + painted + " px)");
+        assert.equal(fresh.gutter, 0, "overlay table takes no column " + JSON.stringify(fresh));
+        assert.equal(fresh.native, false, "overlay table is not a classic gutter " + JSON.stringify(fresh));
       });
     }
   } finally {
