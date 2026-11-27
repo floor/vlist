@@ -173,6 +173,9 @@ export function search<T extends VListItem = VListItem>(
   let cut = false;
   /** Calls that finished applying a membership change. A throw restores only when none have. */
   let settled = 0;
+  /** Pre-change copies, taken only when membership changes. Nested calls overwrite these; the caller keeps its own. */
+  let undoM: number[] | null = null;
+  let undoS: Set<number> | null = null;
   /** Position within `matches` of the focused match (navigate mode). */
   let current = 0;
   /** Whether a virtual filter is currently applied (filter mode). */
@@ -325,6 +328,8 @@ export function search<T extends VListItem = VListItem>(
   const onItemUpdate = (id: string | number, updates: Partial<T>): number => {
     hold = -1;
     cut = false;
+    undoM = null;
+    undoS = null;
     if (!open || !isActive()) return 0;
     const items = ctx.items.all();
     const targetId = updates.id ?? id;
@@ -332,6 +337,8 @@ export function search<T extends VListItem = VListItem>(
     if (idx < 0) return 0;
     const matched = matchesItem(items[idx], caseSensitive ? query : query.toLowerCase());
     if (matched === matchSet.has(idx)) return 0;
+    undoM = matches.slice();
+    undoS = new Set(matchSet);
 
     const prevRow = matches[current];
     if (matched) {
@@ -661,10 +668,10 @@ export function search<T extends VListItem = VListItem>(
         // match, then navigation and the public events see that layout.
         const prevTotal = engineState.totalItems;
         const prevCur = current;
-        const snap = matches.slice();
-        const snapSet = new Set(matchSet);
         const seen = settled;
         const changed = onItemUpdate(id, u);
+        const snap = undoM;
+        const snapSet = undoS;
         let at = holdAt;
         const idx = hold;
         const removed = cut;
@@ -691,10 +698,17 @@ export function search<T extends VListItem = VListItem>(
           // A nested call that already finished keeps its list. Restoring here
           // would drop that rejoin or splice it a second time.
           if (!synced && settled === seen) {
-            matches = snap;
-            matchSet = snapSet;
+            if (snap && snapSet) {
+              matches = snap;
+              matchSet = snapSet;
+            }
             current = prevCur;
             engineState.totalItems = prevTotal;
+          } else if (!synced && !removed && idx >= 0 && matches.indexOf(idx) < 0) {
+            // The pending join never received a slot. Drop it so the set matches
+            // the list a nested commit already published.
+            matchSet.delete(idx);
+            updateCounter();
           }
           throw err;
         }
