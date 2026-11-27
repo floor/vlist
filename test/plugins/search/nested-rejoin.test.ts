@@ -308,6 +308,38 @@ describe("search nested rejoin", () => {
     mounted.close();
   });
 
+  it("reports the settled count once when a nested join is followed by an outer throw", async () => {
+    let once = true;
+    const mounted = mount("table", rows("hide"), (list, id) => {
+      if (!once || id !== 2) return;
+      once = false;
+      list.updateItem(4, { label: "show" });
+      throw new Error("outer after other");
+    });
+    mounted.list.setQuery("show");
+    await flush();
+    const events: number[] = [];
+    mounted.list.on("search:change", (event) => {
+      const matches = mounted.list.getMatches();
+      const counter = mounted.container.querySelector(".vlist-search__counter")?.textContent ?? "";
+      expect(event.matches).toBe(matches.length);
+      expect(mounted.list.total).toBe(matches.length);
+      expect(counter).toBe(`${matches.length} results`);
+      events.push(event.matches);
+    });
+    let error = "";
+    try {
+      mounted.list.updateItem(2, { label: "show" });
+    } catch (err) {
+      error = (err as Error).message;
+    }
+    await flush();
+    expect(error).toBe("outer after other");
+    expect(mounted.list.getMatches()).toEqual([0, 2, 3]);
+    expect(events).toEqual([3]);
+    mounted.close();
+  });
+
   it("commits a filter join once and a grouped table leave twice", async () => {
     const join = mount("table", rows("hide"));
     join.list.setQuery("show");
