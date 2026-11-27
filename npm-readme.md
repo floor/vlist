@@ -139,7 +139,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `data()` | 41.0 KB | 15.3 KB |
 | `scrollbar()` | 36.0 KB | 13.5 KB |
 | `sortable()` | 38.8 KB | 14.0 KB |
-| `groups()` | 43.7 KB | 16.1 KB |
+| `groups()` | 43.8 KB | 16.1 KB |
 | `page()` | 30.3 KB | 11.5 KB |
 | `snapshots()` | 30.8 KB | 11.7 KB |
 | `transition()` | 33.9 KB | 12.4 KB |
@@ -151,7 +151,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `table()` + `rowAttributes()` | 46.7 KB | 17.2 KB |
 | `masonry()` | 39.9 KB | 15.0 KB |
 | `tree()` | 43.5 KB | 15.8 KB |
-| `search()` | 36.5 KB | 14.0 KB |
+| `search()` | 37.1 KB | 14.2 KB |
 | `carousel()` | 43.4 KB | 16.0 KB |
 | `vlist/synthetic` + `carousel()` | 49.5 KB | 18.3 KB |
 | `vlist/synthetic` + `sortable()` | 45.7 KB | 16.7 KB |

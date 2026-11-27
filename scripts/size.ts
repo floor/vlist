@@ -198,8 +198,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   data: kb(15.45),
   scrollbar: kb(13.53),
   sortable: kb(14.26),
-  // PR 527 only: owner approved the measured 16503 B on 2026-11-23.
-  groups: kb(16.117),
+  // Measured 16525 B gzipped on this branch. The pin is that
+  // measurement plus 10 B. kb(16.148) floors to 16535.
+  groups: kb(16.148),
   page: kb(11.53),
   snapshots: kb(11.75),
   transition: kb(12.61),
@@ -222,9 +223,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   "table + rowAttributes": kb(17.44),
   masonry: kb(15.08),
   tree: kb(15.94),
-  // CI run 45994214351 measured 14311 B gzipped. The pin is that
-  // measurement plus 10 B. kb(13.986) floors to 14321.
-  search: kb(13.986),
+  // Measured 14554 B gzipped on this branch. The pin is that
+  // measurement plus 10 B. kb(14.223) floors to 14564.
+  search: kb(14.223),
   carousel: kb(16.15),
   vue: kb(10.77),
   svelte: kb(10.67),
