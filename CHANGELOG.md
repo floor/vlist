@@ -18,6 +18,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 ### Fixed
 
 - With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
+- Dragging the thumb to the end of an `autosize()` list stays at that end after the last rows measure taller, while the pointer is down. Once the drag settles, a native list is at `scrollTop === scrollHeight - clientHeight`. A synthetic thumb stays on the end of the track when the pointer is past it. Appending items, `scrollToIndex`, and restoring a snapshot do not jump to that end.
 - `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate and the check evidence, so the release merge's checks are not read, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again after its last check-run read, immediately before creating or pushing the tag.
 
 ## [3.8.11] - 2026-11-25
