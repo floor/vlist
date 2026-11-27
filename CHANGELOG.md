@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green.
+
 ## [3.8.11] - 2026-11-25
 
 ### Fixed

@@ -65,9 +65,13 @@ script never checks out an integration branch held by another worktree.
    stops immediately for a failed check, then stops without tagging.
 3. **Tag on the release decision.** Run `bun run release X.Y.Z --tag`. It
    re-verifies from scratch, fetches main's objects without checking out main,
-   creates `git tag -a vX.Y.Z <verified merge sha> -m vX.Y.Z`, and pushes only
-   that tag. It leaves the caller's branch or detached HEAD unchanged and
-   does not switch branches after pushing. The tag triggers `publish.yml`: npm,
+   and tags the verified merge when that merge is still the first-parent tip
+   of `origin/main`. When later first-parent commits exist, it refuses and
+   lists them. `--at <full oid>` tags one listed commit that is on that line,
+   descends from the release merge, still has package version X.Y.Z, and has
+   the same green checks. It pushes only that tag. It leaves the caller's
+   branch or detached HEAD unchanged and does not switch branches after
+   pushing. The tag triggers `publish.yml`: npm,
    removal of any npm `next` dist-tag on stable releases, the GitHub Release
    and the production site dispatch.
 
@@ -89,7 +93,7 @@ refused. This is not a fallback after a size failure.
 **2.x maintenance.** Use `--from v2` for a 2.x version. Its release PR
 goes into `v2` and is followed by the existing v2-to-main PR. Both
 merges must be pinned merge commits. Source ref updates are fetched without
-checking out `v2`; tagging uses the same verified main SHA and leaves
+checking out `v2`; tagging follows the same `--tag` / `--at` rule and leaves
 the current worktree unchanged.
 
 **npm tags.** A stable publish moves `latest` and removes any `next`

@@ -2,7 +2,7 @@
 /**
  * vlist release script
  *
- * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag]
+ * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]
  *
  * What it does:
  *   1. Resolves the source branch from the version being released
@@ -17,7 +17,10 @@
  *   7. Creates a PR chore/release-X.Y.Z → <source> and waits for it to merge
  *   8. For 2.x only, promotes v2 → main through a second pinned PR
  *   9. Verifies merge commit, package.json, and passing check runs on main
- *  10. Stops before the tag by default; with explicit --tag, creates annotated tag and pushes
+ *  10. Stops before the tag by default; with explicit --tag, creates an annotated tag and pushes.
+ *      Refuses when origin/main has first-parent commits after the release merge, and lists them.
+ *      --at <full oid> tags that commit when it is on that line, descends from the release merge,
+ *      still has package.json version X.Y.Z, and its check runs are green
  */
 
 import { execSync } from "node:child_process";
@@ -51,8 +54,8 @@ export type BumpType = "patch" | "minor" | "major";
 export type ReleaseBranch = "main" | "v2";
 
 export type ReleaseArgs =
-  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined }
-  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined };
+  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined }
+  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined };
 
 export type ReleaseState =
   | "create-source-pr"
@@ -82,6 +85,12 @@ export interface CheckRunInfo {
   readonly app?: { readonly slug?: string | undefined; readonly name?: string | undefined } | null | undefined;
 }
 
+/** One commit on origin/main's first-parent line, after the release merge. */
+export interface MainLineCommit {
+  readonly oid: string;
+  readonly subject: string;
+}
+
 export interface ReleaseContext {
   readonly currentVersion: string;
   readonly targetVersion: string;
@@ -104,6 +113,14 @@ export interface ReleaseContext {
   readonly originSourceVersion?: string | null | undefined;
   readonly releaseBranchCommitVersion?: string | null | undefined;
   readonly isReleaseBranchPushed?: boolean | undefined;
+  /** First-parent commits on origin/main strictly after the release merge. Empty means main has not moved. */
+  readonly commitsAfterMerge?: readonly MainLineCommit[] | undefined;
+  /** `--at` commit to tag instead of the release merge. */
+  readonly tagAt?: string | null | undefined;
+  readonly tagAtOnFirstParent?: boolean | undefined;
+  readonly tagAtDescendsFromMerge?: boolean | undefined;
+  readonly packageVersionAtTagAt?: string | null | undefined;
+  readonly tagAtCheckRuns?: readonly CheckRunInfo[] | undefined;
 }
 
 export interface PlanOptions {
@@ -120,6 +137,8 @@ export interface PlanOptions {
   readonly isReleaseBranchPushed?: boolean | undefined;
   readonly sourcePrNumber?: number | undefined;
   readonly mainPrNumber?: number | undefined;
+  /** Commit `--at` names. The tag command uses it instead of the release merge. */
+  readonly tagAt?: string | null | undefined;
 }
 
 export interface ReleaseStep {
@@ -137,7 +156,9 @@ export interface ParsedVersion {
 export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
 export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
-export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag]";
+export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]";
+
+const FULL_OID_RE = /^[0-9a-f]{40}$/;
 
 const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
@@ -514,6 +535,48 @@ export const verifyCheckRuns = (
 // Release State Detection & Planning
 // =============================================================================
 
+/**
+ * Commit to tag. The release merge is that commit only while it is still
+ * origin/main's first-parent tip. Later commits on that line are fixes the
+ * release would otherwise ship without, so tagging the merge is refused
+ * until `--at` names one that still carries this version and green checks.
+ */
+export const resolveTagTarget = (mergeSha: string, ctx: ReleaseContext): string => {
+  const tagAt = ctx.tagAt ?? null;
+  const later = ctx.commitsAfterMerge ?? [];
+  if (tagAt === null) {
+    if (later.length === 0) return mergeSha;
+    const listed = later.map((commit) => `${commit.oid} ${commit.subject}`).join("\n");
+    throw new Error(
+      `Cannot tag v${ctx.targetVersion} at release merge ${mergeSha}: origin/main has first-parent commits after it. Tag one of them with --at <full oid>:\n${listed}`,
+    );
+  }
+  if (!FULL_OID_RE.test(tagAt)) {
+    throw new Error(`Cannot tag v${ctx.targetVersion}: --at ${tagAt} is not a full oid`);
+  }
+  if (ctx.tagAtOnFirstParent !== true) {
+    throw new Error(
+      `Cannot tag v${ctx.targetVersion}: --at ${tagAt} is not on origin/main's first-parent line`,
+    );
+  }
+  if (ctx.tagAtDescendsFromMerge !== true) {
+    throw new Error(
+      `Cannot tag v${ctx.targetVersion}: --at ${tagAt} does not descend from release merge ${mergeSha}`,
+    );
+  }
+  if (ctx.packageVersionAtTagAt !== ctx.targetVersion) {
+    const found = ctx.packageVersionAtTagAt ? `v${ctx.packageVersionAtTagAt}` : "unknown";
+    throw new Error(
+      `Cannot tag v${ctx.targetVersion}: package.json at --at ${tagAt} is ${found}, not v${ctx.targetVersion}`,
+    );
+  }
+  if (!ctx.tagAtCheckRuns) {
+    throw new Error(`Cannot tag v${ctx.targetVersion}: no check runs available for --at ${tagAt}`);
+  }
+  verifyCheckRuns(ctx.tagAtCheckRuns, tagAt);
+  return tagAt;
+};
+
 export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
   const mainPr = ctx.mainPr ?? (ctx.sourceBranch === "main" ? ctx.sourcePr : null);
 
@@ -623,10 +686,15 @@ export const detectReleaseState = (ctx: ReleaseContext): ReleaseState => {
         parents: ctx.mainPrMergeParents ?? (ctx.sourceBranch === "main" ? ctx.sourcePrMergeParents : null),
       });
 
+      const tagTarget = resolveTagTarget(mergeSha, ctx);
+
       if (ctx.localTagSha !== null && ctx.localTagSha !== undefined) {
-        if (ctx.localTagSha !== mergeSha) {
+        if (ctx.localTagSha !== tagTarget) {
+          const named = ctx.tagAt
+            ? `verified commit is ${tagTarget}`
+            : `verified merge commit is ${mergeSha}`;
           throw new Error(
-            `Local tag v${ctx.targetVersion} points to ${ctx.localTagSha}, but verified merge commit is ${mergeSha}`,
+            `Local tag v${ctx.targetVersion} points to ${ctx.localTagSha}, but ${named}`,
           );
         }
         return "push-local-tag";
@@ -757,22 +825,27 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
       }
       break;
 
-    case "tag-release":
+    case "tag-release": {
+      const tagSha = opts.tagAt ?? verifiedSha;
+      const tagAgain = opts.tagAt
+        ? `bun run release ${opts.targetVersion} --tag --at ${opts.tagAt}`
+        : `bun run release ${opts.targetVersion} --tag`;
       if (isTag) {
         steps.push(
           { description: "Fetch verified main history without switching branches", command: "git fetch origin main" },
           {
-            description: `Tag v${opts.targetVersion} at verified commit ${verifiedSha}`,
-            command: `git tag -a v${opts.targetVersion} ${verifiedSha} -m v${opts.targetVersion}`,
+            description: `Tag v${opts.targetVersion} at verified commit ${tagSha}`,
+            command: `git tag -a v${opts.targetVersion} ${tagSha} -m v${opts.targetVersion}`,
           },
           { description: `Push tag v${opts.targetVersion}`, command: `git push origin v${opts.targetVersion}` },
         );
       } else {
         steps.push({
-          description: `Main PR merged and verified at ${verifiedSha}. Run 'bun run release ${opts.targetVersion} --tag' to tag and push.`,
+          description: `Main PR merged and verified at ${tagSha}. Run '${tagAgain}' to tag and push.`,
         });
       }
       break;
+    }
 
     case "await-main-pr":
       steps.push(
@@ -942,6 +1015,7 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
   let from: ReleaseBranch | null = null;
   let dryRun = false;
   let tag = false;
+  let at: string | null = null;
   let positional = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -954,6 +1028,12 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
     }
     if (arg === "--tag") {
       tag = true;
+      continue;
+    }
+    if (arg === "--at" || arg.startsWith("--at=")) {
+      const value = arg === "--at" ? argv[++i] : arg.slice("--at=".length);
+      if (value === undefined || value === "" || value.startsWith("-")) throw new Error(USAGE);
+      at = value;
       continue;
     }
     if (arg === "--from") {
@@ -980,10 +1060,11 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
     throw new Error(USAGE);
   }
 
+  const flags = { from, dryRun, tag, ...(at === null ? {} : { at }) };
   if (exactVersion !== null) {
-    return { kind: "exact", version: exactVersion, from, dryRun, tag };
+    return { kind: "exact", version: exactVersion, ...flags };
   }
-  return { kind: "bump", bumpType: bumpType ?? "patch", from, dryRun, tag };
+  return { kind: "bump", bumpType: bumpType ?? "patch", ...flags };
 };
 
 const README_VERSION_RE =
@@ -1848,6 +1929,68 @@ export const parseCompareResponse = (
   return validate(raw, compareSchema, cmd);
 };
 
+/** `git log --first-parent` lines: 40-hex oid, tab, subject. Empty means no commits. */
+export const parseFirstParentLog = (raw: string): readonly MainLineCommit[] => {
+  const trimmed = raw.trim();
+  if (trimmed === "") return [];
+  return trimmed.split("\n").map((line) => {
+    const tab = line.indexOf("\t");
+    if (tab !== 40) {
+      throw new Error(`Malformed git log line: ${JSON.stringify(line)}`);
+    }
+    const oid = line.slice(0, tab);
+    const subject = line.slice(tab + 1);
+    if (!FULL_OID_RE.test(oid)) {
+      throw new Error(`Malformed git log oid: ${JSON.stringify(oid)}`);
+    }
+    return { oid, subject };
+  });
+};
+
+/** First-parent commits reachable from origin/main and not from the release merge. */
+export const readCommitsAfterMerge = (mergeSha: string): readonly MainLineCommit[] => {
+  if (!FULL_OID_RE.test(mergeSha)) {
+    throw new Error(`Release merge ${mergeSha} is not a full oid`);
+  }
+  return read(`git log --first-parent --format=%H%x09%s ${mergeSha}..origin/main`, {
+    kind: "text",
+    name: "commits_after_merge",
+    parse: (raw: string) => parseFirstParentLog(raw),
+  });
+};
+
+/** True when oid is itself on origin/main's first-parent history. */
+export const isOnFirstParentLine = (oid: string): boolean => {
+  if (!FULL_OID_RE.test(oid)) return false;
+  const line = read("git rev-list --first-parent origin/main", {
+    kind: "text",
+    name: "first_parent_line",
+    parse: (raw: string) => raw.trim(),
+  });
+  if (line === "") return false;
+  return line.split("\n").includes(oid);
+};
+
+/** True when `ancestor` is an ancestor of `descendant`, including when they are the same commit. Exit 1 is "no". */
+export const commitDescendsFrom = (ancestor: string, descendant: string): boolean => {
+  if (!FULL_OID_RE.test(ancestor) || !FULL_OID_RE.test(descendant)) return false;
+  const cmd = `git merge-base --is-ancestor ${ancestor} ${descendant}`;
+  try {
+    execSync(cmd, {
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: READ_COMMAND_TIMEOUT_MS,
+    });
+    return true;
+  } catch (err: unknown) {
+    const status = typeof err === "object" && err !== null && "status" in err
+      ? (err as { status: unknown }).status
+      : undefined;
+    if (status === 1) return false;
+    throw new Error(`Command failed [timeout ${READ_COMMAND_TIMEOUT_MS}ms] (${cmd}): ${execErrorMessage(err)}`);
+  }
+};
+
 export const isCommitAncestorOfRemoteMain = (
   commitSha: string,
   owner = "floor",
@@ -2124,6 +2267,13 @@ const main = async (): Promise<void> => {
   let mainPrMergeParents: readonly string[] | null | undefined;
   let sourcePrMergeParents: readonly string[] | null | undefined;
   const mergeSha = mainPr?.mergeCommitOid;
+  const tagAt = args.at ?? null;
+
+  // The tag decision compares the release merge with origin/main. Fetch before
+  // reading that history so a stale remote-tracking ref cannot hide later commits.
+  if (mainPr?.state === "MERGED" && mergeSha && !remoteTagSha) {
+    run("git fetch origin main", { silent: true });
+  }
 
   if (mainPr?.state === "MERGED" && mergeSha) {
     mainPrMergeParents = readCommitParents(mergeSha);
@@ -2155,6 +2305,29 @@ const main = async (): Promise<void> => {
     sourcePrMergeParents = readCommitParents(sourcePr.mergeCommitOid);
   }
 
+  let commitsAfterMerge: readonly MainLineCommit[] | undefined;
+  let tagAtOnFirstParent: boolean | undefined;
+  let tagAtDescendsFromMerge: boolean | undefined;
+  let packageVersionAtTagAt: string | null | undefined;
+  let tagAtCheckRuns: readonly CheckRunInfo[] | undefined;
+  if (mainPr?.state === "MERGED" && mergeSha && !remoteTagSha) {
+    commitsAfterMerge = readCommitsAfterMerge(mergeSha);
+    if (tagAt !== null && FULL_OID_RE.test(tagAt)) {
+      tagAtOnFirstParent = isOnFirstParentLine(tagAt);
+      tagAtDescendsFromMerge = tagAtOnFirstParent && commitDescendsFrom(mergeSha, tagAt);
+      if (tagAtOnFirstParent && tagAtDescendsFromMerge) {
+        try {
+          packageVersionAtTagAt = readPackageVersionAtSha(tagAt);
+        } catch {
+          packageVersionAtTagAt = null;
+        }
+        if (packageVersionAtTagAt === newVersion) {
+          tagAtCheckRuns = !args.dryRun && args.tag ? await waitForCheckRuns(tagAt) : fetchCheckRuns(tagAt);
+        }
+      }
+    }
+  }
+
   let state: ReleaseState;
   try {
     state = detectReleaseState({
@@ -2177,10 +2350,32 @@ const main = async (): Promise<void> => {
       releaseBranchCommitVersion,
       isReleaseBranchPushed,
       tag: args.tag,
+      commitsAfterMerge,
+      tagAt,
+      tagAtOnFirstParent,
+      tagAtDescendsFromMerge,
+      packageVersionAtTagAt,
+      tagAtCheckRuns,
     });
   } catch (err: unknown) {
     console.error(`  ✗ ${err instanceof Error ? err.message : String(err)}`);
     process.exit(1);
+  }
+
+  let tagSha: string | null = mergeSha ?? null;
+  if ((state === "tag-release" || state === "push-local-tag") && mergeSha) {
+    tagSha = resolveTagTarget(mergeSha, {
+      currentVersion: oldVersion,
+      targetVersion: newVersion,
+      remoteTagSha,
+      localTagSha,
+      commitsAfterMerge,
+      tagAt,
+      tagAtOnFirstParent,
+      tagAtDescendsFromMerge,
+      packageVersionAtTagAt,
+      tagAtCheckRuns,
+    });
   }
 
   const evidence: string[] = [];
@@ -2234,7 +2429,8 @@ const main = async (): Promise<void> => {
       currentBranch,
       state,
       tag: args.tag,
-      verifiedSha: mergeSha,
+      verifiedSha: tagSha,
+      tagAt,
       remoteTagSha,
       localTagSha,
       sourcePr,
@@ -2266,9 +2462,10 @@ const main = async (): Promise<void> => {
       return;
     }
     if (state === "tag-release") {
-      step(2, `Tagging v${newVersion} at verified commit ${mergeSha} and pushing...`);
+      if (!tagSha) throw new Error(`Cannot tag v${newVersion}: no commit to tag`);
+      step(2, `Tagging v${newVersion} at verified commit ${tagSha} and pushing...`);
       run(`git fetch origin main`, { silent: true });
-      run(`git tag -a v${newVersion} ${mergeSha} -m v${newVersion}`);
+      run(`git tag -a v${newVersion} ${tagSha} -m v${newVersion}`);
       run(`git push origin v${newVersion}`);
       console.log(`  ✓ Tag v${newVersion} pushed — publish workflow triggered`);
       log(`Done! v${newVersion} is publishing to npm.`);
@@ -2280,12 +2477,15 @@ const main = async (): Promise<void> => {
   }
 
   if (state === "tag-release") {
-    console.log(`  ✓ Main pull request #${mainPr?.number} is merged and verified at ${mergeSha}.`);
-    console.log(`\nNext step to create and push the tag:\n  bun run release ${newVersion} --tag`);
+    const again = tagAt
+      ? `bun run release ${newVersion} --tag --at ${tagAt}`
+      : `bun run release ${newVersion} --tag`;
+    console.log(`  ✓ Main pull request #${mainPr?.number} is merged and verified at ${tagSha}.`);
+    console.log(`\nNext step to create and push the tag:\n  ${again}`);
     return;
   }
   if (state === "push-local-tag") {
-    console.log(`  ✓ Local tag v${newVersion} is verified at ${mergeSha}.`);
+    console.log(`  ✓ Local tag v${newVersion} is verified at ${tagSha}.`);
     console.log(`\nNext step to push the tag:\n  bun run release ${newVersion} --tag`);
     return;
   }

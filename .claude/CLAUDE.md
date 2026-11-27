@@ -236,7 +236,7 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major|<version>] [--from main|v2]` prepares
+`bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]` prepares
 3.x from `main` and 2.x from `v2`. A 3.x release has one release PR into
 `main`; 2.x retains its v2-to-main promotion. `--from` confirms the line.
 
@@ -249,7 +249,13 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
    operator merges with a merge commit pinned to the verified PR head.
 4. The script verifies the main merge, package version and all checks, then
    stops. A separate `bun run release X.Y.Z --tag` re-verifies and tags that
-   exact merge, without switching branches before or after the tag push.
+   exact merge when it is still the tip of `origin/main`'s first-parent history,
+   without switching branches before or after the tag push. When later
+   first-parent commits exist, `--tag` refuses and lists each oid and subject.
+   `--at <full oid>` tags one of those commits instead, only when it is on that
+   line, descends from the release merge, still has package.json version X.Y.Z,
+   and its check runs are green. `--dry-run` shows the same refusal or the same
+   tag plan.
 5. Publish CI handles npm, removing any npm `next` dist-tag on stable releases,
    the GitHub Release and the site dispatch. Verify npm version/tags and the
    live version at `https://vlist.io/dist/version.json`; wait through registry
