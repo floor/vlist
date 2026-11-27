@@ -17,7 +17,7 @@ Who is affected: lists with `search()` and a hidden bar plus `selection()`; anyo
 
 ### Fixed
 
-- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
+- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. When the hidden query is empty and a row is selected, Backspace still emits the delete event.
 - Every JavaScript entry imports in a server process with no DOM. Lists are still created on the client.
 <!-- Placeholder: the autosize() dragged-thumb fix. Add its entry above the release-script line, and name those lists on Who is affected, once it is in this release. -->
 - `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit on main's first-parent line that still carries the release version and whose checks are green.
