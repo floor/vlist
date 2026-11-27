@@ -651,6 +651,11 @@ export function search<T extends VListItem = VListItem>(
         applyQuery(q);
       });
       ctx.hooks.method("getQuery", () => query);
+      // selection() runs first and takes Backspace as delete while a row is
+      // selected. A hidden query that still matches keeps the total above
+      // zero, so the character never leaves. Yield Backspace while the query
+      // has text. An empty query keeps delete.
+      ctx.hooks.method("_k", (): boolean => position === "none" && query.length > 0);
       ctx.hooks.method("nextMatch", nextMatch);
       ctx.hooks.method("prevMatch", prevMatch);
       ctx.hooks.method("getMatches", () => matches.slice());

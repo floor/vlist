@@ -59,7 +59,7 @@ describe("size gate", () => {
       "table + rowAttributes": kb(17.44),
       masonry: kb(15.08),
       tree: kb(15.94),
-      search: kb(13.962),
+      search: kb(13.986),
       carousel: kb(16.15),
       vue: kb(10.77),
       svelte: kb(10.67),
