@@ -197,10 +197,19 @@ async function dragPastEnd(page, kind) {
     await page.mouse.move(origin.cross, y);
     await sleep(40);
   }
-  await sleep(400);
-  await page.mouse.up();
+  // The native drag keeps its own offset until the button comes up. Hold
+  // still so the anchor can arm, then release, then let that snap settle.
   let signature = "";
   let stable = 0;
+  for (let i = 0; i < 12 && stable < 2; i++) {
+    const next = await page.evaluate(() => window.sample().pos);
+    stable = next === signature ? stable + 1 : 0;
+    signature = next;
+    await sleep(80);
+  }
+  await page.mouse.up();
+  signature = "";
+  stable = 0;
   for (let i = 0; i < 24 && stable < 3; i++) {
     const next = await page.evaluate(() => {
       const sample = window.sample();

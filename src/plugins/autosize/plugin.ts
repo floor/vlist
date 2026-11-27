@@ -88,14 +88,17 @@ export function autosize<T extends VListItem = VListItem>(
   let pendingContentSizeUpdate = false;
   let pinnedToEnd = false;
   let animatingToEnd = false;
-  // -1 when the list is not holding its end. Otherwise the offset of the end
-  // it is holding. A drag rewrites that offset through the grown height;
-  // idle puts the end back and moves this up once the list rests there.
-  // A move back above it, or a wheel or touch, lets go.
-  let endAnchor = -1;
+  // -1 unless a thumb drag reached the end. The offset it reached. The
+  // native drag rewrites scroll while the button is down; the idle after
+  // release snaps once and clears this. A drag back above it lets go.
+  let dragAnchor = -1;
+  let nativeThumb = false;
   // Last scroll maximum handed to the scroller. The cache runs ahead of it
   // while a drag is in progress.
   let publishedMax = 0;
+  let tracks: HTMLCollectionOf<Element> | null = null;
+  let dragClass = "";
+  let horizClass = "";
 
   const END_THRESHOLD = 2;
 
@@ -271,6 +274,21 @@ export function autosize<T extends VListItem = VListItem>(
     return maxScroll > 0 && scroll.getPixelEquivalent() >= maxScroll - END_THRESHOLD;
   }
 
+  // The synthetic thumb sets its dragging class. The native thumb is a pointer
+  // held on the scroller, outside the client area (the gutter). Page mode
+  // scrolls the document, so that gutter is on the document element.
+  function thumbHeld(): boolean {
+    if (nativeThumb) return true;
+    const bars = tracks;
+    if (!bars) return false;
+    for (let i = 0; i < bars.length; i++) {
+      const el = bars[i]!;
+      if (el.classList.contains(horizClass) !== isX) continue;
+      if (el.classList.contains(dragClass)) return true;
+    }
+    return false;
+  }
+
   function snapToEnd(): void {
     const maxScroll = maxScrollPos();
     if (maxScroll > scroll.getPixelEquivalent()) {
@@ -327,8 +345,14 @@ export function autosize<T extends VListItem = VListItem>(
         ctx.dom.root.classList.remove(autosizeClass);
       });
       if (gap === 0) gap = ctx.config.gap;
-      endAnchor = -1;
+      dragAnchor = -1;
+      nativeThumb = false;
       publishedMax = maxScrollPos();
+      const prefix = ctx.config.classPrefix;
+      dragClass = prefix + "-scrollbar--dragging";
+      horizClass = prefix + "-scrollbar--horizontal";
+      const pageClass = prefix + "--page";
+      tracks = ctx.dom.root.getElementsByClassName(prefix + "-scrollbar");
 
       // Read estimated size from the current sizeCache before replacing it.
       // The initial cache already has gap baked in — read the raw spec size.
@@ -512,14 +536,30 @@ export function autosize<T extends VListItem = VListItem>(
         }
       });
 
-      const unpinOnUserScroll = (): void => { pinnedToEnd = false; endAnchor = -1; };
+      const unpinOnUserScroll = (): void => { pinnedToEnd = false; };
       const viewport = ctx.dom.viewport;
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
+      const onPointerDown = (event: PointerEvent): void => {
+        if (event.button !== 0) return;
+        const el = ctx.dom.root.classList.contains(pageClass) ? document.documentElement : viewport;
+        if (event.target !== el) return;
+        const outside = isX ? event.offsetY >= el.clientHeight : event.offsetX >= el.clientWidth;
+        if (!outside) return;
+        nativeThumb = true;
+        dragAnchor = -1;
+      };
+      const onPointerUp = (): void => { nativeThumb = false; };
+      document.addEventListener("pointerdown", onPointerDown, true);
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", onPointerUp, true);
 
       ctx.hooks.onDestroy((): void => {
         viewport.removeEventListener("wheel", unpinOnUserScroll);
         viewport.removeEventListener("touchstart", unpinOnUserScroll);
+        document.removeEventListener("pointerdown", onPointerDown, true);
+        document.removeEventListener("pointerup", onPointerUp, true);
+        document.removeEventListener("pointercancel", onPointerUp, true);
       });
 
       // Late-sizing content: `load`/`error` from images, iframes and the like
@@ -591,21 +631,25 @@ export function autosize<T extends VListItem = VListItem>(
 
       onIdle(): void {
         if (!storedCtx) return;
-        // The cache can be ahead of the height the scroller will accept.
-        // Sitting on that height is the end a thumb drag is holding. The
-        // anchor moves up only once the list is actually resting on the
-        // grown end, so the drag's rewrite of scrollTop is not a leave.
+        // The anchor is the published maximum a thumb drag reached. The
+        // native drag keeps writing that offset while the button is down,
+        // so the snap lands on the idle after release, once. A drag back
+        // above the anchor lets go. Nothing arms the anchor except the drag.
         const pos = scroll.getPixelEquivalent();
         const atEnd = isAtEnd();
-        if (endAnchor < 0) {
-          if (atEnd || (publishedMax > 0 && pos >= publishedMax - END_THRESHOLD)) endAnchor = pos;
-        } else if (pos + END_THRESHOLD < endAnchor) endAnchor = -1;
-        else if (atEnd) endAnchor = pos;
+        const down = thumbHeld();
+        if (down) {
+          if (dragAnchor < 0) {
+            if (atEnd || (publishedMax > 0 && pos >= publishedMax - END_THRESHOLD)) dragAnchor = pos;
+          } else if (pos + END_THRESHOLD < dragAnchor) dragAnchor = -1;
+          else if (atEnd) dragAnchor = pos;
+        }
         if (pendingContentSizeUpdate) {
           updateContentSize();
           pendingContentSizeUpdate = false;
         }
-        if (endAnchor < 0) return;
+        if (dragAnchor < 0) return;
+        if (!down) dragAnchor = -1;
         snapToEnd();
       },
     },
