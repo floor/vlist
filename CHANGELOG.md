@@ -11,14 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-### Added
+With the search bar hidden, Backspace edits a query that already has matches, and removes the selection only when the query is empty. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client.
 
-- Every JavaScript package entry imports under SSR. Lists are created on the client. `examples/ssr-sveltekit` is a SvelteKit page that imports `vlist` and `vlist/styles`, and calls `createVList` in `onMount`.
+Who is affected: lists with `search()` and a hidden bar plus `selection()`; anyone importing vlist from a server-rendered app (SvelteKit, Nuxt, Next, Astro); maintainers who run the release script.
 
 ### Fixed
 
 - With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
-- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate and the check evidence, so the release merge's checks are not read, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again after its last check-run read, immediately before creating or pushing the tag.
+- Every JavaScript entry imports in a server process with no DOM. Lists are still created on the client.
+<!-- Placeholder: the autosize() dragged-thumb fix. Add its entry above the release-script line, and name those lists on Who is affected, once it is in this release. -->
+- `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit that still carries the release version and whose checks are green.
 
 ## [3.8.11] - 2026-11-25
 
