@@ -8,13 +8,13 @@
  * custom thumb.
  *
  * The classic launch leaves Chromium's scrollbars visible and turns overlay
- * scrollbars off. The overlay launch is headless Chromium's default. Build
+ * scrollbars off. The overlay launch enables OverlayScrollbar and leaves
+ * scrollbars visible, so the thumb paints and the gutter stays 0. Build
  * first. Run this file alone.
  */
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
-import puppeteer from "puppeteer-core";
-import { findChrome } from "./browser-driver.mjs";
+import { launchBrowser } from "./browser-driver.mjs";
 import { pinPage, settle } from "./browser-page.mjs";
 
 const root = resolve(import.meta.dir, "../dist");
@@ -134,14 +134,55 @@ const check = async (name, fn) => {
   }
 };
 
-const launch = (classic) => puppeteer.launch({
-  headless: true,
-  executablePath: findChrome(),
-  ignoreDefaultArgs: classic ? ["--hide-scrollbars"] : undefined,
-  args: classic
-    ? ["--no-sandbox", "--disable-dev-shm-usage", "--disable-features=OverlayScrollbar"]
-    : ["--no-sandbox", "--disable-dev-shm-usage"],
-});
+const launch = (classic) => launchBrowser({ scrollbars: classic ? "classic" : "overlay" });
+
+async function paintedThumb(page) {
+  await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.id = "bar-probe";
+    probe.style.cssText = "position:fixed;left:8px;top:8px;width:180px;height:140px;overflow:scroll;background:#fff;z-index:2147483647";
+    const inner = document.createElement("div");
+    inner.style.cssText = "width:400px;height:400px;background:#fff";
+    probe.appendChild(inner);
+    document.body.appendChild(probe);
+    probe.scrollTop = 30;
+  });
+  try {
+    const box = await page.evaluate(() => {
+      const r = document.getElementById("bar-probe").getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + 24 };
+    });
+    await page.mouse.move(box.x, box.y);
+    const clip = await page.evaluate(() => {
+      const r = document.getElementById("bar-probe").getBoundingClientRect();
+      return {
+        x: Math.round(r.right - 14),
+        y: Math.round(r.top + 4),
+        width: 14,
+        height: Math.round(r.height - 8),
+      };
+    });
+    const b64 = await page.screenshot({ clip, encoding: "base64" });
+    return page.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = "data:image/png;base64," + b64;
+      await img.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let dark = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] < 250 || data[i + 1] < 250 || data[i + 2] < 250) dark++;
+      }
+      return dark;
+    }, b64);
+  } finally {
+    await page.evaluate(() => document.getElementById("bar-probe")?.remove());
+  }
+}
 
 const oneBar = (sample, label) => {
   assert.ok(sample.scrollHeight > sample.clientHeight, label + " overflows vertically " + JSON.stringify(sample));
@@ -345,8 +386,13 @@ async function exercise(classic) {
       const fresh = await page.evaluate(() => window.bars("#fresh"));
       console.log(label, "fresh", JSON.stringify(fresh));
       await check(label + " a natively scrolling table uses the native bar only", async () => {
+        assert.ok(fresh.scrollHeight > fresh.clientHeight, "overlay table overflows " + JSON.stringify(fresh));
+        assert.equal(fresh.gutter, 0, "overlay scrollbars take no column " + JSON.stringify(fresh));
+        assert.equal(fresh.native, false, "overlay scrollbars are not a classic gutter " + JSON.stringify(fresh));
         assert.equal(fresh.custom, false, "overlay scrollbars: no custom vertical track " + JSON.stringify(fresh));
         assert.ok(!fresh.className.includes("vlist-viewport--custom-scrollbar"), "the viewport is styled as without scrollbar(): " + fresh.className);
+        const painted = await paintedThumb(page);
+        assert.ok(painted > 20, "overlay scrollbars paint a thumb (" + painted + " px)");
       });
     }
   } finally {
