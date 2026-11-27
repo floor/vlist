@@ -171,6 +171,8 @@ export function search<T extends VListItem = VListItem>(
   let hold = -1;
   let holdAt = 0;
   let cut = false;
+  /** Calls that finished applying a membership change. A throw restores only when none have. */
+  let settled = 0;
   /** Position within `matches` of the focused match (navigate mode). */
   let current = 0;
   /** Whether a virtual filter is currently applied (filter mode). */
@@ -223,9 +225,8 @@ export function search<T extends VListItem = VListItem>(
     if (active) resolveOnce();
     else if (!filtered) return;
     filtered = active;
-    const totalFn = (): number => (active ? matches.length : ctx.items.all().length);
-    ctx.items.setTotalFn(totalFn);
-    engineState.totalItems = totalFn();
+    ctx.items.setTotalFn(() => (active ? matchSet.size : ctx.items.all().length));
+    engineState.totalItems = active ? matches.length : ctx.items.all().length;
     (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
     ctx.sizes.rebuild();
     ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
@@ -262,16 +263,29 @@ export function search<T extends VListItem = VListItem>(
   const updateCounter = (): void => {
     if (!bar) return;
     // Same query/matches state as the counter — refreshed together.
-    bar.showNav(navigate && matches.length);
+    const shown = matchSet.size;
+    bar.showNav(navigate && shown);
     if (!isActive()) {
       bar.setCounter("");
-    } else if (!matches.length) {
+    } else if (!shown) {
       bar.setCounter(text.noResults);
     } else if (navigate) {
       bar.setCounter(text.position(current + 1, matches.length));
     } else {
-      bar.setCounter(text.results(matches.length));
+      bar.setCounter(text.results(shown));
     }
+  };
+
+  const listedMatches = (): number[] => {
+    const out = matches.slice();
+    if (matchSet.size === out.length) return out;
+    for (const idx of matchSet) {
+      if (out.indexOf(idx) >= 0) continue;
+      let at = 0;
+      while (at < out.length && out[at]! < idx) at++;
+      out.splice(at, 0, idx);
+    }
+    return out;
   };
 
   const emitSearchChange = (): void => {
@@ -647,6 +661,9 @@ export function search<T extends VListItem = VListItem>(
         // match, then navigation and the public events see that layout.
         const prevTotal = engineState.totalItems;
         const prevCur = current;
+        const snap = matches.slice();
+        const snapSet = new Set(matchSet);
+        const seen = settled;
         const changed = onItemUpdate(id, u);
         let at = holdAt;
         const idx = hold;
@@ -664,23 +681,18 @@ export function search<T extends VListItem = VListItem>(
             }
           }
           if (!changed) return;
-          if (!navigate) {
-            syncFilter(true);
-            ctx.render.force();
-          }
+          if (!navigate) syncFilter(true);
           synced = true;
+          settled++;
           updateCounter();
           if (changed > 1) scrollToMatch();
           emitSearchChange();
         } catch (err) {
-          if (!synced) {
-            if (removed) {
-              matches.splice(at, 0, idx);
-              matchSet.add(idx);
-            } else if (matchSet.has(idx)) {
-              if (at >= 0) matches.splice(at, 1);
-              matchSet.delete(idx);
-            }
+          // A nested call that already finished keeps its list. Restoring here
+          // would drop that rejoin or splice it a second time.
+          if (!synced && settled === seen) {
+            matches = snap;
+            matchSet = snapSet;
             current = prevCur;
             engineState.totalItems = prevTotal;
           }
@@ -703,7 +715,7 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_k", (): boolean => position === "none" && query.length > 0);
       ctx.hooks.method("nextMatch", nextMatch);
       ctx.hooks.method("prevMatch", prevMatch);
-      ctx.hooks.method("getMatches", () => matches.slice());
+      ctx.hooks.method("getMatches", listedMatches);
 
       ctx.hooks.onKeydown(onKeydown);
 

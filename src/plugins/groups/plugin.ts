@@ -809,6 +809,11 @@ export function groups<T extends VListItem = VListItem>(
             stickyHeader.refresh();
             stickyHeader.update(scroll.getPixelEquivalent());
           }
+        } else if (lastDataCount < 0) {
+          layout.rebuild(n, getLoadedItem ?? ((i: number) => ctx.items.all()[i] as T | undefined));
+          lastDataCount = n;
+          lastRebuildLoadedCount = getLoadedCount?.() ?? 0;
+          rebuildGridPositions();
         }
         origSizeCacheRebuild(layout.totalEntries);
       };
