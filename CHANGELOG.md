@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Fixed
+
+- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
+
 ## [3.8.11] - 2026-11-25
 
 ### Fixed
