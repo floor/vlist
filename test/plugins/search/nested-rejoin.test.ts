@@ -386,3 +386,132 @@ describe("search nested rejoin", () => {
     bare.close();
   });
 });
+
+/**
+ * A throw anywhere inside an update must leave the nesting depth where it
+ * started. A raised depth holds every later `search:change` as nested, so a
+ * join and a leave after the throw would publish nothing.
+ */
+describe("search events after a throwing update", () => {
+  type Thrower = "field" | "nested-field" | "group" | "hook";
+
+  function mountArmed(kind: "list" | "table"): {
+    list: Api;
+    container: HTMLElement;
+    events: number[];
+    arm: (thrower: Thrower) => void;
+    close: () => void;
+  } {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const listRef: { list: Api | null } = { list: null };
+    let armed: Thrower | null = null;
+    const fire = (thrower: Thrower): boolean => {
+      if (armed !== thrower) return false;
+      armed = null;
+      return true;
+    };
+    const plugins: Array<VListPlugin<Row>> = [];
+    if (kind === "table") {
+      plugins.push(table<Row>({ columns: [{ key: "group", label: "Group", width: 150 }], rowHeight: 40 }));
+    }
+    plugins.push(groups<Row>({
+      getGroupForIndex: (_index, item) => {
+        if (fire("group")) throw new Error("group callback");
+        return item?.group ?? "";
+      },
+      header: { height: 32, template: (key) => key },
+      sticky: false,
+    }));
+    plugins.push({
+      name: "earlier-hook",
+      priority: 40,
+      setup(pluginCtx) {
+        const prev = pluginCtx.hooks.get("_onItemUpdate") as ((id: string | number, updates: Partial<Row>) => void) | undefined;
+        pluginCtx.hooks.method("_onItemUpdate", (id: string | number, updates: Partial<Row>): void => {
+          if (id === 2 && fire("hook")) throw new Error("update hook");
+          // The nested edit reaches the field accessor while the outer join is open.
+          if (id === 2 && armed === "nested-field" && listRef.list) listRef.list.updateItem(3, { note: "nested" });
+          prev?.(id, updates);
+        });
+      },
+    });
+    plugins.push(search<Row>({
+      mode: "filter",
+      field: (item: Row): string => {
+        if (fire("field") || (item.id === 3 && fire("nested-field"))) throw new Error("field accessor");
+        return item.label;
+      },
+    }));
+    const list = createVList<Row>(
+      {
+        container,
+        items: [
+          { id: 1, group: "A", label: "show" },
+          { id: 2, group: "B", label: "hide" },
+          { id: 3, group: "C", label: "hide" },
+          { id: 4, group: "D", label: "hide" },
+        ],
+        item: { height: 40, template: (item) => item.label },
+      },
+      plugins,
+    ) as Api;
+    listRef.list = list;
+    const events: number[] = [];
+    list.on("search:change", (event) => { events.push(event.matches); });
+    return {
+      list,
+      container,
+      events,
+      arm: (thrower) => { armed = thrower; },
+      close: () => { list.destroy(); container.remove(); },
+    };
+  }
+
+  const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  const messages: Record<Thrower, string> = {
+    field: "field accessor",
+    "nested-field": "field accessor",
+    group: "group callback",
+    hook: "update hook",
+  };
+
+  for (const kind of ["list", "table"] as const) {
+    for (const thrower of ["field", "nested-field", "group", "hook"] as const) {
+      it(`${kind}: a ${thrower} throw during a join reaches the caller and later edits still emit`, async () => {
+        const mounted = mountArmed(kind);
+        try {
+          mounted.list.setQuery("show");
+          await flush();
+          mounted.events.length = 0;
+
+          mounted.arm(thrower);
+          let error = "";
+          try {
+            mounted.list.updateItem(2, { label: "show" });
+          } catch (err) {
+            error = (err as Error).message;
+          }
+          await flush();
+          expect(error).toBe(messages[thrower]);
+          expect(mounted.list.getMatches()).toEqual([0]);
+          mounted.events.length = 0;
+
+          // Same label again: the data already holds it, the filter does not.
+          mounted.list.updateItem(2, { label: "show" });
+          await flush();
+          expect(mounted.list.getMatches()).toEqual([0, 1]);
+          mounted.list.updateItem(2, { label: "hide" });
+          await flush();
+          expect(mounted.list.getMatches()).toEqual([0]);
+
+          expect(mounted.events).toEqual([2, 1]);
+          expect(mounted.list.total).toBe(1);
+          expect(mounted.container.querySelector(".vlist-search__counter")?.textContent ?? "").toBe("1 result");
+        } finally {
+          mounted.close();
+        }
+      });
+    }
+  }
+});
