@@ -14,6 +14,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 ### Fixed
 
 - With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
+- Dragging to the end of an `autosize()` list stays at that end after the last rows measure taller. Once the drag settles, a native list is at `scrollTop === scrollHeight - clientHeight`. A synthetic thumb stays on the end of the track when the pointer is past it.
 
 ## [3.8.11] - 2026-11-25
 

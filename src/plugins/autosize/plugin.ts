@@ -88,6 +88,14 @@ export function autosize<T extends VListItem = VListItem>(
   let pendingContentSizeUpdate = false;
   let pinnedToEnd = false;
   let animatingToEnd = false;
+  // -1 when the list is not holding its end. Otherwise the offset of the end
+  // it is holding. A drag rewrites that offset through the grown height;
+  // idle puts the end back and moves this up once the list rests there.
+  // A move back above it, or a wheel or touch, lets go.
+  let endAnchor = -1;
+  // Last scroll maximum handed to the scroller. The cache runs ahead of it
+  // while a drag is in progress.
+  let publishedMax = 0;
 
   const END_THRESHOLD = 2;
 
@@ -272,6 +280,7 @@ export function autosize<T extends VListItem = VListItem>(
 
   function updateContentSize(): void {
     storedCtx!.render.contentSize(storedCtx!.sizes.cache.getTotalSize());
+    publishedMax = maxScrollPos();
   }
 
   /**
@@ -306,8 +315,7 @@ export function autosize<T extends VListItem = VListItem>(
       // even when the option says synthetic, so the option alone is not the
       // source.
       const autosizeClass = `${ctx.config.classPrefix}--autosize`;
-      const extentIsNative = (): boolean =>
-        ctx.dom.content.style[isX ? "width" : "height"].endsWith("px");
+      const extentIsNative = (): boolean => ctx.dom.content.style[sizeProp].endsWith("px");
       const syncAutosizeClass = (): void => {
         ctx.dom.root.classList.toggle(autosizeClass, extentIsNative());
       };
@@ -319,6 +327,8 @@ export function autosize<T extends VListItem = VListItem>(
         ctx.dom.root.classList.remove(autosizeClass);
       });
       if (gap === 0) gap = ctx.config.gap;
+      endAnchor = -1;
+      publishedMax = maxScrollPos();
 
       // Read estimated size from the current sizeCache before replacing it.
       // The initial cache already has gap baked in — read the raw spec size.
@@ -436,8 +446,7 @@ export function autosize<T extends VListItem = VListItem>(
           if (publishSize) {
             updateContentSize();
           } else {
-            const axis = isX ? "width" : "height";
-            const raw = storedCtx!.dom.content.style[axis];
+            const raw = storedCtx!.dom.content.style[sizeProp];
             // A percentage is the synthetic stage. parseFloat("100%") is 100,
             // and writing pixels there builds a native range. A native list,
             // including page(), publishes a px height.
@@ -445,7 +454,7 @@ export function autosize<T extends VListItem = VListItem>(
               const published = parseFloat(raw);
               const needed = scroll.getPixelEquivalent() + pendingScrollDelta + engineState.containerSize;
               if (!(published >= needed)) {
-                storedCtx!.dom.content.style[axis] = Math.min(needed, MAX_VIRTUAL_SIZE) + "px";
+                storedCtx!.dom.content.style[sizeProp] = Math.min(needed, MAX_VIRTUAL_SIZE) + "px";
               }
             }
           }
@@ -503,7 +512,7 @@ export function autosize<T extends VListItem = VListItem>(
         }
       });
 
-      const unpinOnUserScroll = (): void => { pinnedToEnd = false; };
+      const unpinOnUserScroll = (): void => { pinnedToEnd = false; endAnchor = -1; };
       const viewport = ctx.dom.viewport;
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
@@ -581,16 +590,23 @@ export function autosize<T extends VListItem = VListItem>(
       },
 
       onIdle(): void {
-        if (!storedCtx || !pendingContentSizeUpdate) return;
-
+        if (!storedCtx) return;
+        // The cache can be ahead of the height the scroller will accept.
+        // Sitting on that height is the end a thumb drag is holding. The
+        // anchor moves up only once the list is actually resting on the
+        // grown end, so the drag's rewrite of scrollTop is not a leave.
+        const pos = scroll.getPixelEquivalent();
         const atEnd = isAtEnd();
-        updateContentSize();
-        pendingContentSizeUpdate = false;
-
-        if (atEnd) {
-          snapToEnd();
-          storedCtx.render.force();
+        if (endAnchor < 0) {
+          if (atEnd || (publishedMax > 0 && pos >= publishedMax - END_THRESHOLD)) endAnchor = pos;
+        } else if (pos + END_THRESHOLD < endAnchor) endAnchor = -1;
+        else if (atEnd) endAnchor = pos;
+        if (pendingContentSizeUpdate) {
+          updateContentSize();
+          pendingContentSizeUpdate = false;
         }
+        if (endAnchor < 0) return;
+        snapToEnd();
       },
     },
 
