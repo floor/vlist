@@ -262,3 +262,159 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     rmSync(root, { recursive: true, force: true });
   }
 }, 20_000);
+
+it("refuses to tag the release merge once main has moved, and --at tags a later green commit", () => {
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-tag-target-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const operator = join(root, "operator");
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Release test",
+    GIT_AUTHOR_EMAIL: "release@example.test",
+    GIT_COMMITTER_NAME: "Release test",
+    GIT_COMMITTER_EMAIL: "release@example.test",
+  };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.4" }));
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "initial");
+    git(repo, "remote", "add", "origin", remote);
+    const baseHead = git(repo, "rev-parse", "HEAD");
+    git(repo, "checkout", "-b", "chore/release-3.3.5");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.5" }));
+    git(repo, "commit", "-am", "chore(release): v3.3.5");
+    const releaseHead = git(repo, "rev-parse", "HEAD");
+    git(repo, "push", "origin", "main", "chore/release-3.3.5");
+    git(root, "clone", "--branch", "main", remote, operator);
+    git(operator, "merge", "--no-ff", "origin/chore/release-3.3.5", "-m", "merge release");
+    const mergeSha = git(operator, "rev-parse", "HEAD");
+    writeFileSync(join(operator, "package.json"), JSON.stringify({ version: "3.3.6" }));
+    git(operator, "commit", "-am", "fix: keep the release fix");
+    const wrongSha = git(operator, "rev-parse", "HEAD");
+    writeFileSync(join(operator, "package.json"), JSON.stringify({ version: "3.3.5" }));
+    git(operator, "commit", "-am", "docs: record the size row");
+    const redSha = git(operator, "rev-parse", "HEAD");
+    writeFileSync(join(operator, "package.json"), JSON.stringify({ private: true, version: "3.3.5" }));
+    git(operator, "commit", "-am", "fix: the follow-up on main");
+    const goodSha = git(operator, "rev-parse", "HEAD");
+    git(operator, "push", "origin", "main");
+
+    const callerHead = git(repo, "rev-parse", "HEAD");
+    const callerBranch = git(repo, "branch", "--show-current");
+    const pr = {
+      number: 503,
+      title: "chore(release): v3.3.5",
+      state: "MERGED",
+      headRefName: "chore/release-3.3.5",
+      baseRefName: "main",
+      headRefOid: releaseHead,
+      mergedAt: "2026-11-02T12:00:00Z",
+      mergeCommit: { oid: mergeSha },
+    };
+    const preload = join(root, "github-read-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec } from "node:child_process";
+const pr = ${JSON.stringify(pr)};
+const execute = realExec;
+const redSha = ${JSON.stringify(redSha)};
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  if (command.startsWith("gh pr list")) {
+    if (command.includes("--state open")) return "[]";
+    return command.includes("--head chore/release-3.3.5 --base main") ? JSON.stringify([pr]) : "[]";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(pr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) {
+    const failed = command.includes(redSha);
+    const check_runs = ["Test & Build", "Browser suites"].map((name) => ({
+      name,
+      status: "completed",
+      conclusion: failed && name === "Test & Build" ? "failure" : "success",
+      app: { slug: "github-actions" },
+    }));
+    return JSON.stringify([{ total_count: 2, check_runs }]);
+  }
+  if (command.startsWith("gh api") && command.includes("contents/package.json")) {
+    return JSON.stringify({ content: Buffer.from('{"version":"3.3.5"}').toString("base64") });
+  }
+  if (command.startsWith("gh api") && command.includes("/compare/")) {
+    const sha = command.split("/compare/")[1].split("...")[0];
+    return JSON.stringify({ status: "ahead", ahead_by: 3, behind_by: 0, merge_base_commit: { sha } });
+  }
+  if (command.startsWith("gh api") && command.includes("commits/")) {
+    return JSON.stringify({ parents: ${JSON.stringify([baseHead, releaseHead])}.map((sha) => ({ sha })) });
+  }
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const script = resolve(import.meta.dir, "../../scripts/release.ts");
+    const release = (args: readonly string[]) => {
+      const result = Bun.spawnSync([process.execPath, "--preload", preload, script, ...args], {
+        cwd: repo,
+        env,
+        timeout: 20_000,
+      });
+      return {
+        exitCode: result.exitCode,
+        output: new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr),
+      };
+    };
+    const remoteTag = (): string => git(root, "--git-dir", remote, "tag", "-l", "v3.3.5");
+
+    const dryRefusal = release(["3.3.5", "--dry-run", "--tag"]);
+    expect(dryRefusal.exitCode).toBe(1);
+    expect(dryRefusal.output).toContain(`Cannot tag v3.3.5 at release merge ${mergeSha}`);
+    expect(dryRefusal.output).toContain("--at <full oid>");
+    expect(dryRefusal.output).toContain(`${wrongSha} fix: keep the release fix`);
+    expect(dryRefusal.output).toContain(`${redSha} docs: record the size row`);
+    expect(dryRefusal.output).toContain(`${goodSha} fix: the follow-up on main`);
+    expect(remoteTag()).toBe("");
+
+    const liveRefusal = release(["3.3.5", "--tag"]);
+    expect(liveRefusal.exitCode).toBe(1);
+    expect(liveRefusal.output).toContain(`${goodSha} fix: the follow-up on main`);
+    expect(remoteTag()).toBe("");
+
+    const offLine = release(["3.3.5", "--dry-run", "--tag", "--at", releaseHead]);
+    expect(offLine.exitCode).toBe(1);
+    expect(offLine.output).toContain("not on origin/main's first-parent line");
+
+    const notDescendant = release(["3.3.5", "--dry-run", "--tag", "--at", baseHead]);
+    expect(notDescendant.exitCode).toBe(1);
+    expect(notDescendant.output).toContain(`does not descend from release merge ${mergeSha}`);
+
+    const wrongVersion = release(["3.3.5", "--dry-run", "--tag", "--at", wrongSha]);
+    expect(wrongVersion.exitCode).toBe(1);
+    expect(wrongVersion.output).toContain(`package.json at --at ${wrongSha} is v3.3.6, not v3.3.5`);
+
+    const redChecks = release(["3.3.5", "--dry-run", "--tag", "--at", redSha]);
+    expect(redChecks.exitCode).toBe(1);
+    expect(redChecks.output).toContain(`commit ${redSha} has non-successful check runs`);
+
+    const planned = release(["3.3.5", "--dry-run", "--tag", "--at", goodSha]);
+    expect(planned.exitCode).toBe(0);
+    expect(planned.output).toContain(`git tag -a v3.3.5 ${goodSha} -m v3.3.5`);
+    expect(remoteTag()).toBe("");
+
+    const tagged = release(["3.3.5", "--tag", "--at", goodSha]);
+    expect(tagged.exitCode).toBe(0);
+    expect(tagged.output).toContain("Tag v3.3.5 pushed");
+    expect(git(root, "--git-dir", remote, "rev-parse", "v3.3.5^{}")).toBe(goodSha);
+    expect(git(root, "--git-dir", remote, "cat-file", "-t", "v3.3.5")).toBe("tag");
+    expect(git(repo, "rev-parse", "HEAD")).toBe(callerHead);
+    expect(git(repo, "branch", "--show-current")).toBe(callerBranch);
+    expect(remoteTag()).toBe("v3.3.5");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 90_000);

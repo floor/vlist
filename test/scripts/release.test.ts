@@ -2641,3 +2641,178 @@ describe("main release guards", () => {
     expect(detectBlockingPr([{ ...candidate, headRefName: "feature" }], "main", "3.3.6")).toBeNull();
   });
 });
+
+const RELEASE_MERGE = "a".repeat(40);
+const LATER_ON_MAIN = "b".repeat(40);
+const ALSO_LATER = "c".repeat(40);
+const RELEASE_GREEN_CHECKS: readonly CheckRunInfo[] = [
+  { name: "Test & Build", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+  { name: "Browser suites", status: "completed", conclusion: "success", app: { slug: "github-actions" } },
+];
+
+/** A merged main release whose tag would otherwise be the release merge. */
+const mergedRelease = (tag = true) => ({
+  currentVersion: "3.8.11",
+  targetVersion: "3.8.11",
+  remoteTagSha: null,
+  localTagSha: null,
+  tag,
+  sourceBranch: "main" as const,
+  mainPr: {
+    number: 900,
+    title: "chore(release): v3.8.11",
+    state: "MERGED" as const,
+    headRefName: "chore/release-3.8.11",
+    baseRefName: "main",
+    headRefOid: "1".repeat(40),
+    mergeCommitOid: RELEASE_MERGE,
+  },
+  mainPrMergeParents: ["2".repeat(40), "1".repeat(40)],
+  isMergeCommitAncestor: true,
+  packageVersionAtMergeSha: "3.8.11",
+  checkRuns: RELEASE_GREEN_CHECKS,
+});
+
+describe("tag target when main has moved past the release merge", () => {
+  const later = [
+    { oid: LATER_ON_MAIN, subject: "fix: keep the release fix" },
+    { oid: ALSO_LATER, subject: "docs: record the size row" },
+  ] as const;
+
+  it("tags the release merge when that merge is still main's first-parent tip", () => {
+    expect(detectReleaseState({ ...mergedRelease(), commitsAfterMerge: [] })).toBe("tag-release");
+  });
+
+  it("refuses to tag and lists the later first-parent commits, with or without --tag", () => {
+    for (const tag of [true, false]) {
+      expect(() => detectReleaseState({ ...mergedRelease(tag), commitsAfterMerge: later })).toThrow(
+        new RegExp(
+          `Cannot tag v3\\.8\\.11 at release merge ${RELEASE_MERGE}[\\s\\S]*--at <full oid>[\\s\\S]*${LATER_ON_MAIN} fix: keep the release fix[\\s\\S]*${ALSO_LATER} docs: record the size row`,
+        ),
+      );
+    }
+  });
+
+  it("tags a later commit named with --at when it is on the first-parent line and still the release", () => {
+    expect(
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: later,
+        tagAt: LATER_ON_MAIN,
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toBe("tag-release");
+  });
+
+  it("refuses --at when the commit is off the first-parent line", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: later,
+        tagAt: "d".repeat(40),
+        tagAtOnFirstParent: false,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toThrow("is not on origin/main's first-parent line");
+  });
+
+  it("refuses --at when the commit does not descend from the release merge", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: later,
+        tagAt: "e".repeat(40),
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: false,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toThrow(`does not descend from release merge ${RELEASE_MERGE}`);
+  });
+
+  it("refuses --at when package.json is no longer the release version", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: later,
+        tagAt: LATER_ON_MAIN,
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.12",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toThrow(`package.json at --at ${LATER_ON_MAIN} is v3.8.12, not v3.8.11`);
+  });
+
+  it("refuses --at when that commit's check runs are red", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: later,
+        tagAt: LATER_ON_MAIN,
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: [
+          { name: "Test & Build", status: "completed", conclusion: "failure", app: { slug: "github-actions" } },
+          RELEASE_GREEN_CHECKS[1]!,
+        ],
+      }),
+    ).toThrow(`commit ${LATER_ON_MAIN} has non-successful check runs`);
+  });
+
+  it("refuses --at that is not a full oid", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: later,
+        tagAt: LATER_ON_MAIN.slice(0, 12),
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toThrow(`--at ${LATER_ON_MAIN.slice(0, 12)} is not a full oid`);
+  });
+
+  it("parses --at and plans the annotated tag at that commit", () => {
+    expect(parseArgs(["3.8.11", "--dry-run", "--tag", "--at", LATER_ON_MAIN])).toEqual({
+      kind: "exact",
+      version: "3.8.11",
+      from: null,
+      dryRun: true,
+      tag: true,
+      at: LATER_ON_MAIN,
+    });
+    expect(() => parseArgs(["3.8.11", "--at"])).toThrow(USAGE);
+
+    const tagged = planRelease({
+      targetVersion: "3.8.11",
+      sourceBranch: "main",
+      state: "tag-release",
+      tag: true,
+      verifiedSha: RELEASE_MERGE,
+      tagAt: LATER_ON_MAIN,
+    });
+    expect(tagged.flatMap((step) => (step.command ? [step.command] : []))).toEqual([
+      "git fetch origin main",
+      `git tag -a v3.8.11 ${LATER_ON_MAIN} -m v3.8.11`,
+      "git push origin v3.8.11",
+    ]);
+
+    const held = planRelease({
+      targetVersion: "3.8.11",
+      sourceBranch: "main",
+      state: "tag-release",
+      verifiedSha: RELEASE_MERGE,
+      tagAt: LATER_ON_MAIN,
+    });
+    expect(held[0]?.description).toContain(`bun run release 3.8.11 --tag --at ${LATER_ON_MAIN}`);
+    expect(held.map((step) => step.command).filter(Boolean)).toEqual([]);
+  });
+});
