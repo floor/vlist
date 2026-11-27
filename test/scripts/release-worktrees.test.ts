@@ -190,6 +190,13 @@ for (const source of ["main", "v2"] as const) {
       const committed = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD:CHANGELOG.md"], { cwd: repo, env }).stdout);
       expect(committed.endsWith("\n")).toBe(true);
       expect(committed.endsWith("\n\n")).toBe(false);
+      const commitObject = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD"], { cwd: repo, env }).stdout);
+      const message = commitObject.slice(commitObject.indexOf("\n\n") + 2);
+      expect(message).toBe(`chore(release): v${version}\n`);
+      const releasePr = commands.find((command) => command.includes("Release commit for"));
+      expect(releasePr).toBe(
+        `gh pr create --base ${source} --head ${branch} --title "chore(release): v${version}" --body "Release commit for v${version}."`,
+      );
       expect(git(held, "status", "--porcelain")).toBe("");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -197,6 +204,82 @@ for (const source of ["main", "v2"] as const) {
   }, 20_000);
 
 }
+
+it("appends --signature as the release commit's last paragraph and the release PR's last line", () => {
+  const version = "3.3.5";
+  const previous = "3.3.4";
+  const branch = `chore/release-${version}`;
+  const signature = "Agent: Example";
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-signature-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const held = join(root, "held-main");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: previous }));
+    writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [3.3.4] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD\n".split("3.3.4").join(previous));
+    const readme = `**v${previous}**\n\n` + SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n");
+    for (const name of ["README.md", "npm-readme.md"]) writeFileSync(join(repo, name), readme);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "release notes on main");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main");
+    git(repo, "checkout", "-b", "feature");
+    git(repo, "worktree", "add", held, "main");
+    const commandsFile = join(root, "commands.jsonl");
+    const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
+    const preload = join(root, "github-operator-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec, execFileSync as realFile } from "node:child_process";
+import { appendFileSync } from "node:fs";
+const execute = realExec, executeFile = realFile;
+const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
+const branch = ${JSON.stringify(branch)};
+let mainPr: object | null = null;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
+  if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
+  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh pr create --base main --head " + branch)) {
+    const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", held, "merge", "--no-ff", branch, "-m", "operator main merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", held, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    mainPr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/503";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(mainPr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) return JSON.stringify([{ total_count: 2, check_runs: ["Test & Build", "Browser suites"].map(name => ({ name, status: "completed", conclusion: "success", app: { slug: "github-actions" } })) }]);
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "main", "--signature", signature], { cwd: repo, env, timeout: 15_000 });
+    expect(result.exitCode).toBe(0);
+    const commitObject = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD"], { cwd: repo, env }).stdout);
+    const message = commitObject.slice(commitObject.indexOf("\n\n") + 2);
+    expect(message).toBe(`chore(release): v${version}\n\n${signature}\n`);
+    const commands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    const releasePr = commands.find((command) => command.includes("Release commit for"));
+    expect(releasePr?.endsWith(`${signature}'`) || releasePr?.endsWith(`${signature}"`)).toBe(true);
+    const body = releasePr!.slice(releasePr!.indexOf("--body ") + "--body ".length).replace(/^['"]|['"]$/g, "");
+    expect(body.endsWith(`\n${signature}`)).toBe(true);
+    expect(body.endsWith(`\n\n${signature}`)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);
 
 it("reads origin/<source> package.json and CHANGELOG.md during dry-run and bump resolution from feature or detached HEAD", () => {
   const root = mkdtempSync(join(tmpdir(), "vlist-release-origin-reads-"));

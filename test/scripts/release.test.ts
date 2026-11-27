@@ -258,6 +258,21 @@ describe("parseArgs", () => {
     });
   });
 
+  it("parses one --signature line and leaves the flag off when it is absent", () => {
+    expect(parseArgs(["3.8.13", "--from", "main", "--signature", "Agent: Example"])).toMatchObject({
+      kind: "exact",
+      version: "3.8.13",
+      from: "main",
+      signature: "Agent: Example",
+    });
+    expect(parseArgs(["3.8.13", "--signature=Agent: Example"])).toMatchObject({
+      signature: "Agent: Example",
+    });
+    expect(parseArgs(["3.8.13"])).not.toHaveProperty("signature");
+    expect(() => parseArgs(["3.8.13", "--signature"])).toThrow(USAGE);
+    expect(() => parseArgs(["3.8.13", "--signature", ""])).toThrow(USAGE);
+  });
+
   it("parses --tag flag", () => {
     expect(parseArgs(["--tag"])).toEqual({
       kind: "bump",
