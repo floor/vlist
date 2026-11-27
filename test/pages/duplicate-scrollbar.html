@@ -42,8 +42,8 @@ Expected with the fix: each table shows <b>one</b> vertical bar. On 3.8.10 with 
 <div id="report"></div>
 
 <script type="module">
-// Served from ~/Code/floor so the fix branch's build is reachable by path.
-const FIX = "/worktrees/vlist/fix-514-native-table/dist/";
+// test/pages/ is two levels under the repo root, so this is the repo's own build.
+const FIX = "../../dist/";
 const OLD = "https://cdn.jsdelivr.net/npm/vlist@3.8.10/dist/";
 const params = new URLSearchParams(location.search);
 const useOld = params.get("v") === "3.8.10";
