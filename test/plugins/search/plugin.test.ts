@@ -406,6 +406,26 @@ describe("highlighting", () => {
     expect(marks[0]!.textContent).toBe("Grape");
   });
 
+  it("marks only the dotted capital I when the lowercased query is longer", () => {
+    // "İ".toLowerCase() is "i" plus a combining dot, so the needle is two
+    // code units and the query is one. The mark is the query, not the next letter.
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const list = createVList<Fruit>(
+      {
+        container,
+        items: [{ id: 1, name: "İx", kind: "letter" }],
+        item: { height: 30, template: (item) => item.name },
+      },
+      [search<Fruit>({ field: "name" })],
+    );
+    lists.push(list);
+    q(list, "setQuery")("İ");
+    const mark = container.querySelector(".vlist-search-match");
+    expect(mark).not.toBeNull();
+    expect(mark!.textContent).toBe("İ");
+  });
+
   it("does not leave marks from a shorter query inside longer-match text", () => {
     const tpl = (item: Fruit) => `<span class="name">${item.name}</span>`;
     const { container, list } = makeList({ mode: "navigate", field: "name" }, tpl);

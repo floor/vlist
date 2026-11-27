@@ -61,7 +61,7 @@ export interface SearchBar {
   readonly input: HTMLInputElement;
   setCounter(text: string): void;
   /** Show/hide the prev/next buttons (navigate mode, with matches to step). */
-  showNav(show: boolean): void;
+  showNav(show: boolean | number): void;
   focus(): void;
   setValue(value: string): void;
   destroy(): void;
@@ -166,7 +166,7 @@ export const createSearchBar = (
     setCounter(value: string): void {
       counter.textContent = value;
     },
-    showNav(show: boolean): void {
+    showNav(show: boolean | number): void {
       prev.classList.toggle(`${p}__nav-prev--hidden`, !show);
       next.classList.toggle(`${p}__nav-next--hidden`, !show);
     },

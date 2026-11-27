@@ -166,6 +166,20 @@ export function search<T extends VListItem = VListItem>(
   /** Original-index list of matching items. */
   let matches: number[] = [];
   let matchSet = new Set<number>();
+  // A join is recorded here and spliced in after the previous hook, so that
+  // hook still sees the old slots. -1 when this update did not insert.
+  let hold = -1;
+  let holdAt = 0;
+  let cut = false;
+  /** Calls that finished applying a membership change. A throw restores only when none have. */
+  let settled = 0;
+  /** `_onItemUpdate` frames. A nested search event waits until the outer frame settles. */
+  let depth = 0;
+  /** Nested search events held until the outermost frame finishes. */
+  let held = 0;
+  /** Pre-change copies, taken only when membership changes. Nested calls overwrite these; the caller keeps its own. */
+  let undoM: number[] | null = null;
+  let undoS: Set<number> | null = null;
   /** Position within `matches` of the focused match (navigate mode). */
   let current = 0;
   /** Whether a virtual filter is currently applied (filter mode). */
@@ -218,9 +232,8 @@ export function search<T extends VListItem = VListItem>(
     if (active) resolveOnce();
     else if (!filtered) return;
     filtered = active;
-    const totalFn = active ? (): number => matches.length : (): number => ctx.items.all().length;
-    ctx.items.setTotalFn(totalFn);
-    engineState.totalItems = totalFn();
+    ctx.items.setTotalFn(() => (active ? matchSet.size : ctx.items.all().length));
+    engineState.totalItems = active ? matches.length : ctx.items.all().length;
     (ctx.hooks.get("_onFilterChange") as (() => void) | undefined)?.();
     ctx.sizes.rebuild();
     ctx.render.contentSize(ctx.sizes.cache.getTotalSize());
@@ -254,29 +267,45 @@ export function search<T extends VListItem = VListItem>(
    * leave nothing to navigate: hide, as the counter and the clear button
    * already do (#106).
    */
-  const updateNav = (): void => {
-    bar?.showNav(!!(navigate && matches.length));
-  };
-
   const updateCounter = (): void => {
     if (!bar) return;
     // Same query/matches state as the counter — refreshed together.
-    updateNav();
+    const shown = matchSet.size;
+    bar.showNav(navigate && shown);
     if (!isActive()) {
       bar.setCounter("");
-    } else if (!matches.length) {
+    } else if (!shown) {
       bar.setCounter(text.noResults);
     } else if (navigate) {
       bar.setCounter(text.position(current + 1, matches.length));
     } else {
-      bar.setCounter(text.results(matches.length));
+      bar.setCounter(text.results(shown));
     }
   };
 
+  const listedMatches = (): number[] => {
+    const out = matches.slice();
+    if (matchSet.size === out.length) return out;
+    for (const idx of matchSet) {
+      if (out.indexOf(idx) >= 0) continue;
+      let at = 0;
+      while (at < out.length && out[at]! < idx) at++;
+      out.splice(at, 0, idx);
+    }
+    return out;
+  };
+
   const emitSearchChange = (): void => {
+    // Publishing from the nested frame would count a join the outer edit still
+    // holds. A throw then leaves that count behind the list, the total and the
+    // counter. The nested event is published once the outer frame finishes.
+    if (depth > 1) {
+      held++;
+      return;
+    }
     ctx.emitter.emit("search:change", {
       query,
-      matches: matches.length,
+      matches: matchSet.size,
       total: ctx.items.all().length,
     });
   };
@@ -308,6 +337,10 @@ export function search<T extends VListItem = VListItem>(
 
   // 0: membership unchanged. 1: the match list changed. 2: navigate should reveal.
   const onItemUpdate = (id: string | number, updates: Partial<T>): number => {
+    hold = -1;
+    cut = false;
+    undoM = null;
+    undoS = null;
     if (!open || !isActive()) return 0;
     const items = ctx.items.all();
     const targetId = updates.id ?? id;
@@ -315,25 +348,31 @@ export function search<T extends VListItem = VListItem>(
     if (idx < 0) return 0;
     const matched = matchesItem(items[idx], caseSensitive ? query : query.toLowerCase());
     if (matched === matchSet.has(idx)) return 0;
+    undoM = matches.slice();
+    undoS = new Set(matchSet);
 
     const prevRow = matches[current];
-    let pos = 0;
-    while (pos < matches.length && matches[pos]! < idx) pos++;
     if (matched) {
-      matches.splice(pos, 0, idx);
+      // Counted now, spliced after the previous hook so that hook keeps the old slots.
       matchSet.add(idx);
+      hold = idx;
+      holdAt = -1;
     } else {
+      const pos = matches.indexOf(idx);
+      if (pos < 0) {
+        matchSet.delete(idx);
+        return 1;
+      }
+      hold = idx;
+      holdAt = pos;
+      cut = true;
       matches.splice(pos, 1);
       matchSet.delete(idx);
+      // indexOf is -1 when the focused row was the one removed, or there was none.
+      current = matches.indexOf(prevRow as number);
+      if (current < 0) current = pos < matches.length ? pos : 0;
     }
-    current =
-      prevRow !== undefined && prevRow !== idx
-        ? matches.indexOf(prevRow)
-        : pos < matches.length
-          ? pos
-          : 0;
-
-    return navigate && matches.length && matches[current] !== prevRow ? 2 : 1;
+    return navigate && (matches.length ? matches[current] !== prevRow : matched) ? 2 : 1;
   };
 
   // ── Open / close ────────────────────────────────────────────────────────────
@@ -356,7 +395,7 @@ export function search<T extends VListItem = VListItem>(
 
   const closeSearch = (): void => {
     clearCancelTimer();
-    const wasOpen = open || !!query;
+    const wasOpen = open || query;
     open = false;
     if (query) applyQuery("");
     ctx.dom.root.classList.remove(`${classPrefix}--search-open`);
@@ -408,7 +447,7 @@ export function search<T extends VListItem = VListItem>(
    */
   interface StampedRow extends StampableRow {
     /** Whether this row currently carries the `--current` class (navigate). */
-    _searchMarkCurrent?: boolean;
+    _mk?: boolean;
   }
 
   const eachScope = (el: HTMLElement, fn: (target: HTMLElement) => void): void => {
@@ -420,6 +459,9 @@ export function search<T extends VListItem = VListItem>(
       fn(el);
     }
   };
+
+  // One function per pass, created here. Highlight runs on every commit, so
+  // an arrow at the call site would allocate for each new row while scrolling.
   const highlightTarget = (t: HTMLElement): void => highlightElement(t, query, caseSensitive, matchClass);
   const clearTarget = (t: HTMLElement): void => clearHighlights(t, matchClass);
 
@@ -437,8 +479,8 @@ export function search<T extends VListItem = VListItem>(
     // loaders request items, not headers). renderedElement is layout-space —
     // headers occupy indices — so look up through the mapping groups publishes.
     for (let dataIndex = start; dataIndex <= end; dataIndex++) {
-      const layoutIndex = d2lFn !== null ? d2lFn(dataIndex) : dataIndex;
-      if (l2dFn !== null && l2dFn(layoutIndex) < 0) continue;
+      const layoutIndex = d2lFn ? d2lFn(dataIndex) : dataIndex;
+      if (l2dFn && l2dFn(layoutIndex) < 0) continue;
       const el = ctx.dom.renderedElement(layoutIndex);
       if (!el) continue;
 
@@ -449,7 +491,7 @@ export function search<T extends VListItem = VListItem>(
           eachScope(el, highlightTarget);
           marksPresent = true;
           row._stamp = queryVersion;
-          row._searchMarkCurrent = false;
+          row._mk = false;
         } else if (row._stamp) {
           // Marks built for a query that is no longer active. A row the
           // renderer has written since carries 0 and costs nothing.
@@ -462,12 +504,12 @@ export function search<T extends VListItem = VListItem>(
         // Cheap by construction: only the row entering or leaving the current
         // match touches the DOM — the rest compare one property and move on.
         const isCurrentRow = dataIndex === currentOriginal;
-        if (row._searchMarkCurrent !== isCurrentRow) {
+        if (row._mk !== isCurrentRow) {
           const marks = el.querySelectorAll(`.${matchClass}`);
           for (let m = 0; m < marks.length; m++) {
             marks[m]!.classList.toggle(currentClass, isCurrentRow);
           }
-          row._searchMarkCurrent = isCurrentRow;
+          row._mk = isCurrentRow;
         }
       }
     }
@@ -584,7 +626,7 @@ export function search<T extends VListItem = VListItem>(
             onKeydown,
           },
         );
-        updateNav();
+        bar?.showNav(navigate && matches.length);
         if (variant !== "default") {
           bar.root.classList.add(`${classPrefix}-search--${variant}`);
         }
@@ -626,7 +668,8 @@ export function search<T extends VListItem = VListItem>(
       // row that just left the filter is not a slot.
       ctx.hooks.method("_getIndexById", (id: string | number): number => {
         const source = ctx.items.all().findIndex((row) => row.id === id);
-        return filtered ? matches.indexOf(source) : source;
+        if (!filtered) return source;
+        return matches.indexOf(source);
       });
       if (!ctx.hooks.get("_getItemAtLayout")) ctx.items.setGetFn(getItem);
 
@@ -634,13 +677,62 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
         // Membership first, so groups regroups against the rows that still
         // match, then navigation and the public events see that layout.
+        const prevTotal = engineState.totalItems;
+        const prevCur = current;
+        const seen = settled;
         const changed = onItemUpdate(id, u);
-        prevOnUpdate?.(id, u);
-        if (!changed) return;
-        if (!navigate) syncFilter(true);
-        updateCounter();
-        if (changed > 1) scrollToMatch();
-        emitSearchChange();
+        const snap = undoM;
+        const snapSet = undoS;
+        let at = holdAt;
+        const idx = hold;
+        const removed = cut;
+        let synced = false;
+        // Raised only once the field accessor has run: a throw there would skip
+        // the finally and hold every later event as nested.
+        depth++;
+        try {
+          prevOnUpdate?.(id, u);
+          if (!removed && matchSet.has(idx)) {
+            at = 0;
+            while (at < matches.length && matches[at]! < idx) at++;
+            // A nested rejoin may have spliced this row already.
+            if (matches[at] !== idx) {
+              matches.splice(at, 0, idx);
+              if (current >= at && matches.length > 1) current++;
+            }
+          }
+          if (!changed) return;
+          if (!navigate) syncFilter(true);
+          synced = true;
+          settled++;
+          updateCounter();
+          if (changed > 1) scrollToMatch();
+          emitSearchChange();
+        } catch (err) {
+          // A nested call that already finished keeps its list. Restoring here
+          // would drop that rejoin or splice it a second time.
+          if (!synced && settled === seen) {
+            if (snap && snapSet) {
+              matches = snap;
+              matchSet = snapSet;
+            }
+            current = prevCur;
+            engineState.totalItems = prevTotal;
+          } else if (!synced && !removed && idx >= 0 && matches.indexOf(idx) < 0) {
+            // The pending join never received a slot. Drop it so the set matches
+            // the list a nested commit already published.
+            matchSet.delete(idx);
+            updateCounter();
+          }
+          throw err;
+        } finally {
+          depth--;
+          if (depth === 0 && held > 0) {
+            const pending = held;
+            held = 0;
+            for (let i = 0; i < pending; i++) emitSearchChange();
+          }
+        }
       });
 
       // Public methods.
@@ -658,7 +750,7 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_k", (): boolean => position === "none" && query.length > 0);
       ctx.hooks.method("nextMatch", nextMatch);
       ctx.hooks.method("prevMatch", prevMatch);
-      ctx.hooks.method("getMatches", () => matches.slice());
+      ctx.hooks.method("getMatches", listedMatches);
 
       ctx.hooks.onKeydown(onKeydown);
 
