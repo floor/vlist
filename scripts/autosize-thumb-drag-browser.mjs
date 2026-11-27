@@ -9,8 +9,8 @@
  *
  * The native launch leaves Chromium's scrollbars visible and turns overlay
  * scrollbars off, so the drag hits the browser's own thumb. Build first.
- * Uses scripts/browser-driver.mjs. The coordinator wires this script into
- * `test:browser` after merge; package.json is left untouched here.
+ * Uses scripts/browser-driver.mjs. package.json is left untouched, so
+ * `test:browser` does not run this file yet.
  */
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
