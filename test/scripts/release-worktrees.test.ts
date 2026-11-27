@@ -354,6 +354,89 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
   }
 }, 20_000);
 
+it("prints the signed follow-up after a v2 release PR and signs the v2-to-main PR", () => {
+  const version = "2.8.3";
+  const previous = "2.8.2";
+  const branch = `chore/release-${version}`;
+  const signature = "Agent: Example";
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-v2-signature-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const held = join(root, "held-main");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: previous }));
+    writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [2.8.2] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v2.8.2...HEAD\n");
+    const readme = `**v${previous}**\n\n` + SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n");
+    for (const name of ["README.md", "npm-readme.md"]) writeFileSync(join(repo, name), readme);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "release notes on main");
+    git(repo, "branch", "v2");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main", "v2");
+    git(repo, "checkout", "v2");
+    git(repo, "worktree", "add", held, "main");
+    const commandsFile = join(root, "commands.jsonl");
+    const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
+    const preload = join(root, "github-operator-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec, execFileSync as realFile } from "node:child_process";
+import { appendFileSync } from "node:fs";
+const execute = realExec, executeFile = realFile;
+const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
+const branch = ${JSON.stringify(branch)};
+let sourcePr: object | null = null, mainPr: object | null = null;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
+  if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
+  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh pr create --base v2 --head " + branch)) {
+    const operator = ${JSON.stringify(join(root, "held-v2"))};
+    executeFile("git", ["worktree", "add", operator, "v2"], { stdio: "pipe" });
+    const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", operator, "merge", "--no-ff", branch, "-m", "operator v2 merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", operator, "push", "origin", "v2"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", operator, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    sourcePr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/503";
+  }
+  if (command.startsWith("gh pr create --base main --head v2")) {
+    const headRefOid = executeFile("git", ["rev-parse", "v2"], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", held, "merge", "--no-ff", "v2", "-m", "operator main merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", held, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    mainPr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/504";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(sourcePr);
+  if (command.startsWith("gh pr view 504")) return JSON.stringify(mainPr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) return JSON.stringify([{ total_count: 2, check_runs: ["Test & Build", "Browser suites"].map(name => ({ name, status: "completed", conclusion: "success", app: { slug: "github-actions" } })) }]);
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const stopped = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "v2", "--signature", signature], { cwd: repo, env, timeout: 15_000 });
+    const stoppedOut = new TextDecoder().decode(stopped.stdout) + new TextDecoder().decode(stopped.stderr);
+    expect(stopped.exitCode).toBe(0);
+    expect(stoppedOut).toContain(`Next step, after the operator's pinned merge:\n  bun run release ${version} --from v2 --signature "${signature}"`);
+    const stoppedCommands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    expect(stoppedCommands.some((command) => command.includes("gh pr create --base main"))).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);
+
 it("reads origin/<source> package.json and CHANGELOG.md during dry-run and bump resolution from feature or detached HEAD", () => {
   const root = mkdtempSync(join(tmpdir(), "vlist-release-origin-reads-"));
   const repo = join(root, "caller");

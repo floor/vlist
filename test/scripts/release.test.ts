@@ -279,6 +279,35 @@ describe("parseArgs", () => {
     expect(releaseSourcePrCommand("main", "chore/release-3.8.13", "3.8.13", "Agent: Example").endsWith("Agent: Example'")).toBe(true);
     expect(() => parseArgs(["3.8.13", "--signature"])).toThrow(USAGE);
     expect(() => parseArgs(["3.8.13", "--signature", ""])).toThrow(USAGE);
+    expect(() => parseArgs(["3.8.13", "--signature", "Agent\nExample"])).toThrow(USAGE);
+    expect(() => parseArgs(["3.8.13", "--signature", "Agent: Example "])).toThrow(
+      "--signature must not have leading or trailing whitespace",
+    );
+    expect(() => parseArgs(["3.8.13", "--signature", " Agent: Example"])).toThrow(
+      "--signature must not have leading or trailing whitespace",
+    );
+  });
+
+  it("carries --signature onto the v2-to-main PR and the follow-up release command", () => {
+    const promotion = planRelease({
+      targetVersion: "2.8.3",
+      sourceBranch: "v2",
+      state: "create-main-pr",
+      signature: "Agent: Example",
+    });
+    const create = promotion.map((step) => step.command).find((command) => command?.includes("gh pr create --base main"));
+    expect(create).toBeDefined();
+    const body = create!.slice(create!.indexOf("--body ") + "--body ".length).replace(/^['"]|['"]$/g, "");
+    expect(body.endsWith("\nAgent: Example")).toBe(true);
+    expect(body.startsWith("Version bump to v2.8.3.")).toBe(true);
+
+    const follow = planRelease({
+      targetVersion: "2.8.3",
+      sourceBranch: "v2",
+      state: "create-source-pr",
+      signature: "Agent: Example",
+    });
+    expect(follow.some((step) => step.description.includes('bun run release 2.8.3 --from v2 --signature "Agent: Example"'))).toBe(true);
   });
 
   it("parses --tag flag", () => {
