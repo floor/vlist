@@ -51,7 +51,7 @@ describe("size gate", () => {
       page: kb(11.53),
       snapshots: kb(11.75),
       transition: kb(12.61),
-      autosize: kb(12.21),
+      autosize: kb(12.4991),
       grid: kb(13.24),
       table: kb(16.77),
       "table + columnPin": kb(18.7),

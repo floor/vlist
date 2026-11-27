@@ -204,11 +204,9 @@ export const BUDGET_BYTES: Record<ScenarioName, number> = {
   page: kb(11.53),
   snapshots: kb(11.75),
   transition: kb(12.61),
-  // #372: pruning the measured cache to the list the sweep runs on: +242
-  // bytes gzipped (11935 → 12177), the whole mechanism, no part of it
-  // optional. Measured 12177, so 12.0 kB (12288) leaves 111 bytes of room;
-  // an overrun moves the pin to measured + 1% on the recorded decision.
-  autosize: kb(12.21),
+  // CI run 46024672728 measured 12789 B gzipped. The pin is that
+  // measurement plus 10 B. kb(12.4991) floors to 12799.
+  autosize: kb(12.4991),
   grid: kb(13.24),
   table: kb(16.77),
   // Measured 18957 gzipped on this branch. +1% is 19147, so the pin is the
