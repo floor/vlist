@@ -407,8 +407,8 @@ export function search<T extends VListItem = VListItem>(
    * outlives a rewrite that emptied it.
    */
   interface StampedRow extends StampableRow {
-    /** Whether this row currently carries the `--current` class (navigate). One character: the search bundle is at its pin. */
-    _s?: boolean;
+    /** Whether this row currently carries the `--current` class (navigate). */
+    _searchMarkCurrent?: boolean;
   }
 
   const eachScope = (el: HTMLElement, fn: (target: HTMLElement) => void): void => {
@@ -449,7 +449,7 @@ export function search<T extends VListItem = VListItem>(
           eachScope(el, highlightTarget);
           marksPresent = true;
           row._stamp = queryVersion;
-          row._s = false;
+          row._searchMarkCurrent = false;
         } else if (row._stamp) {
           // Marks built for a query that is no longer active. A row the
           // renderer has written since carries 0 and costs nothing.
@@ -462,12 +462,12 @@ export function search<T extends VListItem = VListItem>(
         // Cheap by construction: only the row entering or leaving the current
         // match touches the DOM — the rest compare one property and move on.
         const isCurrentRow = dataIndex === currentOriginal;
-        if (row._s !== isCurrentRow) {
+        if (row._searchMarkCurrent !== isCurrentRow) {
           const marks = el.querySelectorAll(`.${matchClass}`);
           for (let m = 0; m < marks.length; m++) {
             marks[m]!.classList.toggle(currentClass, isCurrentRow);
           }
-          row._s = isCurrentRow;
+          row._searchMarkCurrent = isCurrentRow;
         }
       }
     }
@@ -655,7 +655,7 @@ export function search<T extends VListItem = VListItem>(
       // selected. A hidden query that still matches keeps the total above
       // zero, so the character never leaves. Yield Backspace while the query
       // has text. An empty query keeps delete.
-      ctx.hooks.method("_k", (): boolean => position === "none" && !!query);
+      ctx.hooks.method("_k", (): boolean => position === "none" && query.length > 0);
       ctx.hooks.method("nextMatch", nextMatch);
       ctx.hooks.method("prevMatch", prevMatch);
       ctx.hooks.method("getMatches", () => matches.slice());
