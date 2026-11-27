@@ -11,9 +11,21 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- Every JavaScript package entry imports under SSR. Lists are created on the client. `examples/ssr-sveltekit` is a SvelteKit page that imports `vlist` and `vlist/styles`, and calls `createVList` in `onMount`.
+
 ### Fixed
 
 - An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws, the list stays on the previous filter, and retrying the edit applies it. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. Nested edits that change which rows match keep the match list ordered and unique.
+- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
+- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate and the check evidence, so the release merge's checks are not read, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again after its last check-run read, immediately before creating or pushing the tag.
+
+## [3.8.11] - 2026-11-25
+
+### Fixed
+
+- A table with `scrollbar()` no longer shows two vertical scrollbars. While the table scrolls natively (`scroll.mode` `"native"`, or `"auto"` below the browser's size limit), `scrollbar()` draws no custom vertical thumb and leaves the browser's own vertical bar, as a native list without `scrollbar()` shows. This holds with classic scrollbars, where the native bar took a column beside the custom thumb, and with overlay scrollbars, where it painted over it. A synthetic table, including an `"auto"` table past the size limit, a list that is not a table, and a viewport whose native bar the author hides with `scrollbar-width: none` keep the custom thumb. The `gutter` option reserves no padding while the native bar is used. Measured on Chromium with classic and with overlay scrollbars.
 
 ## [3.8.10] - 2026-11-23
 
@@ -2405,7 +2417,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.10...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.11...HEAD
+[3.8.11]: https://github.com/floor/vlist/compare/v3.8.10...v3.8.11
 [3.8.10]: https://github.com/floor/vlist/compare/v3.8.9...v3.8.10
 [3.8.9]: https://github.com/floor/vlist/compare/v3.8.8...v3.8.9
 [3.8.8]: https://github.com/floor/vlist/compare/v3.8.7...v3.8.8

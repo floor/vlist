@@ -187,14 +187,16 @@ try {
  assert(pin.countHit,`pinned table: the count receives the hit at its centre, not a pinned cell: ${JSON.stringify(pin)}`);
  pass('pinned columns do not cover the group header content',pin);
 
- // ── The content width is the content box, gutter padding excluded ──
+ // ── The content width is the content box. A natively scrolling table
+ // uses the browser's vertical bar (#514), so scrollbar({gutter}) reserves
+ // no padding: the native bar takes its own column. ──
  const gut=await page.evaluate(()=>gutterInfo());
  assert.equal(gut.containerType,'inline-size',`the gutter host's viewport is the size container: container-type ${gut.containerType}`);
- assert(gut.padding>0,`the gutter host reserves right padding for the custom scrollbar: ${gut.padding}`);
+ assert.equal(gut.padding,0,`a natively scrolling table reserves no custom-scrollbar padding: ${gut.padding}`);
  assert(within(gut.contentWidth,gut.clientWidth-gut.padding),`content ${gut.contentWidth} spans the viewport content box ${gut.clientWidth-gut.padding} (clientWidth ${gut.clientWidth}, padding ${gut.padding})`);
  assert(within(gut.contentRight,gut.contentBoxRight),`content right ${gut.contentRight} ends at the content box edge ${gut.contentBoxRight}: it must not run under the custom scrollbar gutter`);
  assert(gut.countVisible,`the count stays visible inside the gutter host: ${JSON.stringify(gut)}`);
- pass('content width is the viewport content box, custom-scrollbar gutter excluded',gut);
+ pass('content width is the viewport content box, no custom-scrollbar padding on a native table',gut);
 
  // ── The sticky group header's own count stays inside its container ──
  const st=await page.evaluate(()=>stickyInfo());
@@ -202,15 +204,15 @@ try {
  assert(st.countVisible,`sticky group header: the count stays inside the container: ${JSON.stringify(st)}`);
  pass('sticky group header keeps its count inside the container',st);
 
- // ── The native horizontal scrollbar is left enabled ────────────────
+ // ── The native scrollbars are left enabled; the vertical one is the only
+ // vertical bar while the table scrolls natively (#514) ─────────────
  assert.equal(m.scrollbarWidth,'auto',`the table viewport leaves the native scrollbar system enabled: scrollbar-width ${m.scrollbarWidth}`);
- assert.equal(m.pseudoDisplay,'block',`::-webkit-scrollbar is re-enabled: display ${m.pseudoDisplay}`);
- assert.equal(m.pseudoWidth,'0px',`the vertical bar is zero-width: ${m.pseudoWidth}`);
+ assert.notEqual(m.pseudoWidth,'0px',`the native vertical bar is not hidden: ${m.pseudoWidth}`);
  const classic=await page.evaluate(()=>classicScrollbars());
  if(classic){
    assert(m.viewport.offsetHeight-m.viewport.clientHeight>0,`horizontal native scrollbar takes layout space: offsetHeight ${m.viewport.offsetHeight}, clientHeight ${m.viewport.clientHeight}`);
-   assert.equal(m.viewport.offsetWidth-m.viewport.clientWidth,0,'the vertical native bar stays hidden');
-   pass('native horizontal scrollbar present, vertical hidden',{horizontal:m.viewport.offsetHeight-m.viewport.clientHeight,vertical:m.viewport.offsetWidth-m.viewport.clientWidth});
+   assert(m.viewport.offsetWidth-m.viewport.clientWidth>0,'the vertical native bar takes its column: it is the only vertical bar');
+   pass('native horizontal and vertical scrollbars present',{horizontal:m.viewport.offsetHeight-m.viewport.clientHeight,vertical:m.viewport.offsetWidth-m.viewport.clientWidth});
  }else{
    skips++;
    console.log('SKIP native scrollbar layout space: this platform paints overlay scrollbars (a plain overflow box takes none either)');

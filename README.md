@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.8.10** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
+**v3.8.11** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -32,7 +32,7 @@ The virtual list library for every framework. Ultra efficient, batteries-include
 
 ## Frameworks
 
-Vue, Svelte, Solid and React each have an entry in the `vlist` package itself. Like the vanilla builder, they are feature-first: you pass plugins from `vlist`, so an app only bundles the features it uses. Every entry imports the core from `vlist`, and none carries a copy of its own.
+Vue, Svelte, Solid and React each have an entry in the `vlist` package itself. Like the vanilla builder, they are feature-first: you pass plugins from `vlist`, so an app only bundles the features it uses. Every entry imports the core from `vlist`, and none carries a copy of its own. Every JavaScript entry imports under SSR, and lists are created on the client.
 
 | Framework | Import | Entry size |
 |-----------|--------|------------|
@@ -270,7 +270,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `a11y()` | 32.5 KB | 12.4 KB |
 | `selection()` | 37.5 KB | 13.9 KB |
 | `data()` | 41.0 KB | 15.3 KB |
-| `scrollbar()` | 35.3 KB | 13.3 KB |
+| `scrollbar()` | 36.0 KB | 13.5 KB |
 | `sortable()` | 38.8 KB | 14.0 KB |
 | `groups()` | 43.7 KB | 16.1 KB |
 | `page()` | 30.3 KB | 11.5 KB |
@@ -301,6 +301,10 @@ Bundlephobia's badge measures the package's root entry, which re-exports every p
 ## Examples
 
 More examples at **[vlist.io](https://vlist.io)**.
+
+### SSR (SvelteKit)
+
+`examples/ssr-sveltekit` is a SvelteKit page (SSR on) that imports `vlist` and `vlist/styles`, and calls `createVList` in `onMount`. From the repo root run `bun run build`, then in `examples/ssr-sveltekit` run `bun install && bun run build`.
 
 ### Data Table
 

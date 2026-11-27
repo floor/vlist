@@ -42,6 +42,7 @@ export function scrollbar<T extends VListItem = VListItem>(
   let mainAxisPadding = 0;
   let lastBoundsTotal = 0;
   let lastBoundsContainer = 0;
+  let syncNativeBar = (): void => {};
 
   return {
     name: "scrollbar",
@@ -69,7 +70,36 @@ export function scrollbar<T extends VListItem = VListItem>(
         dom.root.parentElement!,
       );
 
-      dom.viewport.classList.add(`${classPrefix}-viewport--custom-scrollbar`);
+      const customClass = `${classPrefix}-viewport--custom-scrollbar`;
+      // table() publishes this during its setup. role="grid" is not enough:
+      // any grid would lose its thumb, and the class marker must stay out of
+      // this bundle.
+      const table = !isX && ctx.hooks.get("_getTableLayout");
+      // A table keeps the browser's horizontal bar for its columns, so its
+      // stylesheet cannot hide the native vertical bar the way a plain list
+      // does, and Chrome paints that bar beside or over a custom thumb (#514).
+      // While a table scrolls natively, use the browser's own vertical bar and
+      // draw none: the viewport is then styled as if scrollbar() were absent.
+      // A synthetic table (overflow hidden) has no native bar and keeps the
+      // custom thumb. A natively scrolling table never takes our viewport
+      // class: under it the table stylesheet turns the native bar back on. So
+      // when its author hides the native bar (scrollbar-width: none, read
+      // from the computed style so a rule of any specificity counts), the
+      // custom thumb is drawn and the author's rule stays in force.
+      // Runs at setup, on resize and on a mode switch, never per scroll.
+      syncNativeBar = (): void => {
+        const vp = dom.viewport;
+        const nativeTable = !!table
+          && ctx.config.scrollMode !== "synthetic"
+          && vp.style.overflowY !== "hidden";
+        vp.classList.toggle(customClass, !nativeTable);
+        // The computed value decides; the inline value is only a fallback for
+        // an environment that computes none (a DOM without the property).
+        const width = nativeTable ? getComputedStyle(vp).getPropertyValue("scrollbar-width") : "";
+        sb?.useNativeBar(nativeTable && (width || vp.style.scrollbarWidth) !== "none");
+      };
+      syncNativeBar();
+      const offMode = ctx.emitter.on("scroll:mode", syncNativeBar);
 
       ctx.hooks.method("refreshScrollbar", () => sb?.refresh());
 
@@ -84,9 +114,10 @@ export function scrollbar<T extends VListItem = VListItem>(
       ctx.hooks.method("_scrollbar:getInstance", () => sb);
 
       ctx.hooks.onDestroy(() => {
+        offMode();
         sb?.destroy();
         sb = null;
-        dom.viewport.classList.remove(`${classPrefix}-viewport--custom-scrollbar`);
+        dom.viewport.classList.remove(customClass);
         if (config?.gutter) {
           dom.viewport.classList.remove(`${classPrefix}-viewport--gutter`);
         }
@@ -107,6 +138,7 @@ export function scrollbar<T extends VListItem = VListItem>(
       },
 
       onResize(): void {
+        syncNativeBar();
         const total = engineState.totalSize + mainAxisPadding;
         const container = engineState.containerSize;
         lastBoundsTotal = total;
