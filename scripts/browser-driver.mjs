@@ -8,6 +8,13 @@
  * GitHub runner images already carry one.
  *
  * Set CHROME_PATH to point at a specific binary.
+ *
+ * VLIST_SCROLLBARS selects the scrollbar mode. `overlay` enables
+ * OverlayScrollbar and leaves scrollbars visible: the gutter is 0 and a thumb
+ * is painted. `classic` turns that feature off and leaves scrollbars visible,
+ * so the gutter is the bar's column. Unset keeps the launcher default, which
+ * hides scrollbars (a zero gutter with nothing painted). Hiding scrollbars is
+ * not the overlay mode. An explicit `scrollbars` option wins over the env var.
  */
 
 import puppeteer from "puppeteer-core";
@@ -35,14 +42,30 @@ export function findChrome(override) {
   return candidate;
 }
 
+const SCROLLBAR_MODES = new Set(["default", "overlay", "classic"]);
+
+export function scrollbarMode(override) {
+  const raw = override ?? process.env.VLIST_SCROLLBARS;
+  const mode = raw ? raw : "default";
+  if (!SCROLLBAR_MODES.has(mode)) {
+    throw new Error(`VLIST_SCROLLBARS must be default, overlay, or classic (got ${mode})`);
+  }
+  return mode;
+}
+
 export async function launchBrowser(opts = {}) {
-  const { headless = true, chrome } = opts;
+  const { headless = true, chrome, scrollbars } = opts;
+  const mode = scrollbarMode(scrollbars);
+  // The suites drive scroll and pointer input; a shared memory limit small
+  // enough to matter shows up as flaky frames rather than a clean failure.
+  const args = ["--no-sandbox", "--disable-dev-shm-usage"];
+  if (mode === "overlay") args.push("--enable-features=OverlayScrollbar");
+  if (mode === "classic") args.push("--disable-features=OverlayScrollbar");
   const browser = await puppeteer.launch({
     headless,
     executablePath: findChrome(chrome),
-    // The suites drive scroll and pointer input; a shared memory limit small
-    // enough to matter shows up as flaky frames rather than a clean failure.
-    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    ignoreDefaultArgs: mode === "default" ? undefined : ["--hide-scrollbars"],
+    args,
   });
   // Branded Chrome starts GoogleUpdater, which inherits the stdio pipes and
   // outlives the browser by minutes. A suite that has closed its browser is
