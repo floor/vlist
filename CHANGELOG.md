@@ -11,6 +11,10 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+### Added
+
+- Every JavaScript package entry imports under SSR. Lists are created on the client. `examples/ssr-sveltekit` is a SvelteKit page that imports `vlist` and `vlist/styles`, and calls `createVList` in `onMount`.
+
 ### Fixed
 
 - With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
