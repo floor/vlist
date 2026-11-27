@@ -11,6 +11,14 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+An edit that brings a row into an active search filter regroups once. A throw leaves the previous filter unless a nested edit has already committed, and the search event reports the count the list keeps.
+
+Who is affected: lists using `search()` with an active filter, including with `groups()` or `table()`.
+
+### Fixed
+
+- An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws before a nested edit has committed, the list stays on the previous filter, and retrying the edit applies it. A nested edit that already committed stays. A pending join that never took a slot is dropped, and the match list stays ordered and unique. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. A nested join reports the same match count as the match list, the total and the counter. When the outer edit throws after that nested join, that event reports the settled count once. A throw from the search field accessor leaves later joins and leaves publishing their events.
+
 ## [3.8.12] - 2026-11-27
 
 With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client; with `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured.
