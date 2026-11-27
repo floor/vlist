@@ -2022,26 +2022,41 @@ export const commitDescendsFrom = (ancestor: string, descendant: string): boolea
   }
 };
 
-/** History and `--at` facts from the current `origin/main` remote-tracking ref. */
+interface MainHistoryFacts {
+  readonly commitsAfterMerge: readonly MainLineCommit[];
+  readonly tagAtOnFirstParent?: boolean;
+  readonly tagAtDescendsFromMerge?: boolean;
+}
+
+/** Fetch `origin/main` into its remote-tracking ref, then read the release merge's and `--at`'s place on it. */
+const readMainHistoryFacts = (mergeSha: string, tagAt: string | null): MainHistoryFacts => {
+  run(FETCH_ORIGIN_MAIN, { silent: true });
+  const commitsAfterMerge = readCommitsAfterMerge(mergeSha);
+  if (tagAt === null || !FULL_OID_RE.test(tagAt)) return { commitsAfterMerge };
+  const tagAtOnFirstParent = isOnFirstParentLine(tagAt);
+  const tagAtDescendsFromMerge = tagAtOnFirstParent && commitDescendsFrom(mergeSha, tagAt);
+  return { commitsAfterMerge, tagAtOnFirstParent, tagAtDescendsFromMerge };
+};
+
+/**
+ * History and `--at` facts. Main history is read from a fresh fetch, and read
+ * again after the `--at` check-run read, so the history a tag decision uses
+ * is never older than the last GitHub call before it.
+ */
 export const readTagTargetFacts = async (
   mergeSha: string,
   version: string,
   tagAt: string | null,
   waitForTargetChecks: boolean,
-): Promise<{
-  readonly commitsAfterMerge: readonly MainLineCommit[];
-  readonly tagAtOnFirstParent?: boolean;
-  readonly tagAtDescendsFromMerge?: boolean;
+): Promise<MainHistoryFacts & {
   readonly packageVersionAtTagAt?: string | null;
   readonly tagAtCheckRuns?: readonly CheckRunInfo[];
 }> => {
-  const commitsAfterMerge = readCommitsAfterMerge(mergeSha);
-  if (tagAt === null || !FULL_OID_RE.test(tagAt)) return { commitsAfterMerge };
-  const tagAtOnFirstParent = isOnFirstParentLine(tagAt);
-  const tagAtDescendsFromMerge = tagAtOnFirstParent && commitDescendsFrom(mergeSha, tagAt);
-  const namingTheMerge = commitsAfterMerge.length > 0 && tagAt === mergeSha;
-  if (!tagAtOnFirstParent || !tagAtDescendsFromMerge || namingTheMerge) {
-    return { commitsAfterMerge, tagAtOnFirstParent, tagAtDescendsFromMerge };
+  const history = readMainHistoryFacts(mergeSha, tagAt);
+  if (tagAt === null || !FULL_OID_RE.test(tagAt)) return history;
+  const namingTheMerge = history.commitsAfterMerge.length > 0 && tagAt === mergeSha;
+  if (history.tagAtOnFirstParent !== true || history.tagAtDescendsFromMerge !== true || namingTheMerge) {
+    return history;
   }
   let packageVersionAtTagAt: string | null = null;
   try {
@@ -2050,16 +2065,11 @@ export const readTagTargetFacts = async (
     packageVersionAtTagAt = null;
   }
   if (packageVersionAtTagAt !== version) {
-    return { commitsAfterMerge, tagAtOnFirstParent, tagAtDescendsFromMerge, packageVersionAtTagAt };
+    return { ...history, packageVersionAtTagAt };
   }
   const tagAtCheckRuns = waitForTargetChecks ? await waitForCheckRuns(tagAt) : fetchCheckRuns(tagAt);
-  return {
-    commitsAfterMerge,
-    tagAtOnFirstParent,
-    tagAtDescendsFromMerge,
-    packageVersionAtTagAt,
-    tagAtCheckRuns,
-  };
+  // Main can move while the check runs are read: the decision reads the history after them.
+  return { ...readMainHistoryFacts(mergeSha, tagAt), packageVersionAtTagAt, tagAtCheckRuns };
 };
 
 export const isCommitAncestorOfRemoteMain = (
@@ -2346,6 +2356,11 @@ const main = async (): Promise<void> => {
   let packageVersionAtTagAt: string | null | undefined;
   let tagAtCheckRuns: readonly CheckRunInfo[] | undefined;
 
+  // Before the tag facts, so their history is the last read before the decision.
+  if (sourcePr?.state === "MERGED" && sourcePr.mergeCommitOid) {
+    sourcePrMergeParents = readCommitParents(sourcePr.mergeCommitOid);
+  }
+
   if (mainPr?.state === "MERGED" && mergeSha) {
     mainPrMergeParents = readCommitParents(mergeSha);
     isMergeCommitAncestor = isCommitAncestorOfRemoteMain(mergeSha);
@@ -2375,23 +2390,19 @@ const main = async (): Promise<void> => {
         checkRunsEvidence = checkRuns.map((r) => `${r.name} (${r.conclusion ?? r.status})`).join(", ");
       }
     } else {
-      checkRuns = fetchCheckRuns(mergeSha);
-      checkRunsEvidence = checkRuns.map((r) => `${r.name} (${r.conclusion ?? r.status})`).join(", ");
+      // The --at commit is the check gate and the check evidence; the merge's
+      // endpoint is not read, so its outage cannot block a green --at.
+      checkRunsEvidence = `not read (--at ${tagAt} is the check gate)`;
     }
 
     // After check verification, so a main that moved during the wait is the
     // history the decision reads. The refspec writes origin/main itself.
-    run(FETCH_ORIGIN_MAIN, { silent: true });
     const facts = await readTagTargetFacts(mergeSha, newVersion, tagAt, !args.dryRun && args.tag === true);
     commitsAfterMerge = facts.commitsAfterMerge;
     tagAtOnFirstParent = facts.tagAtOnFirstParent;
     tagAtDescendsFromMerge = facts.tagAtDescendsFromMerge;
     packageVersionAtTagAt = facts.packageVersionAtTagAt;
     tagAtCheckRuns = facts.tagAtCheckRuns;
-  }
-
-  if (sourcePr?.state === "MERGED" && sourcePr.mergeCommitOid) {
-    sourcePrMergeParents = readCommitParents(sourcePr.mergeCommitOid);
   }
 
   let state: ReleaseState;
@@ -2471,6 +2482,10 @@ const main = async (): Promise<void> => {
       evidence.push(`Merge commit: ${mergeSha} (ancestor of origin/main: ${isMergeCommitAncestor ? "yes" : "no"})`);
       evidence.push(`package.json at merge commit: v${packageVersionAtMergeSha}`);
       evidence.push(`Check runs on merge commit: ${checkRunsEvidence}`);
+      if (tagAt !== null && tagAtCheckRuns) {
+        const atEvidence = tagAtCheckRuns.map((r) => `${r.name} (${r.conclusion ?? r.status})`).join(", ");
+        evidence.push(`Check runs on --at commit ${tagAt}: ${atEvidence}`);
+      }
     }
   }
 
@@ -2520,7 +2535,8 @@ const main = async (): Promise<void> => {
 
   const resolveFreshTagTarget = async (): Promise<string> => {
     if (!mergeSha) throw new Error(`Cannot tag v${newVersion}: no commit to tag`);
-    run(FETCH_ORIGIN_MAIN, { silent: true });
+    // Its last read is a fetch of main after every GitHub call, and only local
+    // git runs between it and the tag push.
     const facts = await readTagTargetFacts(mergeSha, newVersion, tagAt, false);
     const fresh = resolveTagTarget(mergeSha, {
       currentVersion: oldVersion,

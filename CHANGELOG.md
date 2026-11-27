@@ -13,7 +13,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ### Fixed
 
-- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again immediately before creating or pushing the tag.
+- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate and the check evidence, so the release merge's checks are not read, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again after its last check-run read, immediately before creating or pushing the tag.
 
 ## [3.8.11] - 2026-11-25
 
