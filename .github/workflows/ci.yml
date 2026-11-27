@@ -151,3 +151,43 @@ jobs:
           test -x "$CHROME_PATH"
           echo "Using $CHROME_PATH"
           CHROME_PATH="$CHROME_PATH" bun scripts/tree-guides-browser.mjs
+
+      # Overlay scrollbars take no column and still paint a thumb.
+      # --enable-features=OverlayScrollbar, with --hide-scrollbars left off.
+      # Hiding scrollbars also zeroes the gutter and paints nothing, so it is
+      # not this lane. A plain overflow box measures a 0 gutter with the
+      # feature on and a 15px gutter with it off.
+      - name: Overlay scrollbars
+        id: overlay
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: |
+          CHROME_PATH="$(find ~/.cache/ms-playwright -type f -name chrome-headless-shell -path '*chromium_headless_shell-*' | head -1)"
+          test -x "$CHROME_PATH"
+          echo "Using $CHROME_PATH"
+          export CHROME_PATH
+          export VLIST_SCROLLBARS=overlay
+          bun scripts/table-native-classic-browser.mjs
+          bun scripts/scroll-mode-browser.mjs
+          bun scripts/table-paint-pin-browser.mjs
+          bun scripts/autosize-identity-browser.mjs
+          bun scripts/table-group-header-pin-browser.mjs
+
+      - name: Gate
+        if: ${{ !cancelled() }}
+        env:
+          OVERLAY: ${{ steps.overlay.outcome }}
+        run: |
+          red=""
+          for gate in OVERLAY; do
+            case "${!gate}" in
+              success) ;;
+              skipped) red="$red $gate(skipped)";;
+              *) red="$red $gate";;
+            esac
+          done
+          if [ -n "$red" ]; then
+            echo "::error::red gates:$red"
+            exit 1
+          fi
+          echo "every gate green"

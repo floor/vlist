@@ -7,8 +7,9 @@
  *    browser's: scrollbar() renders no custom vertical track and leaves the
  *    viewport unstyled by it (#514). Where this engine gives a plain overflow
  *    box a vertical gutter, the table has that native gutter too.
- * 2. Columns that overflow still get a native horizontal bar (a horizontal
- *    gutter when the engine uses classic scrollbars).
+ * 2. Columns that overflow still get a native horizontal bar. When the
+ *    measured mode takes a column, the table's gutter matches a plain overflow
+ *    box. When it does not, the table takes no column either.
  * 3. The pin separator does not break the focus ring. The boundary pixel and
  *    the pixel on either side are the ring at the top of the edge; the middle
  *    of the boundary is still the separator. Checked for a single left pin, a
@@ -203,6 +204,9 @@ try {
     if (bars.refVerticalGutter > 0) {
       assert.equal(bars.verticalGutter, bars.refVerticalGutter, host + ": the native vertical bar is the only vertical bar");
       assert.ok(bars.horizontalGutter > 0, host + ": native horizontal gutter is present");
+    } else {
+      assert.equal(bars.verticalGutter, 0, host + ": measured scrollbars take no vertical column");
+      assert.equal(bars.horizontalGutter, 0, host + ": measured scrollbars take no horizontal column");
     }
     pass(host + ": one vertical bar (native), native horizontal bar", bars);
   }

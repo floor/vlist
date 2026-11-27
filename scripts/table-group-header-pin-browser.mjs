@@ -13,10 +13,9 @@
  * native scrollbar system so the horizontal bar stays (only the vertical one is
  * replaced by the custom scrollbar), but the base stylesheet's
  * `scrollbar-width: none` overrode it in Chrome 121+. This gate reads the
- * cascade, and on a platform whose scrollbars take layout space, the bar. No
- * platform measured so far takes it: this machine's headless Chrome 157 and the
- * CI runner both paint overlay scrollbars, so that one check reports SKIP there
- * and the summary counts it as a skip, not a pass.
+ * cascade. Layout space is measured on a plain overflow box: when that box
+ * has a gutter the native bars must take a column, and when it does not the
+ * table must not take one either. Neither result is a skip.
  */
 import assert from 'node:assert/strict';
 import {resolve} from 'node:path';
@@ -214,8 +213,9 @@ try {
    assert(m.viewport.offsetWidth-m.viewport.clientWidth>0,'the vertical native bar takes its column: it is the only vertical bar');
    pass('native horizontal and vertical scrollbars present',{horizontal:m.viewport.offsetHeight-m.viewport.clientHeight,vertical:m.viewport.offsetWidth-m.viewport.clientWidth});
  }else{
-   skips++;
-   console.log('SKIP native scrollbar layout space: this platform paints overlay scrollbars (a plain overflow box takes none either)');
+   assert.equal(m.viewport.offsetHeight-m.viewport.clientHeight,0,`measured mode takes no horizontal column: offsetHeight ${m.viewport.offsetHeight}, clientHeight ${m.viewport.clientHeight}`);
+   assert.equal(m.viewport.offsetWidth-m.viewport.clientWidth,0,'measured mode takes no vertical column');
+   pass('measured scrollbars take no layout column',{horizontal:m.viewport.offsetHeight-m.viewport.clientHeight,vertical:m.viewport.offsetWidth-m.viewport.clientWidth});
  }
  console.log('SUMMARY',JSON.stringify({passes,skips,classicScrollbars:classic}));
  await page.close();
