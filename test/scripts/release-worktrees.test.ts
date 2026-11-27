@@ -418,3 +418,282 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     rmSync(root, { recursive: true, force: true });
   }
 }, 90_000);
+
+interface ReleaseCheckout {
+  readonly root: string;
+  readonly repo: string;
+  readonly remote: string;
+  readonly operator: string;
+  readonly env: NodeJS.ProcessEnv;
+  readonly git: (cwd: string, ...args: string[]) => string;
+  readonly baseHead: string;
+  readonly releaseHead: string;
+  readonly mergeSha: string;
+  readonly goodSha: string | null;
+  readonly script: string;
+  dispose(): void;
+}
+
+/** A merged 3.3.5 whose remote main is the merge, or that merge plus one green follow-up. */
+const createReleaseCheckout = (followUp: boolean): ReleaseCheckout => {
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-tag-review-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const operator = join(root, "operator");
+  const env = {
+    ...process.env,
+    GIT_AUTHOR_NAME: "Release test",
+    GIT_AUTHOR_EMAIL: "release@example.test",
+    GIT_COMMITTER_NAME: "Release test",
+    GIT_COMMITTER_EMAIL: "release@example.test",
+  };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  mkdirSync(repo);
+  git(root, "init", "--bare", remote);
+  git(repo, "init", "-b", "main");
+  writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.4" }));
+  git(repo, "add", ".");
+  git(repo, "commit", "-m", "initial");
+  git(repo, "remote", "add", "origin", remote);
+  const baseHead = git(repo, "rev-parse", "HEAD");
+  git(repo, "checkout", "-b", "chore/release-3.3.5");
+  writeFileSync(join(repo, "package.json"), JSON.stringify({ version: "3.3.5" }));
+  git(repo, "commit", "-am", "chore(release): v3.3.5");
+  const releaseHead = git(repo, "rev-parse", "HEAD");
+  git(repo, "push", "origin", "main", "chore/release-3.3.5");
+  git(root, "clone", "--branch", "main", remote, operator);
+  git(operator, "merge", "--no-ff", "origin/chore/release-3.3.5", "-m", "merge release");
+  const mergeSha = git(operator, "rev-parse", "HEAD");
+  git(operator, "push", "origin", "main");
+  let goodSha: string | null = null;
+  if (followUp) {
+    writeFileSync(join(operator, "package.json"), JSON.stringify({ private: true, version: "3.3.5" }));
+    git(operator, "commit", "-am", "fix: the follow-up on main");
+    goodSha = git(operator, "rev-parse", "HEAD");
+    git(operator, "push", "origin", "main");
+  }
+  return {
+    root,
+    repo,
+    remote,
+    operator,
+    env,
+    git,
+    baseHead,
+    releaseHead,
+    mergeSha,
+    goodSha,
+    script: resolve(import.meta.dir, "../../scripts/release.ts"),
+    dispose: () => rmSync(root, { recursive: true, force: true }),
+  };
+};
+
+const releasePreload = (
+  checkout: ReleaseCheckout,
+  checks: "green" | "red-merge" | "advance",
+): string => {
+  const pr = {
+    number: 503,
+    title: "chore(release): v3.3.5",
+    state: "MERGED",
+    headRefName: "chore/release-3.3.5",
+    baseRefName: "main",
+    headRefOid: checkout.releaseHead,
+    mergedAt: "2026-11-02T12:00:00Z",
+    mergeCommit: { oid: checkout.mergeSha },
+  };
+  const advance = `git -C ${checkout.operator} -c user.email=release@example.test -c user.name='Release test' commit --allow-empty -m 'fix: landed during checks' && git -C ${checkout.operator} push origin main`;
+  const file = join(checkout.root, "github-read-fixture.ts");
+  writeFileSync(file, `
+import { mock } from "bun:test";
+import { execSync as realExec } from "node:child_process";
+const pr = ${JSON.stringify(pr)};
+const execute = realExec;
+const mergeSha = ${JSON.stringify(checkout.mergeSha)};
+const checks = ${JSON.stringify(checks)};
+const advance = ${JSON.stringify(advance)};
+let advanced = false;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  if (command.startsWith("gh pr list")) {
+    if (command.includes("--state open")) return "[]";
+    return command.includes("--head chore/release-3.3.5 --base main") ? JSON.stringify([pr]) : "[]";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(pr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) {
+    if (checks === "advance" && !advanced) {
+      advanced = true;
+      execute(advance, { encoding: "utf8" });
+    }
+    const failed = checks === "red-merge" && command.includes(mergeSha);
+    const check_runs = ["Test & Build", "Browser suites"].map((name) => ({
+      name,
+      status: "completed",
+      conclusion: failed && name === "Test & Build" ? "failure" : "success",
+      app: { slug: "github-actions" },
+    }));
+    return JSON.stringify([{ total_count: 2, check_runs }]);
+  }
+  if (command.startsWith("gh api") && command.includes("contents/package.json")) {
+    return JSON.stringify({ content: Buffer.from('{"version":"3.3.5"}').toString("base64") });
+  }
+  if (command.startsWith("gh api") && command.includes("/compare/")) {
+    const sha = command.split("/compare/")[1].split("...")[0];
+    return JSON.stringify({ status: "ahead", ahead_by: 1, behind_by: 0, merge_base_commit: { sha } });
+  }
+  if (command.startsWith("gh api") && command.includes("commits/")) {
+    return JSON.stringify({ parents: ${JSON.stringify([checkout.baseHead, checkout.releaseHead])}.map((sha) => ({ sha })) });
+  }
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+  return file;
+};
+
+const runRelease = (checkout: ReleaseCheckout, preload: string, args: readonly string[]) => {
+  const result = Bun.spawnSync([process.execPath, "--preload", preload, checkout.script, ...args], {
+    cwd: checkout.repo,
+    env: checkout.env,
+    timeout: 20_000,
+  });
+  return {
+    exitCode: result.exitCode,
+    output: new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr),
+  };
+};
+
+it("refuses --at of the release merge, including a local tag at that merge", () => {
+  const checkout = createReleaseCheckout(true);
+  try {
+    const preload = releasePreload(checkout, "green");
+    const mergeSha = checkout.mergeSha;
+    const dry = runRelease(checkout, preload, ["3.3.5", "--dry-run", "--tag", "--at", mergeSha]);
+    expect(dry.exitCode).toBe(1);
+    expect(dry.output).toContain(`--at ${mergeSha} is the release merge, and origin/main has first-parent commits after it`);
+    checkout.git(checkout.repo, "fetch", "origin", "main");
+    checkout.git(checkout.repo, "tag", "-a", "v3.3.5", mergeSha, "-m", "v3.3.5");
+    const pushed = runRelease(checkout, preload, ["3.3.5", "--tag", "--at", mergeSha]);
+    expect(pushed.exitCode).toBe(1);
+    expect(pushed.output).toContain("is the release merge");
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "tag", "-l", "v3.3.5")).toBe("");
+  } finally {
+    checkout.dispose();
+  }
+}, 40_000);
+
+it("reads a freshly fetched origin/main when the fetch refspec ignores main", () => {
+  const checkout = createReleaseCheckout(true);
+  try {
+    const goodSha = checkout.goodSha;
+    if (goodSha === null) throw new Error("missing follow-up");
+    checkout.git(checkout.repo, "fetch", "origin", "main");
+    checkout.git(checkout.repo, "update-ref", "refs/remotes/origin/main", checkout.mergeSha);
+    checkout.git(
+      checkout.repo,
+      "config",
+      "remote.origin.fetch",
+      "+refs/heads/chore/release-3.3.5:refs/remotes/origin/chore/release-3.3.5",
+    );
+    const preload = releasePreload(checkout, "green");
+    const stale = runRelease(checkout, preload, ["3.3.5", "--tag"]);
+    expect(stale.exitCode).toBe(1);
+    expect(stale.output).toContain(goodSha);
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "tag", "-l", "v3.3.5")).toBe("");
+    const tagged = runRelease(checkout, preload, ["3.3.5", "--tag", "--at", goodSha]);
+    expect(tagged.exitCode).toBe(0);
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "v3.3.5^{}")).toBe(goodSha);
+  } finally {
+    checkout.dispose();
+  }
+}, 40_000);
+
+it("does not publish a tag chosen before main moves during check verification", () => {
+  const checkout = createReleaseCheckout(false);
+  try {
+    checkout.git(checkout.repo, "fetch", "origin", "main");
+    const preload = releasePreload(checkout, "advance");
+    const created = runRelease(checkout, preload, ["3.3.5", "--tag"]);
+    const landed = checkout.git(checkout.operator, "rev-parse", "HEAD");
+    expect(created.exitCode).toBe(1);
+    expect(created.output).toContain(landed);
+    expect(created.output).toContain("fix: landed during checks");
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "tag", "-l", "v3.3.5")).toBe("");
+
+    const again = createReleaseCheckout(false);
+    try {
+      again.git(again.repo, "fetch", "origin", "main");
+      again.git(again.repo, "tag", "-a", "v3.3.5", again.mergeSha, "-m", "v3.3.5");
+      const localPreload = releasePreload(again, "advance");
+      const pushed = runRelease(again, localPreload, ["3.3.5", "--tag"]);
+      const moved = again.git(again.operator, "rev-parse", "HEAD");
+      expect(pushed.exitCode).toBe(1);
+      expect(pushed.output).toContain(moved);
+      expect(again.git(again.root, "--git-dir", again.remote, "tag", "-l", "v3.3.5")).toBe("");
+    } finally {
+      again.dispose();
+    }
+  } finally {
+    checkout.dispose();
+  }
+}, 60_000);
+
+it("verifies an existing remote tag against --at", () => {
+  const checkout = createReleaseCheckout(true);
+  try {
+    const goodSha = checkout.goodSha;
+    if (goodSha === null) throw new Error("missing follow-up");
+    checkout.git(checkout.repo, "fetch", "origin", "main");
+    checkout.git(checkout.repo, "tag", "-a", "v3.3.5", goodSha, "-m", "v3.3.5");
+    const preload = releasePreload(checkout, "green");
+    const next = runRelease(checkout, preload, ["3.3.5", "--at", goodSha]);
+    expect(next.exitCode).toBe(0);
+    expect(next.output).toContain(`bun run release 3.3.5 --tag --at ${goodSha}`);
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "tag", "-l", "v3.3.5")).toBe("");
+    checkout.git(checkout.repo, "tag", "-d", "v3.3.5");
+
+    checkout.git(checkout.operator, "tag", "-a", "v3.3.5", checkout.mergeSha, "-m", "v3.3.5");
+    checkout.git(checkout.operator, "push", "origin", "v3.3.5");
+    const conflict = runRelease(checkout, preload, ["3.3.5", "--dry-run", "--tag", "--at", goodSha]);
+    expect(conflict.exitCode).toBe(1);
+    expect(conflict.output).toContain(
+      `Remote tag v3.3.5 points to ${checkout.mergeSha}, but verified commit is ${goodSha}`,
+    );
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "v3.3.5^{}")).toBe(checkout.mergeSha);
+
+    checkout.git(checkout.operator, "push", "origin", ":refs/tags/v3.3.5");
+    checkout.git(checkout.operator, "tag", "-a", "v3.3.5", goodSha, "-m", "v3.3.5");
+    checkout.git(checkout.operator, "push", "origin", "v3.3.5");
+    const dry = runRelease(checkout, preload, ["3.3.5", "--dry-run", "--tag", "--at", goodSha]);
+    expect(dry.exitCode).toBe(0);
+    expect(dry.output).toContain("already released");
+    const live = runRelease(checkout, preload, ["3.3.5", "--tag", "--at", goodSha]);
+    expect(live.exitCode).toBe(0);
+    expect(live.output).toContain("already released");
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "v3.3.5^{}")).toBe(goodSha);
+  } finally {
+    checkout.dispose();
+  }
+}, 60_000);
+
+it("tags --at when only the release merge's checks are red", () => {
+  const checkout = createReleaseCheckout(true);
+  try {
+    const goodSha = checkout.goodSha;
+    if (goodSha === null) throw new Error("missing follow-up");
+    const preload = releasePreload(checkout, "red-merge");
+    const dry = runRelease(checkout, preload, ["3.3.5", "--dry-run", "--tag", "--at", goodSha]);
+    expect(dry.exitCode).toBe(0);
+    expect(dry.output).toContain(`git tag -a v3.3.5 ${goodSha} -m v3.3.5`);
+    const live = runRelease(checkout, preload, ["3.3.5", "--tag", "--at", goodSha]);
+    expect(live.exitCode).toBe(0);
+    expect(checkout.git(checkout.root, "--git-dir", checkout.remote, "rev-parse", "v3.3.5^{}")).toBe(goodSha);
+  } finally {
+    checkout.dispose();
+  }
+}, 40_000);

@@ -2815,4 +2815,105 @@ describe("tag target when main has moved past the release merge", () => {
     expect(held[0]?.description).toContain(`bun run release 3.8.11 --tag --at ${LATER_ON_MAIN}`);
     expect(held.map((step) => step.command).filter(Boolean)).toEqual([]);
   });
+
+  const atLater = {
+    commitsAfterMerge: later,
+    tagAt: LATER_ON_MAIN,
+    tagAtOnFirstParent: true,
+    tagAtDescendsFromMerge: true,
+    packageVersionAtTagAt: "3.8.11",
+    tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+  };
+
+  it("allows --at of the release merge when that merge is still the first-parent tip", () => {
+    expect(
+      detectReleaseState({
+        ...mergedRelease(),
+        commitsAfterMerge: [],
+        tagAt: RELEASE_MERGE,
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toBe("tag-release");
+  });
+
+  it("refuses --at of the release merge itself once later first-parent commits exist", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        localTagSha: RELEASE_MERGE,
+        commitsAfterMerge: later,
+        tagAt: RELEASE_MERGE,
+        tagAtOnFirstParent: true,
+        tagAtDescendsFromMerge: true,
+        packageVersionAtTagAt: "3.8.11",
+        tagAtCheckRuns: RELEASE_GREEN_CHECKS,
+      }),
+    ).toThrow(
+      `--at ${RELEASE_MERGE} is the release merge, and origin/main has first-parent commits after it`,
+    );
+  });
+
+  it("does not let red checks on the release merge block a green --at commit", () => {
+    expect(
+      detectReleaseState({
+        ...mergedRelease(),
+        checkRuns: [
+          { name: "Test & Build", status: "completed", conclusion: "failure", app: { slug: "github-actions" } },
+          RELEASE_GREEN_CHECKS[1]!,
+        ],
+        ...atLater,
+      }),
+    ).toBe("tag-release");
+  });
+
+  it("treats a remote tag at the --at commit as already tagged", () => {
+    expect(
+      detectReleaseState({
+        ...mergedRelease(),
+        remoteTagSha: LATER_ON_MAIN,
+        ...atLater,
+      }),
+    ).toBe("already-tagged");
+  });
+
+  it("refuses a remote tag that differs from --at", () => {
+    expect(() =>
+      detectReleaseState({
+        ...mergedRelease(),
+        remoteTagSha: RELEASE_MERGE,
+        ...atLater,
+      }),
+    ).toThrow(
+      `Remote tag v3.8.11 points to ${RELEASE_MERGE}, but verified commit is ${LATER_ON_MAIN}`,
+    );
+  });
+
+  it("tells a verified local tag to push with the same --at", () => {
+    const held = planRelease({
+      targetVersion: "3.8.11",
+      sourceBranch: "main",
+      state: "push-local-tag",
+      verifiedSha: LATER_ON_MAIN,
+      tagAt: LATER_ON_MAIN,
+      localTagSha: LATER_ON_MAIN,
+    });
+    expect(held[0]?.description).toContain(`bun run release 3.8.11 --tag --at ${LATER_ON_MAIN}`);
+    expect(held.map((step) => step.command).filter(Boolean)).toEqual([]);
+  });
+
+  it("plans a fetch that updates the origin/main remote-tracking ref", () => {
+    const tagged = planRelease({
+      targetVersion: "3.8.11",
+      sourceBranch: "main",
+      state: "tag-release",
+      tag: true,
+      verifiedSha: LATER_ON_MAIN,
+      tagAt: LATER_ON_MAIN,
+    });
+    const fetch = tagged.map((step) => step.command).find((command) => command?.startsWith("git fetch"));
+    expect(fetch).toContain("refs/remotes/origin/main");
+  });
 });
