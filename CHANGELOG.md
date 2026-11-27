@@ -11,15 +11,16 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-### Added
+With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client; with `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured.
 
-- Every JavaScript package entry imports under SSR. Lists are created on the client. `examples/ssr-sveltekit` is a SvelteKit page that imports `vlist` and `vlist/styles`, and calls `createVList` in `onMount`.
+Who is affected: lists with `search()` and a hidden bar plus `selection()`; lists using `autosize()` whose scrollbar thumb is dragged; anyone importing vlist from a server-rendered app (SvelteKit, Nuxt, Next, Astro); maintainers who run the release script.
 
 ### Fixed
 
-- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
-- Dragging the thumb to the end of an `autosize()` list stays at that end after the last rows measure taller, while the pointer is down. Once the drag settles, a native list is at `scrollTop === scrollHeight - clientHeight`. A synthetic thumb stays on the end of the track when the pointer is past it. Appending items, `scrollToIndex`, and restoring a snapshot do not jump to that end.
-- `bun run release X.Y.Z --tag` refuses when `origin/main` has first-parent commits after the release merge, and lists them. `--at <full oid>` tags a later commit on that line when it still carries the release version and its checks are green. Once main has moved, `--at` cannot name the release merge. That commit's checks are the gate and the check evidence, so the release merge's checks are not read, and an existing tag is verified against it. The script fetches `origin/main` into its remote-tracking ref again after its last check-run read, immediately before creating or pushing the tag.
+- With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. When the hidden query is empty and a row is selected, Backspace still emits the delete event.
+- Every JavaScript entry imports in a server process with no DOM. Lists are still created on the client.
+- With `autosize()`, a scrollbar thumb released past the bottom settles at the end once the last rows are measured, with the browser's scrollbar and with `scrollbar()`. A drag that comes back up before release stays where it was released.
+- `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit on main's first-parent line that still carries the release version and whose checks are green.
 
 ## [3.8.11] - 2026-11-25
 
