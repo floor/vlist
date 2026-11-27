@@ -634,9 +634,8 @@ export function selection<T extends VListItem = VListItem>(
 
             case "Delete":
             case "Backspace":
-              // Hidden type-to-search is editing text. Backspace belongs to
-              // that query while it has characters; Delete still removes the
-              // selection. Read at key time: search() registers `_k` after setup.
+              // Hidden type-to-search owns Backspace while the query has text.
+              // search() registers `_k` after this plugin's setup.
               if (event.key === "Backspace" && (ctx.hooks.get("_k") as (() => boolean) | undefined)?.()) break;
               if (state.selected.size > 0) {
                 emitter.emit("delete", {
