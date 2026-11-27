@@ -677,7 +677,6 @@ export function search<T extends VListItem = VListItem>(
       ctx.hooks.method("_onItemUpdate", (id: string | number, u: Partial<T>): void => {
         // Membership first, so groups regroups against the rows that still
         // match, then navigation and the public events see that layout.
-        depth++;
         const prevTotal = engineState.totalItems;
         const prevCur = current;
         const seen = settled;
@@ -688,6 +687,9 @@ export function search<T extends VListItem = VListItem>(
         const idx = hold;
         const removed = cut;
         let synced = false;
+        // Raised only once the field accessor has run: a throw there would skip
+        // the finally and hold every later event as nested.
+        depth++;
         try {
           prevOnUpdate?.(id, u);
           if (!removed && matchSet.has(idx)) {
