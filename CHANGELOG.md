@@ -11,7 +11,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-With the search bar hidden, Backspace edits a query that already has matches, and removes the selection only when the query is empty. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client.
+With the search bar hidden, Backspace edits a query that already has matches, and an empty query emits the selection delete event without removing rows. Every JavaScript entry imports in a server process with no DOM, and the list is still created on the client.
 
 Who is affected: lists with `search()` and a hidden bar plus `selection()`; anyone importing vlist from a server-rendered app (SvelteKit, Nuxt, Next, Astro); maintainers who run the release script.
 
@@ -20,7 +20,7 @@ Who is affected: lists with `search()` and a hidden bar plus `selection()`; anyo
 - With the search bar hidden (`search({ position: "none" })`) and a row selected, Backspace removes the last character of a query that already has matches. Backspace still deletes the selection when the query is empty.
 - Every JavaScript entry imports in a server process with no DOM. Lists are still created on the client.
 <!-- Placeholder: the autosize() dragged-thumb fix. Add its entry above the release-script line, and name those lists on Who is affected, once it is in this release. -->
-- `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit that still carries the release version and whose checks are green.
+- `bun run release X.Y.Z --tag` refuses when main has moved past the release merge, and lists the commits. `--at <full oid>` tags a later commit on main's first-parent line that still carries the release version and whose checks are green.
 
 ## [3.8.11] - 2026-11-25
 
