@@ -251,7 +251,8 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
    `--wait` keeps the poll through the merge and the check verification.
    A 2.x run stops after the PR into `v2` and prints `bun run release X.Y.Z --from v2`,
    which opens the v2-to-main PR. When `--signature` was given, that printed
-   command includes it, and the v2-to-main PR body ends with the same line.
+   command includes it single-quoted for the shell, and the v2-to-main PR body
+   ends with the same line.
    `--wait` opens that PR in the same run.
    `--signature "<line>"` appends that line as the last paragraph of the release
    commit and as the last line of the release PR body. A line with leading or

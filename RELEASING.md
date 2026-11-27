@@ -62,7 +62,8 @@ script never checks out an integration branch held by another worktree.
    `--signature "<line>"` appends that line as the last paragraph of
    the release commit and as the last line of the release PR body. On a 2.x
    release it is also the last line of the v2-to-main PR body, and the printed
-   next step repeats it (`bun run release X.Y.Z --from v2 --signature "<line>"`).
+   next step repeats it, single-quoted for the shell
+   (`bun run release X.Y.Z --from v2 --signature '<line>'`).
    A line with leading or trailing whitespace is rejected. Without it, the
    commit and both PR bodies stay as they are. A prerelease is never bumped: name its stable version explicitly.
 2. **Merge pinned to the reviewed head.** Independent review and all CI must

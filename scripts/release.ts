@@ -165,6 +165,9 @@ export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
 export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>] [--wait]";
 
+/** Shell-quote one argument. The release commands are one shell string. */
+const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
 /**
  * The command the operator runs after the pinned merge. A PR into main is
  * followed by the tag. A 2.x PR into v2 is followed by another release run,
@@ -179,7 +182,8 @@ export const releaseNextStep = (
   if (openedIntoMain) return `bun run release ${version} --tag`;
   const again = `bun run release ${version} --from ${source}`;
   if (signature === undefined) return again;
-  return `${again} --signature "${signature}"`;
+  // The operator pastes this into a shell; double quotes would expand $, ` and \.
+  return `${again} --signature ${shellQuote(signature)}`;
 };
 
 const nextStepAfterMerge = (
@@ -190,9 +194,6 @@ const nextStepAfterMerge = (
 ): ReleaseStep => ({
   description: `Next step, after the operator's pinned merge: ${releaseNextStep(version, source, openedIntoMain, signature)}`,
 });
-
-/** Shell-quote one argument. The release commands are one shell string. */
-const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
 
 /**
  * The release commit. Without a signature the command is the subject alone.
