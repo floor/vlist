@@ -5,7 +5,10 @@
  * The drag has to grab the thumb: scroll moves with the pointer, and it
  * does not move on the press alone. After that, once the growth settles,
  * a native list stays at `scrollTop === scrollHeight - clientHeight` and
- * a synthetic thumb sits on the end of the track.
+ * a synthetic thumb sits on the end of the track. That holds when the
+ * pointer is released right after the last move past the end, before the
+ * growth settles. A drag that goes back into the track before release
+ * stays where it was released, when the growth lands later.
  *
  * A measurement that merely leaves the list on the height published so far
  * is not that drag. Appending items, scrollToIndex, and restoring a
@@ -154,8 +157,45 @@ function along(sample, delta) {
   return { cross: x, along: sample.vpStart + delta };
 }
 
-async function dragPastEnd(page, kind) {
-  await open(page, `kind=${kind}&fixture=drag`);
+// A point on the scrollbar: `along` the scroll axis, `cross` the other one.
+const press = (page, horizontal, point) =>
+  horizontal ? page.mouse.move(point.along, point.cross) : page.mouse.move(point.cross, point.along);
+
+async function settleAfterRelease(page) {
+  let signature = "";
+  let stable = 0;
+  for (let i = 0; i < 24 && stable < 3; i++) {
+    const next = await page.evaluate(() => {
+      const sample = window.sample();
+      return `${sample.content}|${sample.valueMax}|${sample.pos}|${sample.gap}`;
+    });
+    stable = next === signature ? stable + 1 : 0;
+    signature = next;
+    await sleep(80);
+  }
+}
+
+async function holdStill(page) {
+  let signature = "";
+  let stable = 0;
+  for (let i = 0; i < 12 && stable < 2; i++) {
+    const next = await page.evaluate(() => window.sample().pos);
+    stable = next === signature ? stable + 1 : 0;
+    signature = next;
+    await sleep(80);
+  }
+}
+
+/**
+ * Grab the thumb and drag it past the end of the track.
+ * - "pause": hold still at the end until scroll settles, then release.
+ * - "immediate": release right after the last move past the end.
+ * - "reverse": hold still at the end, move back into the track, and release
+ *   35 ms later, inside the 150 ms idle interval.
+ */
+async function dragPastEnd(page, kind, gesture = "pause", axis = "y") {
+  const horizontal = axis === "x";
+  await open(page, `kind=${kind}&axis=${axis}&fixture=drag`);
   const start = await page.evaluate(() => window.sample());
   let origin = kind === "synthetic"
     ? { cross: start.trackCross + start.trackThickness / 2, along: start.thumbCenter }
@@ -170,12 +210,12 @@ async function dragPastEnd(page, kind) {
       await sleep(60);
     }
     const before = await page.evaluate(() => window.sample().pos);
-    await page.mouse.move(point.cross, point.along);
+    await press(page, horizontal, point);
     await page.mouse.down();
     await sleep(30);
     const afterDown = await page.evaluate(() => window.sample().pos);
     const step = kind === "synthetic" ? 36 : 30;
-    await page.mouse.move(point.cross, point.along + step);
+    await press(page, horizontal, { cross: point.cross, along: point.along + step });
     await sleep(40);
     const afterMove = await page.evaluate(() => window.sample().pos);
     const pressed = afterDown - before;
@@ -188,38 +228,40 @@ async function dragPastEnd(page, kind) {
     await page.mouse.up();
   }
   if (!grabbed) {
-    return { start, end: await page.evaluate(() => window.sample()), grabbed: null };
+    return { start, released: null, end: await page.evaluate(() => window.sample()), grabbed: null };
   }
   const endAlong = start.vpEnd + 48;
   const steps = 24;
   for (let i = 1; i <= steps; i++) {
     const y = origin.along + (endAlong - origin.along) * (i / steps);
-    await page.mouse.move(origin.cross, y);
+    await press(page, horizontal, { cross: origin.cross, along: y });
     await sleep(40);
   }
   // The native drag keeps its own offset until the button comes up. Hold
   // still so the anchor can arm, then release, then let that snap settle.
-  let signature = "";
-  let stable = 0;
-  for (let i = 0; i < 12 && stable < 2; i++) {
-    const next = await page.evaluate(() => window.sample().pos);
-    stable = next === signature ? stable + 1 : 0;
-    signature = next;
-    await sleep(80);
+  if (gesture !== "immediate") await holdStill(page);
+  if (gesture === "reverse") {
+    const back = start.vpStart + (start.vpEnd - start.vpStart) * 0.3;
+    await press(page, horizontal, { cross: origin.cross, along: back });
+    await sleep(35);
   }
+  const released = await page.evaluate(() => window.sample());
   await page.mouse.up();
-  signature = "";
-  stable = 0;
-  for (let i = 0; i < 24 && stable < 3; i++) {
-    const next = await page.evaluate(() => {
-      const sample = window.sample();
-      return `${sample.content}|${sample.valueMax}|${sample.pos}|${sample.gap}`;
-    });
-    stable = next === signature ? stable + 1 : 0;
-    signature = next;
-    await sleep(80);
+  await settleAfterRelease(page);
+  return { start, released, end: await page.evaluate(() => window.sample()), grabbed };
+}
+
+/** The drag ended at the end of the track: the list is at its grown end. */
+function checkAtEnd(kind, label, end, detail) {
+  if (kind === "synthetic") {
+    check(end.gap != null && end.gap <= 4, `${label}: the thumb reaches the track end when the pointer goes past it`, detail);
+    return;
   }
-  return { start, end: await page.evaluate(() => window.sample()), grabbed };
+  check(
+    end.nativeMax > 0 && Math.abs(end.scrollTop - end.nativeMax) <= 1,
+    `${label}: after the drag, the scroll offset stays at the grown end`,
+    detail,
+  );
 }
 
 const layouts = [
@@ -231,36 +273,45 @@ const layouts = [
 
 try {
   console.log(await browser.version());
-  for (const kind of ["native", "synthetic"]) {
+  const drags = [
+    { kind: "native", axis: "y", gesture: "pause" },
+    { kind: "synthetic", axis: "y", gesture: "pause" },
+    { kind: "native", axis: "y", gesture: "immediate" },
+    { kind: "synthetic", axis: "y", gesture: "immediate" },
+    { kind: "native", axis: "x", gesture: "immediate" },
+    { kind: "native", axis: "y", gesture: "reverse" },
+    { kind: "synthetic", axis: "y", gesture: "reverse" },
+    { kind: "native", axis: "x", gesture: "reverse" },
+  ];
+  for (const { kind, axis, gesture } of drags) {
+    const label = `${kind}${axis === "x" ? " horizontal" : ""} ${gesture}`;
     const page = await browser.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.stack ?? String(e)));
     try {
-      const { start, end, grabbed } = await dragPastEnd(page, kind);
-      const detail = `grabbed=${JSON.stringify(grabbed)} start=${JSON.stringify(start)} end=${JSON.stringify(end)}`;
-      check(errors.length === 0, `${kind}: no pageerror`, errors.join("\n"));
-      check(!!grabbed, `${kind}: the thumb was grabbed and scroll moved with the pointer`, detail);
+      const { start, released, end, grabbed } = await dragPastEnd(page, kind, gesture, axis);
+      const detail = `grabbed=${JSON.stringify(grabbed)} start=${JSON.stringify(start)} released=${JSON.stringify(released)} end=${JSON.stringify(end)}`;
+      check(errors.length === 0, `${label}: no pageerror`, errors.join("\n"));
+      check(!!grabbed, `${label}: the thumb was grabbed and scroll moved with the pointer`, detail);
+      if (gesture === "reverse") {
+        // Moved back into the track before release: the list stays there,
+        // well short of the end, after any later growth.
+        check(
+          released != null && released.max - released.pos > 200 && end.max - end.pos > 200,
+          `${label}: a drag that leaves the end before release does not snap back to it`,
+          detail,
+        );
+        continue;
+      }
       const grew = kind === "native"
         ? parseFloat(end.content) > parseFloat(start.content) + 8
         : end.valueMax > start.valueMax + 8;
-      check(grew, `${kind}: measuring the last rows grows the list`, detail);
-      if (kind === "native") {
-        check(
-          end.nativeMax > 0 && Math.abs(end.scrollTop - end.nativeMax) <= 1,
-          "native: after the drag, scrollTop stays at the grown end",
-          detail,
-        );
-      } else {
-        check(
-          end.gap != null && end.gap <= 4,
-          "synthetic: the thumb reaches the track end when the pointer goes past it",
-          detail,
-        );
-      }
+      check(grew, `${label}: measuring the last rows grows the list`, detail);
+      checkAtEnd(kind, label, end, detail);
     } catch (error) {
       failures++;
       checks++;
-      console.error(`FAIL ${kind} drag: ${error.stack ?? error}`);
+      console.error(`FAIL ${label} drag: ${error.stack ?? error}`);
     } finally {
       await page.close();
     }
