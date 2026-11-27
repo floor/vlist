@@ -2653,6 +2653,20 @@ describe("main-only releases", () => {
     expect(parseArgs(["3.3.5", "--from", "main"])).toMatchObject({ from: "main" });
   });
 
+  it("stops the release plan after the PR instead of waiting for the merge", () => {
+    const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "create-source-pr" });
+    expect(steps.some((step) => step.description.startsWith("Wait for PR"))).toBe(false);
+    expect(steps.some((step) => step.command?.startsWith("gh pr merge"))).toBe(false);
+    expect(steps.some((step) => step.description.includes("after the operator's pinned merge"))).toBe(true);
+    expect(steps.some((step) => step.description.includes("bun run release 3.3.5 --tag"))).toBe(true);
+  });
+
+  it("keeps the merge poll on the plan when --wait is set", () => {
+    expect(parseArgs(["3.3.5", "--wait"])).toMatchObject({ wait: true });
+    const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "create-source-pr", wait: true });
+    expect(steps.some((step) => step.description.startsWith("Wait for PR"))).toBe(true);
+  });
+
   it("plans one release PR into main and never a main-to-main promotion", () => {
     const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "create-source-pr" });
     const commands = steps.flatMap(step => step.command ? [step.command] : []);
