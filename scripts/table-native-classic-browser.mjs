@@ -8,9 +8,11 @@
  * custom thumb.
  *
  * The classic launch leaves Chromium's scrollbars visible and turns overlay
- * scrollbars off. The overlay launch enables OverlayScrollbar and leaves
- * scrollbars visible, so the thumb paints and the gutter stays 0. Build
- * first. Run this file alone.
+ * scrollbars off. The second launch asks for overlay scrollbars only when
+ * VLIST_SCROLLBARS=overlay: the thumb paints and the gutter stays 0. Chrome
+ * 158 keeps a 15px gutter with OverlayScrollbar enabled, so the default suite
+ * leaves the launcher as it is (scrollbars hidden). Build first. Run this
+ * file alone.
  */
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
@@ -134,7 +136,10 @@ const check = async (name, fn) => {
   }
 };
 
-const launch = (classic) => launchBrowser({ scrollbars: classic ? "classic" : "overlay" });
+const overlay = process.env.VLIST_SCROLLBARS === "overlay";
+const launch = (classic) => launchBrowser({
+  scrollbars: classic ? "classic" : (overlay ? "overlay" : "default"),
+});
 
 async function paintedThumb(page) {
   await page.evaluate(() => {
@@ -386,11 +391,12 @@ async function exercise(classic) {
       const fresh = await page.evaluate(() => window.bars("#fresh"));
       console.log(label, "fresh", JSON.stringify(fresh));
       await check(label + " a natively scrolling table uses the native bar only", async () => {
+        assert.equal(fresh.custom, false, "no custom vertical track " + JSON.stringify(fresh));
+        assert.ok(!fresh.className.includes("vlist-viewport--custom-scrollbar"), "the viewport is styled as without scrollbar(): " + fresh.className);
+        if (!overlay) return;
         assert.ok(fresh.scrollHeight > fresh.clientHeight, "overlay table overflows " + JSON.stringify(fresh));
         assert.equal(fresh.gutter, 0, "overlay scrollbars take no column " + JSON.stringify(fresh));
         assert.equal(fresh.native, false, "overlay scrollbars are not a classic gutter " + JSON.stringify(fresh));
-        assert.equal(fresh.custom, false, "overlay scrollbars: no custom vertical track " + JSON.stringify(fresh));
-        assert.ok(!fresh.className.includes("vlist-viewport--custom-scrollbar"), "the viewport is styled as without scrollbar(): " + fresh.className);
         const painted = await paintedThumb(page);
         assert.ok(painted > 20, "overlay scrollbars paint a thumb (" + painted + " px)");
       });
