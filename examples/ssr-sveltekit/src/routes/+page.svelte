@@ -1,6 +1,8 @@
 <script>
   import { onMount } from "svelte";
   import { createVList } from "vlist";
+  import "vlist/styles";
+  import "./host.css";
 
   let host;
 
@@ -21,4 +23,4 @@
   });
 </script>
 
-<div bind:this={host} style="height: 240px"></div>
+<div bind:this={host} class="host"></div>
