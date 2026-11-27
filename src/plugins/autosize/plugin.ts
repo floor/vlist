@@ -274,6 +274,12 @@ export function autosize<T extends VListItem = VListItem>(
     return maxScroll > 0 && scroll.getPixelEquivalent() >= maxScroll - END_THRESHOLD;
   }
 
+  // A drag that reached the end but has not seen the growth yet sits on the
+  // maximum published so far, short of the cache's new end.
+  function atDragEnd(pos: number): boolean {
+    return isAtEnd() || (publishedMax > 0 && pos >= publishedMax - END_THRESHOLD);
+  }
+
   // The synthetic thumb sets its dragging class. The native thumb is a pointer
   // held on the scroller, outside the client area (the gutter). Page mode
   // scrolls the document, so that gutter is on the document element.
@@ -536,7 +542,10 @@ export function autosize<T extends VListItem = VListItem>(
         }
       });
 
-      const unpinOnUserScroll = (): void => { pinnedToEnd = false; };
+      const unpinOnUserScroll = (): void => {
+        pinnedToEnd = false;
+        dragAnchor = -1;
+      };
       const viewport = ctx.dom.viewport;
       viewport.addEventListener("wheel", unpinOnUserScroll, { passive: true });
       viewport.addEventListener("touchstart", unpinOnUserScroll, { passive: true });
@@ -549,7 +558,17 @@ export function autosize<T extends VListItem = VListItem>(
         nativeThumb = true;
         dragAnchor = -1;
       };
-      const onPointerUp = (): void => { nativeThumb = false; };
+      // Capture phase on the document: this runs before the scrollbar's own
+      // handler drops its dragging class, so the drag is still visible. The
+      // release decides the anchor: on the end, it arms; anywhere else, the
+      // drag let go, whatever an earlier idle recorded.
+      const onPointerUp = (): void => {
+        if (thumbHeld()) {
+          const pos = scroll.getPixelEquivalent();
+          dragAnchor = atDragEnd(pos) ? pos : -1;
+        }
+        nativeThumb = false;
+      };
       document.addEventListener("pointerdown", onPointerDown, true);
       document.addEventListener("pointerup", onPointerUp, true);
       document.addEventListener("pointercancel", onPointerUp, true);
@@ -638,17 +657,17 @@ export function autosize<T extends VListItem = VListItem>(
         const pos = scroll.getPixelEquivalent();
         const atEnd = isAtEnd();
         const down = thumbHeld();
-        if (down) {
-          if (dragAnchor < 0) {
-            if (atEnd || (publishedMax > 0 && pos >= publishedMax - END_THRESHOLD)) dragAnchor = pos;
-          } else if (pos + END_THRESHOLD < dragAnchor) dragAnchor = -1;
-          else if (atEnd) dragAnchor = pos;
-        }
+        if (down && (dragAnchor < 0 ? atDragEnd(pos) : atEnd)) dragAnchor = pos;
         if (pendingContentSizeUpdate) {
           updateContentSize();
           pendingContentSizeUpdate = false;
         }
         if (dragAnchor < 0) return;
+        // Moved back from the anchor, held or not: the drag left the end.
+        if (pos + END_THRESHOLD < dragAnchor) {
+          dragAnchor = -1;
+          return;
+        }
         if (!down) dragAnchor = -1;
         snapToEnd();
       },
