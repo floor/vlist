@@ -11,6 +11,8 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
+## [3.8.13] - 2026-11-28
+
 An edit that brings a row into an active search filter regroups once. A throw leaves the previous filter unless a nested edit has already committed, and the search event reports the count the list keeps; the release command opens the release PR and exits, and `--signature` appends a signature line to the release commit and the PR body.
 
 Who is affected: lists using `search()` with an active filter, including with `groups()` or `table()`; maintainers who run the release script.
@@ -2431,7 +2433,8 @@ See [docs/migration.md](docs/migration.md) for the full v1 → v2 migration guid
 
 - **selection**: Implement ARIA multi-select keyboard model with configurable shiftArrowToggle
 
-[Unreleased]: https://github.com/floor/vlist/compare/v3.8.12...HEAD
+[Unreleased]: https://github.com/floor/vlist/compare/v3.8.13...HEAD
+[3.8.13]: https://github.com/floor/vlist/compare/v3.8.12...v3.8.13
 [3.8.12]: https://github.com/floor/vlist/compare/v3.8.11...v3.8.12
 [3.8.11]: https://github.com/floor/vlist/compare/v3.8.10...v3.8.11
 [3.8.10]: https://github.com/floor/vlist/compare/v3.8.9...v3.8.10
