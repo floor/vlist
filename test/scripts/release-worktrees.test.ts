@@ -461,10 +461,12 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     expect(stoppedCommands.some((command) => command.includes("gh pr create --base main"))).toBe(false);
 
     const ghArgv = join(root, "gh-argv");
-    const recordGh = `gh() { printf '%s\\0' "$@" > ${JSON.stringify(ghArgv)}; }`;
+    // Paths reach the stubs as quoted env values: a $, backtick or quote in TMPDIR is never shell source.
+    const recordGh = `gh() { printf '%s\\0' "$@" > "$GH_ARGV"; }`;
+    const stubEnv = { ...env, GH_ARGV: ghArgv };
     const sourcePr = stoppedCommands.find((command) => command.startsWith("gh pr create --base v2"));
     expect(sourcePr).toBeDefined();
-    expect(replayInShell(sourcePr!, recordGh, repo, env).exitCode).toBe(0);
+    expect(replayInShell(sourcePr!, recordGh, repo, stubEnv).exitCode).toBe(0);
     expect(readArgv(ghArgv).slice(-1)[0]).toBe(`Release commit for v${version}.\n${signature}`);
 
     const nextStep = stoppedOut.match(/Next step, after the operator's pinned merge:\n  (.+)\n/)?.[1];
@@ -472,15 +474,21 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     expect(nextStep!.startsWith(`bun run release ${version} --from v2 --signature `)).toBe(true);
     // The stub records the argv the shell built, then resumes the real release with it.
     const releaseArgv = join(root, "release-argv");
-    const resumeRelease = `bun() { printf '%s\\0' "$@" > ${JSON.stringify(releaseArgv)}; shift 2; exec ${JSON.stringify(process.execPath)} --preload ${JSON.stringify(preload)} ${JSON.stringify(resolve(import.meta.dir, "../../scripts/release.ts"))} "$@"; }`;
-    const resumed = replayInShell(nextStep!, resumeRelease, repo, env);
+    const resumeRelease = `bun() { printf '%s\\0' "$@" > "$RELEASE_ARGV"; shift 2; exec "$RELEASE_BUN" --preload "$RELEASE_PRELOAD" "$RELEASE_SCRIPT" "$@"; }`;
+    const resumed = replayInShell(nextStep!, resumeRelease, repo, {
+      ...stubEnv,
+      RELEASE_ARGV: releaseArgv,
+      RELEASE_BUN: process.execPath,
+      RELEASE_PRELOAD: preload,
+      RELEASE_SCRIPT: resolve(import.meta.dir, "../../scripts/release.ts"),
+    });
     expect(readArgv(releaseArgv)).toEqual(["run", "release", version, "--from", "v2", "--signature", signature]);
     expect({ exitCode: resumed.exitCode, output: resumed.exitCode === 0 ? "" : resumed.output }).toEqual({ exitCode: 0, output: "" });
     expect(resumed.output).toContain(`Next step, after the operator's pinned merge:\n  bun run release ${version} --tag`);
     const resumedCommands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
     const promotion = resumedCommands.find((command) => command.startsWith("gh pr create --base main --head v2"));
     expect(promotion).toBeDefined();
-    expect(replayInShell(promotion!, recordGh, repo, env).exitCode).toBe(0);
+    expect(replayInShell(promotion!, recordGh, repo, stubEnv).exitCode).toBe(0);
     expect(readArgv(ghArgv).slice(-1)[0]).toBe(`Version bump to v${version}.\n${signature}`);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -885,7 +893,8 @@ const releasePreload = (
     mergedAt: "2026-11-02T12:00:00Z",
     mergeCommit: { oid: checkout.mergeSha },
   };
-  const advance = `git -C ${checkout.operator} -c user.email=release@example.test -c user.name='Release test' commit --allow-empty -m 'fix: landed during checks' && git -C ${checkout.operator} push origin main`;
+  // The operator path reaches the shell as a quoted env value, never as shell source.
+  const advance = `git -C "$RELEASE_OPERATOR" -c user.email=release@example.test -c user.name='Release test' commit --allow-empty -m 'fix: landed during checks' && git -C "$RELEASE_OPERATOR" push origin main`;
   const file = join(checkout.root, "github-read-fixture.ts");
   writeFileSync(file, `
 import { mock } from "bun:test";
@@ -911,7 +920,7 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     const advanceNow = checks === "advance" || (checks === "advance-after-status" && statusRead);
     if (advanceNow && !advanced) {
       advanced = true;
-      execute(advance, { encoding: "utf8" });
+      execute(advance, { encoding: "utf8", env: { ...process.env, RELEASE_OPERATOR: ${JSON.stringify(checkout.operator)} } });
     }
     if (checks === "merge-checks-unavailable" && command.includes(mergeSha)) {
       throw new Error("HTTP 502: check runs unavailable for " + mergeSha);

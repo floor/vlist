@@ -10,7 +10,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   USAGE,
   assertCurrentBranch,
@@ -445,10 +445,14 @@ Search: match arrows wait for a match to step (#106).
     // The release reads CHANGELOG.md through git show. The file on disk ends
     // with one newline; the text written back has to as well.
     const dir = mkdtempSync(join(tmpdir(), "vlist-changelog-"));
+    // The variable name is unique to this directory, so concurrent tests do not share it.
+    const pathVar = `VLIST_CHANGELOG_${basename(dir).replace(/[^A-Za-z0-9]/g, "_")}`;
     try {
       const path = join(dir, "CHANGELOG.md");
       writeFileSync(path, UNRELEASED_FIXTURE);
-      const loaded = read(`cat ${JSON.stringify(path)}`, {
+      // The path reaches the shell as a quoted env value, so a $ or backtick in TMPDIR stays a path.
+      process.env[pathVar] = path;
+      const loaded = read(`cat "$${pathVar}"`, {
         kind: "text",
         name: "source_changelog",
         trim: false,
@@ -458,6 +462,7 @@ Search: match arrows wait for a match to step (#106).
       expect(rolled.endsWith("\n")).toBe(true);
       expect(rolled.endsWith("\n\n")).toBe(false);
     } finally {
+      delete process.env[pathVar];
       rmSync(dir, { recursive: true, force: true });
     }
   });
