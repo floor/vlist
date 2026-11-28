@@ -11,7 +11,7 @@ This changelog starts at v1.5.4, the first version published under the `vlist` p
 
 ## [Unreleased]
 
-An edit that brings a row into an active search filter regroups once. A throw leaves the previous filter unless a nested edit has already committed, and the search event reports the count the list keeps; the release command opens the release PR and exits, and can sign the release commit and PR.
+An edit that brings a row into an active search filter regroups once. A throw leaves the previous filter unless a nested edit has already committed, and the search event reports the count the list keeps; the release command opens the release PR and exits, and `--signature` appends a signature line to the release commit and the PR body.
 
 Who is affected: lists using `search()` with an active filter, including with `groups()` or `table()`; maintainers who run the release script.
 
@@ -19,8 +19,8 @@ Who is affected: lists using `search()` with an active filter, including with `g
 
 - An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws before a nested edit has committed, the list stays on the previous filter, and retrying the edit applies it. A nested edit that already committed stays. A pending join that never took a slot is dropped, and the match list stays ordered and unique. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. A nested join reports the same match count as the match list, the total and the counter. When the outer edit throws after that nested join, that event reports the settled count once. A throw from the search field accessor leaves later joins and leaves publishing their events.
 - The release script keeps CHANGELOG.md's final newline.
-- `bun run release X.Y.Z --signature '<line>'` appends that line as the last paragraph of the release commit and as the last line of the release PR body; on a 2.x release it is also the last line of the v2-to-main PR, and the printed next step quotes that line in single quotes. A line with leading or trailing whitespace is rejected.
-- The release command opens the release PR and exits, printing the next step after the pinned merge, and `--wait` keeps the poll.
+- `bun run release X.Y.Z --signature '<line>'` appends a signature line to the release commit and the PR body; on a 2.x release it is also the last line of the v2-to-main PR, and the printed next step quotes that line in single quotes. A line with leading or trailing whitespace is rejected.
+- Once the release PR is open, the command prints what to run after the pinned merge, then exits; `--wait` keeps the poll.
 
 ## [3.8.12] - 2026-11-27
 
