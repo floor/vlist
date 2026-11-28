@@ -2,7 +2,7 @@
 
 The virtual list library for every framework. Ultra efficient, batteries-included, and accessible with composable plugins.
 
-**v3.8.12** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
+**v3.8.13** — `scroll.mode` on the one `vlist` entry: the default, `"auto"`, scrolls natively and hands a list past the browser's size limit to synthetic input, which draws its own scrollbar. Vue, Svelte, Solid and React entries in the package itself (`vlist/vue`, `vlist/svelte`, `vlist/solid`, `vlist/react`), feature-first and tree-shaken like the vanilla builder; the separate adapter packages are deprecated. See the [changelog](https://github.com/floor/vlist/blob/main/CHANGELOG.md).
 
 [![npm version](https://img.shields.io/npm/v/vlist.svg)](https://www.npmjs.com/package/vlist)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/vlist)](https://bundlephobia.com/package/vlist)
@@ -272,7 +272,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `data()` | 41.0 KB | 15.3 KB |
 | `scrollbar()` | 36.0 KB | 13.5 KB |
 | `sortable()` | 38.8 KB | 14.0 KB |
-| `groups()` | 43.7 KB | 16.1 KB |
+| `groups()` | 43.8 KB | 16.1 KB |
 | `page()` | 30.3 KB | 11.5 KB |
 | `snapshots()` | 30.8 KB | 11.7 KB |
 | `transition()` | 33.9 KB | 12.4 KB |
@@ -284,7 +284,7 @@ The touch-only `.vlist-item--touch-sort` class suppresses selection and callouts
 | `table()` + `rowAttributes()` | 46.7 KB | 17.2 KB |
 | `masonry()` | 39.9 KB | 15.0 KB |
 | `tree()` | 43.5 KB | 15.8 KB |
-| `search()` | 36.6 KB | 14.0 KB |
+| `search()` | 37.2 KB | 14.3 KB |
 | `carousel()` | 43.4 KB | 16.0 KB |
 | `vlist/synthetic` + `carousel()` | 49.5 KB | 18.3 KB |
 | `vlist/synthetic` + `sortable()` | 45.7 KB | 16.7 KB |
