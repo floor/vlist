@@ -2,7 +2,7 @@
 /**
  * vlist release script
  *
- * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]
+ * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>] [--wait]
  *
  * What it does:
  *   1. Resolves the source branch from the version being released
@@ -13,10 +13,16 @@
  *      `bun run release` on `main` cannot cut 3.0.0 by accident
  *   4. Updates the version badge in README.md
  *   5. Rolls release notes and compare links into a dated changelog section
- *   6. Commits `chore(release): vX.Y.Z` and pushes the release branch (never source directly)
- *   7. Creates a PR chore/release-X.Y.Z → <source> and waits for it to merge
- *   8. For 2.x only, promotes v2 → main through a second pinned PR
- *   9. Verifies merge commit, package.json, and passing check runs on main
+ *   6. Commits `chore(release): vX.Y.Z` and pushes the release branch (never source directly).
+ *      --signature <line> appends that line as the commit's last paragraph and as the last
+ *      line of each release PR body
+ *   7. Creates a PR chore/release-X.Y.Z → <source> and exits, printing the next step to run
+ *      after the operator's pinned merge (`--tag` for main; for 2.x, another `--from v2` run).
+ *      It does not poll for the merge; --wait keeps the poll through the merge and checks
+ *   8. For 2.x only, promotes v2 → main through a second pinned PR, opened by the next run
+ *      (or by the same run with --wait), which again exits after opening it
+ *   9. On the run after the main merge (or with --wait), verifies merge commit, package.json,
+ *      and passing check runs on main
  *  10. Stops before the tag by default; with explicit --tag, creates an annotated tag and pushes.
  *      Refuses when origin/main has first-parent commits after the release merge, and lists them.
  *      --at <full oid> tags that commit when it is on that line and descends from the release
@@ -2800,7 +2806,7 @@ const main = async (): Promise<void> => {
     }
 
     // The branch is pushed: HEAD is the release commit this run stands behind, and the
-    // merge it waits for must be pinned to exactly that commit.
+    // operator's merge (or the one --wait polls for) must be pinned to exactly that commit.
     const pushedHead = run("git rev-parse HEAD", { silent: true });
     const prUrl = run(
       releaseSourcePrCommand(sourceBranch, releaseBranch, newVersion, args.signature),
