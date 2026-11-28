@@ -19,6 +19,8 @@ Who is affected: lists using `search()` with an active filter, including with `g
 
 - An edit that brings a row into an active search filter regroups once. If the group callback or an earlier update hook throws before a nested edit has committed, the list stays on the previous filter, and retrying the edit applies it. A nested edit that already committed stays. A pending join that never took a slot is dropped, and the match list stays ordered and unique. A throw from a header height callback is not covered. The first match created by an edit in navigate mode is revealed. A nested join reports the same match count as the match list, the total and the counter. When the outer edit throws after that nested join, that event reports the settled count once. A throw from the search field accessor leaves later joins and leaves publishing their events.
 - The release script keeps CHANGELOG.md's final newline.
+- `bun run release X.Y.Z --signature "<line>"` appends that line as the last paragraph of the release commit and as the last line of the release PR body. On a 2.x release it is also the last line of the v2-to-main PR body, and the printed next step is `bun run release X.Y.Z --from v2 --signature '<line>'`, single-quoted so a shell passes `$`, backticks, quotes and backslashes through unchanged. A line with leading or trailing whitespace is rejected. Without it, the commit and both PR bodies stay as they are.
+- The release command opens the release PR and exits, printing the next step after the operator's pinned merge (`bun run release X.Y.Z --tag` when that PR is into main). It does not poll for the merge. `--wait` keeps that poll.
 
 ## [3.8.12] - 2026-11-27
 

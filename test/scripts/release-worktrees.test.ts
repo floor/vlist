@@ -71,7 +71,7 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
   return execute(command, options);
 } }));
 `);
-      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "3.3.5", ...(checkout === "resume" ? [] : ["--tag"])], { cwd: repo, env, timeout: 15_000 });
+      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), "3.3.5", ...(checkout === "resume" ? ["--wait"] : ["--tag"])], { cwd: repo, env, timeout: 15_000 });
       const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
       expect(output).toContain(checkout === "resume" ? "verified with all passing checks" : "Tag v3.3.5 pushed");
       expect(output).not.toContain("npm dist-tag add");
@@ -175,7 +175,7 @@ for (const source of ["main", "v2"] as const) {
     return execute(command, options);
   } }));
   `);
-      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version], { cwd: repo, env, timeout: 15_000 });
+      const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--wait"], { cwd: repo, env, timeout: 15_000 });
       const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
       expect(output).toContain(`package.json: ${previous} → ${version}`);
       expect(output).toContain("verified with all passing checks");
@@ -190,6 +190,13 @@ for (const source of ["main", "v2"] as const) {
       const committed = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD:CHANGELOG.md"], { cwd: repo, env }).stdout);
       expect(committed.endsWith("\n")).toBe(true);
       expect(committed.endsWith("\n\n")).toBe(false);
+      const commitObject = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD"], { cwd: repo, env }).stdout);
+      const message = commitObject.slice(commitObject.indexOf("\n\n") + 2);
+      expect(message).toBe(`chore(release): v${version}\n`);
+      const releasePr = commands.find((command) => command.includes("Release commit for"));
+      expect(releasePr).toBe(
+        `gh pr create --base ${source} --head ${branch} --title "chore(release): v${version}" --body "Release commit for v${version}."`,
+      );
       expect(git(held, "status", "--porcelain")).toBe("");
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -197,6 +204,383 @@ for (const source of ["main", "v2"] as const) {
   }, 20_000);
 
 }
+
+it("appends --signature as the release commit's last paragraph and the release PR's last line", () => {
+  const version = "3.3.5";
+  const previous = "3.3.4";
+  const branch = `chore/release-${version}`;
+  const signature = "Agent: Example";
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-signature-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const held = join(root, "held-main");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: previous }));
+    writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [3.3.4] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD\n".split("3.3.4").join(previous));
+    const readme = `**v${previous}**\n\n` + SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n");
+    for (const name of ["README.md", "npm-readme.md"]) writeFileSync(join(repo, name), readme);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "release notes on main");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main");
+    git(repo, "checkout", "-b", "feature");
+    git(repo, "worktree", "add", held, "main");
+    const commandsFile = join(root, "commands.jsonl");
+    const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
+    const preload = join(root, "github-operator-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec, execFileSync as realFile } from "node:child_process";
+import { appendFileSync } from "node:fs";
+const execute = realExec, executeFile = realFile;
+const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
+const branch = ${JSON.stringify(branch)};
+let mainPr: object | null = null;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
+  if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
+  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh pr create --base main --head " + branch)) {
+    const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", held, "merge", "--no-ff", branch, "-m", "operator main merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", held, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    mainPr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/503";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(mainPr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) return JSON.stringify([{ total_count: 2, check_runs: ["Test & Build", "Browser suites"].map(name => ({ name, status: "completed", conclusion: "success", app: { slug: "github-actions" } })) }]);
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "main", "--signature", signature], { cwd: repo, env, timeout: 15_000 });
+    expect(result.exitCode).toBe(0);
+    const commitObject = new TextDecoder().decode(Bun.spawnSync(["git", "cat-file", "-p", "HEAD"], { cwd: repo, env }).stdout);
+    const message = commitObject.slice(commitObject.indexOf("\n\n") + 2);
+    expect(message).toBe(`chore(release): v${version}\n\n${signature}\n`);
+    const commands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    const releasePr = commands.find((command) => command.includes("Release commit for"));
+    expect(releasePr?.endsWith(`${signature}'`) || releasePr?.endsWith(`${signature}"`)).toBe(true);
+    const body = releasePr!.slice(releasePr!.indexOf("--body ") + "--body ".length).replace(/^['"]|['"]$/g, "");
+    expect(body.endsWith(`\n${signature}`)).toBe(true);
+    expect(body.endsWith(`\n\n${signature}`)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);
+
+it("opens the release PR and exits with the tag next step instead of waiting for the merge", () => {
+  const version = "3.3.5";
+  const previous = "3.3.4";
+  const branch = `chore/release-${version}`;
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-stop-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const held = join(root, "held-main");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: previous }));
+    writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [3.3.4] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v3.3.4...HEAD\n".split("3.3.4").join(previous));
+    const readme = `**v${previous}**\n\n` + SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n");
+    for (const name of ["README.md", "npm-readme.md"]) writeFileSync(join(repo, name), readme);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "release notes on main");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main");
+    git(repo, "checkout", "-b", "feature");
+    git(repo, "worktree", "add", held, "main");
+    const commandsFile = join(root, "commands.jsonl");
+    const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
+    const preload = join(root, "github-operator-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec, execFileSync as realFile } from "node:child_process";
+import { appendFileSync } from "node:fs";
+const execute = realExec, executeFile = realFile;
+const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
+const branch = ${JSON.stringify(branch)};
+let mainPr: object | null = null;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
+  if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
+  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh pr create --base main --head " + branch)) {
+    const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", held, "merge", "--no-ff", branch, "-m", "operator main merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", held, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    mainPr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/503";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(mainPr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) return JSON.stringify([{ total_count: 2, check_runs: ["Test & Build", "Browser suites"].map(name => ({ name, status: "completed", conclusion: "success", app: { slug: "github-actions" } })) }]);
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const result = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "main"], { cwd: repo, env, timeout: 15_000 });
+    const output = new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr);
+    expect(result.exitCode).toBe(0);
+    expect(output).toContain("Next step, after the operator's pinned merge:\n  bun run release 3.3.5 --tag");
+    expect(output).not.toContain("verified with all passing checks");
+    expect(output).not.toContain("Waiting up to 10 minutes");
+    const commands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    expect(commands.some((command) => command.startsWith("gh pr create"))).toBe(true);
+    expect(commands.some((command) => command.startsWith("gh pr view"))).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);
+
+// The operator pastes the printed follow-up into a shell, so each signature is
+// replayed through sh: `$5`, backticks, quotes, backslash and `!` must reach
+// the resumed release unchanged, and the resumed run signs the promotion PR.
+const SHELL_SIGNATURES = [
+  "Agent: Example",
+  "Agent: Claude Opus 5.5 · orchestrator",
+  "Agent: paid $5",
+  "Agent: `echo injected` ran",
+  'Agent: said "hi"',
+  "Agent: it's here",
+  "Agent: back\\slash",
+  "Agent: done!",
+  "Agent: $HOME `x` \"q\" 'a' \\ ! · $5",
+] as const;
+
+/** Run one printed shell line with stub functions, and read each call's argv back. */
+const replayInShell = (line: string, functions: string, cwd: string, env: Record<string, string | undefined>): { readonly exitCode: number; readonly output: string } => {
+  const result = Bun.spawnSync(["sh", "-c", `${functions}\n${line}`], { cwd, env, timeout: 20_000 });
+  return { exitCode: result.exitCode, output: new TextDecoder().decode(result.stdout) + new TextDecoder().decode(result.stderr) };
+};
+
+const readArgv = (file: string): string[] => readFileSync(file, "utf8").split("\0").slice(0, -1);
+
+for (const signature of SHELL_SIGNATURES) it(`prints a follow-up a shell replays exactly and signs the v2-to-main PR: ${JSON.stringify(signature)}`, () => {
+  const version = "2.8.3";
+  const previous = "2.8.2";
+  const branch = `chore/release-${version}`;
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-v2-signature-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const held = join(root, "held-main");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: previous }));
+    writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [2.8.2] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v2.8.2...HEAD\n");
+    const readme = `**v${previous}**\n\n` + SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n");
+    for (const name of ["README.md", "npm-readme.md"]) writeFileSync(join(repo, name), readme);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "release notes on main");
+    git(repo, "branch", "v2");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main", "v2");
+    git(repo, "checkout", "v2");
+    git(repo, "worktree", "add", held, "main");
+    const commandsFile = join(root, "commands.jsonl");
+    const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
+    const preload = join(root, "github-operator-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec, execFileSync as realFile } from "node:child_process";
+import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+const execute = realExec, executeFile = realFile;
+const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
+const branch = ${JSON.stringify(branch)}, sourcePrFile = ${JSON.stringify(join(root, "source-pr.json"))};
+// The merged v2 PR outlives this process, so the replayed follow-up run lists it.
+let sourcePr: object | null = existsSync(sourcePrFile) ? JSON.parse(readFileSync(sourcePrFile, "utf8")) : null, mainPr: object | null = null;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
+  if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
+  if (command.startsWith("gh pr list")) {
+    const listsSource = sourcePr !== null && !command.includes("--state open") && command.includes("--head " + branch + " --base v2");
+    return listsSource ? JSON.stringify([sourcePr]) : "[]";
+  }
+  if (command.startsWith("gh pr create --base v2 --head " + branch)) {
+    const operator = ${JSON.stringify(join(root, "held-v2"))};
+    executeFile("git", ["worktree", "add", operator, "v2"], { stdio: "pipe" });
+    const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", operator, "merge", "--no-ff", branch, "-m", "operator v2 merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", operator, "push", "origin", "v2"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", operator, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    sourcePr = { number: 503, title: "chore(release): v${version}", state: "MERGED", headRefName: branch, baseRefName: "v2", headRefOid, mergedAt: "2026-11-02T12:00:00Z", mergeCommit: { oid } };
+    writeFileSync(sourcePrFile, JSON.stringify(sourcePr));
+    return "https://github.com/floor/vlist/pull/503";
+  }
+  if (command.startsWith("gh pr create --base main --head v2")) {
+    const headRefOid = executeFile("git", ["rev-parse", "v2"], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", held, "merge", "--no-ff", "v2", "-m", "operator main merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", held, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    mainPr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/504";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(sourcePr);
+  if (command.startsWith("gh pr view 504")) return JSON.stringify(mainPr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) return JSON.stringify([{ total_count: 2, check_runs: ["Test & Build", "Browser suites"].map(name => ({ name, status: "completed", conclusion: "success", app: { slug: "github-actions" } })) }]);
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const stopped = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "v2", "--signature", signature], { cwd: repo, env, timeout: 15_000 });
+    const stoppedOut = new TextDecoder().decode(stopped.stdout) + new TextDecoder().decode(stopped.stderr);
+    expect(stopped.exitCode).toBe(0);
+    expect(git(repo, "log", "-1", "--format=%B", `origin/${branch}`)).toBe(`chore(release): v${version}\n\n${signature}`);
+    const stoppedCommands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    expect(stoppedCommands.some((command) => command.includes("gh pr create --base main"))).toBe(false);
+
+    const ghArgv = join(root, "gh-argv");
+    // Paths reach the stubs as quoted env values: a $, backtick or quote in TMPDIR is never shell source.
+    const recordGh = `gh() { printf '%s\\0' "$@" > "$GH_ARGV"; }`;
+    const stubEnv = { ...env, GH_ARGV: ghArgv };
+    const sourcePr = stoppedCommands.find((command) => command.startsWith("gh pr create --base v2"));
+    expect(sourcePr).toBeDefined();
+    expect(replayInShell(sourcePr!, recordGh, repo, stubEnv).exitCode).toBe(0);
+    expect(readArgv(ghArgv).slice(-1)[0]).toBe(`Release commit for v${version}.\n${signature}`);
+
+    const nextStep = stoppedOut.match(/Next step, after the operator's pinned merge:\n  (.+)\n/)?.[1];
+    expect(nextStep).toBeDefined();
+    expect(nextStep!.startsWith(`bun run release ${version} --from v2 --signature `)).toBe(true);
+    // The stub records the argv the shell built, then resumes the real release with it.
+    const releaseArgv = join(root, "release-argv");
+    const resumeRelease = `bun() { printf '%s\\0' "$@" > "$RELEASE_ARGV"; shift 2; exec "$RELEASE_BUN" --preload "$RELEASE_PRELOAD" "$RELEASE_SCRIPT" "$@"; }`;
+    const resumed = replayInShell(nextStep!, resumeRelease, repo, {
+      ...stubEnv,
+      RELEASE_ARGV: releaseArgv,
+      RELEASE_BUN: process.execPath,
+      RELEASE_PRELOAD: preload,
+      RELEASE_SCRIPT: resolve(import.meta.dir, "../../scripts/release.ts"),
+    });
+    expect(readArgv(releaseArgv)).toEqual(["run", "release", version, "--from", "v2", "--signature", signature]);
+    expect({ exitCode: resumed.exitCode, output: resumed.exitCode === 0 ? "" : resumed.output }).toEqual({ exitCode: 0, output: "" });
+    expect(resumed.output).toContain(`Next step, after the operator's pinned merge:\n  bun run release ${version} --tag`);
+    const resumedCommands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    const promotion = resumedCommands.find((command) => command.startsWith("gh pr create --base main --head v2"));
+    expect(promotion).toBeDefined();
+    expect(replayInShell(promotion!, recordGh, repo, stubEnv).exitCode).toBe(0);
+    expect(readArgv(ghArgv).slice(-1)[0]).toBe(`Version bump to v${version}.\n${signature}`);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 20_000);
+
+it("puts --signature on the live v2-to-main PR when --wait opens it", () => {
+  const version = "2.8.3";
+  const previous = "2.8.2";
+  const branch = `chore/release-${version}`;
+  const signature = "Agent: Example";
+  const root = mkdtempSync(join(tmpdir(), "vlist-release-v2-wait-signature-"));
+  const repo = join(root, "caller");
+  const remote = join(root, "remote.git");
+  const held = join(root, "held-main");
+  const env = { ...process.env, GIT_AUTHOR_NAME: "Release test", GIT_AUTHOR_EMAIL: "release@example.test", GIT_COMMITTER_NAME: "Release test", GIT_COMMITTER_EMAIL: "release@example.test" };
+  const git = (cwd: string, ...args: string[]): string => {
+    const result = Bun.spawnSync(["git", ...args], { cwd, env });
+    if (result.exitCode !== 0) throw new Error(new TextDecoder().decode(result.stderr));
+    return new TextDecoder().decode(result.stdout).trim();
+  };
+  try {
+    mkdirSync(repo);
+    git(root, "init", "--bare", remote);
+    git(repo, "init", "-b", "main");
+    writeFileSync(join(repo, "package.json"), JSON.stringify({ version: previous }));
+    writeFileSync(join(repo, "CHANGELOG.md"), "# Changelog\n\n## [Unreleased]\n\nA release theme.\n\nWho is affected: release users.\n\n### Fixed\n\n- A release fix.\n\n## [2.8.2] - 2026-11-02\n\n[Unreleased]: https://github.com/floor/vlist/compare/v2.8.2...HEAD\n");
+    const readme = `**v${previous}**\n\n` + SIZE_ROW_SCENARIOS.map(({ label }) => `| ${label} | 27.3 KB | 10.3 KB |`).join("\n");
+    for (const name of ["README.md", "npm-readme.md"]) writeFileSync(join(repo, name), readme);
+    git(repo, "add", ".");
+    git(repo, "commit", "-m", "release notes on main");
+    git(repo, "branch", "v2");
+    git(repo, "remote", "add", "origin", remote);
+    git(repo, "push", "origin", "main", "v2");
+    git(repo, "checkout", "v2");
+    git(repo, "worktree", "add", held, "main");
+    const commandsFile = join(root, "commands.jsonl");
+    const sizeOutput = "vlist size fixture\n\n" + SIZE_ROW_SCENARIOS.map(({ scenario }) => `  ${scenario}  27.3 KB  10.3 KB  9.1 KB\n  ✓ ${scenario}: 10539 bytes gzipped (budget 10547)`).join("\n");
+    const preload = join(root, "github-operator-fixture.ts");
+    writeFileSync(preload, `
+import { mock } from "bun:test";
+import { execSync as realExec, execFileSync as realFile } from "node:child_process";
+import { appendFileSync } from "node:fs";
+const execute = realExec, executeFile = realFile;
+const held = ${JSON.stringify(held)}, commandsFile = ${JSON.stringify(commandsFile)};
+const branch = ${JSON.stringify(branch)};
+let sourcePr: object | null = null, mainPr: object | null = null;
+const timer = globalThis.setTimeout;
+globalThis.setTimeout = ((fn: () => void) => timer(fn, 0)) as typeof setTimeout;
+mock.module("node:child_process", () => ({ execSync(command: string, options: Parameters<typeof realExec>[1]) {
+  appendFileSync(commandsFile, JSON.stringify(command) + "\\n");
+  if (command === "bun run size") return ${JSON.stringify(sizeOutput)};
+  if (command.startsWith("gh pr list")) return "[]";
+  if (command.startsWith("gh pr create --base v2 --head " + branch)) {
+    const operator = ${JSON.stringify(join(root, "held-v2"))};
+    executeFile("git", ["worktree", "add", operator, "v2"], { stdio: "pipe" });
+    const headRefOid = executeFile("git", ["rev-parse", branch], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", operator, "merge", "--no-ff", branch, "-m", "operator v2 merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", operator, "push", "origin", "v2"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", operator, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    sourcePr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/503";
+  }
+  if (command.startsWith("gh pr create --base main --head v2")) {
+    const headRefOid = executeFile("git", ["rev-parse", "v2"], { encoding: "utf8" }).trim();
+    executeFile("git", ["-C", held, "merge", "--no-ff", "v2", "-m", "operator main merge"], { stdio: "pipe" });
+    executeFile("git", ["-C", held, "push", "origin", "main"], { stdio: "pipe" });
+    const oid = executeFile("git", ["-C", held, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    mainPr = { headRefOid, mergeCommit: { oid }, state: "MERGED" };
+    return "https://github.com/floor/vlist/pull/504";
+  }
+  if (command.startsWith("gh pr view 503")) return JSON.stringify(sourcePr);
+  if (command.startsWith("gh pr view 504")) return JSON.stringify(mainPr);
+  if (command.startsWith("gh api") && command.includes("check-runs")) return JSON.stringify([{ total_count: 2, check_runs: ["Test & Build", "Browser suites"].map(name => ({ name, status: "completed", conclusion: "success", app: { slug: "github-actions" } })) }]);
+  if (command.startsWith("gh ")) throw new Error("Unexpected GitHub operation: " + command);
+  return execute(command, options);
+} }));
+`);
+    const waited = Bun.spawnSync([process.execPath, "--preload", preload, resolve(import.meta.dir, "../../scripts/release.ts"), version, "--from", "v2", "--signature", signature, "--wait"], { cwd: repo, env, timeout: 20_000 });
+    const waitedOut = new TextDecoder().decode(waited.stdout) + new TextDecoder().decode(waited.stderr);
+    expect(waited.exitCode).toBe(0);
+    const commands = readFileSync(commandsFile, "utf8").trim().split("\n").map((line) => JSON.parse(line) as string);
+    const promotion = commands.find((command) => command.includes("gh pr create --base main --head v2"));
+    expect(promotion).toBeDefined();
+    const body = promotion!.slice(promotion!.indexOf("--body ") + "--body ".length).replace(/^['"]|['"]$/g, "");
+    expect(body.startsWith(`Version bump to v${version}.`)).toBe(true);
+    expect(body.endsWith(`\n${signature}`)).toBe(true);
+    expect(waitedOut).toContain("verified with all passing checks");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 25_000);
 
 it("reads origin/<source> package.json and CHANGELOG.md during dry-run and bump resolution from feature or detached HEAD", () => {
   const root = mkdtempSync(join(tmpdir(), "vlist-release-origin-reads-"));
@@ -509,7 +893,8 @@ const releasePreload = (
     mergedAt: "2026-11-02T12:00:00Z",
     mergeCommit: { oid: checkout.mergeSha },
   };
-  const advance = `git -C ${checkout.operator} -c user.email=release@example.test -c user.name='Release test' commit --allow-empty -m 'fix: landed during checks' && git -C ${checkout.operator} push origin main`;
+  // The operator path reaches the shell as a quoted env value, never as shell source.
+  const advance = `git -C "$RELEASE_OPERATOR" -c user.email=release@example.test -c user.name='Release test' commit --allow-empty -m 'fix: landed during checks' && git -C "$RELEASE_OPERATOR" push origin main`;
   const file = join(checkout.root, "github-read-fixture.ts");
   writeFileSync(file, `
 import { mock } from "bun:test";
@@ -535,7 +920,7 @@ mock.module("node:child_process", () => ({ execSync(command: string, options: Pa
     const advanceNow = checks === "advance" || (checks === "advance-after-status" && statusRead);
     if (advanceNow && !advanced) {
       advanced = true;
-      execute(advance, { encoding: "utf8" });
+      execute(advance, { encoding: "utf8", env: { ...process.env, RELEASE_OPERATOR: ${JSON.stringify(checkout.operator)} } });
     }
     if (checks === "merge-checks-unavailable" && command.includes(mergeSha)) {
       throw new Error("HTTP 502: check runs unavailable for " + mergeSha);

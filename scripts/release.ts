@@ -2,7 +2,7 @@
 /**
  * vlist release script
  *
- * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]
+ * Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>] [--wait]
  *
  * What it does:
  *   1. Resolves the source branch from the version being released
@@ -13,10 +13,16 @@
  *      `bun run release` on `main` cannot cut 3.0.0 by accident
  *   4. Updates the version badge in README.md
  *   5. Rolls release notes and compare links into a dated changelog section
- *   6. Commits `chore(release): vX.Y.Z` and pushes the release branch (never source directly)
- *   7. Creates a PR chore/release-X.Y.Z → <source> and waits for it to merge
- *   8. For 2.x only, promotes v2 → main through a second pinned PR
- *   9. Verifies merge commit, package.json, and passing check runs on main
+ *   6. Commits `chore(release): vX.Y.Z` and pushes the release branch (never source directly).
+ *      --signature <line> appends that line as the commit's last paragraph and as the last
+ *      line of each release PR body
+ *   7. Creates a PR chore/release-X.Y.Z → <source> and exits, printing the next step to run
+ *      after the operator's pinned merge (`--tag` for main; for 2.x, another `--from v2` run).
+ *      It does not poll for the merge; --wait keeps the poll through the merge and checks
+ *   8. For 2.x only, promotes v2 → main through a second pinned PR, opened by the next run
+ *      (or by the same run with --wait), which again exits after opening it
+ *   9. On the run after the main merge (or with --wait), verifies merge commit, package.json,
+ *      and passing check runs on main
  *  10. Stops before the tag by default; with explicit --tag, creates an annotated tag and pushes.
  *      Refuses when origin/main has first-parent commits after the release merge, and lists them.
  *      --at <full oid> tags that commit when it is on that line and descends from the release
@@ -57,8 +63,8 @@ export type BumpType = "patch" | "minor" | "major";
 export type ReleaseBranch = "main" | "v2";
 
 export type ReleaseArgs =
-  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined }
-  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined };
+  | { readonly kind: "bump"; readonly bumpType: BumpType; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined; readonly wait?: boolean | undefined }
+  | { readonly kind: "exact"; readonly version: string; readonly from: ReleaseBranch | null; readonly dryRun?: boolean | undefined; readonly tag?: boolean | undefined; readonly at?: string | undefined; readonly signature?: string | undefined; readonly wait?: boolean | undefined };
 
 export type ReleaseState =
   | "create-source-pr"
@@ -142,6 +148,10 @@ export interface PlanOptions {
   readonly mainPrNumber?: number | undefined;
   /** Commit `--at` names. The tag command uses it instead of the release merge. */
   readonly tagAt?: string | null | undefined;
+  /** One trailer line for the release commit and the release PR body. */
+  readonly signature?: string | undefined;
+  /** Poll until the release PR merges. Absent means stop after the PR opens. */
+  readonly wait?: boolean | undefined;
 }
 
 export interface ReleaseStep {
@@ -159,7 +169,76 @@ export interface ParsedVersion {
 export const BUMP_TYPES: readonly BumpType[] = ["patch", "minor", "major"];
 export const RELEASE_BRANCHES: readonly ReleaseBranch[] = ["main", "v2"];
 
-export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]";
+export const USAGE = "Usage: bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>] [--wait]";
+
+/** Shell-quote one argument. The release commands are one shell string. */
+const shellQuote = (value: string): string => `'${value.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * The command the operator runs after the pinned merge. A PR into main is
+ * followed by the tag. A 2.x PR into v2 is followed by another release run,
+ * which opens the v2-to-main PR.
+ */
+export const releaseNextStep = (
+  version: string,
+  source: ReleaseBranch,
+  openedIntoMain: boolean,
+  signature?: string,
+): string => {
+  if (openedIntoMain) return `bun run release ${version} --tag`;
+  const again = `bun run release ${version} --from ${source}`;
+  if (signature === undefined) return again;
+  // The operator pastes this into a shell; double quotes would expand $, ` and \.
+  return `${again} --signature ${shellQuote(signature)}`;
+};
+
+const nextStepAfterMerge = (
+  version: string,
+  source: ReleaseBranch,
+  openedIntoMain: boolean,
+  signature?: string,
+): ReleaseStep => ({
+  description: `Next step, after the operator's pinned merge: ${releaseNextStep(version, source, openedIntoMain, signature)}`,
+});
+
+/**
+ * The release commit. Without a signature the command is the subject alone.
+ * With one, a second `-m` is the trailer paragraph, so the subject stays put.
+ */
+export const releaseCommitCommand = (version: string, signature?: string): string => {
+  const subject = `chore(release): v${version}`;
+  if (signature === undefined) return `git commit -m "${subject}"`;
+  return `git commit -m ${shellQuote(subject)} -m ${shellQuote(signature)}`;
+};
+
+/** The release PR body. The signature, when present, is its last line. */
+export const releaseSourcePrCommand = (
+  sourceBranch: string,
+  head: string,
+  version: string,
+  signature?: string,
+): string => {
+  const title = `chore(release): v${version}`;
+  const body = signature === undefined
+    ? `Release commit for v${version}.`
+    : `Release commit for v${version}.\n${signature}`;
+  if (signature === undefined) {
+    return `gh pr create --base ${sourceBranch} --head ${head} --title "${title}" --body "${body}"`;
+  }
+  return `gh pr create --base ${sourceBranch} --head ${head} --title ${shellQuote(title)} --body ${shellQuote(body)}`;
+};
+
+/** The v2-to-main promotion. It opens a pull request of the existing tip and does not commit. */
+export const releaseMainPrCommand = (head: string, version: string, signature?: string): string => {
+  const title = `chore(release): v${version}`;
+  const body = signature === undefined
+    ? `Version bump to v${version}.`
+    : `Version bump to v${version}.\n${signature}`;
+  if (signature === undefined) {
+    return `gh pr create --base main --head ${head} --title "${title}" --body "${body}"`;
+  }
+  return `gh pr create --base main --head ${head} --title ${shellQuote(title)} --body ${shellQuote(body)}`;
+};
 
 /**
  * Fetch main into its remote-tracking ref. A bare `git fetch origin main` only
@@ -882,15 +961,19 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
     }
 
     case "await-main-pr":
-      steps.push(
-        {
-          description: `Wait for PR #${opts.mainPr?.number ?? opts.mainPrNumber ?? "<number>"} (${mainHead} → main, ${opts.targetVersion}) to be merged`,
-        },
-        pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
-        {
-          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
-        },
-      );
+      if (opts.wait === true) {
+        steps.push(
+          {
+            description: `Wait for PR #${opts.mainPr?.number ?? opts.mainPrNumber ?? "<number>"} (${mainHead} → main, ${opts.targetVersion}) to be merged`,
+          },
+          pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
+          {
+            description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+          },
+        );
+      } else {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, true, opts.signature));
+      }
       break;
 
     case "create-main-pr":
@@ -898,17 +981,27 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         { description: `Fetch ${opts.sourceBranch}`, command: `git fetch origin ${opts.sourceBranch}` },
         {
           description: `Create PR ${mainHead} → main`,
-          command: `gh pr create --base main --head ${mainHead} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
-        },
-        { description: `Wait for PR (${mainHead} → main) to be merged` },
-        pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
-        {
-          description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+          command: releaseMainPrCommand(mainHead, opts.targetVersion, opts.signature),
         },
       );
+      if (opts.wait === true) {
+        steps.push(
+          { description: `Wait for PR (${mainHead} → main) to be merged` },
+          pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
+          {
+            description: `Run 'bun run release ${opts.targetVersion} --tag' once PR is merged and verified`,
+          },
+        );
+      } else {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, true, opts.signature));
+      }
       break;
 
     case "await-source-pr":
+      if (opts.wait !== true) {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, opts.sourceBranch === "main", opts.signature));
+        break;
+      }
       steps.push(
         {
           description: `Wait for PR #${opts.sourcePr?.number ?? opts.sourcePrNumber ?? "<number>"} into ${opts.sourceBranch} to be merged`,
@@ -923,7 +1016,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         { description: `Fetch ${opts.sourceBranch}`, command: `git fetch origin ${opts.sourceBranch}` },
         {
           description: `Create PR ${mainHead} → main`,
-          command: `gh pr create --base main --head ${mainHead} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
+          command: releaseMainPrCommand(mainHead, opts.targetVersion, opts.signature),
         },
         { description: `Wait for PR (${mainHead} → main) to be merged` },
         pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
@@ -962,15 +1055,19 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
             description: "Stage modified files",
             command: "git add package.json README.md npm-readme.md CHANGELOG.md",
           },
-          { description: "Commit release bump", command: `git commit -m "chore(release): v${opts.targetVersion}"` },
+          { description: "Commit release bump", command: releaseCommitCommand(opts.targetVersion, opts.signature) },
           { description: `Push branch ${branch}`, command: `git push origin ${branch}` },
         );
       }
+      steps.push({
+        description: `Create PR ${branch} → ${opts.sourceBranch}`,
+        command: releaseSourcePrCommand(opts.sourceBranch, branch, opts.targetVersion, opts.signature),
+      });
+      if (opts.wait !== true) {
+        steps.push(nextStepAfterMerge(opts.targetVersion, opts.sourceBranch, opts.sourceBranch === "main", opts.signature));
+        break;
+      }
       steps.push(
-        {
-          description: `Create PR ${branch} → ${opts.sourceBranch}`,
-          command: `gh pr create --base ${opts.sourceBranch} --head ${branch} --title "chore(release): v${opts.targetVersion}" --body "Release commit for v${opts.targetVersion}."`,
-        },
         { description: `Wait for PR into ${opts.sourceBranch} to be merged` },
         pinnedMergeStep(opts.sourcePr, `${branch} → ${opts.sourceBranch}`),
       );
@@ -982,7 +1079,7 @@ export const planRelease = (opts: PlanOptions): readonly ReleaseStep[] => {
         { description: `Fetch ${opts.sourceBranch}`, command: `git fetch origin ${opts.sourceBranch}` },
         {
           description: `Create PR ${mainHead} → main`,
-          command: `gh pr create --base main --head ${mainHead} --title "chore(release): v${opts.targetVersion}" --body "Version bump to v${opts.targetVersion}."`,
+          command: releaseMainPrCommand(mainHead, opts.targetVersion, opts.signature),
         },
         { description: `Wait for PR (${mainHead} → main) to be merged` },
         pinnedMergeStep(opts.mainPr, `${mainHead} → main`),
@@ -1050,6 +1147,8 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
   let dryRun = false;
   let tag = false;
   let at: string | null = null;
+  let signature: string | null = null;
+  let wait = false;
   let positional = false;
 
   for (let i = 0; i < argv.length; i++) {
@@ -1068,6 +1167,21 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
       const value = arg === "--at" ? argv[++i] : arg.slice("--at=".length);
       if (value === undefined || value === "" || value.startsWith("-")) throw new Error(USAGE);
       at = value;
+      continue;
+    }
+    if (arg === "--wait") {
+      wait = true;
+      continue;
+    }
+    if (arg === "--signature" || arg.startsWith("--signature=")) {
+      const value = arg === "--signature" ? argv[++i] : arg.slice("--signature=".length);
+      if (value === undefined || value === "" || value.startsWith("-") || /[\r\n]/.test(value)) {
+        throw new Error(USAGE);
+      }
+      if (value !== value.trim()) {
+        throw new Error("--signature must not have leading or trailing whitespace");
+      }
+      signature = value;
       continue;
     }
     if (arg === "--from") {
@@ -1094,7 +1208,14 @@ export const parseArgs = (argv: readonly string[]): ReleaseArgs => {
     throw new Error(USAGE);
   }
 
-  const flags = { from, dryRun, tag, ...(at === null ? {} : { at }) };
+  const flags = {
+    from,
+    dryRun,
+    tag,
+    ...(at === null ? {} : { at }),
+    ...(signature === null ? {} : { signature }),
+    ...(wait ? { wait: true } : {}),
+  };
   if (exactVersion !== null) {
     return { kind: "exact", version: exactVersion, ...flags };
   }
@@ -2525,6 +2646,8 @@ const main = async (): Promise<void> => {
       sourcePr,
       mainPr,
       isReleaseBranchPushed,
+      ...(args.signature === undefined ? {} : { signature: args.signature }),
+      ...(args.wait === true ? { wait: true } : {}),
     });
     console.log(formatReleasePlan(newVersion, sourceBranch, state, plan, { evidence }));
     return;
@@ -2677,26 +2800,35 @@ const main = async (): Promise<void> => {
       console.log(`  ✓ README.md + npm-readme.md: version v${newVersion}, size rows refreshed`);
 
       run(`git add package.json README.md npm-readme.md CHANGELOG.md`);
-      run(`git commit -m "chore(release): v${newVersion}"`);
+      run(releaseCommitCommand(newVersion, args.signature));
       run(`git push origin ${releaseBranch}`);
       console.log(`  ✓ Pushed to ${releaseBranch}`);
     }
 
     // The branch is pushed: HEAD is the release commit this run stands behind, and the
-    // merge it waits for must be pinned to exactly that commit.
+    // operator's merge (or the one --wait polls for) must be pinned to exactly that commit.
     const pushedHead = run("git rev-parse HEAD", { silent: true });
     const prUrl = run(
-      `gh pr create --base ${sourceBranch} --head ${releaseBranch} --title "chore(release): v${newVersion}" --body "Release commit for v${newVersion}."`,
+      releaseSourcePrCommand(sourceBranch, releaseBranch, newVersion, args.signature),
       { silent: true },
     );
     const prNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
     console.log(`  ✓ PR #${prNumber} created: ${prUrl}`);
+    if (args.wait !== true) {
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, sourceBranch === "main", args.signature)}`);
+      return;
+    }
 
     await waitForPrMerge(prNumber, `${releaseBranch} → ${sourceBranch}`, newVersion, pushedHead);
     verifySourcePrPin(prNumber, `${releaseBranch} → ${sourceBranch}`, pushedHead);
     if (sourceBranch === "main") mainPrNumber = prNumber;
   } else if (state === "await-source-pr") {
     const prNumber = sourcePr!.number;
+    if (args.wait !== true) {
+      console.log(`  ✓ PR #${prNumber} is already open.`);
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, sourceBranch === "main", args.signature)}`);
+      return;
+    }
     await waitForPrMerge(
       prNumber,
       `${releaseBranch} → ${sourceBranch}`,
@@ -2713,11 +2845,15 @@ const main = async (): Promise<void> => {
     step(3, `Creating PR ${mainHead} → main...`);
 
     const prUrl = run(
-      `gh pr create --base main --head ${sourceBranch} --title "chore(release): v${newVersion}" --body "Version bump to v${newVersion}."`,
+      releaseMainPrCommand(sourceBranch, newVersion, args.signature),
       { silent: true },
     );
     mainPrNumber = parseInt(prUrl.split("/").pop() ?? "0", 10);
     console.log(`  ✓ PR #${mainPrNumber} created: ${prUrl}`);
+    if (args.wait !== true) {
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, true, args.signature)}`);
+      return;
+    }
 
     const freshMainPin = readPrPin(mainPrNumber);
     await waitForPrMerge(
@@ -2728,6 +2864,11 @@ const main = async (): Promise<void> => {
     );
   } else if (state === "await-main-pr") {
     mainPrNumber = mainPr!.number;
+    if (args.wait !== true) {
+      console.log(`  ✓ PR #${mainPrNumber} is already open.`);
+      console.log(`\nNext step, after the operator's pinned merge:\n  ${releaseNextStep(newVersion, sourceBranch, true, args.signature)}`);
+      return;
+    }
     await waitForPrMerge(mainPrNumber, `${mainHead} → main`, newVersion, mainPr!.headRefOid);
   }
 

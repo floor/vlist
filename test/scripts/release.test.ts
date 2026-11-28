@@ -10,7 +10,7 @@
 import { describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   USAGE,
   assertCurrentBranch,
@@ -40,6 +40,8 @@ import {
   parseSizeOutput,
   refreshReadmeSizes,
   rollChangelog,
+  releaseCommitCommand,
+  releaseSourcePrCommand,
   updateReadmeVersion,
   updateReadmeVersions,
   utcDateStamp,
@@ -258,6 +260,56 @@ describe("parseArgs", () => {
     });
   });
 
+  it("parses one --signature line and leaves the flag off when it is absent", () => {
+    expect(parseArgs(["3.8.13", "--from", "main", "--signature", "Agent: Example"])).toMatchObject({
+      kind: "exact",
+      version: "3.8.13",
+      from: "main",
+      signature: "Agent: Example",
+    });
+    expect(parseArgs(["3.8.13", "--signature=Agent: Example"])).toMatchObject({
+      signature: "Agent: Example",
+    });
+    expect(parseArgs(["3.8.13"])).not.toHaveProperty("signature");
+    expect(releaseCommitCommand("3.8.13")).toBe('git commit -m "chore(release): v3.8.13"');
+    expect(releaseCommitCommand("3.8.13", "Agent: O'Brien")).toContain(`'Agent: O'\\''Brien'`);
+    expect(releaseSourcePrCommand("main", "chore/release-3.8.13", "3.8.13")).toBe(
+      'gh pr create --base main --head chore/release-3.8.13 --title "chore(release): v3.8.13" --body "Release commit for v3.8.13."',
+    );
+    expect(releaseSourcePrCommand("main", "chore/release-3.8.13", "3.8.13", "Agent: Example").endsWith("Agent: Example'")).toBe(true);
+    expect(() => parseArgs(["3.8.13", "--signature"])).toThrow(USAGE);
+    expect(() => parseArgs(["3.8.13", "--signature", ""])).toThrow(USAGE);
+    expect(() => parseArgs(["3.8.13", "--signature", "Agent\nExample"])).toThrow(USAGE);
+    expect(() => parseArgs(["3.8.13", "--signature", "Agent: Example "])).toThrow(
+      "--signature must not have leading or trailing whitespace",
+    );
+    expect(() => parseArgs(["3.8.13", "--signature", " Agent: Example"])).toThrow(
+      "--signature must not have leading or trailing whitespace",
+    );
+  });
+
+  it("carries --signature onto the v2-to-main PR and the follow-up release command", () => {
+    const promotion = planRelease({
+      targetVersion: "2.8.3",
+      sourceBranch: "v2",
+      state: "create-main-pr",
+      signature: "Agent: Example",
+    });
+    const create = promotion.map((step) => step.command).find((command) => command?.includes("gh pr create --base main"));
+    expect(create).toBeDefined();
+    const body = create!.slice(create!.indexOf("--body ") + "--body ".length).replace(/^['"]|['"]$/g, "");
+    expect(body.endsWith("\nAgent: Example")).toBe(true);
+    expect(body.startsWith("Version bump to v2.8.3.")).toBe(true);
+
+    const follow = planRelease({
+      targetVersion: "2.8.3",
+      sourceBranch: "v2",
+      state: "create-source-pr",
+      signature: "Agent: Example",
+    });
+    expect(follow.some((step) => step.description.includes("bun run release 2.8.3 --from v2 --signature 'Agent: Example'"))).toBe(true);
+  });
+
   it("parses --tag flag", () => {
     expect(parseArgs(["--tag"])).toEqual({
       kind: "bump",
@@ -393,10 +445,14 @@ Search: match arrows wait for a match to step (#106).
     // The release reads CHANGELOG.md through git show. The file on disk ends
     // with one newline; the text written back has to as well.
     const dir = mkdtempSync(join(tmpdir(), "vlist-changelog-"));
+    // The variable name is unique to this directory, so concurrent tests do not share it.
+    const pathVar = `VLIST_CHANGELOG_${basename(dir).replace(/[^A-Za-z0-9]/g, "_")}`;
     try {
       const path = join(dir, "CHANGELOG.md");
       writeFileSync(path, UNRELEASED_FIXTURE);
-      const loaded = read(`cat ${JSON.stringify(path)}`, {
+      // The path reaches the shell as a quoted env value, so a $ or backtick in TMPDIR stays a path.
+      process.env[pathVar] = path;
+      const loaded = read(`cat "$${pathVar}"`, {
         kind: "text",
         name: "source_changelog",
         trim: false,
@@ -406,6 +462,7 @@ Search: match arrows wait for a match to step (#106).
       expect(rolled.endsWith("\n")).toBe(true);
       expect(rolled.endsWith("\n\n")).toBe(false);
     } finally {
+      delete process.env[pathVar];
       rmSync(dir, { recursive: true, force: true });
     }
   });
@@ -985,7 +1042,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         "await-main-pr",
       ] as const;
       for (const state of states) {
-        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "v2", state });
+        const steps = planRelease({ targetVersion: "2.8.3", sourceBranch: "v2", state, wait: true });
         const merges = steps
           .map((s) => s.command)
           .filter((c): c is string => !!c && c.startsWith("gh pr merge"));
@@ -999,6 +1056,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         targetVersion: "2.8.3",
         sourceBranch: "v2",
         state: "await-main-pr",
+        wait: true,
         mainPr: mergedMainPr({ state: "OPEN", mergeCommitOid: undefined }),
       });
       expect(waiting.map((s) => s.command)).toContain(
@@ -1009,6 +1067,7 @@ describe("merge pinning — merge commits only, pinned to the head the run pushe
         targetVersion: "2.8.3",
         sourceBranch: "v2",
         state: "await-source-pr",
+        wait: true,
         sourcePr: mergedSourcePr({ state: "OPEN", mergeCommitOid: undefined }),
       });
       expect(sourcing.map((s) => s.command)).toContain(
@@ -1105,6 +1164,7 @@ describe("planRelease", () => {
       targetVersion: "2.8.3",
       sourceBranch: "v2",
       state: "create-source-pr",
+      wait: true,
     });
     const commands = steps.map((s) => s.command).filter(Boolean);
     const descriptions = steps.map((s) => s.description);
@@ -2116,7 +2176,9 @@ describe("stop before the tag — ruled behavior", () => {
         expect(cmd).not.toMatch(/^git tag/);
         expect(cmd).not.toMatch(/^git push origin v/);
       }
-      expect(steps.some((s) => s.description.includes("bun run release 2.8.3 --tag"))).toBe(true);
+      const intoSource = state === "create-source-pr" || state === "await-source-pr";
+      const next = intoSource ? "bun run release 2.8.3 --from v2" : "bun run release 2.8.3 --tag";
+      expect(steps.some((s) => s.description.includes(next))).toBe(true);
     }
   });
 
@@ -2628,6 +2690,20 @@ describe("main-only releases", () => {
   it("derives main for 3.x and accepts the explicit main flag", () => {
     expect(sourceBranchFor("3.3.5")).toBe("main");
     expect(parseArgs(["3.3.5", "--from", "main"])).toMatchObject({ from: "main" });
+  });
+
+  it("stops the release plan after the PR instead of waiting for the merge", () => {
+    const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "create-source-pr" });
+    expect(steps.some((step) => step.description.startsWith("Wait for PR"))).toBe(false);
+    expect(steps.some((step) => step.command?.startsWith("gh pr merge"))).toBe(false);
+    expect(steps.some((step) => step.description.includes("after the operator's pinned merge"))).toBe(true);
+    expect(steps.some((step) => step.description.includes("bun run release 3.3.5 --tag"))).toBe(true);
+  });
+
+  it("keeps the merge poll on the plan when --wait is set", () => {
+    expect(parseArgs(["3.3.5", "--wait"])).toMatchObject({ wait: true });
+    const steps = planRelease({ targetVersion: "3.3.5", sourceBranch: "main", state: "create-source-pr", wait: true });
+    expect(steps.some((step) => step.description.startsWith("Wait for PR"))).toBe(true);
   });
 
   it("plans one release PR into main and never a main-to-main promotion", () => {

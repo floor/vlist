@@ -35,7 +35,7 @@ The swap is automated via `prepublishOnly` / `postpublish` scripts. When editing
 - `bun run typecheck` — `tsc --noEmit` (src + tests)
 - `bun run build` — build library (`build.ts`)
 - `bun run size` — measure gzipped feature sizes
-- `bun run release [patch|minor|major|<version>] [--from main|v2]` — automated release (version bump → commit → PR → wait for merge → tag push → npm publish via CI). 3.x from `main`, 2.x from `v2`.
+- `bun run release [patch|minor|major|<version>] [--from main|v2] [--signature <line>] [--wait]` — automated release (version bump → commit → PR → exit; `--wait` polls the merge; `--tag` pushes the tag → npm publish via CI). 3.x from `main`, 2.x from `v2`. `--signature` appends the line to the release commit, the release PR body, and, on 2.x, the v2-to-main PR body and the printed follow-up command.
 
 ## Project Structure
 
@@ -236,7 +236,7 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
 **Do not manually create GitHub Releases** — the workflow handles it.
 
 ### Release Script (`scripts/release.ts`)
-`bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>]` prepares
+`bun run release [patch|minor|major|<version>] [--from main|v2] [--dry-run] [--tag] [--at <full oid>] [--signature <line>] [--wait]` prepares
 3.x from `main` and 2.x from `v2`. A 3.x release has one release PR into
 `main`; 2.x retains its v2-to-main promotion. `--from` confirms the line.
 
@@ -245,10 +245,20 @@ Triggered by `push: tags: v*.*.*` (not manual GitHub Release). On trigger:
    creates `chore/release-X.Y.Z` from its remote tip, without checking out an
    integration branch another worktree may hold. It bumps the package, dates
    the notes, updates compare links and refreshes both README versions/sizes.
-3. It pushes only the release branch and opens its PR into `main`. The
-   operator merges with a merge commit pinned to the verified PR head.
-4. The script verifies the main merge, package version and all checks, then
-   stops. A separate `bun run release X.Y.Z --tag` re-verifies and tags that
+3. It pushes only the release branch and opens its PR into `main`, then
+   exits. It prints the next step after the operator's pinned merge:
+   `bun run release X.Y.Z --tag`. It does not poll GitHub for that merge.
+   `--wait` keeps the poll through the merge and the check verification.
+   A 2.x run stops after the PR into `v2` and prints `bun run release X.Y.Z --from v2`,
+   which opens the v2-to-main PR. When `--signature` was given, that printed
+   command includes it single-quoted for the shell, and the v2-to-main PR body
+   ends with the same line.
+   `--wait` opens that PR in the same run.
+   `--signature "<line>"` appends that line as the last paragraph of the release
+   commit and as the last line of the release PR body. A line with leading or
+   trailing whitespace is rejected. Without it, the commit and the PR bodies stay as they are.
+   The operator merges with a merge commit pinned to the verified PR head.
+4. A separate `bun run release X.Y.Z --tag` re-verifies and tags that
    exact merge when it is still the tip of `origin/main`'s first-parent history,
    without switching branches before or after the tag push. When later
    first-parent commits exist, `--tag` refuses and lists each oid and subject.
